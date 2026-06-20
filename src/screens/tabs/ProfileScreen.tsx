@@ -22,7 +22,7 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-n
 import { Avatar } from "../../components/Avatar";
 import { BidModal } from "../../components/BidModal";
 import { ContractSigningModal } from "../../components/ContractSigningModal";
-import { PressScale } from "../../components/PressScale";
+import { PressSlide } from "../../components/PressSlide";
 import { useApp } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
 import type { ScheduledInterview } from "../../types/interview";
@@ -86,9 +86,9 @@ export function ProfileScreen() {
       <Animated.View style={{ opacity: fadeAnim }}>
       {/* Hero */}
       <View style={styles.hero}>
-        <PressScale style={styles.editBtn} onPress={() => setProfileEditOpen(true)}>
+        <PressSlide style={styles.editBtn} onPress={() => setProfileEditOpen(true)}>
           <UserCog size={18} color={colors.muted} />
-        </PressScale>
+        </PressSlide>
         <View style={styles.heroRow}>
           <Avatar src={profile.avatar} size={64} />
           <View style={{ flex: 1 }}>
@@ -114,10 +114,10 @@ export function ProfileScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t("profile.children")}</Text>
-            <PressScale style={styles.addBtn}>
+            <PressSlide style={styles.addBtn}>
               <Plus size={14} color={colors.gold} />
               <Text style={styles.addText}>{t("profile.add")}</Text>
-            </PressScale>
+            </PressSlide>
           </View>
           {children.map((child) => (
             <View key={child.name} style={styles.childCard}>
@@ -154,13 +154,13 @@ export function ProfileScreen() {
                 </View>
 
                 {interview.status === "completed" && (
-                  <PressScale
+                  <PressSlide
                     style={styles.actionBtnPrimary}
                     onPress={() => setContractInterview(interview)}
                   >
                     <PenLine size={16} color="#fff" />
                     <Text style={styles.actionBtnPrimaryText}>{t("contract.reviewSign")}</Text>
-                  </PressScale>
+                  </PressSlide>
                 )}
 
                 {interview.status === "contract_signed" && (
@@ -186,7 +186,7 @@ export function ProfileScreen() {
               <Text style={styles.editLinkText}>{t("profile.editProfile")}</Text>
             </Pressable>
           </View>
-          <PressScale style={styles.careCard} onPress={() => setProfileEditOpen(true)}>
+          <PressSlide style={styles.careCard} onPress={() => setProfileEditOpen(true)}>
             {[
               { icon: Baby, color: "#ec4899", label: t("profile.dueDate"), value: profile.dueDate || "—" },
               { icon: DollarSign, color: "#22c55e", label: t("profile.budget"), value: profile.budget || "—" },
@@ -205,7 +205,7 @@ export function ProfileScreen() {
                 </View>
               </View>
             ))}
-          </PressScale>
+          </PressSlide>
         </View>
       )}
 
@@ -218,7 +218,7 @@ export function ProfileScreen() {
               <Text style={styles.editLinkText}>{t("profile.editProfile")}</Text>
             </Pressable>
           </View>
-          <PressScale style={styles.careCard} onPress={() => setProfileEditOpen(true)}>
+          <PressSlide style={styles.careCard} onPress={() => setProfileEditOpen(true)}>
             {[
               { icon: Calendar, color: "#f59e0b", label: t("profile.experience"), value: profile.experience || "—" },
               { icon: FileText, color: "#8b5cf6", label: t("onboarding.specialty"), value: profile.specialty || "—" },
@@ -237,7 +237,7 @@ export function ProfileScreen() {
                 </View>
               </View>
             ))}
-          </PressScale>
+          </PressSlide>
           {profile.licenseNumber && (
             <View style={[styles.careCard, { marginTop: 10 }]}>
               <View style={styles.careRow}>
@@ -259,14 +259,14 @@ export function ProfileScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, styles.sectionTitleInline]}>{t("profile.myBid")}</Text>
-            <PressScale style={styles.editLink} onPress={() => setBidOpen(true)}>
+            <PressSlide style={styles.editLink} onPress={() => setBidOpen(true)}>
               <Edit3 size={13} color={colors.gold} />
               <Text style={[styles.editLinkText, { marginLeft: 4 }]}>
                 {profile.bidRate ? t("profile.updateBid") : t("profile.submitBid")}
               </Text>
-            </PressScale>
+            </PressSlide>
           </View>
-          <PressScale style={styles.bidCard} onPress={() => setBidOpen(true)}>
+          <PressSlide style={styles.bidCard} onPress={() => setBidOpen(true)}>
             <View style={styles.bidTopRow}>
               <View style={[styles.careIcon, { backgroundColor: `${colors.gold}18` }]}>
                 <Tag size={16} color={colors.gold} />
@@ -288,7 +288,7 @@ export function ProfileScreen() {
                 <Text style={styles.bidNoteText}>{profile.bidNote}</Text>
               </View>
             ) : null}
-          </PressScale>
+          </PressSlide>
         </View>
       )}
 
@@ -297,11 +297,11 @@ export function ProfileScreen() {
         <Text style={styles.sectionTitle}>{t("profile.settings")}</Text>
         <View style={styles.settingsCard}>
           {settings.map(({ icon: Icon, label, value, onPress }, i) => (
-            <PressScale
+            <PressSlide
               key={label}
               style={[styles.settingRow, i > 0 && styles.settingBorder]}
               onPress={onPress}
-              scale={0.98}
+             
             >
               <View style={styles.settingIcon}>
                 <Icon size={16} color={colors.muted} />
@@ -311,7 +311,7 @@ export function ProfileScreen() {
                 <Text style={styles.settingValue}>{value}</Text>
               </View>
               <ChevronRight size={14} color={colors.muted} />
-            </PressScale>
+            </PressSlide>
           ))}
         </View>
       </View>

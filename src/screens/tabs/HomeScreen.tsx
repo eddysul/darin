@@ -5,7 +5,7 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-n
 import { useRef } from "react";
 import { Avatar } from "../../components/Avatar";
 import { CaregiverContractModal } from "../../components/CaregiverContractModal";
-import { PressScale } from "../../components/PressScale";
+import { PressSlide } from "../../components/PressSlide";
 import { useApp } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
 import type { IncomingRequest } from "../../types/interview";
@@ -85,10 +85,10 @@ export function HomeScreen() {
                   {ko ? interview.slotLabelKo : interview.slotLabelEn}
                 </Text>
               </View>
-              <PressScale style={styles.completeBtn} onPress={() => completeInterview(interview.id)}>
+              <PressSlide style={styles.completeBtn} onPress={() => completeInterview(interview.id)}>
                 <CheckCircle size={14} color={colors.text} />
                 <Text style={styles.completeBtnText}>{t("interview.markComplete")}</Text>
-              </PressScale>
+              </PressSlide>
             </View>
           ))}
         </View>
@@ -114,10 +114,10 @@ export function HomeScreen() {
               </Text>
             </View>
             {interview.status === "completed" && (
-              <PressScale style={styles.profileLinkBtn} onPress={() => setPendingTab("Profile")}>
+              <PressSlide style={styles.profileLinkBtn} onPress={() => setPendingTab("Profile")}>
                 <PenLine size={14} color="#fff" />
                 <Text style={styles.profileLinkText}>{t("contract.sign")}</Text>
-              </PressScale>
+              </PressSlide>
             )}
             {interview.status === "contract_signed" && (
               <CheckCircle size={18} color={colors.sage} />
@@ -280,16 +280,16 @@ function CaregiverHomeScreen({
                 </Text>
               </View>
               <View style={styles.requestActions}>
-                <PressScale
+                <PressSlide
                   style={styles.acceptBtn}
                   onPress={() => acceptRequest(req.id)}
-                  scale={0.95}
+                 
                 >
                   <Text style={styles.acceptBtnText}>{t("caregiver.home.accept")}</Text>
-                </PressScale>
-                <PressScale style={styles.declineBtn} scale={0.95}>
+                </PressSlide>
+                <PressSlide style={styles.declineBtn}>
                   <Text style={styles.declineBtnText}>{t("caregiver.home.decline")}</Text>
-                </PressScale>
+                </PressSlide>
               </View>
             </View>
           ))}
@@ -320,14 +320,14 @@ function CaregiverHomeScreen({
                   <Text style={styles.interviewTime}>{ko ? req.slotLabelKo : req.slotLabelEn}</Text>
                 </View>
                 {hasParentSig && !isSigned && (
-                  <PressScale
+                  <PressSlide
                     style={styles.profileLinkBtn}
                     onPress={() => setContractRequest(req)}
-                    scale={0.95}
+                   
                   >
                     <PenLine size={13} color="#fff" />
                     <Text style={styles.profileLinkText}>{ko ? "서명" : "Sign"}</Text>
-                  </PressScale>
+                  </PressSlide>
                 )}
                 {isSigned && <CheckCircle size={18} color={colors.sage} />}
               </View>

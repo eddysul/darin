@@ -2,7 +2,7 @@ import { Baby, DollarSign, Home, MapPin, Search, Sparkles } from "lucide-react-n
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
-import { PressScale } from "../../components/PressScale";
+import { PressSlide } from "../../components/PressSlide";
 import { PARENT_LISTINGS, type ParentListing } from "../../demo/parents";
 import { useLanguage } from "../../LanguageContext";
 import type { MessageKey } from "../../i18n";
@@ -63,7 +63,7 @@ function ParentCard({
   t: (key: MessageKey) => string;
 }) {
   return (
-    <PressScale style={styles.card} onPress={onToggle} scale={0.985}>
+    <PressSlide style={styles.card} onPress={onToggle}>
       <View style={styles.cardTop}>
         <Avatar src={parent.avatar} size={52} />
         <View style={{ flex: 1 }}>
@@ -99,12 +99,12 @@ function ParentCard({
         <View style={styles.expanded}>
           <Text style={styles.notesLabel}>{ko ? "특이사항" : "Special Notes"}</Text>
           <Text style={styles.notes}>{ko ? parent.notesKo : parent.notes}</Text>
-          <PressScale style={styles.requestBtn} scale={0.97}>
+          <PressSlide style={styles.requestBtn}>
             <Text style={styles.requestBtnText}>{t("caregiver.find.requestInterview")}</Text>
-          </PressScale>
+          </PressSlide>
         </View>
       )}
-    </PressScale>
+    </PressSlide>
   );
 }
 

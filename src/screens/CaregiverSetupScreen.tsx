@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useState } from "react";
 import { ScreenBackground } from "../components/ScreenBackground";
-import { PressScale } from "../components/PressScale";
+import { PressSlide } from "../components/PressSlide";
 import { useLanguage } from "../LanguageContext";
 import type { UserProfile } from "../types/profile";
 import { DEFAULT_CAREGIVER_PROFILE } from "../context/AppContext";
@@ -146,13 +146,13 @@ export function CaregiverSetupScreen({ onComplete }: Props) {
             />
           </Field>
 
-          <PressScale
+          <PressSlide
             style={[styles.cta, !draft.name.trim() && styles.ctaDisabled]}
             onPress={handleContinue}
             disabled={!draft.name.trim()}
           >
             <Text style={styles.ctaText}>{t("caregiverSetup.cta")}</Text>
-          </PressScale>
+          </PressSlide>
         </ScrollView>
       </KeyboardAvoidingView>
     </ScreenBackground>
@@ -183,14 +183,14 @@ function ToggleRow<T>({
   return (
     <View style={styles.toggleRow}>
       {options.map((opt) => (
-        <PressScale
+        <PressSlide
           key={String(opt.value)}
           style={[styles.toggleBtn, opt.value === value && styles.toggleBtnActive]}
           onPress={() => onChange(opt.value)}
-          scale={0.96}
+         
         >
           <Text style={[styles.toggleText, opt.value === value && styles.toggleTextActive]}>{opt.label}</Text>
-        </PressScale>
+        </PressSlide>
       ))}
     </View>
   );

@@ -1,4 +1,5 @@
 import type { IncomingRequest } from "../types/interview";
+import type { LogEntry } from "../types/log";
 
 export type ParentListing = {
   id: string;
@@ -69,6 +70,53 @@ export const PARENT_LISTINGS: ParentListing[] = [
     notes: "Twin pregnancy! Need an experienced caregiver with twin experience. Live-in preferred, bilingual a plus.",
     notesKo: "쌍둥이 임신 중입니다! 쌍둥이 경험 있는 분을 찾습니다. 입주 선호, 이중언어 가능자 우대.",
     matchScore: 88,
+  },
+];
+
+// Seeded log entries — pre-populated demo data for today
+const today = new Date();
+const ts = (h: number, m = 0) => new Date(today.getFullYear(), today.getMonth(), today.getDate(), h, m).toISOString();
+
+export const DEMO_LOG_ENTRIES: LogEntry[] = [
+  {
+    id: "log-1",
+    category: "meal",
+    timestamp: ts(7, 30),
+    rawText: "모유 수유 120ml 완료했어요.",
+    summary: "모유 수유 120ml",
+    data: { amountMl: 120 },
+  },
+  {
+    id: "log-2",
+    category: "diaper",
+    timestamp: ts(8, 10),
+    rawText: "배변 색이 노란색이었어요. 정상적으로 보여요.",
+    summary: "배변 노란색 (정상)",
+    data: { color: "노란색" },
+  },
+  {
+    id: "log-3",
+    category: "sleep",
+    timestamp: ts(9, 0),
+    rawText: "오전 9시에 낮잠 시작했어요.",
+    summary: "낮잠 시작",
+    data: {},
+  },
+  {
+    id: "log-4",
+    category: "sleep",
+    timestamp: ts(10, 30),
+    rawText: "낮잠 1시간 30분 자고 일어났어요.",
+    summary: "낮잠 종료 (1.5시간)",
+    data: { durationMin: 90 },
+  },
+  {
+    id: "log-5",
+    category: "meal",
+    timestamp: ts(11, 0),
+    rawText: "분유 100ml 먹었어요.",
+    summary: "분유 100ml",
+    data: { amountMl: 100 },
   },
 ];
 

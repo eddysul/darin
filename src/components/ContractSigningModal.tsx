@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { PressScale } from "./PressScale";
+import { PressSlide } from "./PressSlide";
 import { buildContractPreview, defaultContractFields } from "../demo/contractTemplate";
 import { useApp } from "../context/AppContext";
 import { useLanguage } from "../LanguageContext";
@@ -155,17 +155,17 @@ export function ContractSigningModal({ open, interview, onClose, onSigned }: Pro
               </ScrollView>
 
               <View style={styles.actions}>
-                <PressScale style={styles.cancelBtn} onPress={onClose} scale={0.97}>
+                <PressSlide style={styles.cancelBtn} onPress={onClose}>
                   <Text style={styles.cancelText}>{t("profile.cancel")}</Text>
-                </PressScale>
-                <PressScale
+                </PressSlide>
+                <PressSlide
                   style={[styles.signBtn, !signature.trim() && styles.signBtnDisabled]}
                   onPress={handleSign}
                   disabled={!signature.trim()}
-                  scale={0.97}
+                 
                 >
                   <Text style={styles.signText}>{t("contract.sign")}</Text>
-                </PressScale>
+                </PressSlide>
               </View>
             </>
           )}

@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { PressScale } from "./PressScale";
+import { PressSlide } from "./PressSlide";
 import { useApp } from "../context/AppContext";
 import { useLanguage } from "../LanguageContext";
 import { colors, radius } from "../theme";
@@ -84,19 +84,19 @@ export function BidModal({ open, onClose }: Props) {
                 />
               </ScrollView>
               <View style={styles.actions}>
-                <PressScale style={styles.cancelBtn} onPress={onClose} scale={0.97}>
+                <PressSlide style={styles.cancelBtn} onPress={onClose}>
                   <Text style={styles.cancelText}>{t("profile.cancel")}</Text>
-                </PressScale>
-                <PressScale
+                </PressSlide>
+                <PressSlide
                   style={[styles.submitBtn, !rate.trim() && styles.submitBtnDisabled]}
                   onPress={handleSubmit}
                   disabled={!rate.trim()}
-                  scale={0.97}
+                 
                 >
                   <Text style={styles.submitText}>
                     {profile.bidRate ? t("profile.updateBid") : t("profile.submitBid")}
                   </Text>
-                </PressScale>
+                </PressSlide>
               </View>
             </>
           )}

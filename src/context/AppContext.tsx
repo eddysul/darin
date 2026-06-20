@@ -1,9 +1,12 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import type { DailyReport } from "../types/dailyReport";
 import type { ContractFields, IncomingRequest, InterviewSlot, ScheduledInterview } from "../types/interview";
+import type { LogEntry } from "../types/log";
 import type { UserProfile } from "../types/profile";
 import type { MainTabName } from "../types/navigation";
-import { DEMO_INCOMING_REQUESTS } from "../demo/parents";
+import { DEMO_INCOMING_REQUESTS, DEMO_LOG_ENTRIES } from "../demo/parents";
+import { buildDailyReportText } from "../utils/categorize";
+import { createId } from "../utils/id";
 
 const DEFAULT_PARENT_PROFILE: UserProfile = {
   name: "Jisoo Kim",
@@ -64,6 +67,9 @@ type AppContextValue = {
   acceptRequest: (requestId: string) => void;
   caregiverSignContract: (requestId: string, signature: string, notes?: string) => void;
   caregiverBidRate: string | null;
+  logEntries: LogEntry[];
+  addLogEntry: (entry: Omit<LogEntry, "id">) => void;
+  generateDailyReportFromLogs: (locale: "en" | "ko") => void;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -82,6 +88,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [pendingTab, setPendingTab] = useState<MainTabName | null>(null);
   const [pendingContractInterviewId, setPendingContractInterviewId] = useState<string | null>(null);
   const [incomingRequests, setIncomingRequests] = useState<IncomingRequest[]>(DEMO_INCOMING_REQUESTS);
+  const [logEntries, setLogEntries] = useState<LogEntry[]>(DEMO_LOG_ENTRIES);
+
+  const addLogEntry = useCallback((entry: Omit<LogEntry, "id">) => {
+    setLogEntries((prev) => [...prev, { ...entry, id: createId() }]);
+  }, []);
+
+  const generateDailyReportFromLogs = useCallback((locale: "en" | "ko") => {
+    const text = buildDailyReportText(logEntries, locale);
+    if (!text) return;
+    const now = new Date();
+    const report: DailyReport = {
+      id: createId(),
+      date: now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+      child: "Baby",
+      caregiver: "Ji-yeon Park",
+      sourceNote: text,
+      reportEn: buildDailyReportText(logEntries, "en"),
+      reportKo: buildDailyReportText(logEntries, "ko"),
+      parentReplyDraft: "Thank you for today's detailed care log. I appreciate the updates!",
+      items: [],
+      savedAt: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+    };
+    setDailyReport(report);
+  }, [logEntries, setDailyReport]);
 
   const clearPendingTab = useCallback(() => setPendingTab(null), []);
   const clearPendingContractInterview = useCallback(() => setPendingContractInterviewId(null), []);
@@ -187,6 +217,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         acceptRequest,
         caregiverSignContract,
         caregiverBidRate,
+        logEntries,
+        addLogEntry,
+        generateDailyReportFromLogs,
       }}
     >
       {children}
