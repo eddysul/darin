@@ -1,20 +1,35 @@
 export const colors = {
-  background: "#FFFDF7",
-  champagne: "#FFF4D8",
+  background: "#FFFFFF",
+  backgroundSecondary: "#FAFAF8",
   card: "#FFFFFF",
-  gold: "#D9A441",
-  softGold: "#F4D58D",
-  text: "#243036",
-  muted: "#6F6A60",
-  border: "#EFE4CF",
-  inputBg: "#FFFBF2",
-  sage: "#6B9080",
-  navy: "#243036",
+  text: "#111111",
+  muted: "#666666",
+  border: "#EAEAEA",
+  black: "#1A1A1A",
+  yellow: "#E0B23F",
+  yellowSoft: "#FFF8E7",
+  primary: "#1A1A1A",
+  primaryForeground: "#FFFFFF",
+  accent: "#E0B23F",
+  accentGold: "#E0B23F",
+  inputBg: "#FAFAF8",
+  /** @deprecated use backgroundSecondary */
+  sageSurface: "#FAFAF8",
+  /** @deprecated use yellowSoft */
+  champagne: "#FFF8E7",
+  /** @deprecated use accent */
+  gold: "#E0B23F",
+  /** @deprecated use black */
+  deepSage: "#1A1A1A",
+  /** @deprecated use black */
+  sage: "#1A1A1A",
+  /** @deprecated use black */
+  navy: "#1A1A1A",
 };
 
 export const gradients = {
-  screen: ["#FFF4D8", "#FFFDF7", "#FFFFFF"] as const,
-  hero: ["#FFF4D8", "#FFFDF7", "#FFFFFF"] as const,
+  screen: ["#FFFFFF", "#FFFFFF", "#FFFFFF"] as const,
+  hero: ["#FAFAF8", "#FFFFFF", "#FFFFFF"] as const,
 };
 
 export const spacing = {

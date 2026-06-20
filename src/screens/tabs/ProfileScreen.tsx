@@ -10,8 +10,9 @@ import {
   Settings as SettingsIcon,
   UserCog,
 } from "lucide-react-native";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
+import { ScreenScrollView } from "../../components/ScreenScrollView";
 import { useApp } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
 import { colors, radius } from "../../theme";
@@ -36,7 +37,7 @@ export function ProfileScreen() {
   ];
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <ScreenScrollView contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <Pressable style={styles.editBtn} onPress={() => setProfileEditOpen(true)}>
           <UserCog size={18} color={colors.muted} />
@@ -66,7 +67,7 @@ export function ProfileScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t("profile.children")}</Text>
             <Pressable style={styles.addBtn}>
-              <Plus size={14} color={colors.gold} />
+              <Plus size={14} color={colors.text} />
               <Text style={styles.addText}>{t("profile.add")}</Text>
             </Pressable>
           </View>
@@ -127,13 +128,12 @@ export function ProfileScreen() {
           ))}
         </View>
       </View>
-    </ScrollView>
+    </ScreenScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 16, paddingBottom: 32 },
+  content: { paddingHorizontal: 16 },
   hero: {
     backgroundColor: colors.card,
     borderRadius: radius.xl,
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: colors.champagne,
+    backgroundColor: colors.yellowSoft,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 1,
@@ -161,17 +161,19 @@ const styles = StyleSheet.create({
   langChip: {
     fontSize: 11,
     fontWeight: "500",
-    color: colors.gold,
-    backgroundColor: colors.champagne,
+    color: colors.text,
+    backgroundColor: colors.backgroundSecondary,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   section: { marginBottom: 16 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginBottom: 12 },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
-  addText: { fontSize: 14, fontWeight: "600", color: colors.gold },
+  addText: { fontSize: 14, fontWeight: "600", color: colors.text },
   childCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -204,7 +206,7 @@ const styles = StyleSheet.create({
   },
   settingRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
   settingBorder: { borderTopWidth: 1, borderTopColor: colors.border },
-  settingIcon: { backgroundColor: colors.champagne, borderRadius: 12, padding: 8 },
+  settingIcon: { backgroundColor: colors.yellowSoft, borderRadius: 12, padding: 8 },
   settingLabel: { fontSize: 14, fontWeight: "600", color: colors.text },
   settingValue: { fontSize: 12, color: colors.muted, marginTop: 2 },
 });

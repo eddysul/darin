@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/darin-logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFFDF7"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": false,
@@ -18,9 +18,12 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/darin-logo.png",
-        "backgroundColor": "#FFFDF7"
+        "backgroundColor": "#FFFFFF"
       },
       "package": "com.darin.childcare"
+    },
+    "web": {
+      "bundler": "metro"
     },
     "plugins": [
       [

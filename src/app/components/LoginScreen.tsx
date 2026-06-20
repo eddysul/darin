@@ -11,7 +11,7 @@ type LoginScreenProps = {
 type AuthMode = "login" | "signup";
 
 const NAVY = "#243036";
-const GOLD = "#D9A441";
+const ACCENT = "#E0B23F";
 
 function GoogleIcon() {
   return (
@@ -176,7 +176,7 @@ export function LoginScreen({ onLogin, onSignUp }: LoginScreenProps) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.35 }}
       className="absolute inset-0 z-[55] flex flex-col px-7 pt-8 pb-8 overflow-y-auto"
-      style={{ background: "radial-gradient(circle at top, #FFF4D8 0%, #FFFDF7 38%, #FFFFFF 100%)" }}
+      style={{ background: "#FFFFFF" }}
     >
       <div className="flex flex-col items-center mb-5">
         <img
@@ -385,7 +385,7 @@ export function LoginScreen({ onLogin, onSignUp }: LoginScreenProps) {
           <button
             type="button"
             className="text-xs font-semibold text-right self-end hover:opacity-70 transition-opacity"
-            style={{ color: GOLD }}
+            style={{ color: ACCENT }}
           >
             {t("login.forgotPassword")}
           </button>
@@ -420,7 +420,7 @@ export function LoginScreen({ onLogin, onSignUp }: LoginScreenProps) {
               <button
                 type="button"
                 onClick={isSignup ? onSignUp : onLogin}
-                className="w-full flex items-center justify-center gap-3 bg-[#243036] text-[#FFFDF7] rounded-xl py-3.5 text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
+                className="w-full flex items-center justify-center gap-3 bg-[#243036] text-[#FAFAF8] rounded-xl py-3.5 text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
               >
                 <AppleIcon />
                 {t("login.continueApple")}

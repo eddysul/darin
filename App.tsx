@@ -5,12 +5,15 @@ import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppProvider } from "./src/context/AppContext";
+import { CareFlowProvider } from "./src/context/CareFlowContext";
+import { ChatProvider } from "./src/context/ChatContext";
 import { LanguageProvider } from "./src/LanguageContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { MainTabs } from "./src/screens/MainTabs";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { SplashScreen } from "./src/screens/SplashScreen";
 import type { UserProfile } from "./src/types/profile";
+import { WebAppShell } from "./src/components/WebAppShell";
 import { colors } from "./src/theme";
 
 type AppPhase = "splash" | "login" | "onboarding" | "main";
@@ -18,11 +21,17 @@ type AppPhase = "splash" | "login" | "onboarding" | "main";
 export default function App() {
   return (
     <SafeAreaProvider>
-      <LanguageProvider>
-        <AppProvider>
-          <RootApp />
-        </AppProvider>
-      </LanguageProvider>
+      <WebAppShell>
+        <LanguageProvider>
+          <AppProvider>
+            <ChatProvider>
+              <CareFlowProvider>
+                <RootApp />
+              </CareFlowProvider>
+            </ChatProvider>
+          </AppProvider>
+        </LanguageProvider>
+      </WebAppShell>
     </SafeAreaProvider>
   );
 }

@@ -32,7 +32,7 @@ export function LanguagePicker({ open, onClose }: LanguagePickerProps) {
               }}
             >
               <Text style={[styles.optionText, locale === opt && styles.optionTextActive]}>{t(labelKey)}</Text>
-              {locale === opt && <Check size={16} color={colors.gold} strokeWidth={2.5} />}
+              {locale === opt && <Check size={16} color={colors.yellow} strokeWidth={2.5} />}
             </Pressable>
           ))}
         </Pressable>
@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     marginBottom: 6,
   },
-  optionActive: { backgroundColor: colors.champagne },
+  optionActive: { backgroundColor: colors.yellowSoft },
   optionText: { fontSize: 14, fontWeight: "600", color: colors.text },
-  optionTextActive: { color: colors.gold },
+  optionTextActive: { color: colors.text },
 });

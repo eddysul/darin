@@ -10,7 +10,8 @@ import {
   Thermometer,
   Utensils,
 } from "lucide-react-native";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ScreenScrollView } from "../../components/ScreenScrollView";
 import { useApp } from "../../context/AppContext";
 import { DEMO_VOICE_TRANSCRIPT, generateDailyReport } from "../../demo/dailyReport";
 import { getLogEntries } from "../../i18n";
@@ -57,18 +58,28 @@ export function LogScreen() {
   };
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <ScreenScrollView contentContainerStyle={styles.content}>
       <Text style={styles.title}>{t("log.title")}</Text>
       <Text style={styles.subtitle}>{t("log.subtitle")}</Text>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t("log.voiceNote")}</Text>
+      <View style={styles.voiceCard}>
+        <View style={styles.voiceHeader}>
+          <Text style={styles.voiceTitle}>{t("log.voiceNote")}</Text>
+          <View style={styles.voiceBadge}>
+            <Sparkles size={10} color={colors.yellow} />
+            <Text style={styles.voiceBadgeText}>AI</Text>
+          </View>
+        </View>
         <View style={styles.voiceRow}>
           <Pressable
             style={[styles.micBtn, isRecording && styles.micBtnActive]}
             onPress={handleVoiceToggle}
           >
-            {isRecording ? <Pause size={22} color={colors.champagne} /> : <Mic size={22} color={colors.text} />}
+            {isRecording ? (
+              <Pause size={24} color={colors.primaryForeground} />
+            ) : (
+              <Mic size={24} color={colors.text} />
+            )}
           </Pressable>
           <View style={{ flex: 1 }}>
             {isRecording ? (
@@ -104,14 +115,14 @@ export function LogScreen() {
           onPress={handleGenerate}
           disabled={isGenerating || (!voiceTranscript && !inputText.trim())}
         >
-          <Sparkles size={15} color={colors.text} />
+          <Sparkles size={15} color={colors.yellow} />
           <Text style={styles.generateBtnText}>{isGenerating ? t("log.generating") : t("log.generateReport")}</Text>
         </Pressable>
       </View>
 
       {isGenerating && (
-        <View style={[styles.card, styles.centerCard]}>
-          <Sparkles size={24} color={colors.gold} />
+        <View style={[styles.card, styles.aiCard, styles.centerCard]}>
+          <Sparkles size={24} color={colors.yellow} />
           <Text style={styles.generatingText}>{t("log.generating")}</Text>
         </View>
       )}
@@ -119,33 +130,33 @@ export function LogScreen() {
       {generated && !isGenerating && (
         <>
           {[
-            { title: t("log.originalNote"), body: generated.sourceNote },
-            { title: t("log.aiReportEn"), body: generated.reportEn },
-            { title: t("log.aiReportKo"), body: generated.reportKo },
-            { title: t("log.parentReplyDraft"), body: generated.parentReplyDraft, italic: true },
+            { title: t("log.originalNote"), body: generated.sourceNote, ai: false },
+            { title: t("log.aiReportEn"), body: generated.reportEn, ai: true },
+            { title: t("log.aiReportKo"), body: generated.reportKo, ai: true },
+            { title: t("log.parentReplyDraft"), body: generated.parentReplyDraft, ai: true, italic: true },
           ].map((section) => (
-            <View key={section.title} style={styles.card}>
+            <View key={section.title} style={[styles.card, section.ai && styles.aiCard]}>
               <Text style={styles.sectionLabel}>
-                <Sparkles size={11} color={colors.gold} /> {section.title}
+                {section.ai && <Sparkles size={11} color={colors.yellow} />} {section.title}
               </Text>
               <Text style={[styles.sectionBody, section.italic && styles.italic]}>{section.body}</Text>
             </View>
           ))}
           <View style={[styles.card, styles.saveCard]}>
             <View style={styles.saveHeader}>
-              <Sparkles size={14} color={colors.gold} />
+              <Sparkles size={14} color={colors.yellow} />
               <Text style={styles.saveTitle}>{t("log.aiDraft")}</Text>
               <Text style={styles.saveHint}>{t("log.readyToSend")}</Text>
             </View>
             <View style={styles.saveActions}>
-              <Pressable style={styles.generateBtn} onPress={handleSave}>
-                <Send size={14} color={colors.text} />
-                <Text style={styles.generateBtnText}>{t("log.sendToParent")}</Text>
+              <Pressable style={styles.sendBtn} onPress={handleSave}>
+                <Send size={14} color={colors.primaryForeground} />
+                <Text style={styles.sendBtnText}>{t("log.sendToParent")}</Text>
               </Pressable>
             </View>
             {saved && (
               <Text style={styles.savedText}>
-                <CheckCircle size={12} color={colors.sage} /> {t("log.savedToReports")}
+                <CheckCircle size={12} color={colors.text} /> {t("log.savedToReports")}
               </Text>
             )}
           </View>
@@ -159,7 +170,7 @@ export function LogScreen() {
         return (
           <View key={i} style={styles.logItem}>
             <View style={styles.logIcon}>
-              <Icon size={14} color={colors.gold} />
+              <Icon size={14} color={colors.text} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.logText}>{entry.text}</Text>
@@ -168,15 +179,51 @@ export function LogScreen() {
           </View>
         );
       })}
-    </ScrollView>
+    </ScreenScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 16, paddingBottom: 32 },
+  content: { paddingHorizontal: 16 },
   title: { fontSize: 24, fontWeight: "700", color: colors.text },
-  subtitle: { fontSize: 14, color: colors.muted, marginTop: 4, marginBottom: 16 },
+  subtitle: { fontSize: 14, color: colors.muted, marginTop: 4, marginBottom: 20 },
+  voiceCard: {
+    backgroundColor: colors.yellowSoft,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.yellow,
+    padding: 18,
+    marginBottom: 14,
+  },
+  voiceHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  voiceTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  voiceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.background,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  voiceBadgeText: { fontSize: 10, fontWeight: "700", color: colors.text },
+  voiceRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  micBtn: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.yellow,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  micBtnActive: { backgroundColor: colors.black, transform: [{ scale: 1.05 }] },
+  recording: { fontSize: 14, fontWeight: "600", color: colors.text },
+  transcriptLabel: { fontSize: 12, fontWeight: "600", color: colors.yellow, marginBottom: 4 },
+  transcript: { fontSize: 14, lineHeight: 20, color: colors.text },
+  tapLabel: { fontSize: 15, fontWeight: "600", color: colors.text },
+  tapHint: { fontSize: 12, color: colors.muted, marginTop: 4 },
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.xl,
@@ -185,22 +232,8 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
+  aiCard: { backgroundColor: colors.yellowSoft, borderColor: colors.border },
   cardTitle: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 12 },
-  voiceRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  micBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  micBtnActive: { backgroundColor: colors.navy, transform: [{ scale: 1.05 }] },
-  recording: { fontSize: 14, fontWeight: "600", color: colors.text },
-  transcriptLabel: { fontSize: 12, fontWeight: "600", color: colors.gold, marginBottom: 4 },
-  transcript: { fontSize: 14, lineHeight: 20, color: colors.text, opacity: 0.85 },
-  tapLabel: { fontSize: 14, fontWeight: "600", color: colors.text },
-  tapHint: { fontSize: 12, color: colors.muted, marginTop: 2 },
   textarea: {
     backgroundColor: colors.inputBg,
     borderRadius: radius.lg,
@@ -218,23 +251,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: colors.gold,
+    backgroundColor: colors.primary,
     borderRadius: radius.md,
     paddingVertical: 12,
   },
   btnDisabled: { opacity: 0.4 },
-  generateBtnText: { fontSize: 14, fontWeight: "600", color: colors.text },
+  generateBtnText: { fontSize: 14, fontWeight: "600", color: colors.primaryForeground },
   centerCard: { alignItems: "center", paddingVertical: 24 },
   generatingText: { marginTop: 8, fontSize: 14, fontWeight: "600", color: colors.text },
-  sectionLabel: { fontSize: 12, fontWeight: "600", color: colors.gold, marginBottom: 8 },
-  sectionBody: { fontSize: 14, lineHeight: 22, color: colors.text, opacity: 0.85 },
-  italic: { fontStyle: "italic" },
-  saveCard: { backgroundColor: "#FFF9EB", borderColor: colors.border },
+  sectionLabel: { fontSize: 12, fontWeight: "600", color: colors.text, marginBottom: 8 },
+  sectionBody: { fontSize: 14, lineHeight: 22, color: colors.muted },
+  italic: { fontStyle: "italic", color: colors.text },
+  saveCard: { borderTopWidth: 3, borderTopColor: colors.yellow },
   saveHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   saveTitle: { fontSize: 14, fontWeight: "600", color: colors.text, flex: 1 },
   saveHint: { fontSize: 12, color: colors.muted },
   saveActions: { flexDirection: "row" },
-  savedText: { marginTop: 10, fontSize: 12, color: colors.sage, fontWeight: "500" },
+  sendBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+  },
+  sendBtnText: { fontSize: 14, fontWeight: "600", color: colors.primaryForeground },
+  savedText: { marginTop: 10, fontSize: 12, color: colors.muted, fontWeight: "500" },
   logTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginTop: 8, marginBottom: 12 },
   logItem: {
     flexDirection: "row",
@@ -246,7 +290,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
   },
-  logIcon: { backgroundColor: colors.champagne, borderRadius: 12, padding: 6 },
+  logIcon: { backgroundColor: colors.backgroundSecondary, borderRadius: 12, padding: 6 },
   logText: { fontSize: 14, lineHeight: 20, color: colors.text },
   logTime: { fontSize: 12, color: colors.muted, marginTop: 4 },
 });

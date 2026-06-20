@@ -5,9 +5,6 @@ import {
   Mic,
   Search,
   User,
-  Star,
-  MapPin,
-  Clock,
   MessageCircle,
   ChevronRight,
   Heart,
@@ -41,6 +38,10 @@ import type { UserProfile } from "./types/profile";
 import type { DailyReport } from "./types/dailyReport";
 import { generateDailyReport, DEMO_VOICE_TRANSCRIPT } from "./demo/dailyReport";
 import { CAREGIVER_MATCHES } from "./demo/caregivers";
+import { CareFlowProvider, useCareFlow } from "./context/CareFlowContext";
+import { MatchTab } from "./components/match/MatchTab";
+import { CareChatModal } from "./components/care/CareChatModal";
+import { CarePlanModal } from "./components/care/CarePlanModal";
 
 type AppPhase = "splash" | "login" | "onboarding" | "main";
 
@@ -65,14 +66,13 @@ function getOnboardingPreview() {
 }
 import {
   getLogEntries,
-  getCaregiverRole,
 } from "./i18n";
 
 type Tab = "home" | "report" | "log" | "match" | "profile";
 
 const DEFAULT_PROFILE: UserProfile = {
   name: "Jisoo Kim",
-  location: "Seoul, Korea",
+  location: "Seattle, WA",
   avatar: "photo-1438761681033-6461ffad8d80",
   role: "parent",
   languages: "Korean, English",
@@ -82,11 +82,11 @@ const REPORT_ITEM_META: Record<
   DailyReport["items"][number]["type"],
   { icon: typeof Utensils; color: string; bg: string }
 > = {
-  meal: { icon: Utensils, color: "text-[#B8860B]", bg: "bg-[#FFF4D8]" },
-  nap: { icon: Moon, color: "text-[#6B7FA8]", bg: "bg-[#F0F3FA]" },
-  activity: { icon: Activity, color: "text-[#6B9080]", bg: "bg-[#EEF5F0]" },
-  health: { icon: Thermometer, color: "text-[#A67C52]", bg: "bg-[#FFF4D8]" },
-  reminder: { icon: Bell, color: "text-[#D9A441]", bg: "bg-[#FFF9EB]" },
+  meal: { icon: Utensils, color: "text-[#111111]", bg: "bg-[#FFF8E7]" },
+  nap: { icon: Moon, color: "text-[#666666]", bg: "bg-[#FAFAF8]" },
+  activity: { icon: Activity, color: "text-[#111111]", bg: "bg-[#FAFAF8]" },
+  health: { icon: Thermometer, color: "text-[#1A1A1A]", bg: "bg-[#FFF8E7]" },
+  reminder: { icon: Bell, color: "text-[#111111]", bg: "bg-[#FFF8E7]" },
 };
 
 function Avatar({ src, size = 40, className = "" }: { src: string; size?: number; className?: string }) {
@@ -100,9 +100,23 @@ function Avatar({ src, size = 40, className = "" }: { src: string; size?: number
   );
 }
 
-function HomeTab({ profile, dailyReport }: { profile: UserProfile; dailyReport: DailyReport | null }) {
+function HomeTab({
+  profile,
+  dailyReport,
+  onOpenChat,
+  onOpenCarePlan,
+}: {
+  profile: UserProfile;
+  dailyReport: DailyReport | null;
+  onOpenChat: () => void;
+  onOpenCarePlan: () => void;
+}) {
   const { locale, t } = useLanguage();
+  const { activeRelationship } = useCareFlow();
   const firstName = profile.name.split(" ")[0];
+  const activeCaregiver = activeRelationship
+    ? CAREGIVER_MATCHES.find((c) => c.id === activeRelationship.caregiverId)
+    : null;
   const reportPreview = dailyReport
     ? locale === "ko"
       ? dailyReport.reportKo
@@ -114,9 +128,9 @@ function HomeTab({ profile, dailyReport }: { profile: UserProfile; dailyReport: 
     <div className="flex flex-col gap-4 pb-6">
       <div
         className="rounded-3xl mx-4 mt-4 p-5 relative overflow-hidden border border-border"
-        style={{ background: "linear-gradient(135deg, #FFF4D8 0%, #FFFDF7 55%, #FFFFFF 100%)" }}
+        style={{ background: "#FFFFFF" }}
       >
-        <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-[#F4D58D]/20" />
+        <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-[#FAFAF8]" />
         <div className="flex items-center justify-between relative">
           <div>
             <p className="text-muted-foreground text-sm font-medium">{t("home.greeting")}</p>
@@ -124,21 +138,53 @@ function HomeTab({ profile, dailyReport }: { profile: UserProfile; dailyReport: 
               {firstName} 👋
             </h1>
           </div>
-          <Avatar src={profile.avatar} size={48} className="ring-2 ring-[#F4D58D]/50" />
+          <Avatar src={profile.avatar} size={48} className="ring-2 ring-[#EAEAEA]" />
         </div>
         <div className="mt-4 bg-white/70 rounded-2xl p-3 flex items-center gap-3 border border-border">
-          <div className="bg-[#FFF4D8] rounded-xl p-2">
-            <Baby size={20} className="text-[#B8860B]" />
+          <div className="bg-[#FFF8E7] rounded-xl p-2">
+            <Baby size={20} className="text-[#111111]" />
           </div>
           <div className="flex-1">
             <p className="text-muted-foreground text-xs">{t("home.emmaWith")}</p>
             <p className="text-foreground font-semibold text-sm">
-              Ji-yeon Park · {t("home.until")}
+              {activeCaregiver
+                ? `${activeCaregiver.name} · ${activeRelationship?.schedule ?? t("home.until")}`
+                : `— · ${t("home.until")}`}
             </p>
           </div>
-          <CheckCircle size={18} className="text-[#6B9080]" />
+          {activeRelationship ? (
+            <CheckCircle size={18} className="text-[#E0B23F]" />
+          ) : (
+            <CheckCircle size={18} className="text-[#666666]" />
+          )}
         </div>
       </div>
+
+      {activeRelationship && activeCaregiver && (
+        <div className="mx-4 bg-white border border-[#E0B23F] rounded-3xl p-4 shadow-sm">
+          <p className="text-xs font-bold text-[#111111] mb-1">{t("home.activeCareTitle")}</p>
+          <p className="text-sm font-semibold">
+            {activeCaregiver.name} · {activeRelationship.schedule}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">{t("home.activeCareDetail")}</p>
+          <div className="flex gap-2 mt-3">
+            <button
+              type="button"
+              onClick={onOpenChat}
+              className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90"
+            >
+              {t("home.openChat")}
+            </button>
+            <button
+              type="button"
+              onClick={onOpenCarePlan}
+              className="flex-1 py-2.5 rounded-xl border border-[#EAEAEA] text-xs font-semibold hover:bg-[#FAFAF8]"
+            >
+              {t("home.viewCarePlan")}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mx-4">
         <div className="flex items-center justify-between mb-3">
@@ -146,7 +192,7 @@ function HomeTab({ profile, dailyReport }: { profile: UserProfile; dailyReport: 
             {t("home.todaysReport")}
           </h2>
           {dailyReport && (
-            <span className="text-xs font-semibold text-[#B8860B] bg-[#FFF4D8] px-2.5 py-1 rounded-full flex items-center gap-1">
+            <span className="text-xs font-semibold text-[#111111] bg-[#FFF8E7] px-2.5 py-1 rounded-full flex items-center gap-1">
               <Sparkles size={11} />
               {t("report.aiTranslated")}
             </span>
@@ -154,14 +200,14 @@ function HomeTab({ profile, dailyReport }: { profile: UserProfile; dailyReport: 
         </div>
         <div className="bg-card rounded-3xl border border-border p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
-            <Avatar src="photo-1544005313-94ddf0286df2" size={36} />
+            <Avatar src={activeCaregiver?.img ?? "photo-1544005313-94ddf0286df2"} size={36} />
             <div>
               <p className="text-xs text-muted-foreground">{t("home.from")}</p>
               <p className="text-sm font-semibold">
                 {dailyReport ? `${dailyReport.date} · ${dailyReport.savedAt}` : "June 20 · 5:42 PM"}
               </p>
             </div>
-            <div className="ml-auto flex items-center gap-1 bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2.5 py-1 font-semibold">
+            <div className="ml-auto flex items-center gap-1 bg-[#FFF8E7] text-[#111111] text-xs rounded-full px-2.5 py-1 font-semibold">
               <Sparkles size={11} />
               AI
             </div>
@@ -183,7 +229,7 @@ function HomeTab({ profile, dailyReport }: { profile: UserProfile; dailyReport: 
                 </span>
               ))}
               {dailyReport.items.some((i) => i.type === "health") && (
-                <span className="text-xs rounded-full px-2.5 py-1 font-medium bg-[#FFF4D8] text-[#A67C52]">
+                <span className="text-xs rounded-full px-2.5 py-1 font-medium bg-[#FFF8E7] text-[#1A1A1A]">
                   {t("home.tagCough")}
                 </span>
               )}
@@ -198,10 +244,10 @@ function HomeTab({ profile, dailyReport }: { profile: UserProfile; dailyReport: 
         </h2>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { icon: MessageCircle, label: t("home.messageNanny"), color: "bg-[#F0F3FA] text-[#6B7FA8]" },
-            { icon: Calendar, label: t("home.schedulePickup"), color: "bg-[#FFF4D8] text-[#B8860B]" },
-            { icon: Globe, label: t("home.translateReport"), color: "bg-[#EEF5F0] text-[#6B9080]" },
-            { icon: FileText, label: t("home.viewHistory"), color: "bg-[#FFF9EB] text-[#D9A441]" },
+            { icon: MessageCircle, label: t("home.messageNanny"), color: "bg-[#FAFAF8] text-[#111111]" },
+            { icon: Calendar, label: t("home.schedulePickup"), color: "bg-[#FAFAF8] text-[#111111]" },
+            { icon: Globe, label: t("home.translateReport"), color: "bg-[#FAFAF8] text-[#111111]" },
+            { icon: FileText, label: t("home.viewHistory"), color: "bg-[#FAFAF8] text-[#111111]" },
           ].map(({ icon: Icon, label, color }) => (
             <button
               key={label}
@@ -222,7 +268,7 @@ function HomeTab({ profile, dailyReport }: { profile: UserProfile; dailyReport: 
         </h2>
         <div className="bg-card border border-border rounded-3xl p-4 shadow-sm">
           <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
-            <Sparkles size={11} className="text-[#D9A441]" />
+            <Sparkles size={11} className="text-[#111111]" />
             {t("home.suggestedMessage")}
           </p>
           <p className="text-sm text-foreground/85 leading-relaxed italic">
@@ -282,7 +328,7 @@ function ReportTab({ dailyReport }: { dailyReport: DailyReport | null }) {
                     </p>
                   </div>
                   {isToday && report && (
-                    <span className="bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2.5 py-1 font-semibold flex items-center gap-1">
+                    <span className="bg-[#FFF8E7] text-[#111111] text-xs rounded-full px-2.5 py-1 font-semibold flex items-center gap-1">
                       <Sparkles size={11} />
                       {t("report.fromLog")}
                     </span>
@@ -331,10 +377,10 @@ function ReportTab({ dailyReport }: { dailyReport: DailyReport | null }) {
                             );
                           })}
                         </div>
-                        <div className="bg-[#FFF9EB] border border-[#EFE4CF] rounded-2xl p-3 flex items-start gap-2">
-                          <Globe size={14} className="text-[#D9A441] mt-0.5 shrink-0" />
+                        <div className="bg-[#FFF8E7] border border-[#EAEAEA] rounded-2xl p-3 flex items-start gap-2">
+                          <Globe size={14} className="text-[#111111] mt-0.5 shrink-0" />
                           <div>
-                            <p className="text-xs font-semibold text-[#B8860B] mb-1">{t("report.aiTranslated")}</p>
+                            <p className="text-xs font-semibold text-[#111111] mb-1">{t("report.aiTranslated")}</p>
                             <p className="text-xs text-muted-foreground leading-relaxed">{report.reportKo}</p>
                           </div>
                         </div>
@@ -411,22 +457,22 @@ function LogTab({
         <p className="text-muted-foreground text-sm mt-0.5">{t("log.subtitle")}</p>
       </div>
 
-      <div className="mx-4 bg-card border border-border rounded-3xl p-4 shadow-sm">
-        <p className="text-sm font-semibold mb-3">{t("log.voiceNote")}</p>
+      <div className="mx-4 bg-[#FFF8E7] border border-[#E0B23F] rounded-3xl p-5 shadow-sm">
+        <p className="text-base font-bold mb-3">{t("log.voiceNote")}</p>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handleVoiceToggle}
             className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
               isRecording
-                ? "bg-[#243036] shadow-lg scale-110"
-                : "bg-primary shadow-md shadow-primary/20"
+                ? "bg-[#1A1A1A] shadow-lg scale-110"
+                : "bg-[#E0B23F] shadow-md"
             }`}
           >
             {isRecording ? (
-              <Pause size={22} className="text-[#FFF4D8]" />
+              <Pause size={22} className="text-white" />
             ) : (
-              <Mic size={22} className="text-primary-foreground" />
+              <Mic size={22} className="text-[#111111]" />
             )}
           </button>
           <div className="flex-1">
@@ -437,7 +483,7 @@ function LogTab({
                   {Array.from({ length: 20 }).map((_, i) => (
                     <div
                       key={i}
-                      className="w-1 bg-[#F4D58D] rounded-full"
+                      className="w-1 bg-[#E0B23F] rounded-full"
                       style={{ height: `${30 + (i % 5) * 14}%` }}
                     />
                   ))}
@@ -445,7 +491,7 @@ function LogTab({
               </div>
             ) : voiceTranscript ? (
               <div>
-                <p className="text-xs font-semibold text-[#B8860B] mb-1">{t("log.transcriptReady")}</p>
+                <p className="text-xs font-semibold text-[#E0B23F] mb-1">{t("log.transcriptReady")}</p>
                 <p className="text-sm text-foreground/85 leading-relaxed">{voiceTranscript}</p>
               </div>
             ) : (
@@ -474,7 +520,7 @@ function LogTab({
           disabled={isGenerating || (!voiceTranscript && !inputText.trim())}
           className="mt-3 w-full bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-40"
         >
-          <Sparkles size={15} />
+          <Sparkles size={15} className="text-[#E0B23F]" />
           {isGenerating ? t("log.generating") : t("log.generateReport")}
         </button>
       </div>
@@ -489,7 +535,7 @@ function LogTab({
           >
             {isGenerating ? (
               <div className="bg-card border border-border rounded-3xl p-6 text-center">
-                <Sparkles size={24} className="text-[#D9A441] mx-auto mb-2 animate-pulse" />
+                <Sparkles size={24} className="text-[#E0B23F] mx-auto mb-2 animate-pulse" />
                 <p className="text-sm font-semibold">{t("log.generating")}</p>
               </div>
             ) : generated && (
@@ -501,7 +547,7 @@ function LogTab({
                   { title: t("log.parentReplyDraft"), body: generated.parentReplyDraft, italic: true },
                 ].map((section) => (
                   <div key={section.title} className="bg-card border border-border rounded-3xl p-4 shadow-sm">
-                    <p className="text-xs font-semibold text-[#B8860B] mb-2 flex items-center gap-1.5">
+                    <p className="text-xs font-semibold text-[#111111] mb-2 flex items-center gap-1.5">
                       <Sparkles size={11} />
                       {section.title}
                     </p>
@@ -511,9 +557,9 @@ function LogTab({
                   </div>
                 ))}
 
-                <div className="bg-[#FFF9EB] border border-[#EFE4CF] rounded-3xl p-4">
+                <div className="bg-[#FFF8E7] border border-[#EAEAEA] rounded-3xl p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Sparkles size={14} className="text-[#D9A441]" />
+                    <Sparkles size={14} className="text-[#111111]" />
                     <p className="text-sm font-semibold">{t("log.aiDraft")}</p>
                     <span className="ml-auto text-xs text-muted-foreground">{t("log.readyToSend")}</span>
                   </div>
@@ -531,7 +577,7 @@ function LogTab({
                     </button>
                   </div>
                   {saved && (
-                    <p className="text-xs text-[#6B9080] font-medium mt-2 flex items-center gap-1">
+                    <p className="text-xs text-[#111111] font-medium mt-2 flex items-center gap-1">
                       <CheckCircle size={12} />
                       {t("log.savedToReports")}
                     </p>
@@ -550,10 +596,10 @@ function LogTab({
         <div className="flex flex-col gap-2">
           {logEntries.map((entry, i) => {
             const colors: Record<string, string> = {
-              meal: "bg-[#FFF4D8] text-[#B8860B]",
-              sleep: "bg-[#F0F3FA] text-[#6B7FA8]",
-              activity: "bg-[#EEF5F0] text-[#6B9080]",
-              health: "bg-[#FFF9EB] text-[#A67C52]",
+              meal: "bg-[#FFF8E7] text-[#111111]",
+              sleep: "bg-[#FAFAF8] text-[#666666]",
+              activity: "bg-[#FAFAF8] text-[#111111]",
+              health: "bg-[#FFF8E7] text-[#1A1A1A]",
             };
             const icons: Record<string, typeof Utensils> = {
               meal: Utensils,
@@ -575,143 +621,6 @@ function LogTab({
             );
           })}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function MatchTab() {
-  const { locale, t } = useLanguage();
-  const filters = [
-    t("match.filterAll"),
-    t("match.filterBilingual"),
-    t("match.filterWeekday"),
-    t("match.filterInfant"),
-    t("match.filterCertified"),
-  ];
-
-  return (
-    <div className="flex flex-col gap-4 pb-6">
-      <div className="mx-4 mt-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: "Nunito, sans-serif" }}>
-              {t("match.title")}
-            </h1>
-            <p className="text-muted-foreground text-sm mt-0.5">{t("match.subtitle")}</p>
-          </div>
-          <span className="shrink-0 text-xs font-semibold text-[#B8860B] bg-[#FFF4D8] px-2.5 py-1.5 rounded-full flex items-center gap-1">
-            <Sparkles size={11} />
-            {t("match.aiRecommended")}
-          </span>
-        </div>
-      </div>
-
-      <div className="mx-4 flex items-center gap-2 bg-card border border-border rounded-2xl px-4 py-3 shadow-sm">
-        <Search size={16} className="text-muted-foreground" />
-        <input
-          className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
-          placeholder={t("match.placeholder")}
-        />
-      </div>
-
-      <div className="px-4 flex gap-2 overflow-x-auto scrollbar-hide">
-        {filters.map((f, idx) => (
-          <button
-            key={f}
-            type="button"
-            className={`whitespace-nowrap text-xs rounded-full px-3.5 py-2 font-semibold border transition-colors ${
-              idx === 0
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-card text-muted-foreground border-border hover:border-primary/50"
-            }`}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-3 mx-4">
-        {CAREGIVER_MATCHES.map((c) => (
-          <motion.div
-            key={c.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-card border border-border rounded-3xl p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-start gap-3">
-              <div className="relative">
-                <Avatar src={c.img} size={52} />
-                {c.verified && (
-                  <div className="absolute -bottom-1 -right-1 bg-[#6B9080] rounded-full p-0.5">
-                    <CheckCircle size={12} className="text-white" />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-bold text-sm">{c.name}</p>
-                  <span className="ml-auto text-xs font-bold text-[#B8860B] bg-[#FFF4D8] px-2 py-1 rounded-full">
-                    {c.matchScore}% {t("match.matchScore")}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">{getCaregiverRole(locale, c.role)}</p>
-                <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Star size={11} className="text-[#D9A441] fill-[#D9A441]" />
-                    {c.rating} ({c.reviews})
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <MapPin size={11} />
-                    {c.distance}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock size={11} />
-                    {c.available.split(" ").slice(0, 2).join(" ")}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-3 bg-[#FFF9EB] border border-[#EFE4CF] rounded-2xl p-3">
-              <p className="text-xs font-semibold text-[#B8860B] mb-1 flex items-center gap-1">
-                <Sparkles size={11} />
-                {t("match.whyRecommended")}
-              </p>
-              <p className="text-xs text-foreground/85 leading-relaxed">
-                {locale === "ko" ? c.aiExplanationKo : c.aiExplanationEn}
-              </p>
-            </div>
-
-            <p className="text-xs font-semibold text-muted-foreground mt-3 mb-1.5">{t("match.matchReasons")}</p>
-            <div className="flex gap-1.5 flex-wrap">
-              {c.matchReasons.map((reason) => (
-                <span
-                  key={reason}
-                  className="bg-secondary text-foreground/80 text-xs rounded-full px-2.5 py-1 font-medium"
-                >
-                  {reason}
-                </span>
-              ))}
-            </div>
-
-            <div className="flex gap-1.5 flex-wrap mt-2">
-              {c.languages.map((lang) => (
-                <span key={lang} className="bg-[#F0F3FA] text-[#6B7FA8] text-xs rounded-full px-2 py-0.5 font-medium flex items-center gap-1">
-                  <Globe size={10} />
-                  {lang}
-                </span>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-              <span className="font-bold text-[#B8860B] text-sm">{c.price}</span>
-              <button type="button" className="bg-primary text-primary-foreground text-xs font-semibold rounded-xl px-4 py-1.5 hover:opacity-90 transition-opacity">
-                {t("match.viewProfile")}
-              </button>
-            </div>
-          </motion.div>
-        ))}
       </div>
     </div>
   );
@@ -787,7 +696,7 @@ function ProfileTab({
             {profile.languages && (
             <div className="flex gap-1 mt-1.5 flex-wrap">
               {profile.languages.split(",").map((lang) => (
-                <span key={lang.trim()} className="bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2 py-0.5 font-medium">
+                <span key={lang.trim()} className="bg-[#FFF8E7] text-[#111111] text-xs rounded-full px-2 py-0.5 font-medium">
                   {lang.trim()}
                 </span>
               ))}
@@ -795,8 +704,8 @@ function ProfileTab({
             )}
             {!profile.languages && (
             <div className="flex gap-1 mt-1.5">
-              <span className="bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2 py-0.5 font-medium">🇰🇷 Korean</span>
-              <span className="bg-[#F0F3FA] text-[#6B7FA8] text-xs rounded-full px-2 py-0.5 font-medium">🇺🇸 English</span>
+              <span className="bg-[#FFF8E7] text-[#111111] text-xs rounded-full px-2 py-0.5 font-medium">🇰🇷 Korean</span>
+              <span className="bg-[#FAFAF8] text-[#666666] text-xs rounded-full px-2 py-0.5 font-medium">🇺🇸 English</span>
             </div>
             )}
           </div>
@@ -938,8 +847,11 @@ function AppContent() {
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
   const [phase, setPhase] = useState<AppPhase>(() => getDevPreviewPhase() ?? "splash");
+  const [homeChatOpen, setHomeChatOpen] = useState(false);
+  const [homeCarePlanOpen, setHomeCarePlanOpen] = useState(false);
   const onboardingPreview = getOnboardingPreview();
   const { t } = useLanguage();
+  const { activeRelationship, carePlan } = useCareFlow();
 
   const handleSplashComplete = useCallback(() => setPhase("login"), []);
   const handleLogin = useCallback(() => setPhase("main"), []);
@@ -955,10 +867,25 @@ function AppContent() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case "home": return <HomeTab profile={profile} dailyReport={dailyReport} />;
+      case "home":
+        return (
+          <HomeTab
+            profile={profile}
+            dailyReport={dailyReport}
+            onOpenChat={() => setHomeChatOpen(true)}
+            onOpenCarePlan={() => setHomeCarePlanOpen(true)}
+          />
+        );
       case "report": return <ReportTab dailyReport={dailyReport} />;
       case "log": return <LogTab dailyReport={dailyReport} onSaveReport={handleSaveReport} />;
-      case "match": return <MatchTab />;
+      case "match":
+        return (
+          <MatchTab
+            onGoHome={() => {
+              setActiveTab("home");
+            }}
+          />
+        );
       case "profile": return (
         <ProfileTab
           profile={profile}
@@ -974,7 +901,7 @@ function AppContent() {
       className="min-h-screen flex items-center justify-center"
       style={{
         fontFamily: "Plus Jakarta Sans, sans-serif",
-        background: "radial-gradient(circle at top, #FFF4D8 0%, #FFFDF7 38%, #FFFFFF 100%)",
+        background: "#FFFFFF",
       }}
     >
       <div
@@ -1031,28 +958,28 @@ function AppContent() {
                       <div
                         className={`w-12 h-12 rounded-full flex items-center justify-center shadow-md transition-all -mt-6 ${
                           activeTab === id
-                            ? "bg-primary shadow-primary/40 scale-110"
-                            : "bg-primary/80 shadow-primary/20"
+                            ? "bg-[#E0B23F] shadow-black/10 scale-110"
+                            : "bg-[#E0B23F]/90 shadow-black/5"
                         }`}
                       >
-                        <Icon size={22} className="text-primary-foreground" />
+                        <Icon size={22} className="text-[#111111]" />
                       </div>
                     ) : (
                       <div
                         className={`p-2 rounded-xl transition-all ${
-                          activeTab === id ? "bg-primary/10" : ""
+                          activeTab === id ? "bg-[#FFF8E7]" : ""
                         }`}
                       >
                         <Icon
                           size={20}
-                          className={activeTab === id ? "text-primary" : "text-muted-foreground"}
+                          className={activeTab === id ? "text-foreground" : "text-muted-foreground"}
                         />
                       </div>
                     )}
                     <span
                       className={`text-xs font-semibold ${
                         id === "log" ? "mt-1" : ""
-                      } ${activeTab === id ? "text-primary" : "text-muted-foreground"}`}
+                      } ${activeTab === id ? "text-foreground" : "text-muted-foreground"}`}
                     >
                       {t(labelKey)}
                     </span>
@@ -1067,6 +994,22 @@ function AppContent() {
               profile={profile}
               onClose={() => setProfileEditOpen(false)}
               onSave={setProfile}
+            />
+
+            <CareChatModal
+              open={homeChatOpen}
+              caregiverId={activeRelationship?.caregiverId ?? null}
+              onClose={() => setHomeChatOpen(false)}
+              onViewCarePlan={() => {
+                setHomeChatOpen(false);
+                setHomeCarePlanOpen(true);
+              }}
+              onGoHome={() => setActiveTab("home")}
+            />
+            <CarePlanModal
+              open={homeCarePlanOpen}
+              plan={carePlan}
+              onClose={() => setHomeCarePlanOpen(false)}
             />
           </>
         )}
@@ -1091,7 +1034,9 @@ function AppContent() {
 export default function App() {
   return (
     <LanguageProvider>
-      <AppContent />
+      <CareFlowProvider>
+        <AppContent />
+      </CareFlowProvider>
     </LanguageProvider>
   );
 }

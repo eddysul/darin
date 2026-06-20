@@ -47,7 +47,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
               </View>
             ) : (
               <View style={[styles.iconWrap, active && styles.iconWrapActive]}>
-                <Icon size={20} color={active ? colors.gold : colors.muted} />
+                <Icon size={20} color={active ? colors.text : colors.muted} />
               </View>
             )}
             <Text style={[styles.tabLabel, active && styles.tabLabelActive, center && styles.centerLabel]}>{label}</Text>
@@ -70,7 +70,10 @@ export function MainTabs() {
 
   return (
     <>
-    <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
+    <Tab.Navigator
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}
+    >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Reports" component={ReportScreen} />
       <Tab.Screen name="Log" component={LogScreen} />
@@ -99,18 +102,18 @@ const styles = StyleSheet.create({
   },
   tabItem: { flex: 1, alignItems: "center", gap: 4 },
   iconWrap: { padding: 8, borderRadius: 12 },
-  iconWrapActive: { backgroundColor: colors.champagne },
+  iconWrapActive: { backgroundColor: colors.yellowSoft },
   centerBtn: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.gold,
+    backgroundColor: colors.yellow,
     alignItems: "center",
     justifyContent: "center",
     marginTop: -20,
   },
   centerBtnActive: { transform: [{ scale: 1.05 }] },
   tabLabel: { fontSize: 11, fontWeight: "600", color: colors.muted },
-  tabLabelActive: { color: colors.gold },
+  tabLabelActive: { color: colors.text },
   centerLabel: { marginTop: 4 },
 });
