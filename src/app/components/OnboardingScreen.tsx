@@ -204,7 +204,7 @@ export function OnboardingScreen({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="absolute inset-0 z-[55] flex flex-col px-7 pt-8 pb-8 overflow-y-auto"
-      style={{ background: "radial-gradient(circle at top, #FFF4D8 0%, #FFFDF7 38%, #FFFFFF 100%)" }}
+      style={{ background: "#FFFFFF" }}
     >
       <div className="flex items-center justify-between mb-4">
         {step === "profile" ? (

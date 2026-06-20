@@ -8,19 +8,20 @@ import {
   Utensils,
 } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
+import { ScreenScrollView } from "../../components/ScreenScrollView";
 import { useApp } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
 import type { DailyReportItemType } from "../../types/dailyReport";
 import { colors, radius } from "../../theme";
 
-const ITEM_META: Record<DailyReportItemType, { icon: typeof Utensils; color: string; bg: string }> = {
-  meal: { icon: Utensils, color: "#B8860B", bg: "#FFF4D8" },
-  nap: { icon: Moon, color: "#6B7FA8", bg: "#F0F3FA" },
-  activity: { icon: Activity, color: "#6B9080", bg: "#EEF5F0" },
-  health: { icon: Thermometer, color: "#A67C52", bg: "#FFF4D8" },
-  reminder: { icon: Bell, color: "#D9A441", bg: "#FFF9EB" },
+const ITEM_META: Record<DailyReportItemType, { icon: typeof Utensils; color: string; bg: string; accent?: boolean }> = {
+  meal: { icon: Utensils, color: colors.text, bg: colors.yellowSoft, accent: true },
+  nap: { icon: Moon, color: colors.muted, bg: colors.backgroundSecondary },
+  activity: { icon: Activity, color: colors.text, bg: colors.backgroundSecondary },
+  health: { icon: Thermometer, color: colors.text, bg: colors.backgroundSecondary },
+  reminder: { icon: Bell, color: colors.yellow, bg: colors.yellowSoft, accent: true },
 };
 
 export function ReportScreen() {
@@ -30,7 +31,7 @@ export function ReportScreen() {
   const dates = ["June 20", "June 19", "June 18"];
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <ScreenScrollView contentContainerStyle={styles.content}>
       <Text style={styles.title}>{t("report.title")}</Text>
       <Text style={styles.subtitle}>{t("report.subtitle")}</Text>
 
@@ -41,7 +42,7 @@ export function ReportScreen() {
         return (
           <View key={date} style={styles.dateBlock}>
             <View style={styles.dateRow}>
-              <Text style={styles.dateLabel}>{date}</Text>
+              <Text style={styles.dateLabel}>{date.toUpperCase()}</Text>
               <View style={styles.dateLine} />
             </View>
             <Pressable style={styles.card} onPress={() => isToday && setExpanded(!expanded)}>
@@ -55,7 +56,7 @@ export function ReportScreen() {
                 </View>
                 {isToday && report && (
                   <View style={styles.fromLogBadge}>
-                    <Sparkles size={11} color={colors.gold} />
+                    <Sparkles size={11} color={colors.yellow} />
                     <Text style={styles.fromLogText}>{t("report.fromLog")}</Text>
                   </View>
                 )}
@@ -68,7 +69,14 @@ export function ReportScreen() {
                       const meta = ITEM_META[item.type];
                       const Icon = meta.icon;
                       return (
-                        <View key={item.type} style={[styles.pill, { backgroundColor: meta.bg }]}>
+                        <View
+                          key={item.type}
+                          style={[
+                            styles.pill,
+                            { backgroundColor: meta.bg },
+                            meta.accent && styles.pillAccent,
+                          ]}
+                        >
                           <Icon size={16} color={meta.color} />
                           <Text style={[styles.pillText, { color: meta.color }]}>{item.label}</Text>
                         </View>
@@ -96,7 +104,7 @@ export function ReportScreen() {
                         );
                       })}
                       <View style={styles.translationBox}>
-                        <Globe size={14} color={colors.gold} />
+                        <Globe size={14} color={colors.yellow} />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.translationTitle}>{t("report.aiTranslated")}</Text>
                           <Text style={styles.translationBody}>{report.reportKo}</Text>
@@ -116,18 +124,17 @@ export function ReportScreen() {
           </View>
         );
       })}
-    </ScrollView>
+    </ScreenScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 16, paddingBottom: 32 },
+  content: { paddingHorizontal: 16 },
   title: { fontSize: 24, fontWeight: "700", color: colors.text },
-  subtitle: { fontSize: 14, color: colors.muted, marginTop: 4, marginBottom: 16 },
-  dateBlock: { marginBottom: 16 },
-  dateRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-  dateLabel: { fontSize: 12, fontWeight: "600", color: colors.muted },
+  subtitle: { fontSize: 14, color: colors.muted, marginTop: 4, marginBottom: 20 },
+  dateBlock: { marginBottom: 20 },
+  dateRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
+  dateLabel: { fontSize: 11, fontWeight: "700", color: colors.muted, letterSpacing: 1 },
   dateLine: { flex: 1, height: 1, backgroundColor: colors.border },
   card: {
     backgroundColor: colors.card,
@@ -136,39 +143,40 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 16,
   },
-  cardHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
-  caregiver: { fontSize: 14, fontWeight: "600", color: colors.text },
-  submitted: { fontSize: 12, color: colors.muted },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
+  caregiver: { fontSize: 15, fontWeight: "600", color: colors.text },
+  submitted: { fontSize: 12, color: colors.muted, marginTop: 2 },
   fromLogBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: colors.champagne,
+    backgroundColor: colors.yellowSoft,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.full,
   },
-  fromLogText: { fontSize: 10, fontWeight: "600", color: colors.gold },
+  fromLogText: { fontSize: 10, fontWeight: "600", color: colors.text },
   pillGrid: { flexDirection: "row", gap: 8 },
-  pill: { flex: 1, borderRadius: radius.lg, padding: 10, alignItems: "center", gap: 4 },
+  pill: { flex: 1, borderRadius: radius.lg, padding: 10, alignItems: "center", gap: 4, borderWidth: 1, borderColor: colors.border },
+  pillAccent: { borderColor: colors.yellow },
   pillText: { fontSize: 11, fontWeight: "600" },
-  expanded: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
-  summary: { fontSize: 14, lineHeight: 22, color: colors.text, opacity: 0.85, marginBottom: 12 },
-  detailRow: { flexDirection: "row", gap: 12, marginBottom: 10 },
+  expanded: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border },
+  summary: { fontSize: 14, lineHeight: 24, color: colors.text, marginBottom: 14 },
+  detailRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
   detailIcon: { borderRadius: 12, padding: 6 },
-  detailLabel: { fontSize: 12, fontWeight: "600", color: colors.muted },
-  detailValue: { fontSize: 14, color: colors.text },
+  detailLabel: { fontSize: 11, fontWeight: "600", color: colors.muted, textTransform: "uppercase", letterSpacing: 0.5 },
+  detailValue: { fontSize: 14, color: colors.text, marginTop: 2 },
   translationBox: {
     flexDirection: "row",
     gap: 10,
-    backgroundColor: "#FFF9EB",
+    backgroundColor: colors.yellowSoft,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
     padding: 12,
     marginTop: 8,
   },
-  translationTitle: { fontSize: 12, fontWeight: "600", color: colors.gold, marginBottom: 4 },
+  translationTitle: { fontSize: 12, fontWeight: "600", color: colors.text, marginBottom: 4 },
   translationBody: { fontSize: 12, lineHeight: 18, color: colors.muted },
   placeholder: { fontSize: 14, color: colors.muted, lineHeight: 20 },
 });

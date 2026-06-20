@@ -5,9 +5,6 @@ import {
   Mic,
   Search,
   User,
-  Star,
-  MapPin,
-  Clock,
   MessageCircle,
   ChevronRight,
   Heart,
@@ -34,6 +31,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { LanguageProvider, useLanguage } from "./LanguageContext";
 import { LanguagePicker } from "./components/LanguagePicker";
 import { ProfileEditModal } from "./components/ProfileEditModal";
+import { ChildCareSnapshotModal } from "./components/ChildCareSnapshotModal";
 import { SplashScreen } from "./components/SplashScreen";
 import { LoginScreen } from "./components/LoginScreen";
 import { OnboardingScreen } from "./components/OnboardingScreen";
@@ -74,14 +72,13 @@ function getOnboardingPreview() {
 }
 import {
   getLogEntries,
-  getCaregiverRole,
 } from "./i18n";
 
 type Tab = "home" | "report" | "log" | "match" | "profile";
 
 const DEFAULT_PROFILE: UserProfile = {
   name: "Jisoo Kim",
-  location: "Seoul, Korea",
+  location: "Seattle, WA",
   avatar: "photo-1438761681033-6461ffad8d80",
   role: "parent",
   languages: "Korean, English",
@@ -91,11 +88,11 @@ const REPORT_ITEM_META: Record<
   DailyReport["items"][number]["type"],
   { icon: typeof Utensils; color: string; bg: string }
 > = {
-  meal: { icon: Utensils, color: "text-[#B8860B]", bg: "bg-[#FFF4D8]" },
-  nap: { icon: Moon, color: "text-[#6B7FA8]", bg: "bg-[#F0F3FA]" },
-  activity: { icon: Activity, color: "text-[#6B9080]", bg: "bg-[#EEF5F0]" },
-  health: { icon: Thermometer, color: "text-[#A67C52]", bg: "bg-[#FFF4D8]" },
-  reminder: { icon: Bell, color: "text-[#D9A441]", bg: "bg-[#FFF9EB]" },
+  meal: { icon: Utensils, color: "text-[#111111]", bg: "bg-[#FFF8E7]" },
+  nap: { icon: Moon, color: "text-[#666666]", bg: "bg-[#FAFAF8]" },
+  activity: { icon: Activity, color: "text-[#111111]", bg: "bg-[#FAFAF8]" },
+  health: { icon: Thermometer, color: "text-[#1A1A1A]", bg: "bg-[#FFF8E7]" },
+  reminder: { icon: Bell, color: "text-[#111111]", bg: "bg-[#FFF8E7]" },
 };
 
 function Avatar({ src, size = 40, className = "" }: { src: string; size?: number; className?: string }) {
@@ -111,7 +108,11 @@ function Avatar({ src, size = 40, className = "" }: { src: string; size?: number
 
 function HomeTab({ profile, dailyReport, pendingBids, onOpenBids }: { profile: UserProfile; dailyReport: DailyReport | null; pendingBids: number; onOpenBids: () => void }) {
   const { locale, t } = useLanguage();
+  const { activeRelationship } = useCareFlow();
   const firstName = profile.name.split(" ")[0];
+  const activeCaregiver = activeRelationship
+    ? CAREGIVER_MATCHES.find((c) => c.id === activeRelationship.caregiverId)
+    : null;
   const reportPreview = dailyReport
     ? locale === "ko"
       ? dailyReport.reportKo
@@ -123,9 +124,9 @@ function HomeTab({ profile, dailyReport, pendingBids, onOpenBids }: { profile: U
     <div className="flex flex-col gap-4 pb-6">
       <div
         className="rounded-3xl mx-4 mt-4 p-5 relative overflow-hidden border border-border"
-        style={{ background: "linear-gradient(135deg, #FFF4D8 0%, #FFFDF7 55%, #FFFFFF 100%)" }}
+        style={{ background: "#FFFFFF" }}
       >
-        <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-[#F4D58D]/20" />
+        <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-[#FAFAF8]" />
         <div className="flex items-center justify-between relative">
           <div>
             <p className="text-muted-foreground text-sm font-medium">{t("home.greeting")}</p>
@@ -133,19 +134,25 @@ function HomeTab({ profile, dailyReport, pendingBids, onOpenBids }: { profile: U
               {firstName} 👋
             </h1>
           </div>
-          <Avatar src={profile.avatar} size={48} className="ring-2 ring-[#F4D58D]/50" />
+          <Avatar src={profile.avatar} size={48} className="ring-2 ring-[#EAEAEA]" />
         </div>
         <div className="mt-4 bg-white/70 rounded-2xl p-3 flex items-center gap-3 border border-border">
-          <div className="bg-[#FFF4D8] rounded-xl p-2">
-            <Baby size={20} className="text-[#B8860B]" />
+          <div className="bg-[#FFF8E7] rounded-xl p-2">
+            <Baby size={20} className="text-[#111111]" />
           </div>
           <div className="flex-1">
             <p className="text-muted-foreground text-xs">{t("home.emmaWith")}</p>
             <p className="text-foreground font-semibold text-sm">
-              Ji-yeon Park · {t("home.until")}
+              {activeCaregiver
+                ? `${activeCaregiver.name} · ${activeRelationship?.schedule ?? t("home.until")}`
+                : `— · ${t("home.until")}`}
             </p>
           </div>
-          <CheckCircle size={18} className="text-[#6B9080]" />
+          {activeRelationship ? (
+            <CheckCircle size={18} className="text-[#E0B23F]" />
+          ) : (
+            <CheckCircle size={18} className="text-[#666666]" />
+          )}
         </div>
       </div>
 
@@ -170,7 +177,7 @@ function HomeTab({ profile, dailyReport, pendingBids, onOpenBids }: { profile: U
             {t("home.todaysReport")}
           </h2>
           {dailyReport && (
-            <span className="text-xs font-semibold text-[#B8860B] bg-[#FFF4D8] px-2.5 py-1 rounded-full flex items-center gap-1">
+            <span className="text-xs font-semibold text-[#111111] bg-[#FFF8E7] px-2.5 py-1 rounded-full flex items-center gap-1">
               <Sparkles size={11} />
               {t("report.aiTranslated")}
             </span>
@@ -178,14 +185,14 @@ function HomeTab({ profile, dailyReport, pendingBids, onOpenBids }: { profile: U
         </div>
         <div className="bg-card rounded-3xl border border-border p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
-            <Avatar src="photo-1544005313-94ddf0286df2" size={36} />
+            <Avatar src={activeCaregiver?.img ?? "photo-1544005313-94ddf0286df2"} size={36} />
             <div>
               <p className="text-xs text-muted-foreground">{t("home.from")}</p>
               <p className="text-sm font-semibold">
                 {dailyReport ? `${dailyReport.date} · ${dailyReport.savedAt}` : "June 20 · 5:42 PM"}
               </p>
             </div>
-            <div className="ml-auto flex items-center gap-1 bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2.5 py-1 font-semibold">
+            <div className="ml-auto flex items-center gap-1 bg-[#FFF8E7] text-[#111111] text-xs rounded-full px-2.5 py-1 font-semibold">
               <Sparkles size={11} />
               AI
             </div>
@@ -207,7 +214,7 @@ function HomeTab({ profile, dailyReport, pendingBids, onOpenBids }: { profile: U
                 </span>
               ))}
               {dailyReport.items.some((i) => i.type === "health") && (
-                <span className="text-xs rounded-full px-2.5 py-1 font-medium bg-[#FFF4D8] text-[#A67C52]">
+                <span className="text-xs rounded-full px-2.5 py-1 font-medium bg-[#FFF8E7] text-[#1A1A1A]">
                   {t("home.tagCough")}
                 </span>
               )}
@@ -222,10 +229,10 @@ function HomeTab({ profile, dailyReport, pendingBids, onOpenBids }: { profile: U
         </h2>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { icon: MessageCircle, label: t("home.messageNanny"), color: "bg-[#F0F3FA] text-[#6B7FA8]" },
-            { icon: Calendar, label: t("home.schedulePickup"), color: "bg-[#FFF4D8] text-[#B8860B]" },
-            { icon: Globe, label: t("home.translateReport"), color: "bg-[#EEF5F0] text-[#6B9080]" },
-            { icon: FileText, label: t("home.viewHistory"), color: "bg-[#FFF9EB] text-[#D9A441]" },
+            { icon: MessageCircle, label: t("home.messageNanny"), color: "bg-[#FAFAF8] text-[#111111]" },
+            { icon: Calendar, label: t("home.schedulePickup"), color: "bg-[#FAFAF8] text-[#111111]" },
+            { icon: Globe, label: t("home.translateReport"), color: "bg-[#FAFAF8] text-[#111111]" },
+            { icon: FileText, label: t("home.viewHistory"), color: "bg-[#FAFAF8] text-[#111111]" },
           ].map(({ icon: Icon, label, color }) => (
             <button
               key={label}
@@ -246,7 +253,7 @@ function HomeTab({ profile, dailyReport, pendingBids, onOpenBids }: { profile: U
         </h2>
         <div className="bg-card border border-border rounded-3xl p-4 shadow-sm">
           <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
-            <Sparkles size={11} className="text-[#D9A441]" />
+            <Sparkles size={11} className="text-[#111111]" />
             {t("home.suggestedMessage")}
           </p>
           <p className="text-sm text-foreground/85 leading-relaxed italic">
@@ -306,7 +313,7 @@ function ReportTab({ dailyReport }: { dailyReport: DailyReport | null }) {
                     </p>
                   </div>
                   {isToday && report && (
-                    <span className="bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2.5 py-1 font-semibold flex items-center gap-1">
+                    <span className="bg-[#FFF8E7] text-[#111111] text-xs rounded-full px-2.5 py-1 font-semibold flex items-center gap-1">
                       <Sparkles size={11} />
                       {t("report.fromLog")}
                     </span>
@@ -355,10 +362,10 @@ function ReportTab({ dailyReport }: { dailyReport: DailyReport | null }) {
                             );
                           })}
                         </div>
-                        <div className="bg-[#FFF9EB] border border-[#EFE4CF] rounded-2xl p-3 flex items-start gap-2">
-                          <Globe size={14} className="text-[#D9A441] mt-0.5 shrink-0" />
+                        <div className="bg-[#FFF8E7] border border-[#EAEAEA] rounded-2xl p-3 flex items-start gap-2">
+                          <Globe size={14} className="text-[#111111] mt-0.5 shrink-0" />
                           <div>
-                            <p className="text-xs font-semibold text-[#B8860B] mb-1">{t("report.aiTranslated")}</p>
+                            <p className="text-xs font-semibold text-[#111111] mb-1">{t("report.aiTranslated")}</p>
                             <p className="text-xs text-muted-foreground leading-relaxed">{report.reportKo}</p>
                           </div>
                         </div>
@@ -435,22 +442,22 @@ function LogTab({
         <p className="text-muted-foreground text-sm mt-0.5">{t("log.subtitle")}</p>
       </div>
 
-      <div className="mx-4 bg-card border border-border rounded-3xl p-4 shadow-sm">
-        <p className="text-sm font-semibold mb-3">{t("log.voiceNote")}</p>
+      <div className="mx-4 bg-[#FFF8E7] border border-[#E0B23F] rounded-3xl p-5 shadow-sm">
+        <p className="text-base font-bold mb-3">{t("log.voiceNote")}</p>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handleVoiceToggle}
             className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
               isRecording
-                ? "bg-[#243036] shadow-lg scale-110"
-                : "bg-primary shadow-md shadow-primary/20"
+                ? "bg-[#1A1A1A] shadow-lg scale-110"
+                : "bg-[#E0B23F] shadow-md"
             }`}
           >
             {isRecording ? (
-              <Pause size={22} className="text-[#FFF4D8]" />
+              <Pause size={22} className="text-white" />
             ) : (
-              <Mic size={22} className="text-primary-foreground" />
+              <Mic size={22} className="text-[#111111]" />
             )}
           </button>
           <div className="flex-1">
@@ -461,7 +468,7 @@ function LogTab({
                   {Array.from({ length: 20 }).map((_, i) => (
                     <div
                       key={i}
-                      className="w-1 bg-[#F4D58D] rounded-full"
+                      className="w-1 bg-[#E0B23F] rounded-full"
                       style={{ height: `${30 + (i % 5) * 14}%` }}
                     />
                   ))}
@@ -469,7 +476,7 @@ function LogTab({
               </div>
             ) : voiceTranscript ? (
               <div>
-                <p className="text-xs font-semibold text-[#B8860B] mb-1">{t("log.transcriptReady")}</p>
+                <p className="text-xs font-semibold text-[#E0B23F] mb-1">{t("log.transcriptReady")}</p>
                 <p className="text-sm text-foreground/85 leading-relaxed">{voiceTranscript}</p>
               </div>
             ) : (
@@ -498,7 +505,7 @@ function LogTab({
           disabled={isGenerating || (!voiceTranscript && !inputText.trim())}
           className="mt-3 w-full bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-40"
         >
-          <Sparkles size={15} />
+          <Sparkles size={15} className="text-[#E0B23F]" />
           {isGenerating ? t("log.generating") : t("log.generateReport")}
         </button>
       </div>
@@ -513,7 +520,7 @@ function LogTab({
           >
             {isGenerating ? (
               <div className="bg-card border border-border rounded-3xl p-6 text-center">
-                <Sparkles size={24} className="text-[#D9A441] mx-auto mb-2 animate-pulse" />
+                <Sparkles size={24} className="text-[#E0B23F] mx-auto mb-2 animate-pulse" />
                 <p className="text-sm font-semibold">{t("log.generating")}</p>
               </div>
             ) : generated && (
@@ -525,7 +532,7 @@ function LogTab({
                   { title: t("log.parentReplyDraft"), body: generated.parentReplyDraft, italic: true },
                 ].map((section) => (
                   <div key={section.title} className="bg-card border border-border rounded-3xl p-4 shadow-sm">
-                    <p className="text-xs font-semibold text-[#B8860B] mb-2 flex items-center gap-1.5">
+                    <p className="text-xs font-semibold text-[#111111] mb-2 flex items-center gap-1.5">
                       <Sparkles size={11} />
                       {section.title}
                     </p>
@@ -535,9 +542,9 @@ function LogTab({
                   </div>
                 ))}
 
-                <div className="bg-[#FFF9EB] border border-[#EFE4CF] rounded-3xl p-4">
+                <div className="bg-[#FFF8E7] border border-[#EAEAEA] rounded-3xl p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Sparkles size={14} className="text-[#D9A441]" />
+                    <Sparkles size={14} className="text-[#111111]" />
                     <p className="text-sm font-semibold">{t("log.aiDraft")}</p>
                     <span className="ml-auto text-xs text-muted-foreground">{t("log.readyToSend")}</span>
                   </div>
@@ -555,7 +562,7 @@ function LogTab({
                     </button>
                   </div>
                   {saved && (
-                    <p className="text-xs text-[#6B9080] font-medium mt-2 flex items-center gap-1">
+                    <p className="text-xs text-[#111111] font-medium mt-2 flex items-center gap-1">
                       <CheckCircle size={12} />
                       {t("log.savedToReports")}
                     </p>
@@ -574,10 +581,10 @@ function LogTab({
         <div className="flex flex-col gap-2">
           {logEntries.map((entry, i) => {
             const colors: Record<string, string> = {
-              meal: "bg-[#FFF4D8] text-[#B8860B]",
-              sleep: "bg-[#F0F3FA] text-[#6B7FA8]",
-              activity: "bg-[#EEF5F0] text-[#6B9080]",
-              health: "bg-[#FFF9EB] text-[#A67C52]",
+              meal: "bg-[#FFF8E7] text-[#111111]",
+              sleep: "bg-[#FAFAF8] text-[#666666]",
+              activity: "bg-[#FAFAF8] text-[#111111]",
+              health: "bg-[#FFF8E7] text-[#1A1A1A]",
             };
             const icons: Record<string, typeof Utensils> = {
               meal: Utensils,
@@ -1189,7 +1196,8 @@ function ProfileTab({
   onOpenProfileEdit: () => void;
 }) {
   const { locale, t } = useLanguage();
-  const children = [{ name: "Emma", age: locale === "ko" ? "2세 4개월" : "2 yrs 4 mo", img: "photo-1594608661623-aa0bd3a69d98" }];
+  const [childSnapshotOpen, setChildSnapshotOpen] = useState(false);
+  const children = [{ name: "Emma", age: locale === "ko" ? "8개월" : "8 months", img: "photo-1594608661623-aa0bd3a69d98" }];
 
   const settings = [
     {
@@ -1249,7 +1257,7 @@ function ProfileTab({
             {profile.languages && (
             <div className="flex gap-1 mt-1.5 flex-wrap">
               {profile.languages.split(",").map((lang) => (
-                <span key={lang.trim()} className="bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2 py-0.5 font-medium">
+                <span key={lang.trim()} className="bg-[#FFF8E7] text-[#111111] text-xs rounded-full px-2 py-0.5 font-medium">
                   {lang.trim()}
                 </span>
               ))}
@@ -1257,8 +1265,8 @@ function ProfileTab({
             )}
             {!profile.languages && (
             <div className="flex gap-1 mt-1.5">
-              <span className="bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2 py-0.5 font-medium">🇰🇷 Korean</span>
-              <span className="bg-[#F0F3FA] text-[#6B7FA8] text-xs rounded-full px-2 py-0.5 font-medium">🇺🇸 English</span>
+              <span className="bg-[#FFF8E7] text-[#111111] text-xs rounded-full px-2 py-0.5 font-medium">🇰🇷 Korean</span>
+              <span className="bg-[#FAFAF8] text-[#666666] text-xs rounded-full px-2 py-0.5 font-medium">🇺🇸 English</span>
             </div>
             )}
           </div>
@@ -1278,17 +1286,24 @@ function ProfileTab({
           </button>
         </div>
         {children.map((child) => (
-          <div key={child.name} className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3">
+          <button
+            key={child.name}
+            type="button"
+            onClick={() => setChildSnapshotOpen(true)}
+            className="w-full bg-card border border-border rounded-2xl p-4 flex items-center gap-3 text-left hover:bg-[#FAFAF8] transition-colors"
+          >
             <Avatar src={child.img} size={44} />
             <div>
               <p className="font-semibold">{child.name}</p>
               <p className="text-xs text-muted-foreground">{child.age}</p>
             </div>
             <ChevronRight size={16} className="text-muted-foreground ml-auto" />
-          </div>
+          </button>
         ))}
       </div>
       )}
+
+      <ChildCareSnapshotModal open={childSnapshotOpen} onClose={() => setChildSnapshotOpen(false)} />
 
       {/* Caregiver info */}
       {profile.role === "caregiver" &&
@@ -1409,6 +1424,7 @@ function AppContent() {
   const [overlay, setOverlay] = useState<OverlayView | null>(null);
   const onboardingPreview = getOnboardingPreview();
   const { t } = useLanguage();
+  const { activeRelationship, carePlan } = useCareFlow();
 
   const handleSplashComplete = useCallback(() => setPhase("login"), []);
   const handleLogin = useCallback(() => setPhase("main"), []);
@@ -1458,7 +1474,7 @@ function AppContent() {
       className="min-h-screen flex items-center justify-center"
       style={{
         fontFamily: "Plus Jakarta Sans, sans-serif",
-        background: "radial-gradient(circle at top, #FFF4D8 0%, #FFFDF7 38%, #FFFFFF 100%)",
+        background: "#FFFFFF",
       }}
     >
       <div
@@ -1551,28 +1567,28 @@ function AppContent() {
                       <div
                         className={`w-12 h-12 rounded-full flex items-center justify-center shadow-md transition-all -mt-6 ${
                           activeTab === id
-                            ? "bg-primary shadow-primary/40 scale-110"
-                            : "bg-primary/80 shadow-primary/20"
+                            ? "bg-[#E0B23F] shadow-black/10 scale-110"
+                            : "bg-[#E0B23F]/90 shadow-black/5"
                         }`}
                       >
-                        <Icon size={22} className="text-primary-foreground" />
+                        <Icon size={22} className="text-[#111111]" />
                       </div>
                     ) : (
                       <div
                         className={`p-2 rounded-xl transition-all ${
-                          activeTab === id ? "bg-primary/10" : ""
+                          activeTab === id ? "bg-[#FFF8E7]" : ""
                         }`}
                       >
                         <Icon
                           size={20}
-                          className={activeTab === id ? "text-primary" : "text-muted-foreground"}
+                          className={activeTab === id ? "text-foreground" : "text-muted-foreground"}
                         />
                       </div>
                     )}
                     <span
                       className={`text-xs font-semibold ${
                         id === "log" ? "mt-1" : ""
-                      } ${activeTab === id ? "text-primary" : "text-muted-foreground"}`}
+                      } ${activeTab === id ? "text-foreground" : "text-muted-foreground"}`}
                     >
                       {t(labelKey)}
                     </span>
@@ -1587,6 +1603,22 @@ function AppContent() {
               profile={profile}
               onClose={() => setProfileEditOpen(false)}
               onSave={setProfile}
+            />
+
+            <CareChatModal
+              open={homeChatOpen}
+              caregiverId={activeRelationship?.caregiverId ?? null}
+              onClose={() => setHomeChatOpen(false)}
+              onViewCarePlan={() => {
+                setHomeChatOpen(false);
+                setHomeCarePlanOpen(true);
+              }}
+              onGoHome={() => setActiveTab("home")}
+            />
+            <CarePlanModal
+              open={homeCarePlanOpen}
+              plan={carePlan}
+              onClose={() => setHomeCarePlanOpen(false)}
             />
           </>
         )}
@@ -1611,7 +1643,9 @@ function AppContent() {
 export default function App() {
   return (
     <LanguageProvider>
-      <AppContent />
+      <CareFlowProvider>
+        <AppContent />
+      </CareFlowProvider>
     </LanguageProvider>
   );
 }
