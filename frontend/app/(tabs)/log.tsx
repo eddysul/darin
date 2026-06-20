@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { getLogEntries, getLogDraft } from '../../context/i18n';
 
-const PRIMARY = '#4A90D9';
+const PRIMARY = '#243036';
 const CARD_BG = '#fff';
 const BORDER = '#f0f0f0';
 const MUTED = '#9ca3af';
@@ -27,7 +27,7 @@ export default function LogTab() {
   const draftText = getLogDraft(locale);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fdf8f6' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFDF7' }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={{ marginHorizontal: 16, marginTop: 16, marginBottom: 16 }}>
           <Text style={{ fontSize: 24, fontWeight: 'bold', color: FG }}>{t('log.title')}</Text>
@@ -91,9 +91,9 @@ export default function LogTab() {
 
         {/* AI Draft */}
         {generated && (
-          <View style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: CARD_BG, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(74,144,217,0.2)', padding: 16 }}>
+          <View style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: CARD_BG, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(36,48,54,0.2)', padding: 16 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <View style={{ backgroundColor: 'rgba(74,144,217,0.1)', borderRadius: 10, padding: 6 }}>
+              <View style={{ backgroundColor: 'rgba(36,48,54,0.1)', borderRadius: 10, padding: 6 }}>
                 <Sparkles size={14} color={PRIMARY} />
               </View>
               <Text style={{ fontWeight: '600', fontSize: 13, color: FG }}>{t('log.aiDraft')}</Text>

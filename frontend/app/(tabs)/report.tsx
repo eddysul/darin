@@ -26,7 +26,7 @@ export default function ReportTab() {
   const report = getReportContent(locale);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fdf8f6' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFDF7' }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={{ marginHorizontal: 16, marginTop: 16, marginBottom: 16 }}>
           <Text style={{ fontSize: 24, fontWeight: 'bold', color: FG }}>{t('report.title')}</Text>
