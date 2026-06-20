@@ -1,22 +1,113 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Baby, HeartHandshake, ChevronLeft, User, MapPin, Calendar, Globe, Briefcase, Sparkles } from "lucide-react";
+import {
+  Baby,
+  HeartHandshake,
+  ChevronLeft,
+  User,
+  MapPin,
+  Calendar,
+  Globe,
+  Briefcase,
+  Sparkles,
+  IdCard,
+  Camera,
+  Plus,
+  Trash2,
+  FileText,
+} from "lucide-react";
 import { useLanguage } from "../LanguageContext";
-import type { UserProfile, UserRole } from "../types/profile";
+import type { CaregiverCertificate, UserProfile, UserRole } from "../types/profile";
 
 type OnboardingScreenProps = {
   onComplete: (profile: UserProfile) => void;
+  initialRole?: UserRole;
+  initialStep?: Step;
 };
 
 const NAVY = "#1A2333";
-const GOLD = "#C4A574";
 
 type Step = "role" | "profile";
 
-export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
+type CertificateDraft = {
+  id: string;
+  name: string;
+  photo: string;
+};
+
+function createCertificateDraft(): CertificateDraft {
+  return { id: crypto.randomUUID(), name: "", photo: "" };
+}
+
+function readImageFile(file: File, onLoad: (dataUrl: string) => void) {
+  const reader = new FileReader();
+  reader.onload = () => onLoad(reader.result as string);
+  reader.readAsDataURL(file);
+}
+
+type PhotoUploadFieldProps = {
+  label: string;
+  photo: string;
+  uploadLabel: string;
+  changeLabel: string;
+  onPhotoChange: (photo: string) => void;
+};
+
+function PhotoUploadField({ label, photo, uploadLabel, changeLabel, onPhotoChange }: PhotoUploadFieldProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (file: File | undefined) => {
+    if (!file?.type.startsWith("image/")) return;
+    readImageFile(file, onPhotoChange);
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs font-semibold" style={{ color: NAVY }}>
+        {label}
+      </span>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="w-20 h-20 rounded-xl border border-dashed border-border bg-input-background flex items-center justify-center overflow-hidden shrink-0 hover:border-primary/40 transition-colors"
+        >
+          {photo ? (
+            <img src={photo} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <Camera size={22} className="text-muted-foreground" />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="text-sm font-semibold text-primary hover:opacity-80 transition-opacity"
+        >
+          {photo ? changeLabel : uploadLabel}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            handleFile(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function OnboardingScreen({
+  onComplete,
+  initialRole = "parent",
+  initialStep = "role",
+}: OnboardingScreenProps) {
   const { t } = useLanguage();
-  const [step, setStep] = useState<Step>("role");
-  const [role, setRole] = useState<UserRole>("parent");
+  const [step, setStep] = useState<Step>(initialStep);
+  const [role, setRole] = useState<UserRole>(initialRole);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -24,7 +115,22 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const [languages, setLanguages] = useState("");
   const [experience, setExperience] = useState("");
   const [specialty, setSpecialty] = useState("");
+  const [licenseNumber, setLicenseNumber] = useState("");
+  const [licensePhoto, setLicensePhoto] = useState("");
+  const [certificates, setCertificates] = useState<CertificateDraft[]>([]);
   const [error, setError] = useState("");
+
+  const addCertificate = () => {
+    setCertificates((prev) => [...prev, createCertificateDraft()]);
+  };
+
+  const updateCertificate = (id: string, patch: Partial<CertificateDraft>) => {
+    setCertificates((prev) => prev.map((cert) => (cert.id === id ? { ...cert, ...patch } : cert)));
+  };
+
+  const removeCertificate = (id: string) => {
+    setCertificates((prev) => prev.filter((cert) => cert.id !== id));
+  };
 
   const handleRoleContinue = () => {
     setError("");
@@ -45,6 +151,36 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       setError(t("onboarding.locationRequired"));
       return;
     }
+    if (!languages.trim()) {
+      setError(t("onboarding.languagesRequired"));
+      return;
+    }
+
+    if (role === "caregiver") {
+      if (!licenseNumber.trim()) {
+        setError(t("onboarding.licenseNumberRequired"));
+        return;
+      }
+      if (!licensePhoto) {
+        setError(t("onboarding.licensePhotoRequired"));
+        return;
+      }
+      const hasIncompleteCertificate = certificates.some(
+        (cert) => (cert.name.trim() && !cert.photo) || (!cert.name.trim() && cert.photo),
+      );
+      if (hasIncompleteCertificate) {
+        setError(t("onboarding.certificateIncomplete"));
+        return;
+      }
+    }
+
+    const completedCertificates: CaregiverCertificate[] = certificates
+      .filter((cert) => cert.name.trim() && cert.photo)
+      .map((cert) => ({
+        id: cert.id,
+        name: cert.name.trim(),
+        photo: cert.photo,
+      }));
 
     onComplete({
       name: name.trim(),
@@ -53,9 +189,12 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       role,
       dueDate: dueDate.trim() || undefined,
       childName: childName.trim() || undefined,
-      languages: languages.trim() || undefined,
+      languages: languages.trim(),
       experience: experience.trim() || undefined,
       specialty: specialty.trim() || undefined,
+      licenseNumber: role === "caregiver" ? licenseNumber.trim() : undefined,
+      licensePhoto: role === "caregiver" ? licensePhoto : undefined,
+      certificates: role === "caregiver" && completedCertificates.length > 0 ? completedCertificates : undefined,
     });
   };
 
@@ -272,12 +411,97 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                     />
                   </div>
                 </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold" style={{ color: NAVY }}>
+                    {t("onboarding.licenseNumber")} *
+                  </span>
+                  <div className="relative">
+                    <IdCard size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={licenseNumber}
+                      onChange={(e) => setLicenseNumber(e.target.value)}
+                      placeholder={t("onboarding.licenseNumberPlaceholder")}
+                      className="w-full bg-input-background rounded-xl pl-10 pr-4 py-3 text-sm border border-border outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                </label>
+
+                <PhotoUploadField
+                  label={`${t("onboarding.licensePhoto")} *`}
+                  photo={licensePhoto}
+                  uploadLabel={t("onboarding.uploadPhoto")}
+                  changeLabel={t("onboarding.changePhoto")}
+                  onPhotoChange={setLicensePhoto}
+                />
+
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold" style={{ color: NAVY }}>
+                      {t("onboarding.otherCertificates")}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={addCertificate}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:opacity-80 transition-opacity"
+                    >
+                      <Plus size={14} />
+                      {t("onboarding.addCertificate")}
+                    </button>
+                  </div>
+
+                  {certificates.map((cert, index) => (
+                    <div
+                      key={cert.id}
+                      className="rounded-2xl border border-border bg-card p-3.5 flex flex-col gap-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          {t("onboarding.otherCertificates")} {index + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeCertificate(cert.id)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-red-500 hover:opacity-80"
+                        >
+                          <Trash2 size={12} />
+                          {t("onboarding.removeCertificate")}
+                        </button>
+                      </div>
+
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-xs font-semibold" style={{ color: NAVY }}>
+                          {t("onboarding.certificateName")}
+                        </span>
+                        <div className="relative">
+                          <FileText size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                          <input
+                            type="text"
+                            value={cert.name}
+                            onChange={(e) => updateCertificate(cert.id, { name: e.target.value })}
+                            placeholder={t("onboarding.certificateNamePlaceholder")}
+                            className="w-full bg-input-background rounded-xl pl-10 pr-4 py-3 text-sm border border-border outline-none focus:ring-2 focus:ring-primary/30"
+                          />
+                        </div>
+                      </label>
+
+                      <PhotoUploadField
+                        label={t("onboarding.certificatePhoto")}
+                        photo={cert.photo}
+                        uploadLabel={t("onboarding.uploadPhoto")}
+                        changeLabel={t("onboarding.changePhoto")}
+                        onPhotoChange={(photo) => updateCertificate(cert.id, { photo })}
+                      />
+                    </div>
+                  ))}
+                </div>
               </>
             )}
 
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-semibold" style={{ color: NAVY }}>
-                {t("onboarding.languages")}
+                {t("onboarding.languages")} *
               </span>
               <div className="relative">
                 <Globe size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />

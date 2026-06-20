@@ -1,5 +1,11 @@
 export type UserRole = "parent" | "caregiver";
 
+export type CaregiverCertificate = {
+  id: string;
+  name: string;
+  photo: string;
+};
+
 export type UserProfile = {
   name: string;
   location: string;
@@ -10,6 +16,9 @@ export type UserProfile = {
   languages?: string;
   experience?: string;
   specialty?: string;
+  licenseNumber?: string;
+  licensePhoto?: string;
+  certificates?: CaregiverCertificate[];
 };
 
 export const EMPTY_PROFILE: UserProfile = {

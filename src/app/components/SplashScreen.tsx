@@ -20,7 +20,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
     >
       <motion.img
         src="/darin-logo.png"
-        alt="Darin — The Moon, a Mother. The Star, a Baby."
+        alt="Darin — Your first motherhood companion"
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.55, ease: "easeOut" }}

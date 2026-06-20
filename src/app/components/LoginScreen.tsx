@@ -180,7 +180,7 @@ export function LoginScreen({ onLogin, onSignUp }: LoginScreenProps) {
       <div className="flex flex-col items-center mb-5">
         <img
           src="/darin-logo.png"
-          alt="Darin — The Moon, a Mother. The Star, a Baby."
+          alt="Darin — Your first motherhood companion"
           className="w-[200px] h-auto select-none"
           draggable={false}
         />

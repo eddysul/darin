@@ -40,6 +40,26 @@ import { OnboardingScreen } from "./components/OnboardingScreen";
 import type { UserProfile } from "./types/profile";
 
 type AppPhase = "splash" | "login" | "onboarding" | "main";
+
+function getDevPreviewPhase(): AppPhase | null {
+  if (!import.meta.env.DEV) return null;
+  const screen = new URLSearchParams(window.location.search).get("screen");
+  if (screen === "caregiver-onboarding" || screen === "parent-onboarding" || screen === "onboarding") {
+    return "onboarding";
+  }
+  return null;
+}
+
+function getOnboardingPreview() {
+  const screen = new URLSearchParams(window.location.search).get("screen");
+  if (screen === "caregiver-onboarding") {
+    return { initialRole: "caregiver" as const, initialStep: "profile" as const };
+  }
+  if (screen === "parent-onboarding") {
+    return { initialRole: "parent" as const, initialStep: "profile" as const };
+  }
+  return { initialRole: undefined, initialStep: undefined };
+}
 import {
   getReportContent,
   getLogEntries,
@@ -713,17 +733,62 @@ function ProfileTab({
       )}
 
       {/* Caregiver info */}
-      {profile.role === "caregiver" && (profile.experience || profile.specialty) && (
+      {profile.role === "caregiver" &&
+        (profile.experience ||
+          profile.specialty ||
+          profile.licenseNumber ||
+          profile.licensePhoto ||
+          (profile.certificates && profile.certificates.length > 0)) && (
       <div className="mx-4">
         <h2 className="font-bold text-foreground mb-3" style={{ fontFamily: "Nunito, sans-serif" }}>
           {t("onboarding.caregiverInfo")}
         </h2>
-        <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
+        <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3">
           {profile.experience && (
             <p className="text-sm"><span className="font-semibold">{t("onboarding.experience")}: </span>{profile.experience}</p>
           )}
           {profile.specialty && (
             <p className="text-sm"><span className="font-semibold">{t("onboarding.specialty")}: </span>{profile.specialty}</p>
+          )}
+          {(profile.licenseNumber || profile.licensePhoto) && (
+            <div className="flex flex-col gap-2 pt-1 border-t border-border">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
+                {t("onboarding.licensesAndCerts")}
+              </p>
+              {profile.licenseNumber && (
+                <p className="text-sm">
+                  <span className="font-semibold">{t("onboarding.licenseNumber")}: </span>
+                  {profile.licenseNumber}
+                </p>
+              )}
+              {profile.licensePhoto && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-semibold">{t("onboarding.licensePhoto")}</span>
+                  <img
+                    src={profile.licensePhoto}
+                    alt={t("onboarding.licensePhoto")}
+                    className="w-full max-w-[200px] rounded-xl border border-border object-cover"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          {profile.certificates && profile.certificates.length > 0 && (
+            <div className="flex flex-col gap-3 pt-1 border-t border-border">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
+                {t("onboarding.otherCertificates")}
+              </p>
+              {profile.certificates.map((cert) => (
+                <div key={cert.id} className="flex flex-col gap-1.5">
+                  <p className="text-sm font-semibold">{cert.name}</p>
+                  <img
+                    src={cert.photo}
+                    alt={cert.name}
+                    className="w-full max-w-[200px] rounded-xl border border-border object-cover"
+                  />
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -775,7 +840,8 @@ function AppContent() {
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
-  const [phase, setPhase] = useState<AppPhase>("splash");
+  const [phase, setPhase] = useState<AppPhase>(() => getDevPreviewPhase() ?? "splash");
+  const onboardingPreview = getOnboardingPreview();
   const { t } = useLanguage();
 
   const handleSplashComplete = useCallback(() => setPhase("login"), []);
@@ -900,7 +966,13 @@ function AppContent() {
         <AnimatePresence>
           {phase === "splash" && <SplashScreen onComplete={handleSplashComplete} />}
           {phase === "login" && <LoginScreen onLogin={handleLogin} onSignUp={handleSignUp} />}
-          {phase === "onboarding" && <OnboardingScreen onComplete={handleOnboardingComplete} />}
+          {phase === "onboarding" && (
+            <OnboardingScreen
+              onComplete={handleOnboardingComplete}
+              initialRole={onboardingPreview.initialRole}
+              initialStep={onboardingPreview.initialStep}
+            />
+          )}
         </AnimatePresence>
       </div>
     </div>
