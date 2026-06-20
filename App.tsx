@@ -9,11 +9,12 @@ import { LanguageProvider } from "./src/LanguageContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { MainTabs } from "./src/screens/MainTabs";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
+import { RoleSelectScreen } from "./src/screens/RoleSelectScreen";
 import { SplashScreen } from "./src/screens/SplashScreen";
-import type { UserProfile } from "./src/types/profile";
+import type { UserProfile, UserRole } from "./src/types/profile";
 import { colors } from "./src/theme";
 
-type AppPhase = "splash" | "login" | "onboarding" | "main";
+type AppPhase = "splash" | "login" | "role-select" | "onboarding" | "main";
 
 export default function App() {
   return (
@@ -42,12 +43,17 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
 }
 
 function RootApp() {
+  const { profile, setProfile } = useApp();
   const [phase, setPhase] = useState<AppPhase>("splash");
   const [onboardingProfile, setOnboardingProfile] = useState<UserProfile | null>(null);
 
   const handleSplashComplete = useCallback(() => setPhase("login"), []);
-  const handleLogin = useCallback(() => setPhase("main"), []);
-  const handleSignUp = useCallback(() => setPhase("onboarding"), []);
+  const handleLogin = useCallback(() => setPhase("role-select"), []);
+  const handleSignUp = useCallback(() => setPhase("role-select"), []);
+  const handleRoleSelect = useCallback((role: UserRole) => {
+    setProfile({ ...profile, role });
+    setPhase("main");
+  }, [profile, setProfile]);
   const handleOnboardingComplete = useCallback((nextProfile: UserProfile) => {
     setOnboardingProfile(nextProfile);
     setPhase("main");
@@ -59,6 +65,7 @@ function RootApp() {
       {phase === "main" && <MainNavigator onboardingProfile={onboardingProfile} />}
       {phase === "splash" && <SplashScreen onComplete={handleSplashComplete} />}
       {phase === "login" && <LoginScreen onLogin={handleLogin} onSignUp={handleSignUp} />}
+      {phase === "role-select" && <RoleSelectScreen onSelect={handleRoleSelect} />}
       {phase === "onboarding" && <OnboardingScreen onComplete={handleOnboardingComplete} />}
     </View>
   );
