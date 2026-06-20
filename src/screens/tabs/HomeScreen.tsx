@@ -1,7 +1,8 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Baby, Bell, Calendar, CheckCircle, FileText, Globe, MessageCircle, PenLine, Send, Sparkles, Users } from "lucide-react-native";
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRef } from "react";
 import { Avatar } from "../../components/Avatar";
 import { CaregiverContractModal } from "../../components/CaregiverContractModal";
 import { PressScale } from "../../components/PressScale";
@@ -13,6 +14,10 @@ import { colors, gradients, radius } from "../../theme";
 export function HomeScreen() {
   const { profile, dailyReport, scheduledInterviews, completeInterview, setPendingTab, incomingRequests, acceptRequest } = useApp();
   const [contractRequest, setContractRequest] = useState<IncomingRequest | null>(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+  }, []);
   const { locale, t } = useLanguage();
   const firstName = profile.name.split(" ")[0];
   const reportPreview = dailyReport ? (locale === "ko" ? dailyReport.reportKo : dailyReport.reportEn) : null;
@@ -31,6 +36,7 @@ export function HomeScreen() {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <Animated.View style={{ opacity: fadeAnim }}>
       <LinearGradient colors={[...gradients.hero]} style={styles.hero}>
         <View style={styles.heroRow}>
           <View>
@@ -190,6 +196,7 @@ export function HomeScreen() {
           </View>
         </View>
       </View>
+      </Animated.View>
     </ScrollView>
   );
 }
@@ -207,6 +214,10 @@ function CaregiverHomeScreen({
   const { locale, t } = useLanguage();
   const ko = locale === "ko";
   const firstName = profile.name.split(" ")[0];
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+  }, []);
 
   const pending = incomingRequests.filter((r) => r.status === "pending");
   const accepted = incomingRequests.filter((r) => r.status === "accepted" || r.status === "contract_signed");
@@ -214,6 +225,7 @@ function CaregiverHomeScreen({
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <Animated.View style={{ opacity: fadeAnim }}>
       <LinearGradient colors={[...gradients.hero]} style={styles.hero}>
         <View style={styles.heroRow}>
           <View>
@@ -344,6 +356,7 @@ function CaregiverHomeScreen({
         </View>
       </View>
 
+      </Animated.View>
       <CaregiverContractModal
         open={contractRequest !== null}
         request={contractRequest}

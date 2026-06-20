@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bell,
   Baby,
@@ -8,16 +8,19 @@ import {
   ChevronRight,
   CreditCard,
   DollarSign,
+  Edit3,
   FileText,
   Globe,
   Home,
   Milk,
   PenLine,
   Plus,
+  Tag,
   UserCog,
 } from "lucide-react-native";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
+import { BidModal } from "../../components/BidModal";
 import { ContractSigningModal } from "../../components/ContractSigningModal";
 import { PressScale } from "../../components/PressScale";
 import { useApp } from "../../context/AppContext";
@@ -37,6 +40,12 @@ export function ProfileScreen() {
   const { locale, t } = useLanguage();
   const ko = locale === "ko";
   const [contractInterview, setContractInterview] = useState<ScheduledInterview | null>(null);
+  const [bidOpen, setBidOpen] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
+  }, []);
 
   // Auto-open contract modal when navigated here after marking interview complete
   useEffect(() => {
@@ -74,6 +83,7 @@ export function ProfileScreen() {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <Animated.View style={{ opacity: fadeAnim }}>
       {/* Hero */}
       <View style={styles.hero}>
         <PressScale style={styles.editBtn} onPress={() => setProfileEditOpen(true)}>
@@ -244,6 +254,44 @@ export function ProfileScreen() {
         </View>
       )}
 
+      {/* Caregiver Bid card */}
+      {profile.role === "caregiver" && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, styles.sectionTitleInline]}>{t("profile.myBid")}</Text>
+            <PressScale style={styles.editLink} onPress={() => setBidOpen(true)}>
+              <Edit3 size={13} color={colors.gold} />
+              <Text style={[styles.editLinkText, { marginLeft: 4 }]}>
+                {profile.bidRate ? t("profile.updateBid") : t("profile.submitBid")}
+              </Text>
+            </PressScale>
+          </View>
+          <PressScale style={styles.bidCard} onPress={() => setBidOpen(true)}>
+            <View style={styles.bidTopRow}>
+              <View style={[styles.careIcon, { backgroundColor: `${colors.gold}18` }]}>
+                <Tag size={16} color={colors.gold} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.careLabel}>{t("profile.bidRate")}</Text>
+                <Text style={styles.bidRate}>
+                  {profile.bidRate ?? <Text style={styles.noBid}>{t("profile.noBid")}</Text>}
+                </Text>
+              </View>
+              {profile.bidRate && (
+                <View style={styles.bidActiveBadge}>
+                  <Text style={styles.bidActiveBadgeText}>{t("profile.bidActive")}</Text>
+                </View>
+              )}
+            </View>
+            {profile.bidNote ? (
+              <View style={styles.bidNoteRow}>
+                <Text style={styles.bidNoteText}>{profile.bidNote}</Text>
+              </View>
+            ) : null}
+          </PressScale>
+        </View>
+      )}
+
       {/* Settings */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t("profile.settings")}</Text>
@@ -268,12 +316,15 @@ export function ProfileScreen() {
         </View>
       </View>
 
+      </Animated.View>
+
       <ContractSigningModal
         open={contractInterview !== null}
         interview={contractInterview}
         onClose={() => setContractInterview(null)}
         onSigned={() => setContractInterview(null)}
       />
+      <BidModal open={bidOpen} onClose={() => setBidOpen(false)} />
     </ScrollView>
   );
 }
@@ -369,6 +420,31 @@ const styles = StyleSheet.create({
   careIcon: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   careLabel: { fontSize: 11, color: colors.muted, marginBottom: 2 },
   careValue: { fontSize: 14, fontWeight: "600", color: colors.text },
+  bidCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.xl,
+    borderWidth: 1.5,
+    borderColor: colors.gold,
+    padding: 16,
+    overflow: "hidden",
+  },
+  bidTopRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  bidRate: { fontSize: 20, fontWeight: "800", color: colors.gold, marginTop: 2 },
+  noBid: { fontSize: 14, fontWeight: "500", color: colors.muted },
+  bidActiveBadge: {
+    backgroundColor: `${colors.gold}18`,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  bidActiveBadgeText: { fontSize: 11, fontWeight: "700", color: colors.gold },
+  bidNoteRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  bidNoteText: { fontSize: 13, color: colors.text, lineHeight: 20, opacity: 0.8 },
   interviewCard: {
     backgroundColor: colors.card,
     borderRadius: radius.xl,

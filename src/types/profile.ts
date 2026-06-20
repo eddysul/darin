@@ -21,6 +21,9 @@ export type UserProfile = {
   breastfeeding?: boolean;
   notes?: string;
   weeklyRate?: string;
+  bidRate?: string;
+  bidNote?: string;
+  bio?: string;
   availability?: string;
   licenseNumber?: string;
   licensePhoto?: string;

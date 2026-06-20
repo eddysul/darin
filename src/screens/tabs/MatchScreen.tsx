@@ -13,10 +13,15 @@ type Props = {
 };
 
 export function MatchScreen({ onViewProfile }: Props) {
-  const { profile } = useApp();
+  const { profile, caregiverBidRate } = useApp();
   const { locale, t } = useLanguage();
 
   if (profile.role === "caregiver") return <CaregiverFindScreen />;
+
+  // Inject live bid rate from caregiver into the first match (Ji-yeon Park demo)
+  const matches = CAREGIVER_MATCHES.map((c, i) =>
+    i === 0 && caregiverBidRate ? { ...c, weeklyPay: caregiverBidRate } : c,
+  );
   const ko = locale === "ko";
   const filters = [
     t("match.filterAll"),
@@ -56,7 +61,7 @@ export function MatchScreen({ onViewProfile }: Props) {
         ))}
       </ScrollView>
 
-      {CAREGIVER_MATCHES.map((c) => (
+      {matches.map((c) => (
         <View key={c.id} style={styles.card}>
           <View style={styles.cardTop}>
             <View>

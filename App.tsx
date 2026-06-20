@@ -10,13 +10,14 @@ import { LoginScreen } from "./src/screens/LoginScreen";
 import { MainTabs } from "./src/screens/MainTabs";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { ParentSetupScreen } from "./src/screens/ParentSetupScreen";
+import { CaregiverSetupScreen } from "./src/screens/CaregiverSetupScreen";
 import { RoleSelectScreen } from "./src/screens/RoleSelectScreen";
 import { SplashScreen } from "./src/screens/SplashScreen";
 import type { UserProfile, UserRole } from "./src/types/profile";
 import { DEFAULT_CAREGIVER_PROFILE } from "./src/context/AppContext";
 import { colors } from "./src/theme";
 
-type AppPhase = "splash" | "login" | "role-select" | "parent-setup" | "onboarding" | "main";
+type AppPhase = "splash" | "login" | "role-select" | "parent-setup" | "caregiver-setup" | "onboarding" | "main";
 
 export default function App() {
   return (
@@ -55,13 +56,17 @@ function RootApp() {
   const handleRoleSelect = useCallback((role: UserRole) => {
     if (role === "caregiver") {
       setProfile(DEFAULT_CAREGIVER_PROFILE);
-      setPhase("main");
+      setPhase("caregiver-setup");
     } else {
       setProfile({ ...profile, role });
       setPhase("parent-setup");
     }
   }, [profile, setProfile]);
   const handleParentSetupComplete = useCallback((nextProfile: UserProfile) => {
+    setProfile(nextProfile);
+    setPhase("main");
+  }, [setProfile]);
+  const handleCaregiverSetupComplete = useCallback((nextProfile: UserProfile) => {
     setProfile(nextProfile);
     setPhase("main");
   }, [setProfile]);
@@ -78,6 +83,7 @@ function RootApp() {
       {phase === "login" && <LoginScreen onLogin={handleLogin} onSignUp={handleSignUp} />}
       {phase === "role-select" && <RoleSelectScreen onSelect={handleRoleSelect} />}
       {phase === "parent-setup" && <ParentSetupScreen initialProfile={profile} onComplete={handleParentSetupComplete} />}
+      {phase === "caregiver-setup" && <CaregiverSetupScreen onComplete={handleCaregiverSetupComplete} />}
       {phase === "onboarding" && <OnboardingScreen onComplete={handleOnboardingComplete} />}
     </View>
   );

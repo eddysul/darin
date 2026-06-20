@@ -63,12 +63,18 @@ type AppContextValue = {
   incomingRequests: IncomingRequest[];
   acceptRequest: (requestId: string) => void;
   caregiverSignContract: (requestId: string, signature: string, notes?: string) => void;
+  caregiverBidRate: string | null;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [caregiverBidRate, setCaregiverBidRate] = useState<string | null>(null);
+  const [profile, setProfileRaw] = useState<UserProfile>(DEFAULT_PROFILE);
+  const setProfile = useCallback((p: UserProfile) => {
+    setProfileRaw(p);
+    if (p.role === "caregiver" && p.bidRate) setCaregiverBidRate(p.bidRate);
+  }, []);
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
@@ -180,6 +186,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         incomingRequests,
         acceptRequest,
         caregiverSignContract,
+        caregiverBidRate,
       }}
     >
       {children}
