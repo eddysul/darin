@@ -2,13 +2,15 @@ import { useEffect } from "react";
 import { Image } from "expo-image";
 import { StyleSheet, View } from "react-native";
 import { ScreenBackground } from "../components/ScreenBackground";
-import { colors } from "../theme";
+import { useScreenTopInset } from "../hooks/useScreenInsets";
 
 type SplashScreenProps = {
   onComplete: () => void;
 };
 
 export function SplashScreen({ onComplete }: SplashScreenProps) {
+  const topInset = useScreenTopInset(0);
+
   useEffect(() => {
     const timer = setTimeout(onComplete, 2600);
     return () => clearTimeout(timer);
@@ -16,7 +18,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
 
   return (
     <ScreenBackground style={styles.root}>
-      <View style={styles.center}>
+      <View style={[styles.center, { paddingTop: topInset }]}>
         <Image source={require("../../assets/darin-logo.png")} style={styles.logo} contentFit="contain" />
       </View>
     </ScreenBackground>

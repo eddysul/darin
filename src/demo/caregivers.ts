@@ -1,3 +1,19 @@
+export type BackgroundCheckStatus = "completed" | "pending" | "not_submitted" | "expired";
+
+export type CredentialStatus = "verified" | "pending" | "unavailable";
+
+export type CaregiverCredential = {
+  id: "identity" | "cpr" | "license" | "background_check" | "references";
+  status: CredentialStatus;
+};
+
+export type ParentReview = {
+  author: string;
+  rating: number;
+  text: string;
+  date: string;
+};
+
 export type CaregiverMatch = {
   id: number;
   name: string;
@@ -26,6 +42,14 @@ export type CaregiverMatch = {
   certificationsKo: string[];
   strengthsEn: string[];
   strengthsKo: string[];
+  aboutEn?: string;
+  aboutKo?: string;
+  backgroundCheckStatus?: BackgroundCheckStatus;
+  credentials?: CaregiverCredential[];
+  parentReviews?: ParentReview[];
+  price?: string;
+  contactDraftEn?: string;
+  contactDraftKo?: string;
 };
 
 export const CAREGIVER_MATCHES: CaregiverMatch[] = [
@@ -53,6 +77,7 @@ export const CAREGIVER_MATCHES: CaregiverMatch[] = [
       "Live-in available",
       "Newborn & postpartum care",
       "CPR certified",
+      "Background checked",
     ],
     matchReasonsKo: [
       "한국어/영어 이중언어",

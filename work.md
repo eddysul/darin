@@ -1,7 +1,7 @@
 # Darin (Childcare Management App) — 작업 문서
 
 **다린(Darin)** AI 돌봄 커뮤니케이션 앱 UI입니다.  
-모바일 폰 목업 형태의 React 프로토타입이며, 실제 백엔드·SMS·OAuth 연동은 없습니다.
+**Expo React Native** 프로토타입이 메인 실행 대상이며, 실제 백엔드·SMS·OAuth·결제 연동은 없습니다.
 
 - **GitHub:** https://github.com/eddysul/darin
 - **작업 브랜치:** `Joon` (main 직접 푸시 지양)
@@ -17,45 +17,61 @@
 | UI | React Native StyleSheet, expo-linear-gradient |
 | 이미지 | expo-image, expo-image-picker |
 | 아이콘 | lucide-react-native |
-| 상태 | React Context (Language, App) |
+| 상태 | React Context (`Language`, `App`, `Chat`, `CareFlow`) |
 | 패키지 매니저 | pnpm |
 
-> 이전 Vite + React Web 버전 코드는 `src/app/`에 남아 있을 수 있으며, 실행에는 사용되지 않습니다.
+> **Web 레거시:** Vite + React 프로토타입은 `src/app/`에 별도로 존재합니다. HeyDealer 스타일 Care Request 플로우가 web에도 구현되어 있으나, **iOS 시뮬레이터(`pnpm ios`) 기준 메인 코드는 `src/` (RN)** 입니다.
 
 ---
 
-## 프로젝트 구조
+## 프로젝트 구조 (RN 메인)
 
 ```
 Childcare Management App/
-├── public/
-│   └── darin-logo.png          # 스플래시·로그인·파비콘 (투명 PNG)
+├── App.tsx                     # RN 루트 (Provider + phase 관리)
+├── assets/
+│   └── darin-logo.png
 ├── src/
-│   ├── main.tsx                # 앱 진입점
-│   ├── app/
-│   │   ├── App.tsx             # 메인 앱 (탭, 폰 프레임, phase 관리)
-│   │   ├── i18n.ts             # 한/영 번역 및 콘텐츠 데이터
-│   │   ├── LanguageContext.tsx # 전역 언어 상태 (Context)
-│   │   ├── types/
-│   │   │   └── profile.ts      # UserProfile, UserRole, CaregiverCertificate
-│   │   └── components/
-│   │       ├── SplashScreen.tsx      # 시작 화면
-│   │       ├── LoginScreen.tsx       # 로그인 / 회원가입
-│   │       ├── OnboardingScreen.tsx  # 회원가입 후 프로필 설정
-│   │       ├── LanguagePicker.tsx    # 언어 선택 모달
-│   │       ├── ProfileEditModal.tsx  # 프로필 수정 모달
-│   │       ├── figma/                # 이미지 fallback 유틸
-│   │       └── ui/                   # shadcn UI 컴포넌트 모음
-│   └── styles/
-│       ├── index.css
-│       ├── theme.css           # 컬러·디자인 토큰
-│       ├── tailwind.css
-│       └── fonts.css
-├── index.html
-├── package.json
-├── vite.config.ts
-├── pnpm-workspace.yaml
-└── work.md                     # 이 문서
+│   ├── screens/
+│   │   ├── SplashScreen.tsx
+│   │   ├── LoginScreen.tsx
+│   │   ├── OnboardingScreen.tsx
+│   │   ├── MainTabs.tsx
+│   │   └── tabs/
+│   │       ├── HomeScreen.tsx
+│   │       ├── ReportScreen.tsx
+│   │       ├── LogScreen.tsx
+│   │       ├── MatchScreen.tsx      # Find 탭
+│   │       └── ProfileScreen.tsx
+│   ├── components/
+│   │   ├── CareInboxModal.tsx       # 메시지 목록 + 채팅 (단일 Modal)
+│   │   ├── CareProposalChatModal.tsx # 제안 채팅 + Care Plan 협상
+│   │   ├── CareRequestModal.tsx
+│   │   ├── CareProposalsSheet.tsx
+│   │   ├── CarePlanModal.tsx
+│   │   ├── CarePlanAdjustModal.tsx
+│   │   ├── ScheduleTrialModal.tsx
+│   │   ├── CaregiverDetailSheet.tsx
+│   │   ├── ChildCareSnapshotModal.tsx # 아이 돌봄 스냅샷 (Profile)
+│   │   ├── ContactMessageModal.tsx
+│   │   └── ...
+│   ├── context/
+│   │   ├── AppContext.tsx
+│   │   ├── ChatContext.tsx
+│   │   └── CareFlowContext.tsx      # Care Request / Proposal / Match 상태
+│   ├── demo/
+│   │   ├── caregivers.ts
+│   │   ├── careFlow.ts              # mock proposals, chat seeds
+│   │   └── childProfile.ts          # Emma mock child profile
+│   ├── types/
+│   │   ├── profile.ts
+│   │   ├── dailyReport.ts
+│   │   ├── careFlow.ts
+│   │   └── childProfile.ts
+│   ├── i18n.ts
+│   ├── theme.ts
+│   └── app/                         # Web 레거시 (Vite)
+└── work.md
 ```
 
 ---
@@ -66,227 +82,270 @@ Childcare Management App/
 
 ```
 splash  →  login  →  onboarding  →  main
-(스플래시)   (로그인)   (프로필 설정)   (메인 앱)
+(스플래시)   (로그인)   (프로필 설정)   (MainTabs)
                 ↑
          회원가입 시에만 onboarding 경유
-         로그인·소셜(로그인 모드)은 main으로 바로 진입
+         로그인·소셜은 main으로 바로 진입 (검증 없음)
 ```
 
 | Phase | 컴포넌트 | 설명 |
 |-------|----------|------|
-| `splash` | `SplashScreen` | Darin 로고 표시, 약 2.6초 후 자동 전환 |
-| `login` | `LoginScreen` | 로그인 / 회원가입, 소셜 로그인 UI |
-| `onboarding` | `OnboardingScreen` | 역할 선택 + 역할별 프로필 설정 (회원가입 후) |
-| `main` | `App.tsx` 내부 탭 | 홈·리포트·기록·찾기·프로필 |
+| `splash` | `SplashScreen` | Darin 로고, 약 2.6초 후 자동 전환 |
+| `login` | `LoginScreen` | 로그인 / 회원가입 (이메일·비밀번호 입력 **필수 아님**) |
+| `onboarding` | `OnboardingScreen` | 역할 선택 + 프로필 설정 (회원가입 후) |
+| `main` | `MainTabs` | Home · Reports · Log · Find · Profile |
 
-### 개발 미리보기 URL (DEV 전용)
+### 로그인 (프로토타입)
 
-쿼리 파라미터로 온보딩 화면을 바로 띄울 수 있습니다.
-
-| URL | 설명 |
-|-----|------|
-| `?screen=onboarding` | 역할 선택(1단계)부터 시작 |
-| `?screen=parent-onboarding` | 부모 프로필 설정(2단계) 바로 표시 |
-| `?screen=caregiver-onboarding` | 케어기버 프로필 설정(2단계) 바로 표시 |
-
-예: `http://localhost:5173/?screen=caregiver-onboarding`
+- **Log in** / **Continue with Google** / **Apple** 아무거나 누르면 Home 진입
+- 별도 계정·비밀번호 없음
+- **Sign up** → 온보딩 → 메인
 
 ---
 
-## 시작 화면 (SplashScreen)
+## 디자인 토큰 (`src/theme.ts`)
 
-- 흰 배경 + 중앙 `darin-logo.png`
-- 로고: 달·엄마·아기 일러스트 + **DARIN** + *Your first motherhood companion*
-- 투명 PNG (체크무늬 없음, 흰 배경 위에 표시)
-- 페이드인 애니메이션
-- 타이머 종료 후 로그인 화면으로 이동
+Darin 미니멀 **흑백 + 옅은 노랑** 팔레트:
 
----
+| 토큰 | 값 | 용도 |
+|------|-----|------|
+| `background` | `#FFFFFF` | 메인 배경 |
+| `backgroundSecondary` | `#FAFAF8` | 보조 배경 |
+| `text` | `#111111` | 본문 |
+| `muted` | `#666666` | 보조 텍스트 |
+| `border` | `#EAEAEA` | 테두리 |
+| `black` / `primary` | `#1A1A1A` | 버튼·강조 |
+| `yellow` | `#E0B23F` | AI·매칭·협상 하이라이트 |
+| `yellowSoft` | `#FFF8E7` | AI 배지·칩 배경 |
 
-## 로그인 / 회원가입 (LoginScreen)
-
-### 로그인 모드
-- 이메일 · 비밀번호 입력
-- **Log in** 버튼 → 메인 앱 진입
-- **Forgot password?** (UI만, 동작 없음)
-- **Continue with Google / Apple** → 메인 앱 진입
-- 하단 **Sign up** 링크 → 회원가입 모드 전환
-
-### 회원가입 모드
-| 필드 | 설명 |
-|------|------|
-| 이름 | Full name (필수) |
-| 전화번호 | 국가 코드 선택 + 번호 입력 (필수) |
-| 이메일 | 필수 |
-| 비밀번호 / 확인 | 필수, 불일치 시 오류 |
-| 인증번호 | SMS 시뮬레이션 (프로토타입) |
-
-- **Sign up** 버튼 → 전화 인증 완료 후 **온보딩** 화면으로 이동
-- 회원가입 모드에서는 Google / Apple 버튼 미표시
-
-### 전화번호 인증 흐름
-1. 국가 코드 선택 (기본: 🇺🇸 **+1**)
-2. 번호 입력 (US 예시: `(555) 123-4567`)
-3. **인증번호 받기** → 6자리 코드 생성 (Demo code 화면 표시)
-4. **인증하기** → 성공 시 "전화번호 인증 완료"
-5. 인증 완료 후에만 **회원가입** 버튼 활성화
-6. 재전송 60초 쿨다운
-
-### 지원 국가 코드
-- +1 US, +82 KR, +81 JP, +44 UK, +86 CN
-
----
-
-## 온보딩 (OnboardingScreen)
-
-회원가입 완료 후 2단계 프로필 설정입니다.
-
-### 1단계 — 역할 선택
-| 역할 | 설명 |
-|------|------|
-| **부모 / 예비 부모** | 케어기버 찾기, 성장 기록, 가족 돌봄 관리 |
-| **케어기버** | 가족 연결, 업데이트 공유, 일정 관리 |
-
-### 2단계 — 공통 필드 (필수)
-| 필드 | 설명 |
-|------|------|
-| 이름 | 필수 |
-| 위치 | 필수 |
-| 사용 언어 | 필수 |
-
-### 2단계 — 부모 전용 (선택)
-| 필드 | 설명 |
-|------|------|
-| 출산 예정일 | 선택 |
-| 아이 이름 | 선택 |
-
-### 2단계 — 케어기버 전용
-| 필드 | 필수 | 설명 |
-|------|------|------|
-| 경력 | — | 선택 |
-| 전문 분야 | — | 선택 |
-| 면허 번호 | ✅ | 텍스트 입력 |
-| 면허증 사진 | ✅ | 이미지 업로드 (미리보기) |
-| 기타 증명서 | — | **추가** 버튼으로 항목 추가 (이름 + 사진), **삭제** 가능 |
-
-- 기타 증명서: 이름·사진 중 하나만 입력된 항목이 있으면 완료 불가
-- 완료 시 `UserProfile` 저장 후 메인 앱 진입
-
----
-
-## UserProfile (`types/profile.ts`)
-
-```typescript
-type UserRole = "parent" | "caregiver";
-
-type CaregiverCertificate = {
-  id: string;
-  name: string;
-  photo: string;  // base64 data URL (프로토타입)
-};
-
-type UserProfile = {
-  name: string;
-  location: string;
-  avatar: string;
-  role: UserRole;
-  dueDate?: string;
-  childName?: string;
-  languages?: string;
-  experience?: string;
-  specialty?: string;
-  licenseNumber?: string;
-  licensePhoto?: string;
-  certificates?: CaregiverCertificate[];
-};
-```
+노란색은 AI 배지, 매칭 점수, 협상 중 상태, 확정 하이라이트에만 사용.
 
 ---
 
 ## 메인 앱 (5탭)
 
-폰 프레임(390×844) 안에서 하단 탭으로 전환합니다.
-
 ### 1. Home (홈)
-- 사용자 인사 (`Jisoo 👋` — 프로필 이름 연동)
-- 오늘 돌보미 상태 (Emma · Ji-yeon Park)
-- **Today's Report** — AI 번역된 일일 리포트
-- **Quick Actions** — 메시지, 픽업, 번역, 기록
-- **AI Draft Reply** — 부모→돌보미 추천 답장 초안
+
+- 인사 + Emma · 돌보미 상태 카드
+- **Messages** 카드 → `CareInboxModal` (대화 목록)
+- **Quick Actions**
+  - **Message Ji-yeon** → Ji-yeon 채팅방 **바로** 열기 (목록 생략)
+  - Schedule Pickup, Translate Report, View History (UI만)
+- **Today's Report** — AI 번역 일일 리포트
+- **AI Draft Reply**
+- **매칭 확정 후:** **Active Care Relationship** 카드
+  - Ji-yeon Park · Mon–Fri 3 PM–8 PM
+  - Chat saved · Daily reports enabled
+  - Open Chat · View Care Plan
 
 ### 2. Reports (리포트)
-- Emma 돌봄 기록 타임라인
-- 날짜별 리포트 카드 (식사·수면·활동 등)
-- 펼치면 상세 요약 + 건강 노트
+
+- Emma 돌봄 기록 타임라인, 날짜별 카드
 
 ### 3. Log (기록)
-- **Voice Note** — 녹음 UI (시뮬레이션)
-- **Quick Notes** — 텍스트 메모 → AI 리포트 생성
-- **Today's Log** — 시간별 활동 기록
 
-### 4. Find (돌봄 찾기)
-- 돌보미 검색·필터
-- Ji-yeon Park, Sarah Kim, Min-jun Lee 등 카드 목록
-- 평점, 거리, 언어, 태그, 요금 표시
+- **Voice Note** — 중앙 Log 버튼 3초 길게 누르기 → 녹음 → 탭으로 저장 → **dh `/transcribe` API** 전사 + 이벤트 분류
+- 녹음 전: 노란 카드에 “중앙 기록 버튼 길게 누르기” 안내
+- 저장 후: 전사문 → Retake / Generate Report
+- Quick Notes, Today's Log
+
+#### dh transcribe 서버 연동
+
+| 항목 | 경로 |
+|------|------|
+| dh worktree | `../darin-dh` (`origin/dh` checkout) |
+| FastAPI | `../darin-dh/script/main.py` |
+| 앱 API 클라이언트 | `src/api/transcribe.ts` |
+| 녹음 상태 | `src/context/VoiceRecordingContext.tsx` |
+
+**로컬 실행**
+
+```bash
+# 1) dh 서버 (별 터미널)
+cp .env ../darin-dh/script/.env   # BIZCRUSH + OPENAI 키
+pnpm server:dh                    # http://127.0.0.1:8000
+
+# 2) Expo 앱 (.env에 EXPO_PUBLIC_TRANSCRIBE_URL=http://127.0.0.1:8000)
+pnpm ios
+```
+
+- `GET /health` — 키 설정 확인
+- `POST /transcribe` — 오디오 → BizCrush STT → GPT 이벤트 JSON
+- 서버 미연결 시 데모 전사문 fallback
+- iOS 시뮬레이터: `127.0.0.1:8000` / Android 에뮬레이터: `10.0.2.2:8000`
+- **ffmpeg** 필요 (`brew install ffmpeg`)
+
+### 4. Find (돌봄 찾기) — `MatchScreen`
+
+**HeyDealer 영감 Care Request / Care Proposal 플로우** (bid/입찰 용어 **미사용**)
+
+#### 카드 UI (롤백 반영)
+
+- 카드 하단: **요금 + View Profile** 만 표시
+- **Request Proposal** 은 카드에 **없음** → 프로필 시트에서만
+
+#### 전체 데모 플로우
+
+```
+Find
+  → View Profile
+  → Request Proposal (프로필 시트)
+  → Care Request modal (Emma prefilled)
+  → Send Care Request
+  → Care Proposals 비교 (3건)
+  → Chat / Accept Proposal
+  → Care Plan Draft + Agreement Tracker (채팅)
+  → Adjust Care Plan / Schedule trial
+  → Care Plan Update 수락 (mock)
+  → Confirm Match
+  → Simulate caregiver confirmation
+  → Darin Match Confirmed
+  → Saved Chat + Home Active Care Relationship
+```
+
+#### Care Request modal (`CareRequestModal`)
+
+Prefilled mock:
+
+- Child: Emma, 8 months
+- Location: Seattle, Capitol Hill
+- Schedule: Mon–Fri, 3 PM–8 PM
+- Language: Korean/English
+- Care needs, Budget $18–25/hr, Start: Next Monday
+- Button: **Send Care Request**
+
+#### Care Proposals (`CareProposalsSheet`)
+
+- Header: **3 Care Proposals received**
+- Darin AI comparison summary
+- 3 proposals: Ji-yeon (94%), Sarah (91%), Min-jun (87%)
+- 카드당: View Profile · Chat · Shortlist · Accept Proposal
+
+#### 제안 채팅 (`CareProposalChatModal`)
+
+Find 탭 Proposals에서 Chat 시 사용. **CareInboxModal과 분리.**
+
+**Care Plan Draft** (메시지 상단):
+
+- Child, Caregiver, Schedule, Rate, Start date, Care needs, Trial session
+- Status chips: Schedule agreed · Rate discussing · Trial needed · Daily report included
+
+**Agreement Tracker:**
+
+- Schedule / Care scope / Daily report language / Rate / Trial session
+- agreed · discussing · needs confirmation (노란 강조)
+
+**액션 버튼:**
+
+- Draft with AI · Translate · Schedule trial · **Adjust Care Plan** · Confirm Match
+
+**Adjust Care Plan** (`CarePlanAdjustModal`):
+
+- Schedule, Rate, Trial, Start date, Care needs checkboxes, Message
+- Prefill: $21/hr, Friday 4 PM trial 등
+- **Send Care Plan Update** → 채팅에 구조화 카드 (Accept / Counter / Ask Darin)
+
+**Schedule Trial** (`ScheduleTrialModal`):
+
+- Friday 4 PM 제안 → 부모·케어기버 mock 메시지 → Draft trial 상태 갱신
+
+**매칭 확정:**
+
+1. Confirm Match → Parent confirmed · Waiting for caregiver
+2. **Simulate caregiver confirmation** (프로토타입)
+3. **Darin Match Confirmed** 카드 → Go to Active Chat · View Care Plan · Start Daily Reports
 
 ### 5. Profile (프로필)
-- **프로필 카드** — 이름, 역할(부모/케어기버), 위치, 언어 배지
-  - 우측 상단 **UserCog** 아이콘 → 프로필 수정 모달
-- **Children** — 부모 역할일 때만 표시 (Emma 정보)
-- **전문 정보** — 케어기버일 때 경력·전문 분야·면허·기타 증명서 표시
-- **Settings**
-  - Language Preference → 언어 선택 모달 (한/영)
-  - Notifications, Schedule, Care Preferences
-  - Settings (세팅), Billing (빌링) — UI만
+
+- 프로필 카드 (UserCog → 프로필 수정)
+- **Children** (부모 역할만) — Emma 카드 **탭 가능**
+- Settings, Language Preference
+
+#### Child Care Snapshot (`ChildCareSnapshotModal`)
+
+Emma child card 탭 시 bottom sheet / modal 오픈.
+
+- **제목:** Child Care Snapshot
+- **부제:** Shared only with confirmed caregivers.
+- **우측 상단:** ✏️ Edit + 닫기(X) — Edit는 mock 토스트
+
+| 섹션 | 내용 |
+|------|------|
+| **Basic Info** | Emma Kim, 8 months, DOB, Female, Blood O, Preferred name Emma |
+| **Health & Safety** | Peanuts allergy, mild eczema, Seattle Children's Clinic, emergency contact + Edit 칩 |
+| **Special Notes** | Note type (Allergy/Condition/…/Other) + 텍스트 → **Save note** (로컬 state 목록 추가) |
+| **Daily Routine** | Feeding, nap, diaper, comfort, favorite activity |
+| **Care Preferences** | Korean/English, report language, update topics, communication style |
+| **Authorized Pickup** | Jisoo Kim (Mother), Daniel Kim (Father) |
+| **Privacy notice** | 확정 케어기버에게만 공유 안내 |
+
+**하단 액션:**
+
+- **Edit Info** → mock 토스트
+- **Share with Caregiver** → “Child Care Snapshot shared with confirmed caregiver.”
+
+Mock 데이터: `EMMA_CHILD_PROFILE` (`src/demo/childProfile.ts`)  
+타입: `ChildProfile` (`src/types/childProfile.ts`)
+
+RN: `ProfileScreen.tsx` · Web: `src/app/App.tsx` ProfileTab (동일 UX)
+
+---
+
+## Messages / Chat
+
+### `CareInboxModal` (Home 진입)
+
+- **단일 full-screen Modal** — 목록 ↔ 채팅 전환 (iOS nested Modal 버그 회피)
+- Home **Messages** → 목록 → 대화 탭
+- Home **Message Ji-yeon** → `startThreadId=1` 로 Ji-yeon 채팅 **직진**
+- 매칭 후: Saved chat · Active care relationship 배지
+
+### `ChatContext`
+
+- Mock threads: Ji-yeon, Sarah, Min-jun
+- `sendMessage`, `markThreadSaved`, `ensureProposalThread`
+- Ji-yeon thread: 매칭 전 `savedChat: false` (확정 후 true)
+
+### `CareFlowContext`
+
+| 상태 | 설명 |
+|------|------|
+| `proposalsReceived` | Care Request 전송 후 proposals 배너 |
+| `shortlisted` | Shortlist caregiver IDs |
+| `selectedProposalId` / `acceptedProposalId` | 선택·수락 proposal |
+| `matchStatus` | none · parent_pending · confirmed |
+| `activeRelationship` | 확정 후 활성 돌봄 관계 |
+| `negotiations[cid]` | Care Plan Draft, Agreement terms, negotiation chat items |
+
+---
+
+## Mock 데이터 (`demo/`)
+
+### Caregivers (`caregivers.ts`)
+
+- **Ji-yeon Park** (id: 1) — 94% match, $22/hr, background check complete
+- **Sarah Kim** (id: 2)
+- **Min-jun Lee** (id: 3)
+
+### Care Flow (`careFlow.ts`)
+
+- `DEFAULT_CARE_REQUEST`, `CARE_PROPOSALS` (3건)
+- `INITIAL_CHAT_MESSAGES`, AI draft/translate/summary
+- `DEFAULT_CARE_PLAN_ADJUST` ($21/hr, Friday 4 PM trial)
+- `buildCarePlan()`, `buildDefaultCarePlanDraft()`
+
+### Child Profile (`childProfile.ts`)
+
+- `EMMA_CHILD_PROFILE` — Basic info, health, routine, care preferences, pickup, seed special notes
+- `CHILD_NOTE_TYPES` — Allergy, Condition, Medication, Behavior, Food, Sleep, Other
 
 ---
 
 ## 다국어 (i18n)
 
-- `LanguageContext` + `i18n.ts`로 앱 전체 UI 한/영 전환
-- **Profile → Language Preference**에서 English / 한국어 선택
-- 탭 라벨, 화면 문구, 온보딩·리포트·기록 콘텐츠까지 locale에 맞게 표시
-- `createT(locale)` 함수로 번역 키 조회
-
----
-
-## 주요 컴포넌트
-
-| 파일 | 역할 |
-|------|------|
-| `SplashScreen.tsx` | 앱 시작 로고 화면 |
-| `LoginScreen.tsx` | 로그인·회원가입·전화 인증 |
-| `OnboardingScreen.tsx` | 역할 선택 + 역할별 프로필·면허·증명서 설정 |
-| `LanguagePicker.tsx` | 언어 선택 팝업 (폰 프레임 중앙) |
-| `ProfileEditModal.tsx` | 이름·위치 수정 팝업 |
-| `types/profile.ts` | 프로필·역할·증명서 타입 정의 |
-| `LanguageContext.tsx` | `locale`, `setLocale`, `t()` 제공 |
-
----
-
-## 상태 관리 (App.tsx)
-
-| 상태 | 설명 |
-|------|------|
-| `phase` | splash / login / onboarding / main |
-| `activeTab` | home / report / log / match / profile |
-| `profile` | `UserProfile` — 홈·프로필 공유 (역할·면허·증명서 포함) |
-| `langPickerOpen` | 언어 선택 모달 |
-| `profileEditOpen` | 프로필 수정 모달 |
-
----
-
-## 디자인 토큰 (theme.css)
-
-앱 기본 팔레트 (코랄/오렌지 계열):
-
-- `--primary`: `#F4845F`
-- `--background`: `#FFF8F3`
-- `--accent`: `#7CB987`
-- `--chart-3`: `#F4B860` (골드 계열)
-
-로그인·온보딩은 Darin 브랜드 네이비 (`#1A2333`)를 컴포넌트内 인라인으로 사용.  
-로고 A 안 스타는 골드 액센트.
+- `LanguageContext` + `src/i18n.ts` — 한/영
+- Care Request, Proposals, Chat, Negotiation, Care Plan, Home active care, **Child Snapshot** 문자열 포함
+- Profile → Language Preference
 
 ---
 
@@ -294,45 +353,120 @@ type UserProfile = {
 
 ```bash
 pnpm install
-pnpm start
-```
-
-Expo Dev Tools에서 iOS/Android/실기기로 실행합니다.
-
-```bash
-pnpm run ios
+pnpm ios          # iOS Simulator
 pnpm run android
 pnpm run typecheck
 ```
+
+시뮬레이터 새로고침: `Cmd + R`
+
+### Ji-yeon Care Proposal 데모 (요약)
+
+1. Log in (아무 버튼)
+2. **Find** → Ji-yeon **View Profile** → **Request Proposal**
+3. **Send Care Request** → Proposals → Ji-yeon **Chat**
+4. **Adjust Care Plan** → Send → 카드 **Accept**
+5. **Confirm Match** → **Simulate caregiver confirmation**
+6. **Home** → Active Care Relationship 확인
+
+### Child Care Snapshot 데모
+
+1. **Profile** → **Children** → **Emma** 카드 탭
+2. Basic Info · Health & Safety · Routine 확인
+3. Special Notes에 Allergy + 텍스트 입력 → **Save note**
+4. **Share with Caregiver** → mock 확인 토스트
 
 ---
 
 ## 프로토타입 한계 (미구현)
 
-- 실제 Google / Apple OAuth
-- 실제 SMS 인증 (데모 코드로 대체)
-- 백엔드 API / DB
-- 업로드 이미지는 base64로만 저장 (서버 업로드 없음)
-- Settings, Billing, Forgot password 등 일부 버튼은 UI만 존재
-- 로그인 성공 시 별도 검증 없이 메인 앱 진입
-- 프로필 수정 모달은 이름·위치만 변경 (면허·증명서 수정 UI 없음)
+- 실제 OAuth, SMS, 백엔드, DB, 결제, 캘린더 연동
+- Caregiver Accept / Counter는 mock (Accept → 즉시 수락 메시지)
+- Special Notes · Edit Info · Share — **로컬 state / mock 토스트만** (백엔드 저장 없음)
+- Settings, Billing, Forgot password 등 UI만
+- `CareChatScreen.tsx`, `CareChatListScreen.tsx` — 구버전, `CareInboxModal` / `CareProposalChatModal`로 대체됨
 
 ---
 
 ## 작업 이력 요약
 
-1. 모바일 앱 UI 로컬 실행 환경 구성
-2. GitHub (`eddysul/darin`) 푸시 — 작업 브랜치 `Joon`
-3. Language Preference + 앱 전체 한/영 i18n
-4. Profile Settings / Billing 메뉴 추가
-5. 프로필 카드 수정 (UserCog → ProfileEditModal)
-6. Darin 스플래시 화면
-7. 로그인 화면 + Sign up 전환
-8. Google / Apple 소셜 로그인 UI (로그인 모드)
-9. 회원가입 전화번호 필수 + 인증번호 UI
-10. 국가 코드 선택 + US 번호 placeholder
-11. 회원가입 → 온보딩 → 메인 플로우
-12. 역할 선택 (부모/예비 부모 · 케어기버) + 역할별 프로필 설정
-13. 케어기버 면허 번호·면허증 사진 (필수) + 기타 증명서 추가/삭제
-14. Darin 브랜드 로고 교체 (투명 PNG, *Your first motherhood companion*)
-15. DEV 온보딩 미리보기 URL (`?screen=caregiver-onboarding` 등)
+### 초기 · 공통
+
+1. RN + Expo 로컬 실행 환경, GitHub `Joon` 브랜치
+2. 한/영 i18n, Profile Settings / Billing UI
+3. 스플래시 · 로그인 · 회원가입 · 전화 인증(데모) · 온보딩 (부모/케어기버)
+4. 케어기버 면허·증명서 업로드 (base64 프로토타입)
+5. Darin 로고 · 브랜드 적용
+
+### RN UI · 테마
+
+6. Minimal black/white + yellow (`src/theme.ts`) 팔레트 전환
+7. MainTabs: Home, Reports, Log, Find, Profile
+8. Find 탭 헤더 overlap 수정 (AI Recommended 배지)
+
+### Caregiver · Find
+
+9. CaregiverDetailSheet — View Profile, Contact, Request Proposal
+10. Find 카드: **View Profile + 가격만** (Request Proposal 카드에서 제거, 프로필에서만)
+11. Care Request modal + Care Proposals comparison (3 proposals, AI summary)
+12. HeyDealer 스타일 플로우 — **Care Request / Care Proposal** 용어 (bid 미사용)
+
+### Chat · Messages
+
+13. Home Messages 카드 + `CareInboxModal` (목록 → 채팅)
+14. iOS nested Modal 버그 수정 — 목록+채팅 **단일 Modal** 통합
+15. Quick Action **Message Ji-yeon** → Ji-yeon 채팅 직접 진입
+16. `ChatContext` — mock threads, sendMessage, savedChat
+
+### Match · Care Flow
+
+17. `CareFlowContext` — proposals, shortlist, match confirmation, active relationship
+18. Find: Request Proposal → Proposals → **`CareProposalChatModal`** (채팅으로 직접 점프하지 않음)
+19. Mutual match: Confirm Match → Simulate caregiver → Darin Match Confirmed
+20. Home **Active Care Relationship** 카드 + `CarePlanModal`
+
+### Care Plan 협상 (채팅)
+
+21. **Care Plan Draft** 카드 + **Agreement Tracker**
+22. **Adjust Care Plan** modal → **Send Care Plan Update** → 구조화 메시지 카드
+23. Accept / Counter / Ask Darin (mock)
+24. **Schedule Trial** modal + trial proposal 메시지
+25. Darin AI agreement summary (업데이트 수락 후)
+26. 확정 시 negotiated rate ($21/hr), trial (Friday 4 PM) → Active relationship · Saved chat
+
+### Web (`src/app/`)
+
+27. Web 프로토타입에도 CareFlowContext, MatchTab, CareChatModal 등 별도 구현 (RN과 완전 동기화 아님)
+
+### Profile · Child Snapshot
+
+28. **`ChildCareSnapshotModal`** — RN + Web Profile Children → Emma 탭
+29. `ChildProfile` 타입, `EMMA_CHILD_PROFILE` mock, Special Notes 로컬 추가, Edit/Share mock
+
+### Git / PR
+
+30. `Joon` 브랜치 → [PR #2](https://github.com/eddysul/darin/pull/2) (Care Request · proposal chat · Messages, main 대비)
+
+---
+
+## 주요 RN 컴포넌트 참조
+
+| 파일 | 역할 |
+|------|------|
+| `MatchScreen.tsx` | Find 탭, Care Request → Proposals → Chat 연결 |
+| `HomeScreen.tsx` | Messages, Quick Actions, Active Care card |
+| `CareProposalChatModal.tsx` | 제안 채팅 + Care Plan 협상 + Match 확정 |
+| `CareInboxModal.tsx` | Home 메시지 inbox + saved chat |
+| `CareRequestModal.tsx` | Care Request 폼 |
+| `CareProposalsSheet.tsx` | 3 proposals 비교 |
+| `CarePlanAdjustModal.tsx` | Care Plan Update 편집 |
+| `ScheduleTrialModal.tsx` | 시범 세션 제안 |
+| `CarePlanModal.tsx` | 확정 Care Plan 상세 |
+| `CareFlowContext.tsx` | 플로우·협상·매칭 전역 상태 |
+| `ChatContext.tsx` | 대화 thread·메시지 |
+| `ChildCareSnapshotModal.tsx` | Profile → Emma Child Care Snapshot |
+| `ProfileScreen.tsx` | Children 카드 탭 → snapshot 오픈 |
+
+---
+
+*마지막 업데이트: 2026-06-20 — Child Care Snapshot (Profile), Care Plan 협상, Find 플로우, PR #2 반영*

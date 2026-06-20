@@ -5,6 +5,9 @@ import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppProvider } from "./src/context/AppContext";
+import { CareFlowProvider } from "./src/context/CareFlowContext";
+import { ChatProvider } from "./src/context/ChatContext";
+import { VoiceRecordingProvider } from "./src/context/VoiceRecordingContext";
 import { LanguageProvider } from "./src/LanguageContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { MainTabs } from "./src/screens/MainTabs";
@@ -16,17 +19,26 @@ import { SplashScreen } from "./src/screens/SplashScreen";
 import type { UserProfile, UserRole } from "./src/types/profile";
 import { DEFAULT_CAREGIVER_PROFILE } from "./src/context/AppContext";
 import { colors } from "./src/theme";
+import { WebAppShell } from "./src/components/WebAppShell";
 
 type AppPhase = "splash" | "login" | "role-select" | "parent-setup" | "caregiver-setup" | "onboarding" | "main";
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      <LanguageProvider>
-        <AppProvider>
-          <RootApp />
-        </AppProvider>
-      </LanguageProvider>
+      <WebAppShell>
+        <LanguageProvider>
+          <AppProvider>
+            <ChatProvider>
+              <CareFlowProvider>
+                <VoiceRecordingProvider>
+                  <RootApp />
+                </VoiceRecordingProvider>
+              </CareFlowProvider>
+            </ChatProvider>
+          </AppProvider>
+        </LanguageProvider>
+      </WebAppShell>
     </SafeAreaProvider>
   );
 }

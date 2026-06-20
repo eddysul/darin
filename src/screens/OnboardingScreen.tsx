@@ -27,6 +27,7 @@ import {
   View,
 } from "react-native";
 import { ScreenBackground } from "../components/ScreenBackground";
+import { useScreenTopInset } from "../hooks/useScreenInsets";
 import { useLanguage } from "../LanguageContext";
 import type { CaregiverCertificate, UserProfile, UserRole } from "../types/profile";
 import { createId } from "../utils/id";
@@ -54,6 +55,7 @@ export function OnboardingScreen({
   initialRole = "parent",
   initialStep = "role",
 }: OnboardingScreenProps) {
+  const topInset = useScreenTopInset();
   const { t } = useLanguage();
   const [step, setStep] = useState(initialStep);
   const [role, setRole] = useState<UserRole>(initialRole);
@@ -101,7 +103,12 @@ export function OnboardingScreen({
   return (
     <ScreenBackground style={styles.overlay}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scroll, { paddingTop: topInset }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator
+        >
           {step === "profile" && (
             <Pressable onPress={() => setStep("role")} style={styles.back}>
               <ChevronLeft size={18} color={colors.muted} />
@@ -157,7 +164,7 @@ export function OnboardingScreen({
                   <View style={styles.certHeader}>
                     <Text style={styles.label}>{t("onboarding.otherCertificates")}</Text>
                     <Pressable onPress={() => setCertificates((p) => [...p, { id: createId(), name: "", photo: "" }])}>
-                      <Text style={styles.addLink}><Plus size={12} color={colors.gold} /> {t("onboarding.addCertificate")}</Text>
+                      <Text style={styles.addLink}><Plus size={12} color={colors.primary} /> {t("onboarding.addCertificate")}</Text>
                     </Pressable>
                   </View>
                   {certificates.map((cert, i) => (
@@ -191,7 +198,7 @@ function RoleCard({ active, icon: Icon, title, desc, onPress }: { active: boolea
   return (
     <Pressable style={[styles.roleCard, active && styles.roleCardActive]} onPress={onPress}>
       <View style={[styles.roleIcon, active && styles.roleIconActive]}>
-        <Icon size={22} color={active ? colors.gold : colors.muted} />
+        <Icon size={22} color={active ? colors.yellow : colors.muted} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.roleTitle}>{title}</Text>
@@ -228,7 +235,8 @@ function PhotoField({ label, photo, onPick, uploadLabel }: { label: string; phot
 }
 
 const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 55 },
+  overlay: { flex: 1, zIndex: 55 },
+  scrollView: { flex: 1 },
   scroll: { padding: 28, paddingBottom: 48 },
   back: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 12 },
   backText: { fontSize: 14, fontWeight: "600", color: colors.muted },
@@ -245,9 +253,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     marginBottom: 12,
   },
-  roleCardActive: { borderColor: colors.gold, backgroundColor: "#FFFBF2" },
-  roleIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.champagne, alignItems: "center", justifyContent: "center" },
-  roleIconActive: { backgroundColor: "#FFF4D8" },
+  roleCardActive: { borderColor: colors.yellow, backgroundColor: colors.yellowSoft },
+  roleIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.yellowSoft, alignItems: "center", justifyContent: "center" },
+  roleIconActive: { backgroundColor: colors.yellowSoft },
   roleTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
   roleDesc: { fontSize: 13, color: colors.muted, marginTop: 4, lineHeight: 18 },
   inputWrap: { marginBottom: 14 },
@@ -277,13 +285,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
-  uploadLink: { fontSize: 14, fontWeight: "600", color: colors.gold },
+  uploadLink: { fontSize: 14, fontWeight: "600", color: colors.primary },
   certHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  addLink: { fontSize: 12, fontWeight: "600", color: colors.gold },
+  addLink: { fontSize: 12, fontWeight: "600", color: colors.primary },
   certCard: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 12 },
   certTop: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   certIndex: { fontSize: 12, fontWeight: "600", color: colors.muted },
   error: { fontSize: 12, color: "#C45C5C", marginBottom: 8 },
-  primaryBtn: { backgroundColor: colors.gold, borderRadius: radius.md, paddingVertical: 14, alignItems: "center", marginTop: 8 },
-  primaryBtnText: { fontSize: 14, fontWeight: "600", color: colors.text },
+  primaryBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 14, alignItems: "center", marginTop: 8 },
+  primaryBtnText: { fontSize: 14, fontWeight: "600", color: colors.primaryForeground },
 });
