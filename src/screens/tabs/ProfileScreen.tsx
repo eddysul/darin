@@ -1,11 +1,15 @@
 import { Image } from "expo-image";
 import {
   Bell,
+  Baby,
   Calendar,
   ChevronRight,
   CreditCard,
+  DollarSign,
   Globe,
   Heart,
+  Home,
+  Milk,
   Plus,
   Settings as SettingsIcon,
   UserCog,
@@ -80,6 +84,31 @@ export function ProfileScreen() {
               <ChevronRight size={16} color={colors.muted} style={{ marginLeft: "auto" }} />
             </View>
           ))}
+        </View>
+      )}
+
+      {profile.role === "parent" && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("profile.careRequest")}</Text>
+          <View style={styles.careCard}>
+            {[
+              { icon: Baby, color: "#ec4899", label: t("profile.dueDate"), value: profile.dueDate || "—" },
+              { icon: DollarSign, color: "#22c55e", label: t("profile.budget"), value: profile.budget || "—" },
+              { icon: Home, color: "#8b5cf6", label: t("profile.liveIn"), value: profile.liveIn ? t("profile.liveInYes") : t("profile.liveInNo") },
+              { icon: Calendar, color: "#f59e0b", label: t("profile.experience"), value: profile.experience || "—" },
+              { icon: Milk, color: "#243036", label: t("profile.breastfeeding"), value: profile.breastfeeding ? t("profile.breastfeedingYes") : t("profile.breastfeedingNo") },
+            ].map(({ icon: Icon, color, label, value }, i) => (
+              <View key={label} style={[styles.careRow, i > 0 && styles.careRowBorder]}>
+                <View style={[styles.careIcon, { backgroundColor: `${color}18` }]}>
+                  <Icon size={15} color={color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.careLabel}>{label}</Text>
+                  <Text style={styles.careValue}>{value}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
       )}
 
@@ -207,4 +236,16 @@ const styles = StyleSheet.create({
   settingIcon: { backgroundColor: colors.champagne, borderRadius: 12, padding: 8 },
   settingLabel: { fontSize: 14, fontWeight: "600", color: colors.text },
   settingValue: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  careCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden",
+  },
+  careRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
+  careRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  careIcon: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  careLabel: { fontSize: 11, color: colors.muted, marginBottom: 2 },
+  careValue: { fontSize: 14, fontWeight: "600", color: colors.text },
 });

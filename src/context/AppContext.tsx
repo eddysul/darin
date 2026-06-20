@@ -4,10 +4,15 @@ import type { UserProfile } from "../types/profile";
 
 const DEFAULT_PROFILE: UserProfile = {
   name: "Jisoo Kim",
-  location: "Seoul, Korea",
+  location: "Capitol Hill, Seattle",
   avatar: "photo-1438761681033-6461ffad8d80",
   role: "parent",
   languages: "Korean, English",
+  dueDate: "Aug 15, 2026",
+  budget: "$1,500–$2,000/wk",
+  liveIn: true,
+  experience: "First-time parent",
+  breastfeeding: true,
 };
 
 type AppContextValue = {
