@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Image } from "expo-image";
 import {
   Bell,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
+import { ChildCareSnapshotModal } from "../../components/ChildCareSnapshotModal";
 import { ScreenScrollView } from "../../components/ScreenScrollView";
 import { useApp } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
@@ -20,7 +22,8 @@ import { colors, radius } from "../../theme";
 export function ProfileScreen() {
   const { profile, setLangPickerOpen, setProfileEditOpen } = useApp();
   const { locale, t } = useLanguage();
-  const children = [{ name: "Emma", age: locale === "ko" ? "2세 4개월" : "2 yrs 4 mo", img: "photo-1594608661623-aa0bd3a69d98" }];
+  const [childSnapshotOpen, setChildSnapshotOpen] = useState(false);
+  const children = [{ name: "Emma", age: locale === "ko" ? "8개월" : "8 months", img: "photo-1594608661623-aa0bd3a69d98" }];
 
   const settings = [
     {
@@ -72,17 +75,19 @@ export function ProfileScreen() {
             </Pressable>
           </View>
           {children.map((child) => (
-            <View key={child.name} style={styles.childCard}>
+            <Pressable key={child.name} style={styles.childCard} onPress={() => setChildSnapshotOpen(true)}>
               <Avatar src={child.img} size={44} />
               <View>
                 <Text style={styles.childName}>{child.name}</Text>
                 <Text style={styles.childAge}>{child.age}</Text>
               </View>
               <ChevronRight size={16} color={colors.muted} style={{ marginLeft: "auto" }} />
-            </View>
+            </Pressable>
           ))}
         </View>
       )}
+
+      <ChildCareSnapshotModal open={childSnapshotOpen} onClose={() => setChildSnapshotOpen(false)} />
 
       {profile.role === "caregiver" && (profile.licenseNumber || profile.licensePhoto || profile.certificates?.length) && (
         <View style={styles.section}>

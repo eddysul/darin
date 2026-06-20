@@ -6,6 +6,7 @@ import {
   Globe,
   MessageCircle,
   Send,
+  SlidersHorizontal,
   Sparkles,
   Wand2,
 } from "lucide-react-native";
@@ -28,9 +29,17 @@ import {
 import { CAREGIVER_MATCHES } from "../demo/caregivers";
 import { useCareFlow } from "../context/CareFlowContext";
 import { useChat } from "../context/ChatContext";
+import type { CarePlanAdjustForm } from "../types/careFlow";
 import { useScreenTopInset } from "../hooks/useScreenInsets";
 import { useLanguage } from "../LanguageContext";
 import { Avatar } from "./Avatar";
+import { CarePlanAdjustModal } from "./CarePlanAdjustModal";
+import {
+  AgreementTracker,
+  CarePlanDraftCard,
+  NegotiationItem,
+} from "./CarePlanNegotiationBlocks";
+import { ScheduleTrialModal } from "./ScheduleTrialModal";
 import { colors, radius } from "../theme";
 
 const SUGGESTION_CHIPS = [
@@ -58,7 +67,17 @@ export function CareInboxModal({
   directThread = false,
 }: CareInboxModalProps) {
   const { locale, t } = useLanguage();
-  const { matchConfirmed, activeRelationship } = useCareFlow();
+  const {
+    matchConfirmed,
+    activeRelationship,
+    acceptedProposalId,
+    getNegotiation,
+    initNegotiation,
+    sendCarePlanUpdate,
+    acceptCarePlanUpdate,
+    askDarinOnUpdate,
+    proposeTrialSession,
+  } = useCareFlow();
   const { threads, getPreview, getThread, sendMessage } = useChat();
   const topInset = useScreenTopInset(8);
   const scrollRef = useRef<ScrollView>(null);
@@ -67,13 +86,19 @@ export function CareInboxModal({
   const [threadId, setThreadId] = useState(1);
   const [input, setInput] = useState("");
   const [translatePreview, setTranslatePreview] = useState<string | null>(null);
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [trialOpen, setTrialOpen] = useState(false);
 
   const caregiver = CAREGIVER_MATCHES.find((c) => c.id === threadId) ?? CAREGIVER_MATCHES[0];
+  const negotiation = getNegotiation(threadId);
+  const { draft, terms, items } = negotiation;
   const thread = getThread(threadId);
   const messages = thread?.messages ?? [];
   const savedChat = thread?.savedChat ?? false;
   const isActiveCare =
     matchConfirmed && activeRelationship?.caregiverId === threadId && savedChat;
+  const showNegotiation =
+    isActiveCare || acceptedProposalId === threadId || items.length > 0;
   const suggestedMessage = locale === "ko" ? AI_SUGGESTED_MESSAGE.ko : AI_SUGGESTED_MESSAGE.en;
 
   useEffect(() => {
@@ -90,9 +115,10 @@ export function CareInboxModal({
 
   useEffect(() => {
     if (!visible || step !== "thread") return;
+    initNegotiation(threadId);
     const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     return () => clearTimeout(timer);
-  }, [messages, visible, step]);
+  }, [messages, items, visible, step, threadId, initNegotiation]);
 
   const handleClose = () => {
     setStep("list");
@@ -123,6 +149,16 @@ export function CareInboxModal({
     sendMessage(threadId, input.trim(), input.trim());
     setInput("");
     setTranslatePreview(null);
+  };
+
+  const handleSendUpdate = (form: CarePlanAdjustForm) => {
+    sendCarePlanUpdate(threadId, form);
+    setAdjustOpen(false);
+  };
+
+  const handleProposeTrial = () => {
+    proposeTrialSession(threadId, draft.trialSession ?? "Friday 4 PM");
+    setTrialOpen(false);
   };
 
   return (
@@ -215,6 +251,13 @@ export function CareInboxModal({
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
+              {showNegotiation && (
+                <>
+                  <CarePlanDraftCard draft={draft} terms={terms} />
+                  <AgreementTracker terms={terms} />
+                </>
+              )}
+
               {messages.map((msg) => {
                 const text = locale === "ko" ? msg.textKo : msg.textEn;
                 if (msg.role === "ai") {
@@ -239,6 +282,19 @@ export function CareInboxModal({
                 );
               })}
 
+              {showNegotiation &&
+                items.map((item) => (
+                  <NegotiationItem
+                    key={item.id}
+                    item={item}
+                    caregiverImg={caregiver.img}
+                    onAccept={() => acceptCarePlanUpdate(threadId, item.id)}
+                    onCounter={() => setAdjustOpen(true)}
+                    onAskDarin={() => askDarinOnUpdate(threadId)}
+                  />
+                ))}
+
+              {!isActiveCare && (
               <View style={styles.suggestCard}>
                 <Text style={styles.suggestLabel}>{t("chat.suggestedMessage")}</Text>
                 <Text style={styles.suggestBody}>&ldquo;{suggestedMessage}&rdquo;</Text>
@@ -246,6 +302,7 @@ export function CareInboxModal({
                   <Text style={styles.suggestLink}>{t("chat.useSuggestion")}</Text>
                 </Pressable>
               </View>
+              )}
             </ScrollView>
 
             <View style={styles.composer}>
@@ -264,7 +321,7 @@ export function CareInboxModal({
                 </View>
               )}
 
-              <View style={styles.toolsRow}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolsRow}>
                 <Pressable style={styles.toolBtn} onPress={() => setInput(locale === "ko" ? AI_DRAFT_MESSAGE.ko : AI_DRAFT_MESSAGE.en)}>
                   <Wand2 size={13} color={colors.text} />
                   <Text style={styles.toolText}>{t("chat.draftAI")}</Text>
@@ -279,11 +336,17 @@ export function CareInboxModal({
                   <Globe size={13} color={colors.text} />
                   <Text style={styles.toolText}>{t("chat.translate")}</Text>
                 </Pressable>
-                <Pressable style={styles.toolBtn}>
+                <Pressable style={styles.toolBtn} onPress={() => setTrialOpen(true)}>
                   <Calendar size={13} color={colors.text} />
                   <Text style={styles.toolText}>{t("chat.scheduleTrial")}</Text>
                 </Pressable>
-              </View>
+                {showNegotiation && (
+                  <Pressable style={styles.toolBtn} onPress={() => setAdjustOpen(true)}>
+                    <SlidersHorizontal size={13} color={colors.text} />
+                    <Text style={styles.toolText}>{t("negotiation.adjustCarePlan")}</Text>
+                  </Pressable>
+                )}
+              </ScrollView>
 
               <View style={styles.inputRow}>
                 <TextInput
@@ -307,6 +370,14 @@ export function CareInboxModal({
           </KeyboardAvoidingView>
         )}
       </View>
+
+      <CarePlanAdjustModal open={adjustOpen} onClose={() => setAdjustOpen(false)} onSend={handleSendUpdate} />
+      <ScheduleTrialModal
+        open={trialOpen}
+        onClose={() => setTrialOpen(false)}
+        onPropose={handleProposeTrial}
+        suggestedTime={draft.trialSession ?? "Friday 4 PM"}
+      />
     </Modal>
   );
 }
@@ -370,7 +441,7 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", paddingVertical: 48, gap: 12 },
   emptyText: { fontSize: 14, color: colors.muted },
   messages: { flex: 1 },
-  messagesContent: { paddingHorizontal: 16, paddingVertical: 20, gap: 16 },
+  messagesContent: { paddingHorizontal: 16, paddingVertical: 20, gap: 14 },
   msgRow: { flexDirection: "row", gap: 8, maxWidth: "100%" },
   msgRowParent: { justifyContent: "flex-end" },
   msgRowCaregiver: { justifyContent: "flex-start", alignItems: "flex-end" },
@@ -426,7 +497,7 @@ const styles = StyleSheet.create({
   translateBox: { backgroundColor: colors.yellowSoft, borderRadius: radius.md, padding: 10, marginBottom: 10 },
   translateLabel: { fontSize: 11, fontWeight: "700", color: colors.text, marginBottom: 4 },
   translateText: { fontSize: 13, color: colors.text, lineHeight: 18 },
-  toolsRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  toolsRow: { flexDirection: "row", gap: 8, marginBottom: 10, paddingRight: 8 },
   toolBtn: {
     flex: 1,
     flexDirection: "row",

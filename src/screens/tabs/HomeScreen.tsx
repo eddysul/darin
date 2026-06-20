@@ -1,29 +1,34 @@
 import { useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
-import { Calendar, CheckCircle, ChevronRight, FileText, Globe, MessageCircle, Send, Sparkles } from "lucide-react-native";
+import { Calendar, CheckCircle, ChevronRight, FileText, Globe, MessageCircle, Send, SlidersHorizontal, Sparkles } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
 import { CarePlanModal } from "../../components/CarePlanModal";
 import { CareInboxModal } from "../../components/CareInboxModal";
+import { CarePlanAdjustModal } from "../../components/CarePlanAdjustModal";
+import { AgreementTracker, CarePlanDraftCard } from "../../components/CarePlanNegotiationBlocks";
 import { ScreenScrollView } from "../../components/ScreenScrollView";
 import { useCareFlow } from "../../context/CareFlowContext";
 import { CAREGIVER_MATCHES } from "../../demo/caregivers";
 import { useApp } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
+import type { CarePlanAdjustForm } from "../../types/careFlow";
 import { colors, gradients, radius } from "../../theme";
 
 export function HomeScreen() {
   const { profile, dailyReport } = useApp();
   const { locale, t } = useLanguage();
-  const { activeRelationship, matchConfirmed, carePlan } = useCareFlow();
+  const { activeRelationship, matchConfirmed, carePlan, getNegotiation, sendCarePlanUpdate } = useCareFlow();
   const [inboxOpen, setInboxOpen] = useState(false);
   const [inboxStartThreadId, setInboxStartThreadId] = useState<number | null>(null);
   const [carePlanOpen, setCarePlanOpen] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
 
   const activeCaregiver = activeRelationship
     ? CAREGIVER_MATCHES.find((c) => c.id === activeRelationship.caregiverId)
     : null;
   const chatCaregiverId = activeRelationship?.caregiverId ?? CAREGIVER_MATCHES[0].id;
+  const negotiation = activeRelationship ? getNegotiation(activeRelationship.caregiverId) : null;
 
   const openInbox = () => {
     setInboxStartThreadId(null);
@@ -38,6 +43,12 @@ export function HomeScreen() {
   const closeInbox = () => {
     setInboxOpen(false);
     setInboxStartThreadId(null);
+  };
+
+  const handleAdjustCarePlan = (form: CarePlanAdjustForm) => {
+    if (!activeRelationship) return;
+    sendCarePlanUpdate(activeRelationship.caregiverId, form);
+    setAdjustOpen(false);
   };
 
   const firstName = profile.name.split(" ")[0];
@@ -69,19 +80,32 @@ export function HomeScreen() {
         </View>
       </LinearGradient>
 
-      {matchConfirmed && activeRelationship && activeCaregiver && (
-        <View style={styles.activeCareCard}>
-          <Text style={styles.activeCareTitle}>{t("home.activeCareTitle")}</Text>
-          <Text style={styles.activeCareName}>
-            {activeCaregiver.name} · {activeRelationship.schedule}
-          </Text>
-          <Text style={styles.activeCareSub}>{t("home.activeCareDetail")}</Text>
-          <View style={styles.activeCareActions}>
-            <Pressable style={styles.activePrimaryBtn} onPress={openJiyeonChat}>
-              <Text style={styles.activePrimaryBtnText}>{t("home.openChat")}</Text>
-            </Pressable>
-            <Pressable style={styles.activeSecondaryBtn} onPress={() => setCarePlanOpen(true)}>
-              <Text style={styles.activeSecondaryBtnText}>{t("home.viewCarePlan")}</Text>
+      {matchConfirmed && activeRelationship && activeCaregiver && negotiation && (
+        <View style={styles.activeCareSection}>
+          <View style={styles.activeCareCard}>
+            <Text style={styles.activeCareTitle}>{t("home.activeCareTitle")}</Text>
+            <Text style={styles.activeCareName}>
+              {activeCaregiver.name} · {activeRelationship.schedule}
+            </Text>
+            <Text style={styles.activeCareSub}>{t("home.activeCareDetail")}</Text>
+            <View style={styles.activeCareActions}>
+              <Pressable style={styles.activePrimaryBtn} onPress={openJiyeonChat}>
+                <Text style={styles.activePrimaryBtnText}>{t("home.openChat")}</Text>
+              </Pressable>
+              <Pressable style={styles.activeSecondaryBtn} onPress={() => setCarePlanOpen(true)}>
+                <Text style={styles.activeSecondaryBtnText}>{t("home.viewCarePlan")}</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.carePlanSection}>
+            <CarePlanDraftCard draft={negotiation.draft} terms={negotiation.terms} />
+            <View style={styles.trackerGap}>
+              <AgreementTracker terms={negotiation.terms} />
+            </View>
+            <Pressable style={styles.adjustBtn} onPress={() => setAdjustOpen(true)}>
+              <SlidersHorizontal size={14} color={colors.text} />
+              <Text style={styles.adjustBtnText}>{t("negotiation.adjustCarePlan")}</Text>
             </Pressable>
           </View>
         </View>
@@ -174,6 +198,7 @@ export function HomeScreen() {
 
     <CareInboxModal visible={inboxOpen} onClose={closeInbox} startThreadId={inboxStartThreadId} />
     <CarePlanModal open={carePlanOpen} plan={carePlan} onClose={() => setCarePlanOpen(false)} />
+    <CarePlanAdjustModal open={adjustOpen} onClose={() => setAdjustOpen(false)} onSend={handleAdjustCarePlan} />
     </>
   );
 }
@@ -223,9 +248,8 @@ const styles = StyleSheet.create({
   chatEntrySub: { fontSize: 11, color: colors.muted, marginTop: 2 },
   caregiverLabel: { fontSize: 12, color: colors.muted },
   caregiverName: { fontSize: 14, fontWeight: "600", color: colors.text },
+  activeCareSection: { marginHorizontal: 16, marginTop: 12, gap: 12 },
   activeCareCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
     backgroundColor: colors.card,
     borderRadius: radius.xl,
     borderWidth: 1,
@@ -254,6 +278,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundSecondary,
   },
   activeSecondaryBtnText: { fontSize: 12, fontWeight: "600", color: colors.text },
+  carePlanSection: { gap: 12 },
+  trackerGap: { marginTop: 0 },
+  adjustBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+  },
+  adjustBtnText: { fontSize: 13, fontWeight: "600", color: colors.text },
   section: { marginHorizontal: 16, marginTop: 24 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginBottom: 12 },

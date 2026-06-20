@@ -31,6 +31,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { LanguageProvider, useLanguage } from "./LanguageContext";
 import { LanguagePicker } from "./components/LanguagePicker";
 import { ProfileEditModal } from "./components/ProfileEditModal";
+import { ChildCareSnapshotModal } from "./components/ChildCareSnapshotModal";
 import { SplashScreen } from "./components/SplashScreen";
 import { LoginScreen } from "./components/LoginScreen";
 import { OnboardingScreen } from "./components/OnboardingScreen";
@@ -636,7 +637,8 @@ function ProfileTab({
   onOpenProfileEdit: () => void;
 }) {
   const { locale, t } = useLanguage();
-  const children = [{ name: "Emma", age: locale === "ko" ? "2세 4개월" : "2 yrs 4 mo", img: "photo-1594608661623-aa0bd3a69d98" }];
+  const [childSnapshotOpen, setChildSnapshotOpen] = useState(false);
+  const children = [{ name: "Emma", age: locale === "ko" ? "8개월" : "8 months", img: "photo-1594608661623-aa0bd3a69d98" }];
 
   const settings = [
     {
@@ -725,17 +727,24 @@ function ProfileTab({
           </button>
         </div>
         {children.map((child) => (
-          <div key={child.name} className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3">
+          <button
+            key={child.name}
+            type="button"
+            onClick={() => setChildSnapshotOpen(true)}
+            className="w-full bg-card border border-border rounded-2xl p-4 flex items-center gap-3 text-left hover:bg-[#FAFAF8] transition-colors"
+          >
             <Avatar src={child.img} size={44} />
             <div>
               <p className="font-semibold">{child.name}</p>
               <p className="text-xs text-muted-foreground">{child.age}</p>
             </div>
             <ChevronRight size={16} className="text-muted-foreground ml-auto" />
-          </div>
+          </button>
         ))}
       </div>
       )}
+
+      <ChildCareSnapshotModal open={childSnapshotOpen} onClose={() => setChildSnapshotOpen(false)} />
 
       {/* Caregiver info */}
       {profile.role === "caregiver" &&

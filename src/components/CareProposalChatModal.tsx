@@ -3,7 +3,6 @@ import {
   Calendar,
   CheckCircle,
   ChevronLeft,
-  ClipboardList,
   Globe,
   Send,
   SlidersHorizontal,
@@ -29,11 +28,17 @@ import {
 import { CAREGIVER_MATCHES } from "../demo/caregivers";
 import { useCareFlow } from "../context/CareFlowContext";
 import { useChat } from "../context/ChatContext";
-import type { AgreementTerms, CarePlanAdjustForm, CarePlanDraft, NegotiationChatItem, TermStatus } from "../types/careFlow";
+import type { CarePlanAdjustForm } from "../types/careFlow";
 import { useScreenTopInset } from "../hooks/useScreenInsets";
 import { useLanguage } from "../LanguageContext";
 import { Avatar } from "./Avatar";
 import { CarePlanAdjustModal } from "./CarePlanAdjustModal";
+import {
+  AgreementTracker,
+  CarePlanDetailRow,
+  CarePlanDraftCard,
+  NegotiationItem,
+} from "./CarePlanNegotiationBlocks";
 import { ScheduleTrialModal } from "./ScheduleTrialModal";
 import { colors, radius } from "../theme";
 
@@ -163,12 +168,8 @@ export function CareProposalChatModal({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {!isConfirmed && (
-              <>
-                <CarePlanDraftCard draft={draft} terms={terms} />
-                <AgreementTracker terms={terms} />
-              </>
-            )}
+            <CarePlanDraftCard draft={draft} terms={terms} />
+            <AgreementTracker terms={terms} />
 
             {messages.map((msg) => {
               const text = locale === "ko" ? msg.textKo : msg.textEn;
@@ -235,14 +236,14 @@ export function CareProposalChatModal({
                 <Text style={styles.confirmedPair}>
                   {caregiver.name} ↔ {t("chat.emmaFamily")}
                 </Text>
-                <DetailRow label={t("chat.schedule")} value={activeRelationship.schedule} />
-                <DetailRow label={t("chat.rate")} value={activeRelationship.rate} />
+                <CarePlanDetailRow label={t("chat.schedule")} value={activeRelationship.schedule} />
+                <CarePlanDetailRow label={t("chat.rate")} value={activeRelationship.rate} />
                 {activeRelationship.trialSession && (
-                  <DetailRow label={t("chat.trial")} value={activeRelationship.trialSession} />
+                  <CarePlanDetailRow label={t("chat.trial")} value={activeRelationship.trialSession} />
                 )}
-                <DetailRow label={t("chat.startDate")} value={activeRelationship.startDate} />
-                <DetailRow label={t("chat.carePlan")} value={activeRelationship.careNeeds.join(", ")} />
-                <DetailRow label={t("chat.status")} value={t("chat.chatSaved")} />
+                <CarePlanDetailRow label={t("chat.startDate")} value={activeRelationship.startDate} />
+                <CarePlanDetailRow label={t("chat.carePlan")} value={activeRelationship.careNeeds.join(", ")} />
+                <CarePlanDetailRow label={t("chat.status")} value={t("chat.chatSaved")} />
                 <Pressable style={styles.primaryAction} onPress={onBackToProposals}>
                   <Text style={styles.primaryActionText}>{t("chat.goActiveChat")}</Text>
                 </Pressable>
@@ -256,8 +257,9 @@ export function CareProposalChatModal({
             )}
           </ScrollView>
 
-          {!isConfirmed && (
-            <View style={styles.composer}>
+          <View style={styles.composer}>
+              {!isConfirmed && (
+              <>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {SUGGESTION_CHIPS.map((key) => (
                   <Pressable key={key} style={styles.chip} onPress={() => setInput(t(key))}>
@@ -322,8 +324,22 @@ export function CareProposalChatModal({
                   <Text style={styles.confirmBtnText}>{t("chat.confirmMatch")}</Text>
                 </Pressable>
               )}
+              </>
+              )}
+
+              {isConfirmed && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolsScroll}>
+                  <Pressable style={styles.toolBtn} onPress={() => setTrialOpen(true)}>
+                    <Calendar size={13} color={colors.text} />
+                    <Text style={styles.toolText}>{t("chat.scheduleTrial")}</Text>
+                  </Pressable>
+                  <Pressable style={styles.toolBtn} onPress={() => setAdjustOpen(true)}>
+                    <SlidersHorizontal size={13} color={colors.text} />
+                    <Text style={styles.toolText}>{t("negotiation.adjustCarePlan")}</Text>
+                  </Pressable>
+                </ScrollView>
+              )}
             </View>
-          )}
         </KeyboardAvoidingView>
       </View>
 
@@ -335,159 +351,6 @@ export function CareProposalChatModal({
         suggestedTime={draft.trialSession ?? "Friday 4 PM"}
       />
     </Modal>
-  );
-}
-
-function CarePlanDraftCard({ draft, terms }: { draft: CarePlanDraft; terms: AgreementTerms }) {
-  const { t } = useLanguage();
-  return (
-    <View style={styles.draftCard}>
-      <View style={styles.draftTitleRow}>
-        <ClipboardList size={14} color={colors.text} />
-        <Text style={styles.draftTitle}>{t("negotiation.draftTitle")}</Text>
-      </View>
-      <DetailRow label={t("carePlan.child")} value={draft.childName} />
-      <DetailRow label={t("carePlan.caregiver")} value={draft.caregiverName} />
-      <DetailRow label={t("chat.schedule")} value={draft.schedule} />
-      <DetailRow label={t("chat.rate")} value={draft.rate} />
-      <DetailRow label={t("chat.startDate")} value={draft.startDate} />
-      <DetailRow label={t("chat.carePlan")} value={draft.careNeeds.join(", ")} />
-      <DetailRow
-        label={t("negotiation.trialSession")}
-        value={draft.trialSession ?? t("negotiation.trialNotScheduled")}
-      />
-      <View style={styles.statusChips}>
-        {terms.schedule === "agreed" && (
-          <Text style={styles.statusChip}>{t("negotiation.chipScheduleAgreed")}</Text>
-        )}
-        {terms.rate === "discussing" && (
-          <Text style={[styles.statusChip, styles.statusChipHighlight]}>{t("negotiation.chipRateDiscussing")}</Text>
-        )}
-        {terms.trialSession !== "agreed" && (
-          <Text style={[styles.statusChip, styles.statusChipHighlight]}>{t("negotiation.chipTrialNeeded")}</Text>
-        )}
-        {draft.dailyReportIncluded && (
-          <Text style={styles.statusChip}>{t("negotiation.chipDailyReport")}</Text>
-        )}
-      </View>
-    </View>
-  );
-}
-
-function AgreementTracker({ terms }: { terms: AgreementTerms }) {
-  const { t } = useLanguage();
-  const rows: { label: string; status: TermStatus }[] = [
-    { label: t("negotiation.termSchedule"), status: terms.schedule },
-    { label: t("negotiation.termCareScope"), status: terms.careScope },
-    { label: t("negotiation.termDailyReport"), status: terms.dailyReportLanguage },
-    { label: t("negotiation.termRate"), status: terms.rate },
-    { label: t("negotiation.termTrial"), status: terms.trialSession },
-  ];
-
-  return (
-    <View style={styles.trackerCard}>
-      <Text style={styles.trackerTitle}>{t("negotiation.trackerTitle")}</Text>
-      {rows.map(({ label, status }) => (
-        <View key={label} style={styles.trackerRow}>
-          <Text style={styles.trackerLabel}>{label}</Text>
-          <Text style={[styles.trackerStatus, status !== "agreed" && styles.trackerStatusActive]}>
-            {statusLabel(status, t)}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function NegotiationItem({
-  item,
-  caregiverImg,
-  onAccept,
-  onCounter,
-  onAskDarin,
-}: {
-  item: NegotiationChatItem;
-  caregiverImg: string;
-  onAccept: () => void;
-  onCounter: () => void;
-  onAskDarin: () => void;
-}) {
-  const { locale, t } = useLanguage();
-
-  const text = locale === "ko" ? item.textKo : item.textEn;
-
-  if (item.type === "care_plan_update" && item.update) {
-    const u = item.update;
-    return (
-      <View style={styles.updateCard}>
-        <Text style={styles.updateTitle}>{t("negotiation.updateTitle")}</Text>
-        <Text style={styles.updateSection}>{t("negotiation.updatedTerms")}</Text>
-        <DetailRow label={t("chat.trial")} value={u.trialSession} />
-        <DetailRow label={t("chat.rate")} value={u.rate} />
-        <DetailRow label={t("chat.schedule")} value={u.schedule} />
-        <DetailRow label={t("negotiation.needReports")} value={u.careNeeds.includes("bilingual daily reports") ? "included" : "—"} />
-        {u.status === "pending" && (
-          <View style={styles.updateActions}>
-            <Pressable style={styles.updateBtn} onPress={onAccept}>
-              <Text style={styles.updateBtnText}>{t("negotiation.accept")}</Text>
-            </Pressable>
-            <Pressable style={styles.updateBtn} onPress={onCounter}>
-              <Text style={styles.updateBtnText}>{t("negotiation.counter")}</Text>
-            </Pressable>
-            <Pressable style={[styles.updateBtn, styles.updateBtnAccent]} onPress={onAskDarin}>
-              <Sparkles size={11} color={colors.text} />
-              <Text style={styles.updateBtnText}>{t("negotiation.askDarin")}</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
-    );
-  }
-
-  if (item.type === "ai_summary") {
-    return (
-      <View style={styles.aiBlock}>
-        <View style={styles.aiLabelRow}>
-          <Sparkles size={12} color={colors.yellow} />
-          <Text style={styles.aiLabel}>{t("negotiation.aiSummaryTitle")}</Text>
-        </View>
-        <Text style={styles.aiText}>{text}</Text>
-      </View>
-    );
-  }
-
-  if (item.type === "system") {
-    return (
-      <View style={styles.systemCard}>
-        <CheckCircle size={14} color={colors.yellow} />
-        <Text style={styles.systemText}>{text}</Text>
-      </View>
-    );
-  }
-
-  const isParent = item.role === "parent";
-  return (
-    <View style={[styles.msgRow, isParent ? styles.msgRowParent : styles.msgRowCaregiver]}>
-      {!isParent && item.role === "caregiver" && <Avatar src={caregiverImg} size={28} />}
-      <View style={[styles.bubble, isParent ? styles.bubbleParent : styles.bubbleCaregiver]}>
-        <Text style={[styles.bubbleText, isParent && styles.bubbleTextParent]}>{text}</Text>
-      </View>
-    </View>
-  );
-}
-
-function statusLabel(status: TermStatus, t: ReturnType<typeof useLanguage>["t"]) {
-  if (status === "agreed") return t("negotiation.statusAgreed");
-  if (status === "discussing") return t("negotiation.statusDiscussing");
-  return t("negotiation.statusNeedsConfirmation");
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
   );
 }
 

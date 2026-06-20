@@ -52,6 +52,7 @@ Childcare Management App/
 │   │   ├── CarePlanAdjustModal.tsx
 │   │   ├── ScheduleTrialModal.tsx
 │   │   ├── CaregiverDetailSheet.tsx
+│   │   ├── ChildCareSnapshotModal.tsx # 아이 돌봄 스냅샷 (Profile)
 │   │   ├── ContactMessageModal.tsx
 │   │   └── ...
 │   ├── context/
@@ -60,11 +61,13 @@ Childcare Management App/
 │   │   └── CareFlowContext.tsx      # Care Request / Proposal / Match 상태
 │   ├── demo/
 │   │   ├── caregivers.ts
-│   │   └── careFlow.ts              # mock proposals, chat seeds
+│   │   ├── careFlow.ts              # mock proposals, chat seeds
+│   │   └── childProfile.ts          # Emma mock child profile
 │   ├── types/
 │   │   ├── profile.ts
 │   │   ├── dailyReport.ts
-│   │   └── careFlow.ts
+│   │   ├── careFlow.ts
+│   │   └── childProfile.ts
 │   ├── i18n.ts
 │   ├── theme.ts
 │   └── app/                         # Web 레거시 (Vite)
@@ -225,7 +228,37 @@ Find 탭 Proposals에서 Chat 시 사용. **CareInboxModal과 분리.**
 
 ### 5. Profile (프로필)
 
-- 프로필 카드, Children, Settings, Language Preference
+- 프로필 카드 (UserCog → 프로필 수정)
+- **Children** (부모 역할만) — Emma 카드 **탭 가능**
+- Settings, Language Preference
+
+#### Child Care Snapshot (`ChildCareSnapshotModal`)
+
+Emma child card 탭 시 bottom sheet / modal 오픈.
+
+- **제목:** Child Care Snapshot
+- **부제:** Shared only with confirmed caregivers.
+- **우측 상단:** ✏️ Edit + 닫기(X) — Edit는 mock 토스트
+
+| 섹션 | 내용 |
+|------|------|
+| **Basic Info** | Emma Kim, 8 months, DOB, Female, Blood O, Preferred name Emma |
+| **Health & Safety** | Peanuts allergy, mild eczema, Seattle Children's Clinic, emergency contact + Edit 칩 |
+| **Special Notes** | Note type (Allergy/Condition/…/Other) + 텍스트 → **Save note** (로컬 state 목록 추가) |
+| **Daily Routine** | Feeding, nap, diaper, comfort, favorite activity |
+| **Care Preferences** | Korean/English, report language, update topics, communication style |
+| **Authorized Pickup** | Jisoo Kim (Mother), Daniel Kim (Father) |
+| **Privacy notice** | 확정 케어기버에게만 공유 안내 |
+
+**하단 액션:**
+
+- **Edit Info** → mock 토스트
+- **Share with Caregiver** → “Child Care Snapshot shared with confirmed caregiver.”
+
+Mock 데이터: `EMMA_CHILD_PROFILE` (`src/demo/childProfile.ts`)  
+타입: `ChildProfile` (`src/types/childProfile.ts`)
+
+RN: `ProfileScreen.tsx` · Web: `src/app/App.tsx` ProfileTab (동일 UX)
 
 ---
 
@@ -272,12 +305,17 @@ Find 탭 Proposals에서 Chat 시 사용. **CareInboxModal과 분리.**
 - `DEFAULT_CARE_PLAN_ADJUST` ($21/hr, Friday 4 PM trial)
 - `buildCarePlan()`, `buildDefaultCarePlanDraft()`
 
+### Child Profile (`childProfile.ts`)
+
+- `EMMA_CHILD_PROFILE` — Basic info, health, routine, care preferences, pickup, seed special notes
+- `CHILD_NOTE_TYPES` — Allergy, Condition, Medication, Behavior, Food, Sleep, Other
+
 ---
 
 ## 다국어 (i18n)
 
 - `LanguageContext` + `src/i18n.ts` — 한/영
-- Care Request, Proposals, Chat, Negotiation, Care Plan, Home active care 문자열 포함
+- Care Request, Proposals, Chat, Negotiation, Care Plan, Home active care, **Child Snapshot** 문자열 포함
 - Profile → Language Preference
 
 ---
@@ -302,12 +340,20 @@ pnpm run typecheck
 5. **Confirm Match** → **Simulate caregiver confirmation**
 6. **Home** → Active Care Relationship 확인
 
+### Child Care Snapshot 데모
+
+1. **Profile** → **Children** → **Emma** 카드 탭
+2. Basic Info · Health & Safety · Routine 확인
+3. Special Notes에 Allergy + 텍스트 입력 → **Save note**
+4. **Share with Caregiver** → mock 확인 토스트
+
 ---
 
 ## 프로토타입 한계 (미구현)
 
 - 실제 OAuth, SMS, 백엔드, DB, 결제, 캘린더 연동
 - Caregiver Accept / Counter는 mock (Accept → 즉시 수락 메시지)
+- Special Notes · Edit Info · Share — **로컬 state / mock 토스트만** (백엔드 저장 없음)
 - Settings, Billing, Forgot password 등 UI만
 - `CareChatScreen.tsx`, `CareChatListScreen.tsx` — 구버전, `CareInboxModal` / `CareProposalChatModal`로 대체됨
 
@@ -363,6 +409,15 @@ pnpm run typecheck
 
 27. Web 프로토타입에도 CareFlowContext, MatchTab, CareChatModal 등 별도 구현 (RN과 완전 동기화 아님)
 
+### Profile · Child Snapshot
+
+28. **`ChildCareSnapshotModal`** — RN + Web Profile Children → Emma 탭
+29. `ChildProfile` 타입, `EMMA_CHILD_PROFILE` mock, Special Notes 로컬 추가, Edit/Share mock
+
+### Git / PR
+
+30. `Joon` 브랜치 → [PR #2](https://github.com/eddysul/darin/pull/2) (Care Request · proposal chat · Messages, main 대비)
+
 ---
 
 ## 주요 RN 컴포넌트 참조
@@ -380,7 +435,9 @@ pnpm run typecheck
 | `CarePlanModal.tsx` | 확정 Care Plan 상세 |
 | `CareFlowContext.tsx` | 플로우·협상·매칭 전역 상태 |
 | `ChatContext.tsx` | 대화 thread·메시지 |
+| `ChildCareSnapshotModal.tsx` | Profile → Emma Child Care Snapshot |
+| `ProfileScreen.tsx` | Children 카드 탭 → snapshot 오픈 |
 
 ---
 
-*마지막 업데이트: 2026-06-20 — Care Plan 협상 채팅, Find 플로우, Messages 통합 반영*
+*마지막 업데이트: 2026-06-20 — Child Care Snapshot (Profile), Care Plan 협상, Find 플로우, PR #2 반영*
