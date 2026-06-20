@@ -1,13 +1,18 @@
 import { CheckCircle, Clock, Globe, MapPin, Search, Sparkles, Star } from "lucide-react-native";
 import { ScrollView, StyleSheet, Text, TextInput, Pressable, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
-import { CAREGIVER_MATCHES } from "../../demo/caregivers";
+import { CAREGIVER_MATCHES, type CaregiverMatch } from "../../demo/caregivers";
 import { getCaregiverRole } from "../../i18n";
 import { useLanguage } from "../../LanguageContext";
 import { colors, radius } from "../../theme";
 
-export function MatchScreen() {
+type Props = {
+  onViewProfile: (caregiver: CaregiverMatch) => void;
+};
+
+export function MatchScreen({ onViewProfile }: Props) {
   const { locale, t } = useLanguage();
+  const ko = locale === "ko";
   const filters = [
     t("match.filterAll"),
     t("match.filterBilingual"),
@@ -85,7 +90,7 @@ export function MatchScreen() {
 
           <Text style={styles.reasonsTitle}>{t("match.matchReasons")}</Text>
           <View style={styles.reasons}>
-            {c.matchReasons.map((r) => (
+            {(ko ? c.matchReasonsKo : c.matchReasons).map((r) => (
               <Text key={r} style={styles.reasonChip}>
                 {r}
               </Text>
@@ -102,8 +107,8 @@ export function MatchScreen() {
           </View>
 
           <View style={styles.cardFooter}>
-            <Text style={styles.price}>{c.price}</Text>
-            <Pressable style={styles.viewBtn}>
+            <Text style={styles.price}>{c.weeklyPay}</Text>
+            <Pressable style={styles.viewBtn} onPress={() => onViewProfile(c)}>
               <Text style={styles.viewBtnText}>{t("match.viewProfile")}</Text>
             </Pressable>
           </View>

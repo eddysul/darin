@@ -1,17 +1,25 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Baby, Calendar, CheckCircle, FileText, Globe, MessageCircle, Send, Sparkles } from "lucide-react-native";
+import { Baby, Calendar, CheckCircle, FileText, Globe, MessageCircle, PenLine, Send, Sparkles } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
+import { PressScale } from "../../components/PressScale";
 import { useApp } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
 import { colors, gradients, radius } from "../../theme";
 
 export function HomeScreen() {
-  const { profile, dailyReport } = useApp();
+  const { profile, dailyReport, scheduledInterviews, completeInterview, setPendingTab } = useApp();
   const { locale, t } = useLanguage();
   const firstName = profile.name.split(" ")[0];
   const reportPreview = dailyReport ? (locale === "ko" ? dailyReport.reportKo : dailyReport.reportEn) : null;
   const replyDraft = dailyReport?.parentReplyDraft ?? t("home.draftText");
+  const ko = locale === "ko";
+
+  const scheduledOnHome = scheduledInterviews.filter((i) => i.status === "scheduled");
+  const postInterview = scheduledInterviews.filter(
+    (i) => i.status === "completed" || i.status === "contract_signed",
+  );
+  const activeContract = scheduledInterviews.find((i) => i.status === "contract_signed");
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -23,17 +31,86 @@ export function HomeScreen() {
           </View>
           <Avatar src={profile.avatar} size={48} />
         </View>
-        <View style={styles.caregiverCard}>
-          <View style={styles.caregiverIcon}>
-            <Baby size={20} color={colors.gold} />
+        {activeContract ? (
+          <View style={styles.caregiverCard}>
+            <View style={styles.caregiverIcon}>
+              <Baby size={20} color={colors.gold} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.caregiverLabel}>{t("home.myCaregiver")}</Text>
+              <Text style={styles.caregiverName}>
+                {activeContract.caregiverName} · {activeContract.contractFields?.weeklyPay ?? activeContract.weeklyPay}
+              </Text>
+            </View>
+            <CheckCircle size={18} color={colors.sage} />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.caregiverLabel}>{t("home.emmaWith")}</Text>
-            <Text style={styles.caregiverName}>Ji-yeon Park · {t("home.until")}</Text>
+        ) : (
+          <View style={styles.caregiverCard}>
+            <View style={styles.caregiverIcon}>
+              <Baby size={20} color={colors.gold} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.caregiverLabel}>{t("home.emmaWith")}</Text>
+              <Text style={styles.caregiverName}>Ji-yeon Park · {t("home.until")}</Text>
+            </View>
+            <CheckCircle size={18} color={colors.sage} />
           </View>
-          <CheckCircle size={18} color={colors.sage} />
-        </View>
+        )}
       </LinearGradient>
+
+      {scheduledOnHome.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("home.interviewsSection")}</Text>
+          {scheduledOnHome.map((interview) => (
+            <View key={interview.id} style={styles.interviewCard}>
+              <Avatar src={interview.caregiverAvatar} size={44} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.interviewLabel}>{t("home.upcomingInterview")}</Text>
+                <Text style={styles.interviewName}>{interview.caregiverName}</Text>
+                <Text style={styles.interviewTime}>
+                  {ko ? interview.slotLabelKo : interview.slotLabelEn}
+                </Text>
+              </View>
+              <PressScale style={styles.completeBtn} onPress={() => completeInterview(interview.id)}>
+                <CheckCircle size={14} color={colors.text} />
+                <Text style={styles.completeBtnText}>{t("interview.markComplete")}</Text>
+              </PressScale>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {postInterview.map((interview) => (
+        <View key={interview.id} style={styles.section}>
+          <View style={styles.interviewCard}>
+            <View style={styles.interviewIcon}>
+              <Calendar size={18} color={interview.status === "contract_signed" ? colors.sage : colors.gold} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.interviewLabel}>
+                {interview.status === "contract_signed"
+                  ? t("home.contractSigned")
+                  : t("home.readyToSign")}
+              </Text>
+              <Text style={styles.interviewName}>{interview.caregiverName}</Text>
+              <Text style={styles.interviewTime}>
+                {interview.status === "completed"
+                  ? t("home.signOnProfile")
+                  : t("home.contractActive")}
+              </Text>
+            </View>
+            {interview.status === "completed" && (
+              <PressScale style={styles.profileLinkBtn} onPress={() => setPendingTab("Profile")}>
+                <PenLine size={14} color="#fff" />
+                <Text style={styles.profileLinkText}>{t("contract.sign")}</Text>
+              </PressScale>
+            )}
+            {interview.status === "contract_signed" && (
+              <CheckCircle size={18} color={colors.sage} />
+            )}
+          </View>
+        </View>
+      ))}
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -137,6 +214,44 @@ const styles = StyleSheet.create({
   caregiverIcon: { backgroundColor: colors.champagne, borderRadius: 12, padding: 8 },
   caregiverLabel: { fontSize: 12, color: colors.muted },
   caregiverName: { fontSize: 14, fontWeight: "600", color: colors.text },
+  interviewCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.card,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    padding: 14,
+    marginBottom: 10,
+  },
+  interviewIcon: { backgroundColor: colors.champagne, borderRadius: 12, padding: 10 },
+  interviewLabel: { fontSize: 11, fontWeight: "600", color: colors.gold, marginBottom: 2 },
+  interviewName: { fontSize: 15, fontWeight: "700", color: colors.text },
+  interviewTime: { fontSize: 13, color: colors.muted, marginTop: 2 },
+  completeBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: colors.champagne,
+    borderRadius: radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxWidth: 88,
+  },
+  completeBtnText: { fontSize: 10, fontWeight: "700", color: colors.text, textAlign: "center" },
+  profileLinkBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.sage,
+    borderRadius: radius.md,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+  },
+  profileLinkText: { fontSize: 12, fontWeight: "700", color: "#fff" },
   section: { marginHorizontal: 16, marginTop: 20 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginBottom: 12 },

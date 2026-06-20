@@ -92,6 +92,17 @@ export function ProfileEditModal({ open, profile, onClose, onSave }: ProfileEdit
                     thumbColor="#fff"
                   />
                 </View>
+                <Text style={styles.label}>{t("profile.notes")}</Text>
+                <TextInput
+                  style={[styles.input, styles.textarea]}
+                  value={draft.notes ?? ""}
+                  onChangeText={(notes) => setDraft((d) => ({ ...d, notes }))}
+                  placeholder={t("profile.notesPlaceholder")}
+                  placeholderTextColor={colors.muted}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
               </>
             )}
           </ScrollView>
@@ -143,6 +154,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 14,
   },
+  textarea: { minHeight: 100, paddingTop: 12 },
   actions: { flexDirection: "row", gap: 10, marginTop: 8 },
   cancelBtn: {
     flex: 1,

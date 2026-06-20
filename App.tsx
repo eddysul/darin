@@ -9,12 +9,13 @@ import { LanguageProvider } from "./src/LanguageContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { MainTabs } from "./src/screens/MainTabs";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
+import { ParentSetupScreen } from "./src/screens/ParentSetupScreen";
 import { RoleSelectScreen } from "./src/screens/RoleSelectScreen";
 import { SplashScreen } from "./src/screens/SplashScreen";
 import type { UserProfile, UserRole } from "./src/types/profile";
 import { colors } from "./src/theme";
 
-type AppPhase = "splash" | "login" | "role-select" | "onboarding" | "main";
+type AppPhase = "splash" | "login" | "role-select" | "parent-setup" | "onboarding" | "main";
 
 export default function App() {
   return (
@@ -52,8 +53,12 @@ function RootApp() {
   const handleSignUp = useCallback(() => setPhase("role-select"), []);
   const handleRoleSelect = useCallback((role: UserRole) => {
     setProfile({ ...profile, role });
-    setPhase("main");
+    setPhase(role === "parent" ? "parent-setup" : "main");
   }, [profile, setProfile]);
+  const handleParentSetupComplete = useCallback((nextProfile: UserProfile) => {
+    setProfile(nextProfile);
+    setPhase("main");
+  }, [setProfile]);
   const handleOnboardingComplete = useCallback((nextProfile: UserProfile) => {
     setOnboardingProfile(nextProfile);
     setPhase("main");
@@ -66,6 +71,7 @@ function RootApp() {
       {phase === "splash" && <SplashScreen onComplete={handleSplashComplete} />}
       {phase === "login" && <LoginScreen onLogin={handleLogin} onSignUp={handleSignUp} />}
       {phase === "role-select" && <RoleSelectScreen onSelect={handleRoleSelect} />}
+      {phase === "parent-setup" && <ParentSetupScreen initialProfile={profile} onComplete={handleParentSetupComplete} />}
       {phase === "onboarding" && <OnboardingScreen onComplete={handleOnboardingComplete} />}
     </View>
   );
