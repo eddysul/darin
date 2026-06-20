@@ -8,17 +8,37 @@ from io import BytesIO
 import openai
 import websockets
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from pydub import AudioSegment
 
 load_dotenv()
 
-BIZCRUSH_API_KEY = os.getenv("BIZCRUSH_API_KEY")
+BIZCRUSH_API_KEY = (os.getenv("BIZCRUSH_API_KEY") or "").strip()
+OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip()
 CHUNK_SIZE = 640  # 20ms PCM16 at 16kHz mono
 
-openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+app = FastAPI(title="Darin Transcribe API")
 
-app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+_openai_client: openai.OpenAI | None = None
+
+
+def get_openai_client() -> openai.OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        if not OPENAI_API_KEY:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured")
+        _openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    return _openai_client
+
 
 CATEGORIZE_PROMPT = """
 아래 텍스트는 육아 음성 메모를 전사한 내용이야.
@@ -57,6 +77,9 @@ CATEGORIZE_PROMPT = """
 
 
 async def transcribe(file_content: bytes) -> str:
+    if not BIZCRUSH_API_KEY:
+        raise HTTPException(status_code=500, detail="BIZCRUSH_API_KEY is not configured")
+
     audio = AudioSegment.from_file(BytesIO(file_content))
     audio = audio.set_frame_rate(16000).set_channels(1).set_sample_width(2)
     pcm_data = audio.raw_data
@@ -90,7 +113,7 @@ async def transcribe(file_content: bytes) -> str:
 
 
 def categorize(text: str) -> dict:
-    message = openai_client.chat.completions.create(
+    message = get_openai_client().chat.completions.create(
         model="gpt-4o-mini",
         max_tokens=2048,
         messages=[{"role": "user", "content": CATEGORIZE_PROMPT + text}],
@@ -98,9 +121,20 @@ def categorize(text: str) -> dict:
     return json.loads(message.choices[0].message.content)
 
 
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "bizcrush_configured": bool(BIZCRUSH_API_KEY),
+        "openai_configured": bool(OPENAI_API_KEY),
+    }
+
+
 @app.post("/transcribe")
 async def transcribe_recording(file: UploadFile = File(...)):
     content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty audio file")
 
     text = await transcribe(content)
     result = categorize(text)
