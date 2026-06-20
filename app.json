@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Darin",
+    "slug": "darin-childcare",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/darin-logo.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/darin-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFDF7"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.darin.childcare"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/darin-logo.png",
+        "backgroundColor": "#FFFDF7"
+      },
+      "package": "com.darin.childcare"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Darin to access your photos for license and certificate uploads."
+        }
+      ]
+    ]
+  }
+}

@@ -5,12 +5,13 @@ import { useLanguage } from "../LanguageContext";
 
 type LoginScreenProps = {
   onLogin: () => void;
+  onSignUp: () => void;
 };
 
 type AuthMode = "login" | "signup";
 
-const NAVY = "#1A2333";
-const GOLD = "#C4A574";
+const NAVY = "#243036";
+const GOLD = "#D9A441";
 
 function GoogleIcon() {
   return (
@@ -55,7 +56,7 @@ const COUNTRY_OPTIONS = [
   { code: "+86", flag: "🇨🇳", label: "CN", placeholder: "138 0013 8000" },
 ] as const;
 
-export function LoginScreen({ onLogin }: LoginScreenProps) {
+export function LoginScreen({ onLogin, onSignUp }: LoginScreenProps) {
   const { t } = useLanguage();
   const [mode, setMode] = useState<AuthMode>("login");
   const [name, setName] = useState("");
@@ -161,7 +162,11 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       }
     }
     setFormError("");
-    onLogin();
+    if (isSignup) {
+      onSignUp();
+    } else {
+      onLogin();
+    }
   };
 
   return (
@@ -170,10 +175,16 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.35 }}
-      className="absolute inset-0 z-[55] flex flex-col bg-white px-7 pt-8 pb-8 overflow-y-auto"
+      className="absolute inset-0 z-[55] flex flex-col px-7 pt-8 pb-8 overflow-y-auto"
+      style={{ background: "radial-gradient(circle at top, #FFF4D8 0%, #FFFDF7 38%, #FFFFFF 100%)" }}
     >
       <div className="flex flex-col items-center mb-5">
-        <img src="/darin-logo.png" alt="Darin" className="w-[96px] h-auto select-none" draggable={false} />
+        <img
+          src="/darin-logo.png"
+          alt="Darin — Your first motherhood companion"
+          className="w-[200px] h-auto select-none"
+          draggable={false}
+        />
       </div>
 
       <AnimatePresence mode="wait">
@@ -283,7 +294,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   <button
                     type="button"
                     onClick={handleVerifyCode}
-                    className="shrink-0 px-4 py-3 rounded-xl text-xs font-semibold bg-primary text-white hover:opacity-90 active:scale-[0.98] transition-all whitespace-nowrap"
+                    className="shrink-0 px-4 py-3 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all whitespace-nowrap"
                   >
                     {t("signup.verifyCode")}
                   </button>
@@ -383,7 +394,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         <button
           type="submit"
           disabled={isSignup && !phoneVerified}
-          className="w-full bg-primary text-white rounded-xl py-3.5 text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all shadow-md shadow-primary/25 mt-1 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full bg-primary text-primary-foreground rounded-xl py-3.5 text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all shadow-md shadow-primary/20 mt-1 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {isSignup ? t("signup.submit") : t("login.submit")}
         </button>
@@ -399,7 +410,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             <div className="flex flex-col gap-2.5">
               <button
                 type="button"
-                onClick={onLogin}
+                onClick={isSignup ? onSignUp : onLogin}
                 className="w-full flex items-center justify-center gap-3 border border-border bg-white text-foreground rounded-xl py-3.5 text-sm font-semibold hover:bg-secondary/40 active:scale-[0.98] transition-all"
               >
                 <GoogleIcon />
@@ -408,8 +419,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
               <button
                 type="button"
-                onClick={onLogin}
-                className="w-full flex items-center justify-center gap-3 bg-[#1A2333] text-white rounded-xl py-3.5 text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
+                onClick={isSignup ? onSignUp : onLogin}
+                className="w-full flex items-center justify-center gap-3 bg-[#243036] text-[#FFFDF7] rounded-xl py-3.5 text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
               >
                 <AppleIcon />
                 {t("login.continueApple")}
