@@ -28,3 +28,26 @@ export type ScheduledInterview = {
   signature?: string;
   signedAt?: string;
 };
+
+export type RequestStatus = "pending" | "accepted" | "declined" | "contract_signed";
+
+export type IncomingRequest = {
+  id: string;
+  parentId: string;
+  parentName: string;
+  parentAvatar: string;
+  parentLocation: string;
+  dueDate: string;
+  budget: string;
+  liveIn: boolean;
+  breastfeeding: boolean;
+  notes?: string;
+  slotLabelEn: string;
+  slotLabelKo: string;
+  status: RequestStatus;
+  contractFields?: ContractFields;
+  parentSignature?: string;
+  parentSignedAt?: string;
+  caregiverSignature?: string;
+  caregiverSignedAt?: string;
+};

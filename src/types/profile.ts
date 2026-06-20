@@ -20,6 +20,8 @@ export type UserProfile = {
   liveIn?: boolean;
   breastfeeding?: boolean;
   notes?: string;
+  weeklyRate?: string;
+  availability?: string;
   licenseNumber?: string;
   licensePhoto?: string;
   certificates?: CaregiverCertificate[];

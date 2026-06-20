@@ -13,6 +13,7 @@ import { ParentSetupScreen } from "./src/screens/ParentSetupScreen";
 import { RoleSelectScreen } from "./src/screens/RoleSelectScreen";
 import { SplashScreen } from "./src/screens/SplashScreen";
 import type { UserProfile, UserRole } from "./src/types/profile";
+import { DEFAULT_CAREGIVER_PROFILE } from "./src/context/AppContext";
 import { colors } from "./src/theme";
 
 type AppPhase = "splash" | "login" | "role-select" | "parent-setup" | "onboarding" | "main";
@@ -52,8 +53,13 @@ function RootApp() {
   const handleLogin = useCallback(() => setPhase("role-select"), []);
   const handleSignUp = useCallback(() => setPhase("role-select"), []);
   const handleRoleSelect = useCallback((role: UserRole) => {
-    setProfile({ ...profile, role });
-    setPhase(role === "parent" ? "parent-setup" : "main");
+    if (role === "caregiver") {
+      setProfile(DEFAULT_CAREGIVER_PROFILE);
+      setPhase("main");
+    } else {
+      setProfile({ ...profile, role });
+      setPhase("parent-setup");
+    }
   }, [profile, setProfile]);
   const handleParentSetupComplete = useCallback((nextProfile: UserProfile) => {
     setProfile(nextProfile);

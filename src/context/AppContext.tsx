@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import type { DailyReport } from "../types/dailyReport";
-import type { ContractFields, InterviewSlot, ScheduledInterview } from "../types/interview";
+import type { ContractFields, IncomingRequest, InterviewSlot, ScheduledInterview } from "../types/interview";
 import type { UserProfile } from "../types/profile";
 import type { MainTabName } from "../types/navigation";
+import { DEMO_INCOMING_REQUESTS } from "../demo/parents";
 
-const DEFAULT_PROFILE: UserProfile = {
+const DEFAULT_PARENT_PROFILE: UserProfile = {
   name: "Jisoo Kim",
   location: "Capitol Hill, Seattle",
   avatar: "photo-1438761681033-6461ffad8d80",
@@ -15,7 +16,27 @@ const DEFAULT_PROFILE: UserProfile = {
   liveIn: true,
   experience: "First-time parent",
   breastfeeding: true,
+  notes: "",
 };
+
+const DEFAULT_CAREGIVER_PROFILE: UserProfile = {
+  name: "Ji-yeon Park",
+  location: "Seattle, WA",
+  avatar: "photo-1544005313-94ddf0286df2",
+  role: "caregiver",
+  languages: "Korean, English",
+  experience: "8 years postpartum care",
+  specialty: "Newborn care · Breastfeeding support",
+  weeklyRate: "$1,800–$2,000/wk",
+  availability: "Mon–Fri · 8am–6pm or Live-in",
+  liveIn: true,
+  breastfeeding: true,
+  licenseNumber: "WA-2019-PCN-4821",
+};
+
+const DEFAULT_PROFILE = DEFAULT_PARENT_PROFILE;
+
+export { DEFAULT_CAREGIVER_PROFILE };
 
 type AppContextValue = {
   profile: UserProfile;
@@ -39,6 +60,9 @@ type AppContextValue = {
   setPendingTab: (tab: MainTabName | null) => void;
   pendingContractInterviewId: string | null;
   clearPendingContractInterview: () => void;
+  incomingRequests: IncomingRequest[];
+  acceptRequest: (requestId: string) => void;
+  caregiverSignContract: (requestId: string, signature: string, notes?: string) => void;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -51,9 +75,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [scheduledInterviews, setScheduledInterviews] = useState<ScheduledInterview[]>([]);
   const [pendingTab, setPendingTab] = useState<MainTabName | null>(null);
   const [pendingContractInterviewId, setPendingContractInterviewId] = useState<string | null>(null);
+  const [incomingRequests, setIncomingRequests] = useState<IncomingRequest[]>(DEMO_INCOMING_REQUESTS);
 
   const clearPendingTab = useCallback(() => setPendingTab(null), []);
   const clearPendingContractInterview = useCallback(() => setPendingContractInterviewId(null), []);
+
+  const acceptRequest = useCallback((requestId: string) => {
+    setIncomingRequests((prev) =>
+      prev.map((r) => (r.id === requestId ? { ...r, status: "accepted" as const } : r)),
+    );
+  }, []);
+
+  const caregiverSignContract = useCallback((requestId: string, signature: string, notes?: string) => {
+    setIncomingRequests((prev) =>
+      prev.map((r) =>
+        r.id === requestId
+          ? {
+              ...r,
+              status: "contract_signed" as const,
+              caregiverSignature: signature,
+              caregiverSignedAt: new Date().toISOString(),
+              ...(notes ? { notes } : {}),
+            }
+          : r,
+      ),
+    );
+  }, []);
 
   const scheduleInterview = useCallback(
     (caregiver: { id: number; name: string; img: string; weeklyPay: string }, slot: InterviewSlot) => {
@@ -130,6 +177,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPendingTab,
         pendingContractInterviewId,
         clearPendingContractInterview,
+        incomingRequests,
+        acceptRequest,
+        caregiverSignContract,
       }}
     >
       {children}

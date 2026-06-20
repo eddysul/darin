@@ -199,27 +199,48 @@ export function ProfileScreen() {
         </View>
       )}
 
-      {/* Caregiver info */}
-      {profile.role === "caregiver" && (profile.licenseNumber || profile.licensePhoto || profile.certificates?.length) && (
+      {/* Caregiver professional profile */}
+      {profile.role === "caregiver" && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t("onboarding.caregiverInfo")}</Text>
-          <View style={styles.infoCard}>
-            {profile.experience && (
-              <Text style={styles.infoLine}>
-                <Text style={styles.infoBold}>{t("onboarding.experience")}: </Text>
-                {profile.experience}
-              </Text>
-            )}
-            {profile.licenseNumber && (
-              <Text style={styles.infoLine}>
-                <Text style={styles.infoBold}>{t("onboarding.licenseNumber")}: </Text>
-                {profile.licenseNumber}
-              </Text>
-            )}
-            {profile.licensePhoto && (
-              <Image source={{ uri: profile.licensePhoto }} style={styles.licenseImg} contentFit="cover" />
-            )}
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, styles.sectionTitleInline]}>{t("profile.professionalProfile")}</Text>
+            <Pressable style={styles.editLink} onPress={() => setProfileEditOpen(true)}>
+              <Text style={styles.editLinkText}>{t("profile.editProfile")}</Text>
+            </Pressable>
           </View>
+          <PressScale style={styles.careCard} onPress={() => setProfileEditOpen(true)}>
+            {[
+              { icon: Calendar, color: "#f59e0b", label: t("profile.experience"), value: profile.experience || "—" },
+              { icon: FileText, color: "#8b5cf6", label: t("onboarding.specialty"), value: profile.specialty || "—" },
+              { icon: DollarSign, color: "#22c55e", label: t("profile.weeklyRate"), value: profile.weeklyRate || "—" },
+              { icon: Home, color: "#6B7FA8", label: t("profile.availability"), value: profile.availability || "—" },
+              { icon: Baby, color: "#ec4899", label: t("profile.liveIn"), value: profile.liveIn ? t("profile.liveInYes") : t("profile.liveInNo") },
+              { icon: Milk, color: "#243036", label: t("profile.breastfeeding"), value: profile.breastfeeding ? t("profile.breastfeedingYes") : t("profile.breastfeedingNo") },
+            ].map(({ icon: Icon, color, label, value }, i) => (
+              <View key={label} style={[styles.careRow, i > 0 && styles.careRowBorder]}>
+                <View style={[styles.careIcon, { backgroundColor: `${color}18` }]}>
+                  <Icon size={15} color={color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.careLabel}>{label}</Text>
+                  <Text style={styles.careValue}>{value}</Text>
+                </View>
+              </View>
+            ))}
+          </PressScale>
+          {profile.licenseNumber && (
+            <View style={[styles.careCard, { marginTop: 10 }]}>
+              <View style={styles.careRow}>
+                <View style={[styles.careIcon, { backgroundColor: `${colors.gold}18` }]}>
+                  <FileText size={15} color={colors.gold} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.careLabel}>{t("onboarding.licenseNumber")}</Text>
+                  <Text style={styles.careValue}>{profile.licenseNumber}</Text>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       )}
 

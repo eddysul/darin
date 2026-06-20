@@ -2,7 +2,9 @@ import { CheckCircle, Clock, Globe, MapPin, Search, Sparkles, Star } from "lucid
 import { ScrollView, StyleSheet, Text, TextInput, Pressable, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
 import { CAREGIVER_MATCHES, type CaregiverMatch } from "../../demo/caregivers";
+import { CaregiverFindScreen } from "./CaregiverFindScreen";
 import { getCaregiverRole } from "../../i18n";
+import { useApp } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
 import { colors, radius } from "../../theme";
 
@@ -11,7 +13,10 @@ type Props = {
 };
 
 export function MatchScreen({ onViewProfile }: Props) {
+  const { profile } = useApp();
   const { locale, t } = useLanguage();
+
+  if (profile.role === "caregiver") return <CaregiverFindScreen />;
   const ko = locale === "ko";
   const filters = [
     t("match.filterAll"),

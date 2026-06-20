@@ -105,6 +105,61 @@ export function ProfileEditModal({ open, profile, onClose, onSave }: ProfileEdit
                 />
               </>
             )}
+
+            {draft.role === "caregiver" && (
+              <>
+                <Text style={styles.label}>{t("profile.experience")}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={draft.experience ?? ""}
+                  onChangeText={(experience) => setDraft((d) => ({ ...d, experience }))}
+                  placeholder={t("profile.experiencePlaceholder")}
+                  placeholderTextColor={colors.muted}
+                />
+                <Text style={styles.label}>{t("onboarding.specialty")}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={draft.specialty ?? ""}
+                  onChangeText={(specialty) => setDraft((d) => ({ ...d, specialty }))}
+                  placeholder={draft.role === "caregiver" ? "e.g. Newborn care, breastfeeding support" : ""}
+                  placeholderTextColor={colors.muted}
+                />
+                <Text style={styles.label}>{t("profile.weeklyRate")}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={draft.weeklyRate ?? ""}
+                  onChangeText={(weeklyRate) => setDraft((d) => ({ ...d, weeklyRate }))}
+                  placeholder={t("profile.weeklyRatePlaceholder")}
+                  placeholderTextColor={colors.muted}
+                />
+                <Text style={styles.label}>{t("profile.availability")}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={draft.availability ?? ""}
+                  onChangeText={(availability) => setDraft((d) => ({ ...d, availability }))}
+                  placeholder={t("profile.availabilityPlaceholder")}
+                  placeholderTextColor={colors.muted}
+                />
+                <View style={styles.toggleRow}>
+                  <Text style={styles.label}>{t("profile.liveIn")}</Text>
+                  <Switch
+                    value={draft.liveIn ?? false}
+                    onValueChange={(liveIn) => setDraft((d) => ({ ...d, liveIn }))}
+                    trackColor={{ false: colors.border, true: colors.gold }}
+                    thumbColor="#fff"
+                  />
+                </View>
+                <View style={styles.toggleRow}>
+                  <Text style={styles.label}>{t("profile.breastfeeding")}</Text>
+                  <Switch
+                    value={draft.breastfeeding ?? false}
+                    onValueChange={(breastfeeding) => setDraft((d) => ({ ...d, breastfeeding }))}
+                    trackColor={{ false: colors.border, true: colors.gold }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              </>
+            )}
           </ScrollView>
           <View style={styles.actions}>
             <Pressable style={styles.cancelBtn} onPress={onClose}>

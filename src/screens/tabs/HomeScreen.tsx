@@ -1,14 +1,18 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Baby, Calendar, CheckCircle, FileText, Globe, MessageCircle, PenLine, Send, Sparkles } from "lucide-react-native";
+import { Baby, Bell, Calendar, CheckCircle, FileText, Globe, MessageCircle, PenLine, Send, Sparkles, Users } from "lucide-react-native";
+import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
+import { CaregiverContractModal } from "../../components/CaregiverContractModal";
 import { PressScale } from "../../components/PressScale";
 import { useApp } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
+import type { IncomingRequest } from "../../types/interview";
 import { colors, gradients, radius } from "../../theme";
 
 export function HomeScreen() {
-  const { profile, dailyReport, scheduledInterviews, completeInterview, setPendingTab } = useApp();
+  const { profile, dailyReport, scheduledInterviews, completeInterview, setPendingTab, incomingRequests, acceptRequest } = useApp();
+  const [contractRequest, setContractRequest] = useState<IncomingRequest | null>(null);
   const { locale, t } = useLanguage();
   const firstName = profile.name.split(" ")[0];
   const reportPreview = dailyReport ? (locale === "ko" ? dailyReport.reportKo : dailyReport.reportEn) : null;
@@ -20,6 +24,10 @@ export function HomeScreen() {
     (i) => i.status === "completed" || i.status === "contract_signed",
   );
   const activeContract = scheduledInterviews.find((i) => i.status === "contract_signed");
+
+  if (profile.role === "caregiver") {
+    return <CaregiverHomeScreen contractRequest={contractRequest} setContractRequest={setContractRequest} />;
+  }
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -186,6 +194,165 @@ export function HomeScreen() {
   );
 }
 
+// ─── Caregiver Home ───────────────────────────────────────────────────────────
+
+function CaregiverHomeScreen({
+  contractRequest,
+  setContractRequest,
+}: {
+  contractRequest: IncomingRequest | null;
+  setContractRequest: (r: IncomingRequest | null) => void;
+}) {
+  const { profile, incomingRequests, acceptRequest } = useApp();
+  const { locale, t } = useLanguage();
+  const ko = locale === "ko";
+  const firstName = profile.name.split(" ")[0];
+
+  const pending = incomingRequests.filter((r) => r.status === "pending");
+  const accepted = incomingRequests.filter((r) => r.status === "accepted" || r.status === "contract_signed");
+  const activeContract = incomingRequests.find((r) => r.status === "contract_signed");
+
+  return (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <LinearGradient colors={[...gradients.hero]} style={styles.hero}>
+        <View style={styles.heroRow}>
+          <View>
+            <Text style={styles.greeting}>{t("caregiver.home.greeting")}</Text>
+            <Text style={styles.name}>{firstName} 👋</Text>
+          </View>
+          <Avatar src={profile.avatar} size={48} />
+        </View>
+        {activeContract ? (
+          <View style={styles.caregiverCard}>
+            <View style={styles.caregiverIcon}>
+              <CheckCircle size={20} color={colors.sage} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.caregiverLabel}>{t("caregiver.home.contractSigned")}</Text>
+              <Text style={styles.caregiverName}>
+                {activeContract.parentName} · {activeContract.contractFields?.weeklyPay ?? activeContract.budget}
+              </Text>
+            </View>
+            <CheckCircle size={18} color={colors.sage} />
+          </View>
+        ) : (
+          <View style={styles.caregiverCard}>
+            <View style={styles.caregiverIcon}>
+              <Bell size={20} color={colors.gold} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.caregiverLabel}>{t("caregiver.home.requests")}</Text>
+              <Text style={styles.caregiverName}>
+                {pending.length > 0
+                  ? `${pending.length} ${ko ? "개의 새 요청" : "new request(s)"}`
+                  : t("caregiver.home.noRequests")}
+              </Text>
+            </View>
+          </View>
+        )}
+      </LinearGradient>
+
+      {/* Pending interview requests */}
+      {pending.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("caregiver.home.requests")}</Text>
+          {pending.map((req) => (
+            <View key={req.id} style={[styles.interviewCard, { borderColor: colors.gold }]}>
+              <Avatar src={req.parentAvatar} size={44} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.interviewLabel}>{ko ? "인터뷰 요청" : "Interview Request"}</Text>
+                <Text style={styles.interviewName}>{req.parentName}</Text>
+                <Text style={styles.interviewTime}>{ko ? req.slotLabelKo : req.slotLabelEn}</Text>
+                <Text style={styles.interviewSubtext}>
+                  {req.liveIn ? (ko ? "입주" : "Live-in") : (ko ? "출퇴근" : "Live-out")} · {req.budget}
+                </Text>
+              </View>
+              <View style={styles.requestActions}>
+                <PressScale
+                  style={styles.acceptBtn}
+                  onPress={() => acceptRequest(req.id)}
+                  scale={0.95}
+                >
+                  <Text style={styles.acceptBtnText}>{t("caregiver.home.accept")}</Text>
+                </PressScale>
+                <PressScale style={styles.declineBtn} scale={0.95}>
+                  <Text style={styles.declineBtnText}>{t("caregiver.home.decline")}</Text>
+                </PressScale>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Accepted / signed */}
+      {accepted.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{ko ? "진행 중" : "In Progress"}</Text>
+          {accepted.map((req) => {
+            const isSigned = req.status === "contract_signed";
+            const hasParentSig = !!req.parentSignature;
+            return (
+              <View key={req.id} style={[styles.interviewCard, { borderColor: isSigned ? colors.sage : colors.gold }]}>
+                <View style={[styles.interviewIcon, { backgroundColor: isSigned ? `${colors.sage}18` : colors.champagne }]}>
+                  <Users size={18} color={isSigned ? colors.sage : colors.gold} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.interviewLabel, { color: isSigned ? colors.sage : colors.gold }]}>
+                    {isSigned
+                      ? t("caregiver.home.contractSigned")
+                      : hasParentSig
+                        ? t("caregiver.home.contractReady")
+                        : t("caregiver.home.accepted")}
+                  </Text>
+                  <Text style={styles.interviewName}>{req.parentName}</Text>
+                  <Text style={styles.interviewTime}>{ko ? req.slotLabelKo : req.slotLabelEn}</Text>
+                </View>
+                {hasParentSig && !isSigned && (
+                  <PressScale
+                    style={styles.profileLinkBtn}
+                    onPress={() => setContractRequest(req)}
+                    scale={0.95}
+                  >
+                    <PenLine size={13} color="#fff" />
+                    <Text style={styles.profileLinkText}>{ko ? "서명" : "Sign"}</Text>
+                  </PressScale>
+                )}
+                {isSigned && <CheckCircle size={18} color={colors.sage} />}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Quick actions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t("home.quickActions")}</Text>
+        <View style={styles.actionsGrid}>
+          {[
+            { icon: MessageCircle, label: ko ? "메시지" : "Messages", bg: "#F0F3FA", fg: "#6B7FA8" },
+            { icon: Calendar, label: ko ? "일정 관리" : "Schedule", bg: colors.champagne, fg: colors.gold },
+            { icon: FileText, label: ko ? "돌봄 기록" : "Care Log", bg: "#EEF5F0", fg: colors.sage },
+            { icon: Globe, label: ko ? "번역" : "Translate", bg: "#FFF9EB", fg: colors.gold },
+          ].map(({ icon: Icon, label, bg, fg }) => (
+            <Pressable key={label} style={styles.actionCard}>
+              <View style={[styles.actionIcon, { backgroundColor: bg }]}>
+                <Icon size={18} color={fg} />
+              </View>
+              <Text style={styles.actionLabel}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      <CaregiverContractModal
+        open={contractRequest !== null}
+        request={contractRequest}
+        onClose={() => setContractRequest(null)}
+      />
+    </ScrollView>
+  );
+}
+
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: colors.background },
   content: { paddingBottom: 24 },
@@ -321,4 +488,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   secondaryBtnText: { fontSize: 14, fontWeight: "600", color: colors.muted },
+  interviewSubtext: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  requestActions: { gap: 6, alignItems: "flex-end" },
+  acceptBtn: {
+    backgroundColor: colors.sage,
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  acceptBtnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  declineBtn: {
+    backgroundColor: colors.champagne,
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  declineBtnText: { fontSize: 12, fontWeight: "600", color: colors.muted },
 });
