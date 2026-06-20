@@ -1,46 +1,59 @@
+import asyncio
+import json
 import os
-import uuid
-from pathlib import Path
+import ssl
+from io import BytesIO
 
-import httpx
+import websockets
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, File, UploadFile
+from pydub import AudioSegment
 
 load_dotenv()
 
 BIZCRUSH_API_KEY = os.getenv("BIZCRUSH_API_KEY")
-BASE_URL = os.getenv("BASE_URL")  # 서버 공개 URL (예: https://your-server.com)
-
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
+CHUNK_SIZE = 640  # 20ms PCM16 at 16kHz mono
 
 app = FastAPI()
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 @app.post("/transcribe")
 async def transcribe_recording(file: UploadFile = File(...)):
-    # 파일 임시 저장
-    ext = Path(file.filename).suffix if file.filename else ".m4a"
-    filename = f"{uuid.uuid4()}{ext}"
-    file_path = UPLOAD_DIR / filename
+    content = await file.read()
 
-    file_path.write_bytes(await file.read())
+    # m4a 등 포맷을 PCM16 (16kHz, mono, 16-bit)으로 변환
+    audio = AudioSegment.from_file(BytesIO(content))
+    audio = audio.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+    pcm_data = audio.raw_data
 
-    audio_url = f"{BASE_URL}/uploads/{filename}"
+    wss_url = (
+        f"wss://extapi.bizcrush.ai/v1/stt/stream"
+        f"?api_key={BIZCRUSH_API_KEY}&format=json"
+        f"&enable_diarization=false&language_hints=ko"
+    )
+    final_text = ""
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
 
-    try:
-        async with httpx.AsyncClient(timeout=600) as client:
-            response = await client.post(
-                "https://extapi.bizcrush.ai/v1/stt",
-                params={"api_key": BIZCRUSH_API_KEY},
-                json={"audio_url": audio_url},
-            )
-    finally:
-        file_path.unlink(missing_ok=True)
+    async with websockets.connect(wss_url, ssl=ssl_ctx) as ws:
+        # 1. 설정 프레임 전송
+        await ws.send(json.dumps({"encoding": "pcm16"}))
 
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=response.json())
+        # 2. 오디오 청크 스트리밍 (20ms 간격으로 실시간 페이싱)
+        for i in range(0, len(pcm_data), CHUNK_SIZE):
+            await ws.send(pcm_data[i:i + CHUNK_SIZE])
+            await asyncio.sleep(0.02)
 
-    return response.json()
+        # 3. 스트림 종료 신호: 빈 바이너리 프레임
+        await ws.send(b"")
+
+        # 4. 서버가 닫을 때까지 결과 수신 (text는 누적값이므로 마지막 값이 전체 텍스트)
+        async for message in ws:
+            print("RAW:", message)
+            data = json.loads(message)
+            chunk = data.get("chunk", {})
+            if chunk.get("text"):
+                final_text = chunk["text"]
+
+    return {"text": final_text}

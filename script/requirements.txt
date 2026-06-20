@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+websockets
+pydub
+python-multipart
+python-dotenv
