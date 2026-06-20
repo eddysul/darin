@@ -12,13 +12,15 @@
 
 | 구분 | 기술 |
 |------|------|
-| 프레임워크 | React 18 + TypeScript |
-| 빌드 | Vite 6 |
-| 스타일 | Tailwind CSS 4, CSS Variables (`theme.css`) |
-| UI 컴포넌트 | shadcn/ui (Radix UI 기반) |
-| 아이콘 | lucide-react |
-| 애니메이션 | motion (Framer Motion) |
+| 프레임워크 | **React Native** + Expo 52 + TypeScript |
+| 네비게이션 | React Navigation (Bottom Tabs) |
+| UI | React Native StyleSheet, expo-linear-gradient |
+| 이미지 | expo-image, expo-image-picker |
+| 아이콘 | lucide-react-native |
+| 상태 | React Context (Language, App) |
 | 패키지 매니저 | pnpm |
+
+> 이전 Vite + React Web 버전 코드는 `src/app/`에 남아 있을 수 있으며, 실행에는 사용되지 않습니다.
 
 ---
 
@@ -292,13 +294,16 @@ type UserProfile = {
 
 ```bash
 pnpm install
-pnpm run dev
+pnpm start
 ```
 
-브라우저: http://localhost:5173/  
-(포트 충돌 시 Vite가 5174 등 다른 포트 사용)
+Expo Dev Tools에서 iOS/Android/실기기로 실행합니다.
 
-macOS에서 `pnpm install` 실패 시 `pnpm-workspace.yaml`의 `allowBuilds` 설정 확인 (esbuild, tailwind oxide).
+```bash
+pnpm run ios
+pnpm run android
+pnpm run typecheck
+```
 
 ---
 

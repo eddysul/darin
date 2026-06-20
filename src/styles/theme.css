@@ -2,38 +2,44 @@
 
 :root {
   --font-size: 16px;
-  --background: #FFF8F3;
-  --foreground: #2C1810;
+  --background: #FFFDF7;
+  --foreground: #243036;
   --card: #FFFFFF;
-  --card-foreground: #2C1810;
+  --card-foreground: #243036;
   --popover: #FFFFFF;
-  --popover-foreground: #2C1810;
-  --primary: #F4845F;
-  --primary-foreground: #FFFFFF;
-  --secondary: #FFF0E8;
-  --secondary-foreground: #2C1810;
-  --muted: #F5EDE6;
-  --muted-foreground: #9B7B6E;
-  --accent: #7CB987;
-  --accent-foreground: #FFFFFF;
-  --destructive: #E05252;
+  --popover-foreground: #243036;
+  --primary: #D9A441;
+  --primary-foreground: #243036;
+  --secondary: #FFF4D8;
+  --secondary-foreground: #243036;
+  --muted: #FFF4D8;
+  --muted-foreground: #6F6A60;
+  --accent: #F4D58D;
+  --accent-foreground: #243036;
+  --destructive: #C45C5C;
   --destructive-foreground: #ffffff;
-  --border: rgba(180, 120, 90, 0.15);
+  --border: #EFE4CF;
   --input: transparent;
-  --input-background: #FFF0E8;
-  --switch-background: #D4B5A8;
+  --input-background: #FFFBF2;
+  --switch-background: #E8D5A8;
   --font-weight-medium: 600;
   --font-weight-normal: 400;
-  --ring: #F4845F;
-  --chart-1: #F4845F;
-  --chart-2: #7CB987;
-  --chart-3: #F4B860;
-  --chart-4: #8FA8D8;
-  --chart-5: #C48BC4;
+  --ring: #D9A441;
+  --chart-1: #D9A441;
+  --chart-2: #8BA888;
+  --chart-3: #F4D58D;
+  --chart-4: #A8B8C8;
+  --chart-5: #C4A8B8;
   --radius: 1rem;
+  --brand-gold: #D9A441;
+  --brand-soft-gold: #F4D58D;
+  --brand-champagne: #FFF4D8;
+  --brand-text: #243036;
+  --brand-muted: #6F6A60;
+  --app-gradient: radial-gradient(circle at top, #FFF4D8 0%, #FFFDF7 38%, #FFFFFF 100%);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: #030213;
+  --sidebar-primary: #243036;
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
@@ -126,12 +132,8 @@
 
   body {
     @apply bg-background text-foreground;
+    background: var(--app-gradient);
   }
-
-  /**
-  * Default typography styles for HTML elements (h1-h4, p, label, button, input).
-  * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.
-  */
 
   html {
     font-size: var(--font-size);

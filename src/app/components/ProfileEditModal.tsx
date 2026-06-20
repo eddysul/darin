@@ -79,7 +79,7 @@ export function ProfileEditModal({ open, profile, onClose, onSave }: ProfileEdit
               <button
                 type="button"
                 onClick={handleSave}
-                className="flex-1 bg-primary text-white rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 transition-opacity"
+                className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 transition-opacity"
               >
                 {t("profile.save")}
               </button>

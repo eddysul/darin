@@ -25,7 +25,7 @@ type OnboardingScreenProps = {
   initialStep?: Step;
 };
 
-const NAVY = "#1A2333";
+const NAVY = "#243036";
 
 type Step = "role" | "profile";
 
@@ -203,7 +203,8 @@ export function OnboardingScreen({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 z-[55] flex flex-col bg-white px-7 pt-8 pb-8 overflow-y-auto"
+      className="absolute inset-0 z-[55] flex flex-col px-7 pt-8 pb-8 overflow-y-auto"
+      style={{ background: "radial-gradient(circle at top, #FFF4D8 0%, #FFFDF7 38%, #FFFFFF 100%)" }}
     >
       <div className="flex items-center justify-between mb-4">
         {step === "profile" ? (
@@ -296,7 +297,7 @@ export function OnboardingScreen({
             <button
               type="button"
               onClick={handleRoleContinue}
-              className="w-full bg-primary text-white rounded-xl py-3.5 text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all shadow-md shadow-primary/25 mt-4"
+              className="w-full bg-primary text-primary-foreground rounded-xl py-3.5 text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all shadow-md shadow-primary/20 mt-4"
             >
               {t("onboarding.continue")}
             </button>
@@ -520,7 +521,7 @@ export function OnboardingScreen({
             <button
               type="button"
               onClick={handleFinish}
-              className="w-full bg-primary text-white rounded-xl py-3.5 text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all shadow-md shadow-primary/25 mt-2"
+              className="w-full bg-primary text-primary-foreground rounded-xl py-3.5 text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all shadow-md shadow-primary/20 mt-2"
             >
               {t("onboarding.finish")}
             </button>

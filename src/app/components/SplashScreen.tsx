@@ -16,7 +16,8 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.45, ease: "easeInOut" }}
-      className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-white px-10"
+      className="absolute inset-0 z-[60] flex flex-col items-center justify-center px-10"
+      style={{ background: "radial-gradient(circle at top, #FFF4D8 0%, #FFFDF7 38%, #FFFFFF 100%)" }}
     >
       <motion.img
         src="/darin-logo.png"

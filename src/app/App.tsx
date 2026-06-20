@@ -38,6 +38,9 @@ import { SplashScreen } from "./components/SplashScreen";
 import { LoginScreen } from "./components/LoginScreen";
 import { OnboardingScreen } from "./components/OnboardingScreen";
 import type { UserProfile } from "./types/profile";
+import type { DailyReport } from "./types/dailyReport";
+import { generateDailyReport, DEMO_VOICE_TRANSCRIPT } from "./demo/dailyReport";
+import { CAREGIVER_MATCHES } from "./demo/caregivers";
 
 type AppPhase = "splash" | "login" | "onboarding" | "main";
 
@@ -61,9 +64,7 @@ function getOnboardingPreview() {
   return { initialRole: undefined, initialStep: undefined };
 }
 import {
-  getReportContent,
   getLogEntries,
-  getLogDraft,
   getCaregiverRole,
 } from "./i18n";
 
@@ -77,68 +78,15 @@ const DEFAULT_PROFILE: UserProfile = {
   languages: "Korean, English",
 };
 
-const CAREGIVERS = [
-  {
-    id: 1,
-    name: "Ji-yeon Park",
-    role: "Certified Nanny",
-    rating: 4.9,
-    reviews: 47,
-    location: "Gangnam-gu",
-    distance: "1.2km",
-    price: "₩18,000/hr",
-    languages: ["Korean", "English"],
-    tags: ["Infant Care", "Bilingual", "First Aid"],
-    available: "Mon–Fri 3pm–8pm",
-    img: "photo-1544005313-94ddf0286df2",
-    verified: true,
-  },
-  {
-    id: 2,
-    name: "Sarah Kim",
-    role: "Bilingual Babysitter",
-    rating: 4.8,
-    reviews: 33,
-    location: "Mapo-gu",
-    distance: "2.4km",
-    price: "₩15,000/hr",
-    languages: ["English", "Korean", "Japanese"],
-    tags: ["Toddler", "Arts & Crafts", "CPR Certified"],
-    available: "Weekends & Evenings",
-    img: "photo-1438761681033-6461ffad8d80",
-    verified: true,
-  },
-  {
-    id: 3,
-    name: "Min-jun Lee",
-    role: "Daycare Teacher",
-    rating: 4.7,
-    reviews: 89,
-    location: "Seodaemun-gu",
-    distance: "3.1km",
-    price: "₩420,000/mo",
-    languages: ["Korean"],
-    tags: ["Group Care", "Montessori", "Licensed"],
-    available: "Mon–Fri 8am–6pm",
-    img: "photo-1472099645785-5658abf4ff4e",
-    verified: true,
-  },
-];
-
-const REPORT = {
-  child: "Emma",
-  date: "June 20, 2025",
-  caregiver: "Ji-yeon Park",
-  summary:
-    "Emma had a wonderful day today. She was in great spirits throughout the morning, finished her lunch enthusiastically, and had a solid nap. She showed some creativity during arts and crafts, and played happily in the park. A slight cough appeared after lunch — worth monitoring this evening.",
-  items: [
-    { icon: Utensils, label: "Meal", value: "Finished lunch well · Had afternoon snack", color: "text-amber-500", bg: "bg-amber-50" },
-    { icon: Moon, label: "Sleep", value: "Nap 1hr 20min · Fell asleep easily", color: "text-indigo-400", bg: "bg-indigo-50" },
-    { icon: Activity, label: "Activity", value: "Park play · Arts & crafts · Story time", color: "text-green-500", bg: "bg-green-50" },
-    { icon: Heart, label: "Mood", value: "Happy · Energetic in the morning", color: "text-rose-400", bg: "bg-rose-50" },
-    { icon: Thermometer, label: "Health", value: "Slight cough after lunch · No fever", color: "text-orange-400", bg: "bg-orange-50" },
-  ],
-  note: "Extra clothes needed tomorrow — Emma got paint on her shirt today!",
+const REPORT_ITEM_META: Record<
+  DailyReport["items"][number]["type"],
+  { icon: typeof Utensils; color: string; bg: string }
+> = {
+  meal: { icon: Utensils, color: "text-[#B8860B]", bg: "bg-[#FFF4D8]" },
+  nap: { icon: Moon, color: "text-[#6B7FA8]", bg: "bg-[#F0F3FA]" },
+  activity: { icon: Activity, color: "text-[#6B9080]", bg: "bg-[#EEF5F0]" },
+  health: { icon: Thermometer, color: "text-[#A67C52]", bg: "bg-[#FFF4D8]" },
+  reminder: { icon: Bell, color: "text-[#D9A441]", bg: "bg-[#FFF9EB]" },
 };
 
 function Avatar({ src, size = 40, className = "" }: { src: string; size?: number; className?: string }) {
@@ -152,91 +100,108 @@ function Avatar({ src, size = 40, className = "" }: { src: string; size?: number
   );
 }
 
-function HomeTab({ profile }: { profile: UserProfile }) {
+function HomeTab({ profile, dailyReport }: { profile: UserProfile; dailyReport: DailyReport | null }) {
   const { locale, t } = useLanguage();
-  const report = getReportContent(locale);
   const firstName = profile.name.split(" ")[0];
+  const reportPreview = dailyReport
+    ? locale === "ko"
+      ? dailyReport.reportKo
+      : dailyReport.reportEn
+    : null;
+  const replyDraft = dailyReport?.parentReplyDraft ?? t("home.draftText");
 
   return (
     <div className="flex flex-col gap-4 pb-6">
-      {/* Header */}
-      <div className="bg-primary rounded-3xl mx-4 mt-4 p-5 text-white relative overflow-hidden">
-        <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-white/10" />
-        <div className="absolute -right-4 top-12 w-24 h-24 rounded-full bg-white/10" />
+      <div
+        className="rounded-3xl mx-4 mt-4 p-5 relative overflow-hidden border border-border"
+        style={{ background: "linear-gradient(135deg, #FFF4D8 0%, #FFFDF7 55%, #FFFFFF 100%)" }}
+      >
+        <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-[#F4D58D]/20" />
         <div className="flex items-center justify-between relative">
           <div>
-            <p className="text-white/70 text-sm font-medium">{t("home.greeting")}</p>
-            <h1 className="text-2xl font-bold mt-0.5" style={{ fontFamily: "Nunito, sans-serif" }}>
+            <p className="text-muted-foreground text-sm font-medium">{t("home.greeting")}</p>
+            <h1 className="text-2xl font-bold mt-0.5 text-foreground" style={{ fontFamily: "Nunito, sans-serif" }}>
               {firstName} 👋
             </h1>
           </div>
-          <div className="relative">
-            <Avatar src={profile.avatar} size={48} className="ring-2 ring-white/40" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-accent rounded-full border-2 border-primary" />
-          </div>
+          <Avatar src={profile.avatar} size={48} className="ring-2 ring-[#F4D58D]/50" />
         </div>
-        <div className="mt-4 bg-white/15 rounded-2xl p-3 flex items-center gap-3">
-          <div className="bg-white/20 rounded-xl p-2">
-            <Baby size={20} className="text-white" />
+        <div className="mt-4 bg-white/70 rounded-2xl p-3 flex items-center gap-3 border border-border">
+          <div className="bg-[#FFF4D8] rounded-xl p-2">
+            <Baby size={20} className="text-[#B8860B]" />
           </div>
           <div className="flex-1">
-            <p className="text-white/80 text-xs">{t("home.emmaWith")}</p>
-            <p className="text-white font-semibold text-sm">
+            <p className="text-muted-foreground text-xs">{t("home.emmaWith")}</p>
+            <p className="text-foreground font-semibold text-sm">
               Ji-yeon Park · {t("home.until")}
             </p>
           </div>
-          <CheckCircle size={18} className="text-green-200" />
+          <CheckCircle size={18} className="text-[#6B9080]" />
         </div>
       </div>
 
-      {/* Today's Report Card */}
       <div className="mx-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-bold text-foreground" style={{ fontFamily: "Nunito, sans-serif" }}>
             {t("home.todaysReport")}
           </h2>
+          {dailyReport && (
+            <span className="text-xs font-semibold text-[#B8860B] bg-[#FFF4D8] px-2.5 py-1 rounded-full flex items-center gap-1">
+              <Sparkles size={11} />
+              {t("report.aiTranslated")}
+            </span>
+          )}
         </div>
         <div className="bg-card rounded-3xl border border-border p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <Avatar src="photo-1544005313-94ddf0286df2" size={36} />
             <div>
               <p className="text-xs text-muted-foreground">{t("home.from")}</p>
-              <p className="text-sm font-semibold">June 20 · 5:42 PM</p>
+              <p className="text-sm font-semibold">
+                {dailyReport ? `${dailyReport.date} · ${dailyReport.savedAt}` : "June 20 · 5:42 PM"}
+              </p>
             </div>
-            <div className="ml-auto flex items-center gap-1 bg-green-50 text-green-600 text-xs rounded-full px-2.5 py-1">
+            <div className="ml-auto flex items-center gap-1 bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2.5 py-1 font-semibold">
               <Sparkles size={11} />
               AI
             </div>
           </div>
-          <p className="text-sm text-foreground/80 leading-relaxed">{report.translation}</p>
-          <div className="mt-3 flex gap-2 flex-wrap">
-            {[t("home.tagLunch"), t("home.tagNap"), t("home.tagCough")].map((tag) => (
-              <span
-                key={tag}
-                className={`text-xs rounded-full px-2.5 py-1 font-medium ${
-                  tag.includes("⚠")
-                    ? "bg-orange-50 text-orange-600"
-                    : "bg-secondary text-muted-foreground"
-                }`}
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
+          <p className="text-sm text-foreground/85 leading-relaxed">
+            {reportPreview ??
+              (locale === "ko"
+                ? "Emma는 오늘 좋은 하루를 보냈습니다. Log 탭에서 음성 메모를 추가하고 일일 리포트를 생성해 보세요."
+                : "Generate a daily report from the Log tab to see Emma's AI-translated update here.")}
+          </p>
+          {dailyReport && (
+            <div className="mt-3 flex gap-2 flex-wrap">
+              {dailyReport.items.slice(0, 3).map((item) => (
+                <span
+                  key={item.type}
+                  className="text-xs rounded-full px-2.5 py-1 font-medium bg-secondary text-muted-foreground"
+                >
+                  {item.label}
+                </span>
+              ))}
+              {dailyReport.items.some((i) => i.type === "health") && (
+                <span className="text-xs rounded-full px-2.5 py-1 font-medium bg-[#FFF4D8] text-[#A67C52]">
+                  {t("home.tagCough")}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Quick Actions */}
       <div className="mx-4">
         <h2 className="font-bold text-foreground mb-3" style={{ fontFamily: "Nunito, sans-serif" }}>
           {t("home.quickActions")}
         </h2>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { icon: MessageCircle, label: t("home.messageNanny"), color: "bg-blue-50 text-blue-500" },
-            { icon: Calendar, label: t("home.schedulePickup"), color: "bg-purple-50 text-purple-500" },
-            { icon: Globe, label: t("home.translateReport"), color: "bg-green-50 text-green-500" },
-            { icon: FileText, label: t("home.viewHistory"), color: "bg-amber-50 text-amber-500" },
+            { icon: MessageCircle, label: t("home.messageNanny"), color: "bg-[#F0F3FA] text-[#6B7FA8]" },
+            { icon: Calendar, label: t("home.schedulePickup"), color: "bg-[#FFF4D8] text-[#B8860B]" },
+            { icon: Globe, label: t("home.translateReport"), color: "bg-[#EEF5F0] text-[#6B9080]" },
+            { icon: FileText, label: t("home.viewHistory"), color: "bg-[#FFF9EB] text-[#D9A441]" },
           ].map(({ icon: Icon, label, color }) => (
             <button
               key={label}
@@ -251,21 +216,20 @@ function HomeTab({ profile }: { profile: UserProfile }) {
         </div>
       </div>
 
-      {/* Draft Reply */}
       <div className="mx-4">
         <h2 className="font-bold text-foreground mb-3" style={{ fontFamily: "Nunito, sans-serif" }}>
           {t("home.aiDraftReply")}
         </h2>
         <div className="bg-card border border-border rounded-3xl p-4 shadow-sm">
           <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
-            <Sparkles size={11} className="text-primary" />
+            <Sparkles size={11} className="text-[#D9A441]" />
             {t("home.suggestedMessage")}
           </p>
-          <p className="text-sm text-foreground/80 leading-relaxed italic">
-            &ldquo;{t("home.draftText")}&rdquo;
+          <p className="text-sm text-foreground/85 leading-relaxed italic">
+            &ldquo;{replyDraft}&rdquo;
           </p>
           <div className="flex gap-2 mt-3">
-            <button className="flex-1 bg-primary text-white rounded-xl py-2 text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+            <button className="flex-1 bg-primary text-primary-foreground rounded-xl py-2 text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
               <Send size={14} />
               {t("home.send")}
             </button>
@@ -279,11 +243,11 @@ function HomeTab({ profile }: { profile: UserProfile }) {
   );
 }
 
-function ReportTab() {
-  const [expanded, setExpanded] = useState(false);
+function ReportTab({ dailyReport }: { dailyReport: DailyReport | null }) {
+  const [expanded, setExpanded] = useState(true);
   const { locale, t } = useLanguage();
-  const report = getReportContent(locale);
-  const itemIcons = REPORT.items;
+
+  const historyDates = ["June 20", "June 19", "June 18"];
 
   return (
     <div className="flex flex-col gap-4 pb-6">
@@ -294,85 +258,148 @@ function ReportTab() {
         <p className="text-muted-foreground text-sm mt-0.5">{t("report.subtitle")}</p>
       </div>
 
-      {/* Timeline */}
-      {["June 20", "June 19", "June 18"].map((date, i) => (
-        <div key={date} className="mx-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-semibold text-muted-foreground">{date}</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
-          <div
-            className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm cursor-pointer"
-            onClick={() => setExpanded(expanded === false ? true : false)}
-          >
-            <div className="p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <Avatar src="photo-1544005313-94ddf0286df2" size={36} />
-                <div className="flex-1">
-                  <p className="font-semibold text-sm">Ji-yeon Park</p>
-                  <p className="text-xs text-muted-foreground">{t("report.submitted")}</p>
-                </div>
-                {i === 0 && (
-                  <span className="bg-orange-50 text-orange-500 text-xs rounded-full px-2.5 py-1 font-medium flex items-center gap-1">
-                    <AlertCircle size={11} />
-                    {t("report.note")}
-                  </span>
-                )}
-              </div>
+      {historyDates.map((date, i) => {
+        const isToday = i === 0;
+        const report = isToday && dailyReport ? dailyReport : null;
 
-              {/* Activity Pills */}
-              <div className="grid grid-cols-3 gap-2">
-                {itemIcons.slice(0, 3).map(({ icon: Icon, color, bg }, idx) => (
-                  <div key={idx} className={`${bg} rounded-2xl p-2.5 flex flex-col items-center gap-1`}>
-                    <Icon size={16} className={color} />
-                    <span className={`text-xs font-semibold ${color}`}>{report.items[idx].label}</span>
+        return (
+          <div key={date} className="mx-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-semibold text-muted-foreground">{date}</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+            <div
+              className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm cursor-pointer"
+              onClick={() => isToday && setExpanded(!expanded)}
+            >
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Avatar src="photo-1544005313-94ddf0286df2" size={36} />
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm">Ji-yeon Park</p>
+                    <p className="text-xs text-muted-foreground">
+                      {report ? `${t("report.submitted")} · ${report.savedAt}` : t("report.submitted")}
+                    </p>
                   </div>
-                ))}
-              </div>
-
-              {/* Expanded */}
-              {i === 0 && (
-                <div className="mt-3 pt-3 border-t border-border">
-                  <p className="text-sm text-foreground/80 leading-relaxed">{report.summary}</p>
-                  <div className="mt-3 flex flex-col gap-2">
-                    {itemIcons.map(({ icon: Icon, color, bg }, idx) => (
-                      <div key={idx} className="flex items-start gap-3">
-                        <div className={`${bg} rounded-xl p-1.5 mt-0.5`}>
-                          <Icon size={14} className={color} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-muted-foreground">{report.items[idx].label}</p>
-                          <p className="text-sm">{report.items[idx].value}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {report.note && (
-                    <div className="mt-3 bg-amber-50 border border-amber-100 rounded-2xl p-3 flex items-start gap-2">
-                      <AlertCircle size={14} className="text-amber-500 mt-0.5 shrink-0" />
-                      <p className="text-xs text-amber-700">{report.note}</p>
-                    </div>
+                  {isToday && report && (
+                    <span className="bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2.5 py-1 font-semibold flex items-center gap-1">
+                      <Sparkles size={11} />
+                      {t("report.fromLog")}
+                    </span>
+                  )}
+                  {isToday && !report && (
+                    <span className="bg-secondary text-muted-foreground text-xs rounded-full px-2.5 py-1 font-medium">
+                      {t("log.useVoiceOrNotes")}
+                    </span>
                   )}
                 </div>
-              )}
+
+                {report ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      {report.items.slice(0, 3).map((item) => {
+                        const meta = REPORT_ITEM_META[item.type];
+                        const Icon = meta.icon;
+                        return (
+                          <div key={item.type} className={`${meta.bg} rounded-2xl p-2.5 flex flex-col items-center gap-1`}>
+                            <Icon size={16} className={meta.color} />
+                            <span className={`text-xs font-semibold ${meta.color}`}>{item.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {expanded && (
+                      <div className="mt-3 pt-3 border-t border-border space-y-3">
+                        <p className="text-sm text-foreground/85 leading-relaxed">
+                          {locale === "ko" ? report.reportKo : report.reportEn}
+                        </p>
+                        <div className="flex flex-col gap-2">
+                          {report.items.map((item) => {
+                            const meta = REPORT_ITEM_META[item.type];
+                            const Icon = meta.icon;
+                            return (
+                              <div key={item.type} className="flex items-start gap-3">
+                                <div className={`${meta.bg} rounded-xl p-1.5 mt-0.5`}>
+                                  <Icon size={14} className={meta.color} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground">{item.label}</p>
+                                  <p className="text-sm">{item.value}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="bg-[#FFF9EB] border border-[#EFE4CF] rounded-2xl p-3 flex items-start gap-2">
+                          <Globe size={14} className="text-[#D9A441] mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-xs font-semibold text-[#B8860B] mb-1">{t("report.aiTranslated")}</p>
+                            <p className="text-xs text-muted-foreground leading-relaxed">{report.reportKo}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {locale === "ko"
+                      ? "이전 날짜 리포트입니다. 오늘 리포트는 Log 탭에서 생성할 수 있습니다."
+                      : "Past report summary. Generate today's report from the Log tab."}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
-function LogTab() {
+function LogTab({
+  dailyReport,
+  onSaveReport,
+}: {
+  dailyReport: DailyReport | null;
+  onSaveReport: (report: DailyReport) => void;
+}) {
   const [isRecording, setIsRecording] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState("");
   const [inputText, setInputText] = useState("");
-  const [generated, setGenerated] = useState(false);
+  const [generated, setGenerated] = useState<DailyReport | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [saved, setSaved] = useState(false);
   const { locale, t } = useLanguage();
-  const draftText = getLogDraft(locale);
   const logEntries = getLogEntries(locale);
 
+  const handleVoiceToggle = () => {
+    if (isRecording) {
+      setIsRecording(false);
+      setVoiceTranscript(DEMO_VOICE_TRANSCRIPT);
+    } else {
+      setIsRecording(true);
+      setVoiceTranscript("");
+    }
+  };
+
   const handleGenerate = () => {
-    if (inputText.trim()) setGenerated(true);
+    const source = [voiceTranscript, inputText].filter(Boolean).join("\n\n");
+    if (!source.trim()) return;
+
+    setIsGenerating(true);
+    setSaved(false);
+    window.setTimeout(() => {
+      const report = generateDailyReport(source);
+      setGenerated(report);
+      setIsGenerating(false);
+    }, 900);
+  };
+
+  const handleSave = () => {
+    if (!generated) return;
+    onSaveReport(generated);
+    setSaved(true);
   };
 
   return (
@@ -384,33 +411,42 @@ function LogTab() {
         <p className="text-muted-foreground text-sm mt-0.5">{t("log.subtitle")}</p>
       </div>
 
-      {/* Voice Record */}
       <div className="mx-4 bg-card border border-border rounded-3xl p-4 shadow-sm">
         <p className="text-sm font-semibold mb-3">{t("log.voiceNote")}</p>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setIsRecording(!isRecording)}
+            type="button"
+            onClick={handleVoiceToggle}
             className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
               isRecording
-                ? "bg-rose-500 shadow-lg shadow-rose-200 scale-110"
-                : "bg-primary shadow-md shadow-primary/30"
+                ? "bg-[#243036] shadow-lg scale-110"
+                : "bg-primary shadow-md shadow-primary/20"
             }`}
           >
-            {isRecording ? <Pause size={22} className="text-white" /> : <Mic size={22} className="text-white" />}
+            {isRecording ? (
+              <Pause size={22} className="text-[#FFF4D8]" />
+            ) : (
+              <Mic size={22} className="text-primary-foreground" />
+            )}
           </button>
           <div className="flex-1">
             {isRecording ? (
               <div>
-                <p className="text-sm font-semibold text-rose-500">{t("log.recording")}</p>
+                <p className="text-sm font-semibold text-foreground">{t("log.recording")}</p>
                 <div className="flex gap-0.5 mt-1.5 items-end h-6">
                   {Array.from({ length: 20 }).map((_, i) => (
                     <div
                       key={i}
-                      className="w-1 bg-rose-300 rounded-full"
-                      style={{ height: `${Math.random() * 100}%` }}
+                      className="w-1 bg-[#F4D58D] rounded-full"
+                      style={{ height: `${30 + (i % 5) * 14}%` }}
                     />
                   ))}
                 </div>
+              </div>
+            ) : voiceTranscript ? (
+              <div>
+                <p className="text-xs font-semibold text-[#B8860B] mb-1">{t("log.transcriptReady")}</p>
+                <p className="text-sm text-foreground/85 leading-relaxed">{voiceTranscript}</p>
               </div>
             ) : (
               <div>
@@ -422,56 +458,91 @@ function LogTab() {
         </div>
       </div>
 
-      {/* Text Input */}
       <div className="mx-4 bg-card border border-border rounded-3xl p-4 shadow-sm">
-        <p className="text-sm font-semibold mb-2">{t("log.quickNotes")}</p>
+        <p className="text-sm font-semibold mb-1">{t("log.quickNotes")}</p>
+        <p className="text-xs text-muted-foreground mb-2">{t("log.autoTranscribed")}</p>
         <textarea
-          className="w-full bg-input-background rounded-2xl p-3 text-sm resize-none border-0 outline-none text-foreground placeholder:text-muted-foreground"
+          className="w-full bg-input-background rounded-2xl p-3 text-sm resize-none border border-border outline-none focus:ring-2 focus:ring-primary/30 text-foreground placeholder:text-muted-foreground"
           rows={3}
           placeholder={t("log.placeholder")}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
         />
         <button
+          type="button"
           onClick={handleGenerate}
-          className="mt-2 w-full bg-primary text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+          disabled={isGenerating || (!voiceTranscript && !inputText.trim())}
+          className="mt-3 w-full bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-40"
         >
           <Sparkles size={15} />
-          {t("log.generateReport")}
+          {isGenerating ? t("log.generating") : t("log.generateReport")}
         </button>
       </div>
 
-      {/* Generated Report */}
       <AnimatePresence>
-        {generated && (
+        {(generated || isGenerating) && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
-            className="mx-4 bg-card border border-primary/20 rounded-3xl p-4 shadow-sm"
+            className="mx-4 flex flex-col gap-3"
           >
-            <div className="flex items-center gap-2 mb-3">
-              <div className="bg-primary/10 rounded-xl p-1.5">
-                <Sparkles size={14} className="text-primary" />
+            {isGenerating ? (
+              <div className="bg-card border border-border rounded-3xl p-6 text-center">
+                <Sparkles size={24} className="text-[#D9A441] mx-auto mb-2 animate-pulse" />
+                <p className="text-sm font-semibold">{t("log.generating")}</p>
               </div>
-              <p className="text-sm font-semibold">{t("log.aiDraft")}</p>
-              <span className="ml-auto text-xs text-muted-foreground">{t("log.readyToSend")}</span>
-            </div>
-            <p className="text-sm text-foreground/80 leading-relaxed">{draftText}</p>
-            <div className="flex gap-2 mt-3">
-              <button className="flex-1 bg-primary text-white rounded-xl py-2 text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
-                <Send size={14} />
-                {t("log.sendToParent")}
-              </button>
-              <button className="px-4 bg-secondary text-muted-foreground rounded-xl text-sm font-semibold">
-                {t("home.edit")}
-              </button>
-            </div>
+            ) : generated && (
+              <>
+                {[
+                  { title: t("log.originalNote"), body: generated.sourceNote },
+                  { title: t("log.aiReportEn"), body: generated.reportEn },
+                  { title: t("log.aiReportKo"), body: generated.reportKo },
+                  { title: t("log.parentReplyDraft"), body: generated.parentReplyDraft, italic: true },
+                ].map((section) => (
+                  <div key={section.title} className="bg-card border border-border rounded-3xl p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-[#B8860B] mb-2 flex items-center gap-1.5">
+                      <Sparkles size={11} />
+                      {section.title}
+                    </p>
+                    <p className={`text-sm text-foreground/85 leading-relaxed ${section.italic ? "italic" : ""}`}>
+                      {section.body}
+                    </p>
+                  </div>
+                ))}
+
+                <div className="bg-[#FFF9EB] border border-[#EFE4CF] rounded-3xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles size={14} className="text-[#D9A441]" />
+                    <p className="text-sm font-semibold">{t("log.aiDraft")}</p>
+                    <span className="ml-auto text-xs text-muted-foreground">{t("log.readyToSend")}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      className="flex-1 bg-primary text-primary-foreground rounded-xl py-2 text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                    >
+                      <Send size={14} />
+                      {t("log.sendToParent")}
+                    </button>
+                    <button type="button" className="px-4 bg-secondary text-muted-foreground rounded-xl text-sm font-semibold">
+                      {t("home.edit")}
+                    </button>
+                  </div>
+                  {saved && (
+                    <p className="text-xs text-[#6B9080] font-medium mt-2 flex items-center gap-1">
+                      <CheckCircle size={12} />
+                      {t("log.savedToReports")}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Today's Log */}
       <div className="mx-4">
         <h2 className="font-bold text-foreground mb-3" style={{ fontFamily: "Nunito, sans-serif" }}>
           {t("log.todaysLog")}
@@ -479,10 +550,10 @@ function LogTab() {
         <div className="flex flex-col gap-2">
           {logEntries.map((entry, i) => {
             const colors: Record<string, string> = {
-              meal: "bg-amber-50 text-amber-500",
-              sleep: "bg-indigo-50 text-indigo-400",
-              activity: "bg-green-50 text-green-500",
-              health: "bg-orange-50 text-orange-400",
+              meal: "bg-[#FFF4D8] text-[#B8860B]",
+              sleep: "bg-[#F0F3FA] text-[#6B7FA8]",
+              activity: "bg-[#EEF5F0] text-[#6B9080]",
+              health: "bg-[#FFF9EB] text-[#A67C52]",
             };
             const icons: Record<string, typeof Utensils> = {
               meal: Utensils,
@@ -522,13 +593,20 @@ function MatchTab() {
   return (
     <div className="flex flex-col gap-4 pb-6">
       <div className="mx-4 mt-4">
-        <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: "Nunito, sans-serif" }}>
-          {t("match.title")}
-        </h1>
-        <p className="text-muted-foreground text-sm mt-0.5">{t("match.subtitle")}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: "Nunito, sans-serif" }}>
+              {t("match.title")}
+            </h1>
+            <p className="text-muted-foreground text-sm mt-0.5">{t("match.subtitle")}</p>
+          </div>
+          <span className="shrink-0 text-xs font-semibold text-[#B8860B] bg-[#FFF4D8] px-2.5 py-1.5 rounded-full flex items-center gap-1">
+            <Sparkles size={11} />
+            {t("match.aiRecommended")}
+          </span>
+        </div>
       </div>
 
-      {/* Search */}
       <div className="mx-4 flex items-center gap-2 bg-card border border-border rounded-2xl px-4 py-3 shadow-sm">
         <Search size={16} className="text-muted-foreground" />
         <input
@@ -537,14 +615,14 @@ function MatchTab() {
         />
       </div>
 
-      {/* Filters */}
       <div className="px-4 flex gap-2 overflow-x-auto scrollbar-hide">
         {filters.map((f, idx) => (
           <button
             key={f}
+            type="button"
             className={`whitespace-nowrap text-xs rounded-full px-3.5 py-2 font-semibold border transition-colors ${
               idx === 0
-                ? "bg-primary text-white border-primary"
+                ? "bg-primary text-primary-foreground border-primary"
                 : "bg-card text-muted-foreground border-border hover:border-primary/50"
             }`}
           >
@@ -553,9 +631,8 @@ function MatchTab() {
         ))}
       </div>
 
-      {/* Cards */}
       <div className="flex flex-col gap-3 mx-4">
-        {CAREGIVERS.map((c) => (
+        {CAREGIVER_MATCHES.map((c) => (
           <motion.div
             key={c.id}
             initial={{ opacity: 0, y: 8 }}
@@ -566,22 +643,24 @@ function MatchTab() {
               <div className="relative">
                 <Avatar src={c.img} size={52} />
                 {c.verified && (
-                  <div className="absolute -bottom-1 -right-1 bg-accent rounded-full p-0.5">
+                  <div className="absolute -bottom-1 -right-1 bg-[#6B9080] rounded-full p-0.5">
                     <CheckCircle size={12} className="text-white" />
                   </div>
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-bold text-sm">{c.name}</p>
-                  <div className="flex items-center gap-1 ml-auto">
-                    <Star size={12} className="text-amber-400 fill-amber-400" />
-                    <span className="text-xs font-semibold">{c.rating}</span>
-                    <span className="text-xs text-muted-foreground">({c.reviews})</span>
-                  </div>
+                  <span className="ml-auto text-xs font-bold text-[#B8860B] bg-[#FFF4D8] px-2 py-1 rounded-full">
+                    {c.matchScore}% {t("match.matchScore")}
+                  </span>
                 </div>
                 <p className="text-xs text-muted-foreground">{getCaregiverRole(locale, c.role)}</p>
                 <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Star size={11} className="text-[#D9A441] fill-[#D9A441]" />
+                    {c.rating} ({c.reviews})
+                  </span>
                   <span className="flex items-center gap-1">
                     <MapPin size={11} />
                     {c.distance}
@@ -594,23 +673,40 @@ function MatchTab() {
               </div>
             </div>
 
-            <div className="flex gap-1.5 flex-wrap mt-3">
-              {c.languages.map((lang) => (
-                <span key={lang} className="bg-blue-50 text-blue-500 text-xs rounded-full px-2 py-0.5 font-medium flex items-center gap-1">
-                  <Globe size={10} />
-                  {lang}
+            <div className="mt-3 bg-[#FFF9EB] border border-[#EFE4CF] rounded-2xl p-3">
+              <p className="text-xs font-semibold text-[#B8860B] mb-1 flex items-center gap-1">
+                <Sparkles size={11} />
+                {t("match.whyRecommended")}
+              </p>
+              <p className="text-xs text-foreground/85 leading-relaxed">
+                {locale === "ko" ? c.aiExplanationKo : c.aiExplanationEn}
+              </p>
+            </div>
+
+            <p className="text-xs font-semibold text-muted-foreground mt-3 mb-1.5">{t("match.matchReasons")}</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {c.matchReasons.map((reason) => (
+                <span
+                  key={reason}
+                  className="bg-secondary text-foreground/80 text-xs rounded-full px-2.5 py-1 font-medium"
+                >
+                  {reason}
                 </span>
               ))}
-              {c.tags.map((tag) => (
-                <span key={tag} className="bg-secondary text-muted-foreground text-xs rounded-full px-2 py-0.5">
-                  {tag}
+            </div>
+
+            <div className="flex gap-1.5 flex-wrap mt-2">
+              {c.languages.map((lang) => (
+                <span key={lang} className="bg-[#F0F3FA] text-[#6B7FA8] text-xs rounded-full px-2 py-0.5 font-medium flex items-center gap-1">
+                  <Globe size={10} />
+                  {lang}
                 </span>
               ))}
             </div>
 
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-              <span className="font-bold text-primary text-sm">{c.price}</span>
-              <button className="bg-primary text-white text-xs font-semibold rounded-xl px-4 py-1.5 hover:opacity-90 transition-opacity">
+              <span className="font-bold text-[#B8860B] text-sm">{c.price}</span>
+              <button type="button" className="bg-primary text-primary-foreground text-xs font-semibold rounded-xl px-4 py-1.5 hover:opacity-90 transition-opacity">
                 {t("match.viewProfile")}
               </button>
             </div>
@@ -691,7 +787,7 @@ function ProfileTab({
             {profile.languages && (
             <div className="flex gap-1 mt-1.5 flex-wrap">
               {profile.languages.split(",").map((lang) => (
-                <span key={lang.trim()} className="bg-blue-50 text-blue-500 text-xs rounded-full px-2 py-0.5 font-medium">
+                <span key={lang.trim()} className="bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2 py-0.5 font-medium">
                   {lang.trim()}
                 </span>
               ))}
@@ -699,8 +795,8 @@ function ProfileTab({
             )}
             {!profile.languages && (
             <div className="flex gap-1 mt-1.5">
-              <span className="bg-blue-50 text-blue-500 text-xs rounded-full px-2 py-0.5 font-medium">🇰🇷 Korean</span>
-              <span className="bg-blue-50 text-blue-500 text-xs rounded-full px-2 py-0.5 font-medium">🇺🇸 English</span>
+              <span className="bg-[#FFF4D8] text-[#B8860B] text-xs rounded-full px-2 py-0.5 font-medium">🇰🇷 Korean</span>
+              <span className="bg-[#F0F3FA] text-[#6B7FA8] text-xs rounded-full px-2 py-0.5 font-medium">🇺🇸 English</span>
             </div>
             )}
           </div>
@@ -840,6 +936,7 @@ function AppContent() {
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
   const [phase, setPhase] = useState<AppPhase>(() => getDevPreviewPhase() ?? "splash");
   const onboardingPreview = getOnboardingPreview();
   const { t } = useLanguage();
@@ -852,11 +949,15 @@ function AppContent() {
     setPhase("main");
   }, []);
 
+  const handleSaveReport = useCallback((report: DailyReport) => {
+    setDailyReport(report);
+  }, []);
+
   const renderTab = () => {
     switch (activeTab) {
-      case "home": return <HomeTab profile={profile} />;
-      case "report": return <ReportTab />;
-      case "log": return <LogTab />;
+      case "home": return <HomeTab profile={profile} dailyReport={dailyReport} />;
+      case "report": return <ReportTab dailyReport={dailyReport} />;
+      case "log": return <LogTab dailyReport={dailyReport} onSaveReport={handleSaveReport} />;
       case "match": return <MatchTab />;
       case "profile": return (
         <ProfileTab
@@ -870,13 +971,21 @@ function AppContent() {
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-amber-50 flex items-center justify-center"
-      style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
+      className="min-h-screen flex items-center justify-center"
+      style={{
+        fontFamily: "Plus Jakarta Sans, sans-serif",
+        background: "radial-gradient(circle at top, #FFF4D8 0%, #FFFDF7 38%, #FFFFFF 100%)",
+      }}
     >
-      {/* Phone frame */}
       <div
-        className="relative bg-background rounded-[2.5rem] overflow-hidden shadow-2xl shadow-orange-200/60 border border-orange-100"
-        style={{ width: 390, height: 844, maxHeight: "100vh", maxWidth: "100vw" }}
+        className="relative rounded-[2.5rem] overflow-hidden shadow-2xl border border-border"
+        style={{
+          width: 390,
+          height: 844,
+          maxHeight: "100vh",
+          maxWidth: "100vw",
+          background: "var(--app-gradient)",
+        }}
       >
         {/* Status bar + main app */}
         {phase === "main" && (
@@ -926,7 +1035,7 @@ function AppContent() {
                             : "bg-primary/80 shadow-primary/20"
                         }`}
                       >
-                        <Icon size={22} className="text-white" />
+                        <Icon size={22} className="text-primary-foreground" />
                       </div>
                     ) : (
                       <div
