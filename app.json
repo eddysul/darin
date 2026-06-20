@@ -13,7 +13,12 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.darin.childcare"
+      "bundleIdentifier": "com.darin.childcare",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -30,6 +35,12 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Darin to access your photos for license and certificate uploads."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow Darin to record voice notes for daily care logs."
         }
       ]
     ]

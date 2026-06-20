@@ -7,6 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppProvider } from "./src/context/AppContext";
 import { CareFlowProvider } from "./src/context/CareFlowContext";
 import { ChatProvider } from "./src/context/ChatContext";
+import { VoiceRecordingProvider } from "./src/context/VoiceRecordingContext";
 import { LanguageProvider } from "./src/LanguageContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { MainTabs } from "./src/screens/MainTabs";
@@ -26,7 +27,9 @@ export default function App() {
           <AppProvider>
             <ChatProvider>
               <CareFlowProvider>
-                <RootApp />
+                <VoiceRecordingProvider>
+                  <RootApp />
+                </VoiceRecordingProvider>
               </CareFlowProvider>
             </ChatProvider>
           </AppProvider>

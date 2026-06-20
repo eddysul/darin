@@ -144,7 +144,36 @@ Darin 미니멀 **흑백 + 옅은 노랑** 팔레트:
 
 ### 3. Log (기록)
 
-- Voice Note, Quick Notes, Today's Log
+- **Voice Note** — 중앙 Log 버튼 3초 길게 누르기 → 녹음 → 탭으로 저장 → **dh `/transcribe` API** 전사 + 이벤트 분류
+- 녹음 전: 노란 카드에 “중앙 기록 버튼 길게 누르기” 안내
+- 저장 후: 전사문 → Retake / Generate Report
+- Quick Notes, Today's Log
+
+#### dh transcribe 서버 연동
+
+| 항목 | 경로 |
+|------|------|
+| dh worktree | `../darin-dh` (`origin/dh` checkout) |
+| FastAPI | `../darin-dh/script/main.py` |
+| 앱 API 클라이언트 | `src/api/transcribe.ts` |
+| 녹음 상태 | `src/context/VoiceRecordingContext.tsx` |
+
+**로컬 실행**
+
+```bash
+# 1) dh 서버 (별 터미널)
+cp .env ../darin-dh/script/.env   # BIZCRUSH + OPENAI 키
+pnpm server:dh                    # http://127.0.0.1:8000
+
+# 2) Expo 앱 (.env에 EXPO_PUBLIC_TRANSCRIBE_URL=http://127.0.0.1:8000)
+pnpm ios
+```
+
+- `GET /health` — 키 설정 확인
+- `POST /transcribe` — 오디오 → BizCrush STT → GPT 이벤트 JSON
+- 서버 미연결 시 데모 전사문 fallback
+- iOS 시뮬레이터: `127.0.0.1:8000` / Android 에뮬레이터: `10.0.2.2:8000`
+- **ffmpeg** 필요 (`brew install ffmpeg`)
 
 ### 4. Find (돌봄 찾기) — `MatchScreen`
 

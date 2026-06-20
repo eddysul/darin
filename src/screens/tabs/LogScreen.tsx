@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   CheckCircle,
-  Mic,
   Moon,
-  Pause,
+  RotateCcw,
   Send,
   Sparkles,
   Thermometer,
@@ -12,8 +11,10 @@ import {
 } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenScrollView } from "../../components/ScreenScrollView";
+import { VoiceWaveform } from "../../components/VoiceWaveform";
 import { useApp } from "../../context/AppContext";
-import { DEMO_VOICE_TRANSCRIPT, generateDailyReport } from "../../demo/dailyReport";
+import { useVoiceRecording } from "../../context/VoiceRecordingContext";
+import { generateDailyReport } from "../../demo/dailyReport";
 import { getLogEntries } from "../../i18n";
 import { useLanguage } from "../../LanguageContext";
 import type { DailyReport } from "../../types/dailyReport";
@@ -23,21 +24,26 @@ export function LogScreen() {
   const { dailyReport, setDailyReport } = useApp();
   const { locale, t } = useLanguage();
   const logEntries = getLogEntries(locale);
-  const [isRecording, setIsRecording] = useState(false);
+  const { isRecording, isTranscribing, levels, savedNote, clearSavedNote } = useVoiceRecording();
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [inputText, setInputText] = useState("");
   const [generated, setGenerated] = useState<DailyReport | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const handleVoiceToggle = () => {
-    if (isRecording) {
-      setIsRecording(false);
-      setVoiceTranscript(DEMO_VOICE_TRANSCRIPT);
-    } else {
-      setIsRecording(true);
-      setVoiceTranscript("");
+  useEffect(() => {
+    if (savedNote?.transcript) {
+      setVoiceTranscript(savedNote.transcript);
     }
+  }, [savedNote]);
+
+  const hasTranscript = Boolean(voiceTranscript);
+
+  const handleRetake = () => {
+    clearSavedNote();
+    setVoiceTranscript("");
+    setGenerated(null);
+    setSaved(false);
   };
 
   const handleGenerate = () => {
@@ -70,33 +76,64 @@ export function LogScreen() {
             <Text style={styles.voiceBadgeText}>AI</Text>
           </View>
         </View>
-        <View style={styles.voiceRow}>
-          <Pressable
-            style={[styles.micBtn, isRecording && styles.micBtnActive]}
-            onPress={handleVoiceToggle}
-          >
-            {isRecording ? (
-              <Pause size={24} color={colors.primaryForeground} />
-            ) : (
-              <Mic size={24} color={colors.text} />
+
+        {isRecording ? (
+          <>
+            <Text style={styles.recording}>{t("log.recordingLive")}</Text>
+            <View style={styles.waveWrap}>
+              <VoiceWaveform levels={levels} barCount={32} height={48} />
+            </View>
+          </>
+        ) : isTranscribing ? (
+          <>
+            <Text style={styles.recording}>{t("log.transcribing")}</Text>
+            <View style={styles.waveWrap}>
+              <VoiceWaveform levels={levels} barCount={32} height={48} active={false} />
+            </View>
+          </>
+        ) : hasTranscript ? (
+          <>
+            <Text style={styles.transcript}>{voiceTranscript}</Text>
+            {savedNote?.events && savedNote.events.length > 0 && (
+              <View style={styles.eventList}>
+                {savedNote.events.map((event, index) => (
+                  <View key={`${event.category}-${index}`} style={styles.eventChip}>
+                    <Text style={styles.eventChipText}>{event.category}</Text>
+                  </View>
+                ))}
+              </View>
             )}
-          </Pressable>
-          <View style={{ flex: 1 }}>
-            {isRecording ? (
-              <Text style={styles.recording}>{t("log.recording")}</Text>
-            ) : voiceTranscript ? (
-              <>
-                <Text style={styles.transcriptLabel}>{t("log.transcriptReady")}</Text>
-                <Text style={styles.transcript}>{voiceTranscript}</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.tapLabel}>{t("log.tapToRecord")}</Text>
-                <Text style={styles.tapHint}>{t("log.autoTranscribed")}</Text>
-              </>
+            {savedNote?.usedFallbackTranscript && (
+              <Text style={styles.fallbackHint}>{t("log.transcribeFallback")}</Text>
             )}
-          </View>
-        </View>
+            <View style={styles.voiceActions}>
+              <Pressable style={styles.retakeBtn} onPress={handleRetake}>
+                <RotateCcw size={14} color={colors.text} />
+                <Text style={styles.retakeBtnText}>{t("log.retake")}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.generateVoiceBtn, isGenerating && styles.btnDisabled]}
+                onPress={handleGenerate}
+                disabled={isGenerating}
+              >
+                <Sparkles size={14} color={colors.yellow} />
+                <Text style={styles.generateVoiceBtnText}>
+                  {isGenerating ? t("log.generating") : t("log.generateReport")}
+                </Text>
+              </Pressable>
+            </View>
+            {savedNote && (
+              <View style={styles.savedVoiceRow}>
+                <CheckCircle size={11} color={colors.muted} />
+                <Text style={styles.savedVoiceHint}>
+                  {t("log.voiceSaved")} · {savedNote.savedAt}
+                </Text>
+              </View>
+            )}
+          </>
+        ) : (
+          <Text style={styles.holdHint}>{t("log.holdCenterHint")}</Text>
+        )}
       </View>
 
       <View style={styles.card}>
@@ -110,14 +147,16 @@ export function LogScreen() {
           value={inputText}
           onChangeText={setInputText}
         />
-        <Pressable
-          style={[styles.generateBtn, (!voiceTranscript && !inputText.trim()) && styles.btnDisabled]}
-          onPress={handleGenerate}
-          disabled={isGenerating || (!voiceTranscript && !inputText.trim())}
-        >
-          <Sparkles size={15} color={colors.yellow} />
-          <Text style={styles.generateBtnText}>{isGenerating ? t("log.generating") : t("log.generateReport")}</Text>
-        </Pressable>
+        {!hasTranscript && (
+          <Pressable
+            style={[styles.generateBtn, !inputText.trim() && styles.btnDisabled]}
+            onPress={handleGenerate}
+            disabled={isGenerating || !inputText.trim()}
+          >
+            <Sparkles size={15} color={colors.yellow} />
+            <Text style={styles.generateBtnText}>{isGenerating ? t("log.generating") : t("log.generateReport")}</Text>
+          </Pressable>
+        )}
       </View>
 
       {isGenerating && (
@@ -209,21 +248,54 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   voiceBadgeText: { fontSize: 10, fontWeight: "700", color: colors.text },
-  voiceRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  micBtn: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.yellow,
+  recording: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 8 },
+  holdHint: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: colors.muted,
+    textAlign: "center",
+    paddingVertical: 8,
+  },
+  waveWrap: { marginTop: 2 },
+  transcript: { fontSize: 14, lineHeight: 22, color: colors.text },
+  eventList: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
+  eventChip: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  eventChipText: { fontSize: 11, fontWeight: "600", color: colors.text },
+  fallbackHint: { fontSize: 11, color: colors.muted, marginTop: 10 },
+  voiceActions: { flexDirection: "row", gap: 8, marginTop: 16 },
+  retakeBtn: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    backgroundColor: colors.background,
   },
-  micBtnActive: { backgroundColor: colors.black, transform: [{ scale: 1.05 }] },
-  recording: { fontSize: 14, fontWeight: "600", color: colors.text },
-  transcriptLabel: { fontSize: 12, fontWeight: "600", color: colors.yellow, marginBottom: 4 },
-  transcript: { fontSize: 14, lineHeight: 20, color: colors.text },
-  tapLabel: { fontSize: 15, fontWeight: "600", color: colors.text },
-  tapHint: { fontSize: 12, color: colors.muted, marginTop: 4 },
+  retakeBtnText: { fontSize: 13, fontWeight: "600", color: colors.text },
+  generateVoiceBtn: {
+    flex: 1.2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+  },
+  generateVoiceBtnText: { fontSize: 13, fontWeight: "600", color: colors.primaryForeground },
+  savedVoiceRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
+  savedVoiceHint: { fontSize: 11, color: colors.muted, fontWeight: "500" },
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.xl,
