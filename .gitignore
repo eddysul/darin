@@ -9,3 +9,4 @@ script/.env
 .expo/
 script/.venv/
 script/__pycache__/
+__pycache__/
