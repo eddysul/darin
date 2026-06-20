@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import type { DailyReport } from "../types/dailyReport";
 import type { ContractFields, IncomingRequest, InterviewSlot, ScheduledInterview } from "../types/interview";
 import type { LogEntry } from "../types/log";
+import type { WeeklyPayment } from "../types/payment";
 import type { UserProfile } from "../types/profile";
 import type { MainTabName } from "../types/navigation";
 import { DEMO_INCOMING_REQUESTS, DEMO_LOG_ENTRIES } from "../demo/parents";
@@ -70,6 +71,8 @@ type AppContextValue = {
   logEntries: LogEntry[];
   addLogEntry: (entry: Omit<LogEntry, "id">) => void;
   generateDailyReportFromLogs: (locale: "en" | "ko") => void;
+  weeklyPayments: WeeklyPayment[];
+  makePayment: (paymentId: string) => void;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -89,6 +92,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [pendingContractInterviewId, setPendingContractInterviewId] = useState<string | null>(null);
   const [incomingRequests, setIncomingRequests] = useState<IncomingRequest[]>(DEMO_INCOMING_REQUESTS);
   const [logEntries, setLogEntries] = useState<LogEntry[]>(DEMO_LOG_ENTRIES);
+  const [weeklyPayments, setWeeklyPayments] = useState<WeeklyPayment[]>([
+    {
+      id: "pay-1",
+      weekLabel: "Week of June 16",
+      weekLabelKo: "6월 3주차 (6/16–6/20)",
+      amount: "$1,800",
+      dueDate: "June 20, 2026",
+      dueDateKo: "2026년 6월 20일",
+      status: "pending",
+      caregiverName: "Ji-yeon Park",
+    },
+  ]);
+
+  const makePayment = useCallback((paymentId: string) => {
+    setWeeklyPayments((prev) =>
+      prev.map((p) =>
+        p.id === paymentId
+          ? { ...p, status: "paid" as const, paidAt: new Date().toISOString() }
+          : p,
+      ),
+    );
+  }, []);
 
   const addLogEntry = useCallback((entry: Omit<LogEntry, "id">) => {
     setLogEntries((prev) => [...prev, { ...entry, id: createId() }]);
@@ -220,6 +245,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         logEntries,
         addLogEntry,
         generateDailyReportFromLogs,
+        weeklyPayments,
+        makePayment,
       }}
     >
       {children}

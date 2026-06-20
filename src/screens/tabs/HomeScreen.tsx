@@ -1,19 +1,22 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Baby, Bell, Calendar, CheckCircle, FileText, Globe, MessageCircle, PenLine, Send, Sparkles, Users } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { Baby, Bell, Calendar, CheckCircle, CreditCard, FileText, Globe, MessageCircle, PenLine, Users } from "lucide-react-native";
+import { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useRef } from "react";
 import { Avatar } from "../../components/Avatar";
 import { CaregiverContractModal } from "../../components/CaregiverContractModal";
+import { PaymentModal } from "../../components/PaymentModal";
 import { PressSlide } from "../../components/PressSlide";
 import { useApp } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
 import type { IncomingRequest } from "../../types/interview";
+import type { WeeklyPayment } from "../../types/payment";
 import { colors, gradients, radius } from "../../theme";
 
 export function HomeScreen() {
-  const { profile, dailyReport, scheduledInterviews, completeInterview, setPendingTab, incomingRequests, acceptRequest } = useApp();
+  const { profile, dailyReport, scheduledInterviews, completeInterview, setPendingTab, weeklyPayments } = useApp();
   const [contractRequest, setContractRequest] = useState<IncomingRequest | null>(null);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<WeeklyPayment | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -21,7 +24,6 @@ export function HomeScreen() {
   const { locale, t } = useLanguage();
   const firstName = profile.name.split(" ")[0];
   const reportPreview = dailyReport ? (locale === "ko" ? dailyReport.reportKo : dailyReport.reportEn) : null;
-  const replyDraft = dailyReport?.parentReplyDraft ?? t("home.draftText");
   const ko = locale === "ko";
 
   const scheduledOnHome = scheduledInterviews.filter((i) => i.status === "scheduled");
@@ -29,10 +31,16 @@ export function HomeScreen() {
     (i) => i.status === "completed" || i.status === "contract_signed",
   );
   const activeContract = scheduledInterviews.find((i) => i.status === "contract_signed");
+  const currentPayment = weeklyPayments[0] ?? null;
 
   if (profile.role === "caregiver") {
     return <CaregiverHomeScreen contractRequest={contractRequest} setContractRequest={setContractRequest} />;
   }
+
+  const openPayment = (p: WeeklyPayment) => {
+    setSelectedPayment(p);
+    setPaymentOpen(true);
+  };
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -72,6 +80,7 @@ export function HomeScreen() {
         )}
       </LinearGradient>
 
+      {/* Scheduled interviews */}
       {scheduledOnHome.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t("home.interviewsSection")}</Text>
@@ -86,14 +95,15 @@ export function HomeScreen() {
                 </Text>
               </View>
               <PressSlide style={styles.completeBtn} onPress={() => completeInterview(interview.id)}>
-                <CheckCircle size={14} color={colors.text} />
-                <Text style={styles.completeBtnText}>{t("interview.markComplete")}</Text>
+                <CheckCircle size={15} color="#fff" />
+                <Text style={styles.completeBtnText}>{ko ? "완료" : "Done"}</Text>
               </PressSlide>
             </View>
           ))}
         </View>
       )}
 
+      {/* Post-interview: contract status */}
       {postInterview.map((interview) => (
         <View key={interview.id} style={styles.section}>
           <View style={styles.interviewCard}>
@@ -114,9 +124,9 @@ export function HomeScreen() {
               </Text>
             </View>
             {interview.status === "completed" && (
-              <PressSlide style={styles.profileLinkBtn} onPress={() => setPendingTab("Profile")}>
+              <PressSlide style={styles.signBtn} onPress={() => setPendingTab("Profile")}>
                 <PenLine size={14} color="#fff" />
-                <Text style={styles.profileLinkText}>{t("contract.sign")}</Text>
+                <Text style={styles.signBtnText}>{ko ? "서명하기" : "Sign"}</Text>
               </PressSlide>
             )}
             {interview.status === "contract_signed" && (
@@ -126,16 +136,35 @@ export function HomeScreen() {
         </View>
       ))}
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t("home.todaysReport")}</Text>
-          {dailyReport && (
-            <View style={styles.aiBadge}>
-              <Sparkles size={11} color={colors.gold} />
-              <Text style={styles.aiBadgeText}>{t("report.aiTranslated")}</Text>
+      {/* Weekly payment card */}
+      {currentPayment && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("payment.section")}</Text>
+          <View style={[styles.paymentCard, currentPayment.status === "paid" && styles.paymentCardPaid]}>
+            <View style={styles.paymentLeft}>
+              <CreditCard size={18} color={currentPayment.status === "paid" ? colors.sage : colors.gold} />
+              <View>
+                <Text style={styles.paymentWeek}>{ko ? currentPayment.weekLabelKo : currentPayment.weekLabel}</Text>
+                <Text style={styles.paymentAmount}>{currentPayment.amount}</Text>
+              </View>
             </View>
-          )}
+            {currentPayment.status === "paid" ? (
+              <View style={styles.paidBadge}>
+                <CheckCircle size={13} color={colors.sage} />
+                <Text style={styles.paidText}>{t("payment.received")}</Text>
+              </View>
+            ) : (
+              <PressSlide style={styles.payBtn} onPress={() => openPayment(currentPayment)}>
+                <Text style={styles.payBtnText}>{t("payment.pay")}</Text>
+              </PressSlide>
+            )}
+          </View>
         </View>
+      )}
+
+      {/* Today's report */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t("home.todaysReport")}</Text>
         <View style={styles.card}>
           <View style={styles.reportMeta}>
             <Avatar src="photo-1544005313-94ddf0286df2" size={36} />
@@ -145,20 +174,17 @@ export function HomeScreen() {
                 {dailyReport ? `${dailyReport.date} · ${dailyReport.savedAt}` : "June 20 · 5:42 PM"}
               </Text>
             </View>
-            <View style={styles.aiPill}>
-              <Sparkles size={11} color={colors.gold} />
-              <Text style={styles.aiPillText}>AI</Text>
-            </View>
           </View>
           <Text style={styles.reportBody}>
             {reportPreview ??
-              (locale === "ko"
-                ? "Log 탭에서 음성 메모를 추가하고 일일 리포트를 생성해 보세요."
-                : "Generate a daily report from the Log tab to see Emma's AI-translated update here.")}
+              (ko
+                ? "Log 탭에서 기록을 추가하고 일일 리포트를 생성해 보세요."
+                : "Add entries in the Log tab and generate a daily report to see it here.")}
           </Text>
         </View>
       </View>
 
+      {/* Quick actions */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t("home.quickActions")}</Text>
         <View style={styles.actionsGrid}>
@@ -177,26 +203,13 @@ export function HomeScreen() {
           ))}
         </View>
       </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t("home.aiDraftReply")}</Text>
-        <View style={styles.card}>
-          <Text style={styles.draftHint}>
-            <Sparkles size={11} color={colors.gold} /> {t("home.suggestedMessage")}
-          </Text>
-          <Text style={styles.draftText}>&ldquo;{replyDraft}&rdquo;</Text>
-          <View style={styles.draftActions}>
-            <Pressable style={styles.primaryBtn}>
-              <Send size={14} color={colors.text} />
-              <Text style={styles.primaryBtnText}>{t("home.send")}</Text>
-            </Pressable>
-            <Pressable style={styles.secondaryBtn}>
-              <Text style={styles.secondaryBtnText}>{t("home.edit")}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
       </Animated.View>
+
+      <PaymentModal
+        open={paymentOpen}
+        payment={selectedPayment}
+        onClose={() => setPaymentOpen(false)}
+      />
     </ScrollView>
   );
 }
@@ -210,7 +223,7 @@ function CaregiverHomeScreen({
   contractRequest: IncomingRequest | null;
   setContractRequest: (r: IncomingRequest | null) => void;
 }) {
-  const { profile, incomingRequests, acceptRequest } = useApp();
+  const { profile, incomingRequests, acceptRequest, weeklyPayments } = useApp();
   const { locale, t } = useLanguage();
   const ko = locale === "ko";
   const firstName = profile.name.split(" ")[0];
@@ -222,6 +235,7 @@ function CaregiverHomeScreen({
   const pending = incomingRequests.filter((r) => r.status === "pending");
   const accepted = incomingRequests.filter((r) => r.status === "accepted" || r.status === "contract_signed");
   const activeContract = incomingRequests.find((r) => r.status === "contract_signed");
+  const currentPayment = weeklyPayments[0] ?? null;
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -280,11 +294,7 @@ function CaregiverHomeScreen({
                 </Text>
               </View>
               <View style={styles.requestActions}>
-                <PressSlide
-                  style={styles.acceptBtn}
-                  onPress={() => acceptRequest(req.id)}
-                 
-                >
+                <PressSlide style={styles.acceptBtn} onPress={() => acceptRequest(req.id)}>
                   <Text style={styles.acceptBtnText}>{t("caregiver.home.accept")}</Text>
                 </PressSlide>
                 <PressSlide style={styles.declineBtn}>
@@ -296,7 +306,7 @@ function CaregiverHomeScreen({
         </View>
       )}
 
-      {/* Accepted / signed */}
+      {/* Accepted / signed contracts */}
       {accepted.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{ko ? "진행 중" : "In Progress"}</Text>
@@ -320,19 +330,41 @@ function CaregiverHomeScreen({
                   <Text style={styles.interviewTime}>{ko ? req.slotLabelKo : req.slotLabelEn}</Text>
                 </View>
                 {hasParentSig && !isSigned && (
-                  <PressSlide
-                    style={styles.profileLinkBtn}
-                    onPress={() => setContractRequest(req)}
-                   
-                  >
+                  <PressSlide style={styles.signBtn} onPress={() => setContractRequest(req)}>
                     <PenLine size={13} color="#fff" />
-                    <Text style={styles.profileLinkText}>{ko ? "서명" : "Sign"}</Text>
+                    <Text style={styles.signBtnText}>{ko ? "서명하기" : "Sign"}</Text>
                   </PressSlide>
                 )}
                 {isSigned && <CheckCircle size={18} color={colors.sage} />}
               </View>
             );
           })}
+        </View>
+      )}
+
+      {/* Weekly payment status */}
+      {currentPayment && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("payment.section")}</Text>
+          <View style={[styles.paymentCard, currentPayment.status === "paid" && styles.paymentCardPaid]}>
+            <View style={styles.paymentLeft}>
+              <CreditCard size={18} color={currentPayment.status === "paid" ? colors.sage : "#f59e0b"} />
+              <View>
+                <Text style={styles.paymentWeek}>{ko ? currentPayment.weekLabelKo : currentPayment.weekLabel}</Text>
+                <Text style={styles.paymentAmount}>{currentPayment.amount}</Text>
+              </View>
+            </View>
+            {currentPayment.status === "paid" ? (
+              <View style={styles.paidBadge}>
+                <CheckCircle size={13} color={colors.sage} />
+                <Text style={styles.paidText}>{t("payment.caregiverPaid")}</Text>
+              </View>
+            ) : (
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingText}>{t("payment.caregiverPending")}</Text>
+              </View>
+            )}
+          </View>
         </View>
       )}
 
@@ -394,6 +426,7 @@ const styles = StyleSheet.create({
   caregiverIcon: { backgroundColor: colors.champagne, borderRadius: 12, padding: 8 },
   caregiverLabel: { fontSize: 12, color: colors.muted },
   caregiverName: { fontSize: 14, fontWeight: "600", color: colors.text },
+
   interviewCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -409,32 +442,34 @@ const styles = StyleSheet.create({
   interviewLabel: { fontSize: 11, fontWeight: "600", color: colors.gold, marginBottom: 2 },
   interviewName: { fontSize: 15, fontWeight: "700", color: colors.text },
   interviewTime: { fontSize: 13, color: colors.muted, marginTop: 2 },
+  interviewSubtext: { fontSize: 12, color: colors.muted, marginTop: 2 },
+
   completeBtn: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
-    backgroundColor: colors.champagne,
+    gap: 5,
+    backgroundColor: colors.navy,
     borderRadius: radius.md,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    maxWidth: 88,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
-  completeBtnText: { fontSize: 10, fontWeight: "700", color: colors.text, textAlign: "center" },
-  profileLinkBtn: {
+  completeBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+
+  signBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     backgroundColor: colors.sage,
     borderRadius: radius.md,
     paddingVertical: 9,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
-  profileLinkText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  signBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+
   section: { marginHorizontal: 16, marginTop: 20 },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginBottom: 12 },
+
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.xl,
@@ -442,30 +477,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 16,
   },
-  aiBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: colors.champagne,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-  },
-  aiBadgeText: { fontSize: 11, fontWeight: "600", color: colors.gold },
   reportMeta: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
   metaLabel: { fontSize: 12, color: colors.muted },
   metaValue: { fontSize: 14, fontWeight: "600", color: colors.text },
-  aiPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: colors.champagne,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-  },
-  aiPillText: { fontSize: 11, fontWeight: "600", color: colors.gold },
   reportBody: { fontSize: 14, lineHeight: 22, color: colors.text, opacity: 0.85 },
+
   actionsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   actionCard: {
     width: "47%",
@@ -480,43 +496,69 @@ const styles = StyleSheet.create({
   },
   actionIcon: { borderRadius: 12, padding: 8 },
   actionLabel: { flex: 1, fontSize: 13, fontWeight: "600", color: colors.text },
-  draftHint: { fontSize: 12, color: colors.muted, marginBottom: 8 },
-  draftText: { fontSize: 14, lineHeight: 22, color: colors.text, opacity: 0.85, fontStyle: "italic" },
-  draftActions: { flexDirection: "row", gap: 8, marginTop: 12 },
-  primaryBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: colors.gold,
-    borderRadius: radius.md,
-    paddingVertical: 10,
-  },
-  primaryBtnText: { fontSize: 14, fontWeight: "600", color: colors.text },
-  secondaryBtn: {
-    paddingHorizontal: 16,
-    backgroundColor: colors.champagne,
-    borderRadius: radius.md,
-    justifyContent: "center",
-  },
-  secondaryBtnText: { fontSize: 14, fontWeight: "600", color: colors.muted },
-  interviewSubtext: { fontSize: 12, color: colors.muted, marginTop: 2 },
+
   requestActions: { gap: 6, alignItems: "flex-end" },
   acceptBtn: {
     backgroundColor: colors.sage,
     borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    alignItems: "center",
   },
-  acceptBtnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  acceptBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
   declineBtn: {
     backgroundColor: colors.champagne,
     borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
     borderWidth: 1,
     borderColor: colors.border,
+    alignItems: "center",
   },
-  declineBtnText: { fontSize: 12, fontWeight: "600", color: colors.muted },
+  declineBtnText: { fontSize: 13, fontWeight: "600", color: colors.muted },
+
+  // Payment card
+  paymentCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.card,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+  },
+  paymentCardPaid: { borderColor: `${colors.sage}40` },
+  paymentLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  paymentWeek: { fontSize: 12, color: colors.muted },
+  paymentAmount: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 2 },
+  payBtn: {
+    backgroundColor: colors.navy,
+    borderRadius: radius.md,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  payBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  paidBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: `${colors.sage}18`,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+  },
+  paidText: { fontSize: 12, fontWeight: "700", color: colors.sage },
+  pendingBadge: {
+    backgroundColor: "#FFF9EB",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: "#f59e0b40",
+  },
+  pendingText: { fontSize: 12, fontWeight: "700", color: "#f59e0b" },
+
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
 });
