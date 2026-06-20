@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   Home,
   FileText,
@@ -26,10 +26,18 @@ import {
   AlertCircle,
   Sparkles,
   Baby,
+  Settings as SettingsIcon,
+  CreditCard,
+  UserCog,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { LanguageProvider, useLanguage } from "./LanguageContext";
 import { LanguagePicker } from "./components/LanguagePicker";
+import { ProfileEditModal, type UserProfile } from "./components/ProfileEditModal";
+import { SplashScreen } from "./components/SplashScreen";
+import { LoginScreen } from "./components/LoginScreen";
+
+type AppPhase = "splash" | "login" | "main";
 import {
   getReportContent,
   getLogEntries,
@@ -38,6 +46,12 @@ import {
 } from "./i18n";
 
 type Tab = "home" | "report" | "log" | "match" | "profile";
+
+const DEFAULT_PROFILE: UserProfile = {
+  name: "Jisoo Kim",
+  location: "Seoul, Korea",
+  avatar: "photo-1438761681033-6461ffad8d80",
+};
 
 const CAREGIVERS = [
   {
@@ -114,9 +128,10 @@ function Avatar({ src, size = 40, className = "" }: { src: string; size?: number
   );
 }
 
-function HomeTab() {
+function HomeTab({ profile }: { profile: UserProfile }) {
   const { locale, t } = useLanguage();
   const report = getReportContent(locale);
+  const firstName = profile.name.split(" ")[0];
 
   return (
     <div className="flex flex-col gap-4 pb-6">
@@ -128,11 +143,11 @@ function HomeTab() {
           <div>
             <p className="text-white/70 text-sm font-medium">{t("home.greeting")}</p>
             <h1 className="text-2xl font-bold mt-0.5" style={{ fontFamily: "Nunito, sans-serif" }}>
-              Jisoo 👋
+              {firstName} 👋
             </h1>
           </div>
           <div className="relative">
-            <Avatar src="photo-1438761681033-6461ffad8d80" size={48} className="ring-2 ring-white/40" />
+            <Avatar src={profile.avatar} size={48} className="ring-2 ring-white/40" />
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-accent rounded-full border-2 border-primary" />
           </div>
         </div>
@@ -582,7 +597,15 @@ function MatchTab() {
   );
 }
 
-function ProfileTab({ onOpenLanguagePicker }: { onOpenLanguagePicker: () => void }) {
+function ProfileTab({
+  profile,
+  onOpenLanguagePicker,
+  onOpenProfileEdit,
+}: {
+  profile: UserProfile;
+  onOpenLanguagePicker: () => void;
+  onOpenProfileEdit: () => void;
+}) {
   const { locale, t } = useLanguage();
   const children = [{ name: "Emma", age: locale === "ko" ? "2세 4개월" : "2 yrs 4 mo", img: "photo-1594608661623-aa0bd3a69d98" }];
 
@@ -608,19 +631,39 @@ function ProfileTab({ onOpenLanguagePicker }: { onOpenLanguagePicker: () => void
       label: t("profile.carePref"),
       value: t("profile.careValue"),
     },
+    {
+      icon: SettingsIcon,
+      label: t("profile.appSettings"),
+      value: t("profile.appSettingsValue"),
+    },
+    {
+      icon: CreditCard,
+      label: t("profile.billing"),
+      value: t("profile.billingValue"),
+    },
   ];
 
   return (
     <div className="flex flex-col gap-4 pb-6">
       {/* Profile Hero */}
-      <div className="mx-4 mt-4 bg-card border border-border rounded-3xl p-5 shadow-sm">
-        <div className="flex items-center gap-4">
-          <Avatar src="photo-1438761681033-6461ffad8d80" size={64} className="ring-2 ring-primary/20" />
+      <div className="mx-4 mt-4 bg-card border border-border rounded-3xl p-5 shadow-sm relative">
+        <button
+          type="button"
+          onClick={onOpenProfileEdit}
+          aria-label={t("profile.editProfile")}
+          className="absolute top-4 right-4 w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+        >
+          <UserCog size={18} strokeWidth={2} />
+        </button>
+        <div className="flex items-center gap-4 pr-10">
+          <Avatar src={profile.avatar} size={64} className="ring-2 ring-primary/20" />
           <div>
             <h2 className="font-bold text-lg" style={{ fontFamily: "Nunito, sans-serif" }}>
-              Jisoo Kim
+              {profile.name}
             </h2>
-            <p className="text-sm text-muted-foreground">{t("profile.parent")}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("profile.role")} · {profile.location}
+            </p>
             <div className="flex gap-1 mt-1.5">
               <span className="bg-blue-50 text-blue-500 text-xs rounded-full px-2 py-0.5 font-medium">🇰🇷 Korean</span>
               <span className="bg-blue-50 text-blue-500 text-xs rounded-full px-2 py-0.5 font-medium">🇺🇸 English</span>
@@ -696,15 +739,27 @@ const TABS: { id: Tab; icon: typeof Home; labelKey: "tabs.home" | "tabs.report" 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [langPickerOpen, setLangPickerOpen] = useState(false);
+  const [profileEditOpen, setProfileEditOpen] = useState(false);
+  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [phase, setPhase] = useState<AppPhase>("splash");
   const { t } = useLanguage();
+
+  const handleSplashComplete = useCallback(() => setPhase("login"), []);
+  const handleLogin = useCallback(() => setPhase("main"), []);
 
   const renderTab = () => {
     switch (activeTab) {
-      case "home": return <HomeTab />;
+      case "home": return <HomeTab profile={profile} />;
       case "report": return <ReportTab />;
       case "log": return <LogTab />;
       case "match": return <MatchTab />;
-      case "profile": return <ProfileTab onOpenLanguagePicker={() => setLangPickerOpen(true)} />;
+      case "profile": return (
+        <ProfileTab
+          profile={profile}
+          onOpenLanguagePicker={() => setLangPickerOpen(true)}
+          onOpenProfileEdit={() => setProfileEditOpen(true)}
+        />
+      );
     }
   };
 
@@ -718,81 +773,95 @@ function AppContent() {
         className="relative bg-background rounded-[2.5rem] overflow-hidden shadow-2xl shadow-orange-200/60 border border-orange-100"
         style={{ width: 390, height: 844, maxHeight: "100vh", maxWidth: "100vw" }}
       >
-        {/* Status bar */}
-        <div className="flex items-center justify-between px-6 pt-3 pb-1 bg-background">
-          <span className="text-xs font-bold">9:41</span>
-          <div className="w-28 h-6 bg-foreground rounded-full" />
-          <div className="flex items-center gap-1">
-            <div className="flex gap-0.5 items-end">
-              {[3, 5, 7, 9].map((h) => (
-                <div key={h} className="w-1 bg-foreground rounded-sm" style={{ height: h }} />
-              ))}
+        {/* Status bar + main app */}
+        {phase === "main" && (
+          <>
+            <div className="flex items-center justify-between px-6 pt-3 pb-1 bg-background">
+              <span className="text-xs font-bold">9:41</span>
+              <div className="w-28 h-6 bg-foreground rounded-full" />
+              <div className="flex items-center gap-1">
+                <div className="flex gap-0.5 items-end">
+                  {[3, 5, 7, 9].map((h) => (
+                    <div key={h} className="w-1 bg-foreground rounded-sm" style={{ height: h }} />
+                  ))}
+                </div>
+                <div className="w-4 h-2 border border-foreground rounded-sm">
+                  <div className="h-full w-3/4 bg-foreground rounded-sm" />
+                </div>
+              </div>
             </div>
-            <div className="w-4 h-2 border border-foreground rounded-sm">
-              <div className="h-full w-3/4 bg-foreground rounded-sm" />
-            </div>
-          </div>
-        </div>
 
-        {/* Scrollable content */}
-        <div className="overflow-y-auto" style={{ height: "calc(100% - 100px)" }}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, x: 12 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -12 }}
-              transition={{ duration: 0.18 }}
-            >
-              {renderTab()}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* Bottom nav */}
-        <div className="absolute bottom-0 left-0 right-0 bg-card border-t border-border px-2 pb-5 pt-2">
-          <div className="flex items-center">
-            {TABS.map(({ id, icon: Icon, labelKey }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className="flex-1 flex flex-col items-center gap-1 py-1 transition-colors"
-              >
-                {id === "log" ? (
-                  <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center shadow-md transition-all -mt-6 ${
-                      activeTab === id
-                        ? "bg-primary shadow-primary/40 scale-110"
-                        : "bg-primary/80 shadow-primary/20"
-                    }`}
-                  >
-                    <Icon size={22} className="text-white" />
-                  </div>
-                ) : (
-                  <div
-                    className={`p-2 rounded-xl transition-all ${
-                      activeTab === id ? "bg-primary/10" : ""
-                    }`}
-                  >
-                    <Icon
-                      size={20}
-                      className={activeTab === id ? "text-primary" : "text-muted-foreground"}
-                    />
-                  </div>
-                )}
-                <span
-                  className={`text-xs font-semibold ${
-                    id === "log" ? "mt-1" : ""
-                  } ${activeTab === id ? "text-primary" : "text-muted-foreground"}`}
+            <div className="overflow-y-auto" style={{ height: "calc(100% - 100px)" }}>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: 0.18 }}
                 >
-                  {t(labelKey)}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
+                  {renderTab()}
+                </motion.div>
+              </AnimatePresence>
+            </div>
 
-        <LanguagePicker open={langPickerOpen} onClose={() => setLangPickerOpen(false)} />
+            <div className="absolute bottom-0 left-0 right-0 bg-card border-t border-border px-2 pb-5 pt-2">
+              <div className="flex items-center">
+                {TABS.map(({ id, icon: Icon, labelKey }) => (
+                  <button
+                    key={id}
+                    onClick={() => setActiveTab(id)}
+                    className="flex-1 flex flex-col items-center gap-1 py-1 transition-colors"
+                  >
+                    {id === "log" ? (
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center shadow-md transition-all -mt-6 ${
+                          activeTab === id
+                            ? "bg-primary shadow-primary/40 scale-110"
+                            : "bg-primary/80 shadow-primary/20"
+                        }`}
+                      >
+                        <Icon size={22} className="text-white" />
+                      </div>
+                    ) : (
+                      <div
+                        className={`p-2 rounded-xl transition-all ${
+                          activeTab === id ? "bg-primary/10" : ""
+                        }`}
+                      >
+                        <Icon
+                          size={20}
+                          className={activeTab === id ? "text-primary" : "text-muted-foreground"}
+                        />
+                      </div>
+                    )}
+                    <span
+                      className={`text-xs font-semibold ${
+                        id === "log" ? "mt-1" : ""
+                      } ${activeTab === id ? "text-primary" : "text-muted-foreground"}`}
+                    >
+                      {t(labelKey)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <LanguagePicker open={langPickerOpen} onClose={() => setLangPickerOpen(false)} />
+            <ProfileEditModal
+              open={profileEditOpen}
+              profile={profile}
+              onClose={() => setProfileEditOpen(false)}
+              onSave={setProfile}
+            />
+          </>
+        )}
+
+        {/* Splash & Login overlays */}
+        <AnimatePresence>
+          {phase === "splash" && <SplashScreen onComplete={handleSplashComplete} />}
+          {phase === "login" && <LoginScreen onLogin={handleLogin} />}
+        </AnimatePresence>
       </div>
     </div>
   );

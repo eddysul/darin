@@ -1,11 +1,14 @@
+# Darin — Childcare Management App
 
-  # Childcare Management App
+AI 돌봄 커뮤니케이션 앱 UI 프로토타입입니다.
 
-  This is a code bundle for Childcare Management App. The original project is available at https://www.figma.com/design/OB8L9O6wvvaeZKXoc82GN9/Childcare-Management-App.
+## Running the code
 
-  ## Running the code
+```bash
+pnpm install
+pnpm run dev
+```
 
-  Run `npm i` to install the dependencies.
+브라우저에서 http://localhost:5173/ 를 엽니다.
 
-  Run `npm run dev` to start the development server.
-  
+자세한 구조와 기능은 [work.md](./work.md)를 참고하세요.
