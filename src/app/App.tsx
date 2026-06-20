@@ -33,11 +33,13 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { LanguageProvider, useLanguage } from "./LanguageContext";
 import { LanguagePicker } from "./components/LanguagePicker";
-import { ProfileEditModal, type UserProfile } from "./components/ProfileEditModal";
+import { ProfileEditModal } from "./components/ProfileEditModal";
 import { SplashScreen } from "./components/SplashScreen";
 import { LoginScreen } from "./components/LoginScreen";
+import { OnboardingScreen } from "./components/OnboardingScreen";
+import type { UserProfile } from "./types/profile";
 
-type AppPhase = "splash" | "login" | "main";
+type AppPhase = "splash" | "login" | "onboarding" | "main";
 import {
   getReportContent,
   getLogEntries,
@@ -51,6 +53,8 @@ const DEFAULT_PROFILE: UserProfile = {
   name: "Jisoo Kim",
   location: "Seoul, Korea",
   avatar: "photo-1438761681033-6461ffad8d80",
+  role: "parent",
+  languages: "Korean, English",
 };
 
 const CAREGIVERS = [
@@ -662,17 +666,29 @@ function ProfileTab({
               {profile.name}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {t("profile.role")} · {profile.location}
+              {profile.role === "caregiver" ? t("profile.roleCaregiver") : t("profile.roleParent")} · {profile.location}
             </p>
+            {profile.languages && (
+            <div className="flex gap-1 mt-1.5 flex-wrap">
+              {profile.languages.split(",").map((lang) => (
+                <span key={lang.trim()} className="bg-blue-50 text-blue-500 text-xs rounded-full px-2 py-0.5 font-medium">
+                  {lang.trim()}
+                </span>
+              ))}
+            </div>
+            )}
+            {!profile.languages && (
             <div className="flex gap-1 mt-1.5">
               <span className="bg-blue-50 text-blue-500 text-xs rounded-full px-2 py-0.5 font-medium">🇰🇷 Korean</span>
               <span className="bg-blue-50 text-blue-500 text-xs rounded-full px-2 py-0.5 font-medium">🇺🇸 English</span>
             </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Children */}
+      {/* Children — parents only */}
+      {profile.role === "parent" && (
       <div className="mx-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-bold text-foreground" style={{ fontFamily: "Nunito, sans-serif" }}>
@@ -694,6 +710,24 @@ function ProfileTab({
           </div>
         ))}
       </div>
+      )}
+
+      {/* Caregiver info */}
+      {profile.role === "caregiver" && (profile.experience || profile.specialty) && (
+      <div className="mx-4">
+        <h2 className="font-bold text-foreground mb-3" style={{ fontFamily: "Nunito, sans-serif" }}>
+          {t("onboarding.caregiverInfo")}
+        </h2>
+        <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
+          {profile.experience && (
+            <p className="text-sm"><span className="font-semibold">{t("onboarding.experience")}: </span>{profile.experience}</p>
+          )}
+          {profile.specialty && (
+            <p className="text-sm"><span className="font-semibold">{t("onboarding.specialty")}: </span>{profile.specialty}</p>
+          )}
+        </div>
+      </div>
+      )}
 
       {/* Settings */}
       <div className="mx-4">
@@ -746,6 +780,11 @@ function AppContent() {
 
   const handleSplashComplete = useCallback(() => setPhase("login"), []);
   const handleLogin = useCallback(() => setPhase("main"), []);
+  const handleSignUp = useCallback(() => setPhase("onboarding"), []);
+  const handleOnboardingComplete = useCallback((nextProfile: UserProfile) => {
+    setProfile(nextProfile);
+    setPhase("main");
+  }, []);
 
   const renderTab = () => {
     switch (activeTab) {
@@ -860,7 +899,8 @@ function AppContent() {
         {/* Splash & Login overlays */}
         <AnimatePresence>
           {phase === "splash" && <SplashScreen onComplete={handleSplashComplete} />}
-          {phase === "login" && <LoginScreen onLogin={handleLogin} />}
+          {phase === "login" && <LoginScreen onLogin={handleLogin} onSignUp={handleSignUp} />}
+          {phase === "onboarding" && <OnboardingScreen onComplete={handleOnboardingComplete} />}
         </AnimatePresence>
       </div>
     </div>

@@ -16,15 +16,15 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.45, ease: "easeInOut" }}
-      className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-white"
+      className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-white px-10"
     >
       <motion.img
         src="/darin-logo.png"
-        alt="Darin — for my little star"
-        initial={{ opacity: 0, scale: 0.94 }}
+        alt="Darin — The Moon, a Mother. The Star, a Baby."
+        initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.55, ease: "easeOut" }}
-        className="w-[220px] h-auto select-none"
+        className="w-full max-w-[280px] h-auto select-none"
         draggable={false}
       />
     </motion.div>

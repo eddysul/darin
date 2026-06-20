@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../LanguageContext";
-
-export type UserProfile = {
-  name: string;
-  location: string;
-  avatar: string;
-};
+import type { UserProfile } from "../types/profile";
 
 type ProfileEditModalProps = {
   open: boolean;

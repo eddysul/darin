@@ -1,0 +1,25 @@
+export type UserRole = "parent" | "caregiver";
+
+export type UserProfile = {
+  name: string;
+  location: string;
+  avatar: string;
+  role: UserRole;
+  dueDate?: string;
+  childName?: string;
+  languages?: string;
+  experience?: string;
+  specialty?: string;
+};
+
+export const EMPTY_PROFILE: UserProfile = {
+  name: "",
+  location: "",
+  avatar: "photo-1438761681033-6461ffad8d80",
+  role: "parent",
+  dueDate: "",
+  childName: "",
+  languages: "",
+  experience: "",
+  specialty: "",
+};
