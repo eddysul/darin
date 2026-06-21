@@ -5,6 +5,7 @@ import {
   CircleDot,
   Cookie,
   Globe,
+  MessageCircle,
   Moon,
   Pill,
   PillBottle,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { AIChatScreen } from "../AIChatScreen";
 import { Avatar } from "../../components/Avatar";
 import { ScreenScrollView } from "../../components/ScreenScrollView";
 import { useApp } from "../../context/AppContext";
@@ -219,11 +221,21 @@ export function ReportScreen() {
   const { dailyReport } = useApp();
   const { locale, t } = useLanguage();
   const dates = ["June 20", "June 19", "June 18"];
+  const [chatOpen, setChatOpen] = useState(false);
 
   return (
-    <ScreenScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{t("report.title")}</Text>
-      <Text style={styles.subtitle}>{t("report.subtitle")}</Text>
+    <View style={styles.container}>
+      <ScreenScrollView contentContainerStyle={styles.content}>
+        <View style={styles.titleRow}>
+          <View>
+            <Text style={styles.title}>{t("report.title")}</Text>
+            <Text style={styles.subtitle}>{t("report.subtitle")}</Text>
+          </View>
+          <Pressable style={styles.consultBtn} onPress={() => setChatOpen(true)}>
+            <MessageCircle size={14} color={colors.text} />
+            <Text style={styles.consultBtnText}>상담받기</Text>
+          </Pressable>
+        </View>
 
       {dates.map((date, i) => {
         const isToday = i === 0;
@@ -250,14 +262,36 @@ export function ReportScreen() {
           </View>
         );
       })}
-    </ScreenScrollView>
+      </ScreenScrollView>
+      {chatOpen && <AIChatScreen onClose={() => setChatOpen(false)} />}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1 },
   content: { paddingHorizontal: 16 },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
   title: { fontSize: 24, fontWeight: "700", color: colors.text },
-  subtitle: { fontSize: 14, color: colors.muted, marginTop: 4, marginBottom: 20 },
+  subtitle: { fontSize: 14, color: colors.muted, marginTop: 4 },
+  consultBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: colors.yellowSoft,
+    borderWidth: 1,
+    borderColor: colors.yellow,
+    borderRadius: radius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 6,
+  },
+  consultBtnText: { fontSize: 12, fontWeight: "700", color: colors.text },
   dateBlock: { marginBottom: 20 },
   dateRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
   dateLabel: { fontSize: 11, fontWeight: "700", color: colors.muted, letterSpacing: 1 },
