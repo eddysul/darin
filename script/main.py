@@ -4,12 +4,14 @@ import os
 import ssl
 from datetime import date
 from io import BytesIO
+from typing import Any
 
 import openai
 import websockets
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from pydub import AudioSegment
 
 load_dotenv()
@@ -128,6 +130,67 @@ async def health():
         "bizcrush_configured": bool(BIZCRUSH_API_KEY),
         "openai_configured": bool(OPENAI_API_KEY),
     }
+
+
+REPORT_PROMPT = """
+You are a postpartum care specialist (산후조리사) writing a daily baby/mother care report for a Korean-American family.
+
+Based on the caregiver's voice note below, write a structured daily report in BOTH English and Korean, plus a parent reply draft.
+
+Voice note (transcribed):
+{transcript}
+
+Parsed events:
+{events}
+
+Return ONLY the following JSON (no extra text):
+{{
+  "reportEn": "<2-4 sentence English summary of the day's care — what happened, any health notes, anything to watch for>",
+  "reportKo": "<Same summary in natural Korean — 2-4 sentences>",
+  "parentReplyDraft": "<A short English reply the parent might send back — asking a follow-up or acknowledging care>",
+  "items": [
+    {{ "type": "meal", "label": "Meal", "value": "<one-line summary of feeding/meals>" }},
+    {{ "type": "nap", "label": "Nap / Sleep", "value": "<one-line summary of sleep>" }},
+    {{ "type": "activity", "label": "Activity", "value": "<one-line summary of play/activity>" }},
+    {{ "type": "health", "label": "Health Note", "value": "<any health observations or 'No concerns'>" }},
+    {{ "type": "reminder", "label": "Reminder", "value": "<anything the parent needs to prepare or know for tomorrow, or 'None'>" }}
+  ]
+}}
+
+Rules:
+- Base the report ONLY on what is mentioned in the voice note and events — do not invent details
+- If a category has nothing to report, write "Not recorded" for that item value
+- Items must always have all 5 types in that exact order
+- Keep the tone warm and professional
+"""
+
+
+class ReportRequest(BaseModel):
+    transcript: str
+    events: list[dict[str, Any]] = []
+
+
+@app.post("/report")
+async def generate_report(body: ReportRequest):
+    if not body.transcript.strip():
+        raise HTTPException(status_code=400, detail="transcript is required")
+
+    events_str = json.dumps(body.events, ensure_ascii=False, indent=2) if body.events else "[]"
+    prompt = REPORT_PROMPT.format(transcript=body.transcript, events=events_str)
+
+    message = get_openai_client().chat.completions.create(
+        model="gpt-4o",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = message.choices[0].message.content or ""
+    # Strip markdown code fences if model wraps in ```json
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return json.loads(raw.strip())
 
 
 @app.post("/transcribe")

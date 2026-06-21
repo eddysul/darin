@@ -12,11 +12,12 @@ import {
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenScrollView } from "../../components/ScreenScrollView";
 import { VoiceWaveform } from "../../components/VoiceWaveform";
+import { generateReport } from "../../api/transcribe";
 import { useApp } from "../../context/AppContext";
 import { useVoiceRecording } from "../../context/VoiceRecordingContext";
-import { generateDailyReport } from "../../demo/dailyReport";
 import { getLogEntries } from "../../i18n";
 import { useLanguage } from "../../LanguageContext";
+import { createId } from "../../utils/id";
 import type { DailyReport } from "../../types/dailyReport";
 import { colors, radius } from "../../theme";
 
@@ -46,15 +47,32 @@ export function LogScreen() {
     setSaved(false);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     const source = [voiceTranscript, inputText].filter(Boolean).join("\n\n");
     if (!source.trim()) return;
     setIsGenerating(true);
     setSaved(false);
-    setTimeout(() => {
-      setGenerated(generateDailyReport(source));
+    try {
+      const events = (savedNote?.events ?? []) as Record<string, unknown>[];
+      const result = await generateReport(source, events);
+      const now = new Date();
+      setGenerated({
+        id: createId(),
+        date: now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+        child: "",
+        caregiver: "Ji-yeon Park",
+        sourceNote: source,
+        reportEn: result.reportEn,
+        reportKo: result.reportKo,
+        parentReplyDraft: result.parentReplyDraft,
+        items: result.items,
+        savedAt: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+      });
+    } catch (e) {
+      console.error("Report generation failed:", e);
+    } finally {
       setIsGenerating(false);
-    }, 900);
+    }
   };
 
   const handleSave = () => {
