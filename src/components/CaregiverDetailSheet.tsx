@@ -84,9 +84,9 @@ export function CaregiverDetailSheet({
               <View style={styles.trustBadge}>
                 <ShieldCheck size={12} color={colors.text} />
                 <Text style={styles.trustText}>
-                  {isBackgroundCheckComplete(caregiver.backgroundCheckStatus ?? "not_submitted")
+                  {isBackgroundCheckComplete(caregiver.backgroundCheckStatus)
                     ? t("match.backgroundChecked")
-                    : getBackgroundCheckLabel(caregiver.backgroundCheckStatus ?? "not_submitted", t)}
+                    : getBackgroundCheckLabel(caregiver.backgroundCheckStatus, t)}
                 </Text>
               </View>
             </View>
@@ -112,14 +112,13 @@ export function CaregiverDetailSheet({
             </Section>
 
             <Section title={t("match.verifiedCredentials")}>
-              {(caregiver.credentials ?? []).map((cred) => {
-                const bgStatus = caregiver.backgroundCheckStatus ?? "not_submitted";
+              {caregiver.credentials.map((cred) => {
                 const label =
                   cred.id === "background_check"
-                    ? getBackgroundCheckLabel(bgStatus, t)
+                    ? getBackgroundCheckLabel(caregiver.backgroundCheckStatus, t)
                     : getCredentialStatusLabel(cred.status, t);
                 const verified = cred.id === "background_check"
-                  ? isBackgroundCheckComplete(bgStatus)
+                  ? isBackgroundCheckComplete(caregiver.backgroundCheckStatus)
                   : cred.status === "verified";
 
                 return (
@@ -135,7 +134,7 @@ export function CaregiverDetailSheet({
             </Section>
 
             <Section title={t("match.parentReviews")}>
-              {(caregiver.parentReviews ?? []).map((review) => (
+              {caregiver.parentReviews.map((review) => (
                 <View key={review.author} style={styles.reviewCard}>
                   <View style={styles.reviewTop}>
                     <Text style={styles.reviewAuthor}>{review.author}</Text>

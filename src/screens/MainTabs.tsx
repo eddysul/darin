@@ -1,8 +1,5 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
-import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { Home, FileText, Mic, Search, User } from "lucide-react-native";
-import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -12,30 +9,22 @@ import { useLanguage } from "../LanguageContext";
 import { colors } from "../theme";
 import { HomeScreen } from "./tabs/HomeScreen";
 import { LogScreen } from "./tabs/LogScreen";
-import { FindNavigator } from "./FindNavigator";
+import { MatchScreen } from "./tabs/MatchScreen";
 import { ProfileScreen } from "./tabs/ProfileScreen";
 import { ReportScreen } from "./tabs/ReportScreen";
 import { LanguagePicker } from "../components/LanguagePicker";
 import { ProfileEditModal } from "../components/ProfileEditModal";
 import { useApp } from "../context/AppContext";
 
-import type { MainTabParamList } from "../types/navigation";
+export type MainTabParamList = {
+  Home: undefined;
+  Reports: undefined;
+  Log: undefined;
+  Find: undefined;
+  Profile: undefined;
+};
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
-
-function TabRedirect() {
-  const { pendingTab, clearPendingTab } = useApp();
-  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
-
-  useEffect(() => {
-    if (pendingTab) {
-      navigation.navigate(pendingTab);
-      clearPendingTab();
-    }
-  }, [pendingTab, clearPendingTab, navigation]);
-
-  return null;
-}
 
 function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -44,9 +33,9 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     useVoiceRecording();
   const tabs = [
     { name: "Home" as const, icon: Home, label: t("tabs.home") },
-    { name: "Find" as const, icon: Search, label: t("tabs.match") },
-    { name: "Log" as const, icon: Mic, label: t("tabs.log"), center: true },
     { name: "Reports" as const, icon: FileText, label: t("tabs.report") },
+    { name: "Log" as const, icon: Mic, label: t("tabs.log"), center: true },
+    { name: "Find" as const, icon: Search, label: t("tabs.match") },
     { name: "Profile" as const, icon: User, label: t("tabs.profile") },
   ];
 
@@ -134,17 +123,15 @@ export function MainTabs() {
   return (
     <>
     <Tab.Navigator
-      initialRouteName="Home"
       tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Find" component={FindNavigator} />
-      <Tab.Screen name="Log" component={LogScreen} />
       <Tab.Screen name="Reports" component={ReportScreen} />
+      <Tab.Screen name="Log" component={LogScreen} />
+      <Tab.Screen name="Find" component={MatchScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
-    <TabRedirect />
     <LanguagePicker open={langPickerOpen} onClose={() => setLangPickerOpen(false)} />
     <ProfileEditModal
       open={profileEditOpen}

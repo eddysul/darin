@@ -16,15 +16,6 @@ export type UserProfile = {
   languages?: string;
   experience?: string;
   specialty?: string;
-  budget?: string;
-  liveIn?: boolean;
-  breastfeeding?: boolean;
-  notes?: string;
-  weeklyRate?: string;
-  bidRate?: string;
-  bidNote?: string;
-  bio?: string;
-  availability?: string;
   licenseNumber?: string;
   licensePhoto?: string;
   certificates?: CaregiverCertificate[];
@@ -40,8 +31,4 @@ export const EMPTY_PROFILE: UserProfile = {
   languages: "",
   experience: "",
   specialty: "",
-  budget: "",
-  liveIn: false,
-  breastfeeding: false,
-  notes: "",
 };

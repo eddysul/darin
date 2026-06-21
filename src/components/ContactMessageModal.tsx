@@ -29,7 +29,7 @@ export function ContactMessageModal({ open, caregiver, mode, onClose, onSent }: 
 
   useEffect(() => {
     if (!open || !caregiver) return;
-    setMessage((locale === "ko" ? caregiver.contactDraftKo : caregiver.contactDraftEn) ?? "");
+    setMessage(locale === "ko" ? caregiver.contactDraftKo : caregiver.contactDraftEn);
     setSent(false);
   }, [open, caregiver, locale]);
 
