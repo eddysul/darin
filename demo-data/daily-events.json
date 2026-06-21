@@ -1,0 +1,380 @@
+{
+  "2026-06-20": {
+    "events": [
+      { "category": "수면", "time_start": "07:20", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:35", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "배변", "time": "08:10", "type": "소변", "note": "" },
+      { "category": "수면", "time_start": "09:10", "time_end": "10:05", "duration_min": 55, "note": "오전 낮잠" },
+      { "category": "식사", "time": "10:20", "type": "이유식", "amount": "70g", "menu": "단호박죽", "note": "" },
+      { "category": "터미타임", "time_start": "10:50", "duration_min": 15, "note": "" },
+      { "category": "배변", "time": "11:30", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "간식", "time": "11:50", "type": "사과퓨레", "amount": "30ml", "note": "" },
+      { "category": "수면", "time_start": "12:00", "time_end": "14:00", "duration_min": 120, "note": "낮잠" },
+      { "category": "식사", "time": "14:15", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "온도/습도", "time": "15:00", "body_temp": 36.8, "room_temp": 24.0, "humidity": 52, "note": "" },
+      { "category": "영양제", "time": "15:05", "name": "비타민D", "amount": "1방울", "note": "" },
+      { "category": "식사", "time": "17:00", "type": "이유식", "amount": "65g", "menu": "브로콜리감자죽", "note": "잘 먹음" },
+      { "category": "배변", "time": "17:45", "type": "소변", "note": "" },
+      { "category": "목욕", "time": "18:30", "note": "피부 상태 양호" },
+      { "category": "식사", "time": "19:30", "type": "분유", "amount": "210ml", "note": "" },
+      { "category": "복용 약", "time": "19:45", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-19": {
+    "events": [
+      { "category": "수면", "time_start": "06:50", "time_end": null, "duration_min": null, "note": "기상, 컨디션 좋음" },
+      { "category": "식사", "time": "07:10", "type": "분유", "amount": "190ml", "note": "" },
+      { "category": "배변", "time": "08:00", "type": "대변", "color": "노란색", "note": "" },
+      { "category": "키 몸무게", "time": "09:00", "height_cm": 67.4, "weight_kg": 7.2, "note": "정기 측정" },
+      { "category": "진료", "time": "10:00", "hospital": "우리소아과", "reason": "7개월 정기검진", "note": "이상 없음, 이유식 진행 잘 되고 있다고 함" },
+      { "category": "수면", "time_start": "11:30", "time_end": "13:00", "duration_min": 90, "note": "외출 후 피곤해서 일찍 낮잠" },
+      { "category": "식사", "time": "13:15", "type": "이유식", "amount": "60g", "menu": "쌀미음", "note": "" },
+      { "category": "식사", "time": "16:00", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "배변", "time": "16:40", "type": "소변", "note": "" },
+      { "category": "수면", "time_start": "17:00", "time_end": "17:45", "duration_min": 45, "note": "저녁 낮잠 짧게" },
+      { "category": "목욕", "time": "18:45", "note": "" },
+      { "category": "식사", "time": "19:30", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "수면", "time_start": "20:45", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-18": {
+    "events": [
+      { "category": "수면", "time_start": "07:40", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:55", "type": "분유", "amount": "180ml", "note": "조금 남김" },
+      { "category": "배변", "time": "09:00", "type": "대변", "color": "황금색", "note": "정상" },
+      { "category": "수면", "time_start": "09:30", "time_end": "11:00", "duration_min": 90, "note": "" },
+      { "category": "식사", "time": "11:15", "type": "이유식", "amount": "75g", "menu": "고구마죽", "note": "잘 먹음" },
+      { "category": "터미타임", "time_start": "11:50", "duration_min": 20, "note": "고개 잘 들어올림" },
+      { "category": "간식", "time": "13:00", "type": "배퓨레", "amount": "25ml", "note": "" },
+      { "category": "수면", "time_start": "13:30", "time_end": "15:30", "duration_min": 120, "note": "낮잠 깊이 잠" },
+      { "category": "식사", "time": "15:45", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "온도/습도", "time": "16:00", "body_temp": 36.6, "room_temp": 23.5, "humidity": 55, "note": "" },
+      { "category": "영양제", "time": "16:05", "name": "비타민D", "amount": "1방울", "note": "" },
+      { "category": "배변", "time": "17:20", "type": "소변", "note": "" },
+      { "category": "식사", "time": "18:00", "type": "이유식", "amount": "60g", "menu": "당근미음", "note": "" },
+      { "category": "식사", "time": "20:00", "type": "분유", "amount": "210ml", "note": "" },
+      { "category": "복용 약", "time": "20:10", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:40", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-17": {
+    "events": [
+      { "category": "수면", "time_start": "07:00", "time_end": null, "duration_min": null, "note": "기상, 기분 좋음" },
+      { "category": "식사", "time": "07:20", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "수면", "time_start": "09:00", "time_end": "10:10", "duration_min": 70, "note": "" },
+      { "category": "식사", "time": "10:30", "type": "이유식", "amount": "80g", "menu": "완두콩죽", "note": "처음 먹이는 재료, 이상반응 없음" },
+      { "category": "배변", "time": "11:00", "type": "대변", "color": "녹황색", "note": "" },
+      { "category": "터미타임", "time_start": "11:30", "duration_min": 15, "note": "" },
+      { "category": "수면", "time_start": "13:00", "time_end": "15:10", "duration_min": 130, "note": "" },
+      { "category": "식사", "time": "15:20", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "배변", "time": "16:15", "type": "소변", "note": "" },
+      { "category": "간식", "time": "17:00", "type": "바나나퓨레", "amount": "20ml", "note": "" },
+      { "category": "목욕", "time": "18:30", "note": "습진 부위 로션 꼼꼼히 발라줌" },
+      { "category": "식사", "time": "19:20", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-16": {
+    "events": [
+      { "category": "수면", "time_start": "07:30", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:45", "type": "분유", "amount": "190ml", "note": "" },
+      { "category": "배변", "time": "08:30", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "온도/습도", "time": "08:45", "body_temp": 37.1, "room_temp": 24.0, "humidity": 50, "note": "체온 약간 높음, 경과 관찰" },
+      { "category": "수면", "time_start": "09:40", "time_end": "10:40", "duration_min": 60, "note": "" },
+      { "category": "온도/습도", "time": "11:00", "body_temp": 36.9, "room_temp": 24.0, "humidity": 50, "note": "체온 정상화" },
+      { "category": "식사", "time": "11:10", "type": "이유식", "amount": "50g", "menu": "쌀미음", "note": "컨디션 안 좋아서 양 줄임" },
+      { "category": "수면", "time_start": "12:30", "time_end": "14:30", "duration_min": 120, "note": "" },
+      { "category": "식사", "time": "14:45", "type": "분유", "amount": "170ml", "note": "" },
+      { "category": "배변", "time": "15:30", "type": "소변", "note": "" },
+      { "category": "온도/습도", "time": "16:00", "body_temp": 36.7, "room_temp": 24.0, "humidity": 50, "note": "정상" },
+      { "category": "영양제", "time": "16:05", "name": "비타민D", "amount": "1방울", "note": "" },
+      { "category": "식사", "time": "18:00", "type": "이유식", "amount": "55g", "menu": "단호박죽", "note": "" },
+      { "category": "식사", "time": "20:00", "type": "분유", "amount": "190ml", "note": "" },
+      { "category": "복용 약", "time": "20:10", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:50", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-15": {
+    "events": [
+      { "category": "수면", "time_start": "07:10", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:25", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "배변", "time": "08:20", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "수면", "time_start": "09:20", "time_end": "10:30", "duration_min": 70, "note": "" },
+      { "category": "식사", "time": "10:45", "type": "이유식", "amount": "70g", "menu": "소고기죽", "note": "처음 소고기 시도, 잘 먹음" },
+      { "category": "터미타임", "time_start": "11:20", "duration_min": 20, "note": "뒤집기 거의 성공" },
+      { "category": "수면", "time_start": "13:00", "time_end": "15:00", "duration_min": 120, "note": "" },
+      { "category": "식사", "time": "15:10", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "간식", "time": "16:30", "type": "고구마퓨레", "amount": "30ml", "note": "" },
+      { "category": "배변", "time": "17:00", "type": "소변", "note": "" },
+      { "category": "목욕", "time": "18:30", "note": "" },
+      { "category": "식사", "time": "19:30", "type": "분유", "amount": "210ml", "note": "" },
+      { "category": "복용 약", "time": "19:45", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-14": {
+    "events": [
+      { "category": "수면", "time_start": "07:45", "time_end": null, "duration_min": null, "note": "기상, 밤에 두 번 깸" },
+      { "category": "식사", "time": "08:00", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "수면", "time_start": "09:30", "time_end": "10:45", "duration_min": 75, "note": "" },
+      { "category": "식사", "time": "11:00", "type": "이유식", "amount": "65g", "menu": "브로콜리감자죽", "note": "" },
+      { "category": "배변", "time": "11:45", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "터미타임", "time_start": "12:15", "duration_min": 15, "note": "" },
+      { "category": "수면", "time_start": "13:15", "time_end": "15:00", "duration_min": 105, "note": "" },
+      { "category": "식사", "time": "15:20", "type": "분유", "amount": "190ml", "note": "" },
+      { "category": "온도/습도", "time": "16:00", "body_temp": 36.5, "room_temp": 23.0, "humidity": 58, "note": "" },
+      { "category": "영양제", "time": "16:05", "name": "비타민D", "amount": "1방울", "note": "" },
+      { "category": "배변", "time": "17:10", "type": "소변", "note": "" },
+      { "category": "식사", "time": "18:00", "type": "이유식", "amount": "70g", "menu": "당근미음", "note": "" },
+      { "category": "식사", "time": "20:00", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "수면", "time_start": "20:45", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-13": {
+    "events": [
+      { "category": "수면", "time_start": "07:00", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:15", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "배변", "time": "08:00", "type": "대변", "color": "황금색", "note": "정상" },
+      { "category": "수면", "time_start": "09:00", "time_end": "10:00", "duration_min": 60, "note": "" },
+      { "category": "식사", "time": "10:20", "type": "이유식", "amount": "75g", "menu": "닭고기죽", "note": "처음 닭고기, 잘 받아들임" },
+      { "category": "터미타임", "time_start": "11:00", "duration_min": 20, "note": "뒤집기 성공! 처음으로 혼자 뒤집음" },
+      { "category": "수면", "time_start": "12:30", "time_end": "14:30", "duration_min": 120, "note": "" },
+      { "category": "식사", "time": "14:45", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "간식", "time": "16:00", "type": "블루베리퓨레", "amount": "20ml", "note": "처음 시도, 이상반응 없음" },
+      { "category": "배변", "time": "16:30", "type": "소변", "note": "" },
+      { "category": "목욕", "time": "18:30", "note": "" },
+      { "category": "식사", "time": "19:30", "type": "분유", "amount": "210ml", "note": "" },
+      { "category": "복용 약", "time": "19:45", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-12": {
+    "events": [
+      { "category": "수면", "time_start": "07:30", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:45", "type": "분유", "amount": "190ml", "note": "" },
+      { "category": "배변", "time": "09:00", "type": "대변", "color": "녹황색", "note": "약간 묽음" },
+      { "category": "수면", "time_start": "09:45", "time_end": "11:15", "duration_min": 90, "note": "" },
+      { "category": "식사", "time": "11:30", "type": "이유식", "amount": "60g", "menu": "쌀미음", "note": "배변 상태로 인해 자극적이지 않은 메뉴" },
+      { "category": "온도/습도", "time": "12:00", "body_temp": 36.7, "room_temp": 24.5, "humidity": 48, "note": "" },
+      { "category": "수면", "time_start": "13:00", "time_end": "15:00", "duration_min": 120, "note": "" },
+      { "category": "식사", "time": "15:15", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "배변", "time": "16:00", "type": "대변", "color": "황금색", "note": "정상화" },
+      { "category": "영양제", "time": "16:10", "name": "비타민D", "amount": "1방울", "note": "" },
+      { "category": "배변", "time": "17:30", "type": "소변", "note": "" },
+      { "category": "식사", "time": "18:00", "type": "이유식", "amount": "65g", "menu": "단호박죽", "note": "" },
+      { "category": "식사", "time": "20:00", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "복용 약", "time": "20:10", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:40", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-11": {
+    "events": [
+      { "category": "수면", "time_start": "06:50", "time_end": null, "duration_min": null, "note": "기상, 기분 좋음" },
+      { "category": "식사", "time": "07:10", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "배변", "time": "08:00", "type": "소변", "note": "" },
+      { "category": "수면", "time_start": "09:10", "time_end": "10:20", "duration_min": 70, "note": "" },
+      { "category": "식사", "time": "10:35", "type": "이유식", "amount": "80g", "menu": "고구마소고기죽", "note": "" },
+      { "category": "터미타임", "time_start": "11:10", "duration_min": 20, "note": "" },
+      { "category": "수면", "time_start": "13:00", "time_end": "15:10", "duration_min": 130, "note": "" },
+      { "category": "식사", "time": "15:20", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "간식", "time": "16:30", "type": "사과퓨레", "amount": "30ml", "note": "" },
+      { "category": "배변", "time": "17:00", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "목욕", "time": "18:30", "note": "피부 상태 양호" },
+      { "category": "식사", "time": "19:30", "type": "분유", "amount": "210ml", "note": "" },
+      { "category": "복용 약", "time": "19:45", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-10": {
+    "events": [
+      { "category": "수면", "time_start": "07:20", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:35", "type": "분유", "amount": "190ml", "note": "" },
+      { "category": "배변", "time": "08:30", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "수면", "time_start": "09:30", "time_end": "10:40", "duration_min": 70, "note": "" },
+      { "category": "식사", "time": "10:55", "type": "이유식", "amount": "70g", "menu": "브로콜리닭죽", "note": "" },
+      { "category": "터미타임", "time_start": "11:30", "duration_min": 15, "note": "" },
+      { "category": "수면", "time_start": "13:00", "time_end": "14:50", "duration_min": 110, "note": "" },
+      { "category": "식사", "time": "15:05", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "온도/습도", "time": "15:30", "body_temp": 36.6, "room_temp": 25.0, "humidity": 45, "note": "날씨 더움, 실내 냉방" },
+      { "category": "영양제", "time": "15:35", "name": "비타민D", "amount": "1방울", "note": "" },
+      { "category": "배변", "time": "16:20", "type": "소변", "note": "" },
+      { "category": "간식", "time": "17:00", "type": "수박주스", "amount": "20ml", "note": "여름 과일 처음 시도" },
+      { "category": "식사", "time": "18:00", "type": "이유식", "amount": "75g", "menu": "당근소고기죽", "note": "" },
+      { "category": "목욕", "time": "19:00", "note": "" },
+      { "category": "식사", "time": "20:00", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "복용 약", "time": "20:10", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:45", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-09": {
+    "events": [
+      { "category": "수면", "time_start": "07:00", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:15", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "수면", "time_start": "09:00", "time_end": "10:30", "duration_min": 90, "note": "" },
+      { "category": "식사", "time": "10:45", "type": "이유식", "amount": "75g", "menu": "단호박달걀죽", "note": "달걀노른자 처음 시도, 이상반응 없음" },
+      { "category": "배변", "time": "11:30", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "터미타임", "time_start": "12:00", "duration_min": 20, "note": "뒤집기 시도 많이 함" },
+      { "category": "수면", "time_start": "13:00", "time_end": "15:00", "duration_min": 120, "note": "" },
+      { "category": "식사", "time": "15:15", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "온도/습도", "time": "16:00", "body_temp": 36.8, "room_temp": 24.5, "humidity": 50, "note": "" },
+      { "category": "영양제", "time": "16:05", "name": "비타민D", "amount": "1방울", "note": "" },
+      { "category": "배변", "time": "17:00", "type": "소변", "note": "" },
+      { "category": "식사", "time": "18:00", "type": "이유식", "amount": "70g", "menu": "고구마죽", "note": "" },
+      { "category": "식사", "time": "20:00", "type": "분유", "amount": "210ml", "note": "" },
+      { "category": "복용 약", "time": "20:10", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-08": {
+    "events": [
+      { "category": "수면", "time_start": "07:40", "time_end": null, "duration_min": null, "note": "기상, 밤새 잘 잠" },
+      { "category": "식사", "time": "07:55", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "배변", "time": "08:50", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "수면", "time_start": "09:50", "time_end": "11:00", "duration_min": 70, "note": "" },
+      { "category": "식사", "time": "11:15", "type": "이유식", "amount": "80g", "menu": "소고기감자죽", "note": "오늘 특히 잘 먹음" },
+      { "category": "터미타임", "time_start": "11:50", "duration_min": 25, "note": "" },
+      { "category": "수면", "time_start": "13:30", "time_end": "15:30", "duration_min": 120, "note": "" },
+      { "category": "식사", "time": "15:45", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "배변", "time": "16:30", "type": "소변", "note": "" },
+      { "category": "간식", "time": "17:00", "type": "바나나퓨레", "amount": "25ml", "note": "" },
+      { "category": "목욕", "time": "18:30", "note": "습진 부위 로션 바름" },
+      { "category": "식사", "time": "19:30", "type": "분유", "amount": "210ml", "note": "" },
+      { "category": "복용 약", "time": "19:45", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-07": {
+    "events": [
+      { "category": "수면", "time_start": "07:10", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:30", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "배변", "time": "08:15", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "수면", "time_start": "09:20", "time_end": "10:30", "duration_min": 70, "note": "" },
+      { "category": "식사", "time": "10:45", "type": "이유식", "amount": "70g", "menu": "닭고기브로콜리죽", "note": "" },
+      { "category": "진료", "time": "14:00", "hospital": "우리소아과", "reason": "피부과 상담 (습진)", "note": "가벼운 아토피성 피부염 진단, 저자극 로션 처방" },
+      { "category": "수면", "time_start": "13:00", "time_end": "14:45", "duration_min": 105, "note": "외출 전 낮잠" },
+      { "category": "식사", "time": "15:30", "type": "분유", "amount": "190ml", "note": "" },
+      { "category": "온도/습도", "time": "16:00", "body_temp": 36.6, "room_temp": 23.5, "humidity": 55, "note": "" },
+      { "category": "영양제", "time": "16:05", "name": "비타민D", "amount": "1방울", "note": "" },
+      { "category": "배변", "time": "17:30", "type": "소변", "note": "" },
+      { "category": "식사", "time": "18:30", "type": "이유식", "amount": "65g", "menu": "단호박죽", "note": "" },
+      { "category": "목욕", "time": "19:00", "note": "처방받은 로션 도포" },
+      { "category": "식사", "time": "20:00", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "수면", "time_start": "20:40", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-06": {
+    "events": [
+      { "category": "수면", "time_start": "07:30", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:45", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "배변", "time": "09:00", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "수면", "time_start": "09:40", "time_end": "11:00", "duration_min": 80, "note": "" },
+      { "category": "식사", "time": "11:15", "type": "이유식", "amount": "70g", "menu": "완두콩닭죽", "note": "" },
+      { "category": "터미타임", "time_start": "11:50", "duration_min": 20, "note": "" },
+      { "category": "수면", "time_start": "13:00", "time_end": "15:00", "duration_min": 120, "note": "" },
+      { "category": "식사", "time": "15:10", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "간식", "time": "16:30", "type": "사과퓨레", "amount": "30ml", "note": "" },
+      { "category": "배변", "time": "17:15", "type": "소변", "note": "" },
+      { "category": "식사", "time": "18:00", "type": "이유식", "amount": "75g", "menu": "소고기당근죽", "note": "" },
+      { "category": "식사", "time": "20:00", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "복용 약", "time": "20:10", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-05": {
+    "events": [
+      { "category": "수면", "time_start": "07:00", "time_end": null, "duration_min": null, "note": "기상, 컨디션 좋음" },
+      { "category": "식사", "time": "07:15", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "키 몸무게", "time": "08:30", "height_cm": 67.0, "weight_kg": 7.1, "note": "정기 측정" },
+      { "category": "배변", "time": "08:45", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "수면", "time_start": "09:30", "time_end": "10:40", "duration_min": 70, "note": "" },
+      { "category": "식사", "time": "11:00", "type": "이유식", "amount": "80g", "menu": "닭고기당근죽", "note": "" },
+      { "category": "터미타임", "time_start": "11:40", "duration_min": 20, "note": "" },
+      { "category": "수면", "time_start": "13:00", "time_end": "15:00", "duration_min": 120, "note": "" },
+      { "category": "식사", "time": "15:15", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "온도/습도", "time": "15:30", "body_temp": 36.7, "room_temp": 24.0, "humidity": 52, "note": "" },
+      { "category": "영양제", "time": "15:35", "name": "비타민D", "amount": "1방울", "note": "" },
+      { "category": "배변", "time": "16:30", "type": "소변", "note": "" },
+      { "category": "목욕", "time": "18:30", "note": "" },
+      { "category": "식사", "time": "19:30", "type": "분유", "amount": "210ml", "note": "" },
+      { "category": "복용 약", "time": "19:45", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-04": {
+    "events": [
+      { "category": "수면", "time_start": "07:30", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:45", "type": "분유", "amount": "190ml", "note": "" },
+      { "category": "배변", "time": "08:30", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "수면", "time_start": "09:40", "time_end": "11:10", "duration_min": 90, "note": "" },
+      { "category": "식사", "time": "11:25", "type": "이유식", "amount": "70g", "menu": "고구마소고기죽", "note": "" },
+      { "category": "터미타임", "time_start": "12:00", "duration_min": 15, "note": "" },
+      { "category": "수면", "time_start": "13:30", "time_end": "15:30", "duration_min": 120, "note": "" },
+      { "category": "식사", "time": "15:45", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "배변", "time": "16:30", "type": "소변", "note": "" },
+      { "category": "간식", "time": "17:00", "type": "고구마퓨레", "amount": "25ml", "note": "" },
+      { "category": "식사", "time": "18:00", "type": "이유식", "amount": "65g", "menu": "브로콜리죽", "note": "" },
+      { "category": "목욕", "time": "19:00", "note": "로션 도포" },
+      { "category": "식사", "time": "20:00", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "복용 약", "time": "20:10", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:35", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-03": {
+    "events": [
+      { "category": "수면", "time_start": "06:45", "time_end": null, "duration_min": null, "note": "기상, 평소보다 일찍 깸" },
+      { "category": "식사", "time": "07:00", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "배변", "time": "07:50", "type": "소변", "note": "" },
+      { "category": "수면", "time_start": "09:00", "time_end": "10:30", "duration_min": 90, "note": "보충 수면" },
+      { "category": "식사", "time": "10:45", "type": "이유식", "amount": "70g", "menu": "단호박닭죽", "note": "" },
+      { "category": "터미타임", "time_start": "11:20", "duration_min": 20, "note": "" },
+      { "category": "배변", "time": "12:00", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "수면", "time_start": "13:00", "time_end": "14:30", "duration_min": 90, "note": "" },
+      { "category": "식사", "time": "14:45", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "온도/습도", "time": "15:00", "body_temp": 36.8, "room_temp": 23.0, "humidity": 60, "note": "" },
+      { "category": "영양제", "time": "15:05", "name": "비타민D", "amount": "1방울", "note": "" },
+      { "category": "간식", "time": "16:30", "type": "배퓨레", "amount": "25ml", "note": "" },
+      { "category": "배변", "time": "17:20", "type": "소변", "note": "" },
+      { "category": "식사", "time": "18:00", "type": "이유식", "amount": "75g", "menu": "소고기감자죽", "note": "" },
+      { "category": "식사", "time": "20:00", "type": "분유", "amount": "210ml", "note": "" },
+      { "category": "복용 약", "time": "20:10", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-02": {
+    "events": [
+      { "category": "수면", "time_start": "07:20", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:35", "type": "분유", "amount": "190ml", "note": "" },
+      { "category": "배변", "time": "08:30", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "수면", "time_start": "09:30", "time_end": "10:40", "duration_min": 70, "note": "" },
+      { "category": "식사", "time": "11:00", "type": "이유식", "amount": "70g", "menu": "당근죽", "note": "" },
+      { "category": "터미타임", "time_start": "11:40", "duration_min": 15, "note": "" },
+      { "category": "수면", "time_start": "13:00", "time_end": "15:00", "duration_min": 120, "note": "" },
+      { "category": "식사", "time": "15:15", "type": "분유", "amount": "180ml", "note": "" },
+      { "category": "배변", "time": "16:00", "type": "소변", "note": "" },
+      { "category": "목욕", "time": "18:30", "note": "" },
+      { "category": "식사", "time": "19:30", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "복용 약", "time": "19:45", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  },
+  "2026-06-01": {
+    "events": [
+      { "category": "수면", "time_start": "07:30", "time_end": null, "duration_min": null, "note": "기상" },
+      { "category": "식사", "time": "07:45", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "배변", "time": "08:40", "type": "대변", "color": "황금색", "note": "" },
+      { "category": "수면", "time_start": "09:30", "time_end": "10:45", "duration_min": 75, "note": "" },
+      { "category": "식사", "time": "11:00", "type": "이유식", "amount": "65g", "menu": "쌀미음", "note": "이유식 시작 첫날, 조금만 줌" },
+      { "category": "터미타임", "time_start": "11:45", "duration_min": 15, "note": "" },
+      { "category": "수면", "time_start": "13:00", "time_end": "15:00", "duration_min": 120, "note": "" },
+      { "category": "식사", "time": "15:10", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "온도/습도", "time": "15:30", "body_temp": 36.6, "room_temp": 22.5, "humidity": 58, "note": "" },
+      { "category": "영양제", "time": "15:35", "name": "비타민D", "amount": "1방울", "note": "" },
+      { "category": "배변", "time": "17:00", "type": "소변", "note": "" },
+      { "category": "식사", "time": "19:00", "type": "분유", "amount": "200ml", "note": "" },
+      { "category": "복용 약", "time": "19:15", "name": "철분제", "amount": "1ml", "note": "" },
+      { "category": "목욕", "time": "19:30", "note": "" },
+      { "category": "수면", "time_start": "20:30", "time_end": null, "duration_min": null, "note": "취침" }
+    ]
+  }
+}
