@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 import type { DailyReport } from "../types/dailyReport";
 import type { ContractFields, IncomingRequest, InterviewSlot, ScheduledInterview } from "../types/interview";
 import type { LogEntry } from "../types/log";
@@ -82,14 +82,17 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [caregiverBidRate, setCaregiverBidRate] = useState<string | null>(null);
   const [profile, setProfileRaw] = useState<UserProfile>(DEFAULT_PROFILE);
+  const profileRef = useRef(DEFAULT_PROFILE);
   const setProfile = useCallback((p: UserProfile) => {
     setProfileRaw(p);
+    profileRef.current = p;
     if (p.role === "caregiver" && p.bidRate) setCaregiverBidRate(p.bidRate);
   }, []);
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [scheduledInterviews, setScheduledInterviews] = useState<ScheduledInterview[]>([]);
+  const scheduledInterviewsRef = useRef<ScheduledInterview[]>([]);
   const [pendingTab, setPendingTab] = useState<MainTabName | null>(null);
   const [pendingContractInterviewId, setPendingContractInterviewId] = useState<string | null>(null);
   const [incomingRequests, setIncomingRequests] = useState<IncomingRequest[]>(DEMO_INCOMING_REQUESTS);
@@ -178,38 +181,79 @@ export function AppProvider({ children }: { children: ReactNode }) {
         slotLabelKo: slot.labelKo,
         status: "scheduled",
       };
-      setScheduledInterviews((prev) => [
-        ...prev.filter((i) => i.caregiverId !== caregiver.id),
-        entry,
-      ]);
+      setScheduledInterviews((prev) => {
+        const next = [...prev.filter((i) => i.caregiverId !== caregiver.id), entry];
+        scheduledInterviewsRef.current = next;
+        return next;
+      });
+      // Mirror on caregiver side so the request shows up in caregiver Home
+      setIncomingRequests((prev) => {
+        const existing = prev.find((r) => r.caregiverId === caregiver.id);
+        if (existing) {
+          return prev.map((r) =>
+            r.caregiverId === caregiver.id
+              ? { ...r, slotLabelEn: slot.labelEn, slotLabelKo: slot.labelKo, status: "pending" as const }
+              : r,
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: `req-${caregiver.id}`,
+            parentId: "p2",
+            caregiverId: caregiver.id,
+            parentName: profileRef.current.name,
+            parentAvatar: profileRef.current.avatar,
+            parentLocation: profileRef.current.location,
+            dueDate: profileRef.current.dueDate ?? "",
+            budget: profileRef.current.budget ?? "",
+            liveIn: profileRef.current.liveIn ?? false,
+            breastfeeding: profileRef.current.breastfeeding ?? false,
+            notes: profileRef.current.notes,
+            slotLabelEn: slot.labelEn,
+            slotLabelKo: slot.labelKo,
+            status: "pending" as const,
+          },
+        ];
+      });
       setPendingTab("Home");
     },
     [],
   );
 
   const completeInterview = useCallback((interviewId: string) => {
-    setScheduledInterviews((prev) =>
-      prev.map((i) => (i.id === interviewId ? { ...i, status: "completed" as const } : i)),
-    );
+    setScheduledInterviews((prev) => {
+      const next = prev.map((i) => (i.id === interviewId ? { ...i, status: "completed" as const } : i));
+      scheduledInterviewsRef.current = next;
+      return next;
+    });
     setPendingContractInterviewId(interviewId);
     setPendingTab("Profile");
   }, []);
 
   const signContract = useCallback(
     (interviewId: string, fields: ContractFields, signature: string) => {
-      setScheduledInterviews((prev) =>
-        prev.map((i) =>
+      const interview = scheduledInterviewsRef.current.find((i) => i.id === interviewId);
+      setScheduledInterviews((prev) => {
+        const next = prev.map((i) =>
           i.id === interviewId
-            ? {
-                ...i,
-                status: "contract_signed" as const,
-                contractFields: fields,
-                signature,
-                signedAt: new Date().toISOString(),
-              }
+            ? { ...i, status: "contract_signed" as const, contractFields: fields, signature, signedAt: new Date().toISOString() }
             : i,
-        ),
-      );
+        );
+        scheduledInterviewsRef.current = next;
+        return next;
+      });
+      // Mirror parent signature on caregiver side so caregiver sees "Sign Contract" button
+      if (interview?.caregiverId !== undefined) {
+        const cid = interview.caregiverId;
+        setIncomingRequests((prev) =>
+          prev.map((r) =>
+            r.caregiverId === cid
+              ? { ...r, contractFields: fields, parentSignature: signature, parentSignedAt: new Date().toISOString() }
+              : r,
+          ),
+        );
+      }
     },
     [],
   );

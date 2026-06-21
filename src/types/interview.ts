@@ -34,6 +34,7 @@ export type RequestStatus = "pending" | "accepted" | "declined" | "contract_sign
 export type IncomingRequest = {
   id: string;
   parentId: string;
+  caregiverId?: number;
   parentName: string;
   parentAvatar: string;
   parentLocation: string;
