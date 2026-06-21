@@ -3,6 +3,7 @@ import {
   Activity,
   CheckCircle,
   Moon,
+  Plus,
   RotateCcw,
   Send,
   Sparkles,
@@ -31,6 +32,8 @@ export function LogScreen() {
   const [generated, setGenerated] = useState<DailyReport | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [localEntries, setLocalEntries] = useState<{ type: "meal" | "sleep" | "activity" | "health"; text: string; time: string }[]>([]);
+  const [addedToLog, setAddedToLog] = useState(false);
 
   useEffect(() => {
     if (savedNote?.transcript) {
@@ -45,6 +48,23 @@ export function LogScreen() {
     setVoiceTranscript("");
     setGenerated(null);
     setSaved(false);
+    setAddedToLog(false);
+  };
+
+  const handleAddToLog = () => {
+    if (!voiceTranscript.trim() || addedToLog) return;
+    const categoryIconMap: Record<string, "meal" | "sleep" | "activity" | "health" | undefined> = {
+      식사: "meal", 간식: "meal", 영양제: "meal",
+      수면: "sleep",
+      배변: "activity", 목욕: "activity", 터미타임: "activity",
+      진료: "health", "온도/습도": "health", "복용 약": "health",
+    };
+    const firstCategory = savedNote?.events?.[0]?.category as string | undefined;
+    const type: "meal" | "sleep" | "activity" | "health" = (firstCategory ? categoryIconMap[firstCategory] : undefined) ?? "activity";
+    const now = new Date();
+    const time = now.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+    setLocalEntries((prev) => [{ type, text: voiceTranscript.trim(), time }, ...prev]);
+    setAddedToLog(true);
   };
 
   const handleGenerate = async () => {
@@ -140,6 +160,16 @@ export function LogScreen() {
                 </Text>
               </Pressable>
             </View>
+            <Pressable
+              style={[styles.addToLogBtn, addedToLog && styles.addToLogBtnDone]}
+              onPress={handleAddToLog}
+              disabled={addedToLog}
+            >
+              <CheckCircle size={14} color={addedToLog ? colors.sage : colors.text} />
+              <Text style={[styles.addToLogBtnText, addedToLog && styles.addToLogBtnTextDone]}>
+                {addedToLog ? "오늘의 기록에 추가됨" : "오늘의 기록에 추가"}
+              </Text>
+            </Pressable>
             {savedNote && (
               <View style={styles.savedVoiceRow}>
                 <CheckCircle size={11} color={colors.muted} />
@@ -221,18 +251,24 @@ export function LogScreen() {
       )}
 
       <Text style={styles.logTitle}>{t("log.todaysLog")}</Text>
-      {logEntries.map((entry, i) => {
+      {[...localEntries, ...logEntries].map((entry, i) => {
         const iconMap = { meal: Utensils, sleep: Moon, activity: Activity, health: Thermometer };
         const Icon = iconMap[entry.type];
+        const isNew = i < localEntries.length;
         return (
-          <View key={i} style={styles.logItem}>
-            <View style={styles.logIcon}>
-              <Icon size={14} color={colors.text} />
+          <View key={i} style={[styles.logItem, isNew && styles.logItemNew]}>
+            <View style={[styles.logIcon, isNew && styles.logIconNew]}>
+              <Icon size={14} color={isNew ? colors.yellow : colors.text} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.logText}>{entry.text}</Text>
               <Text style={styles.logTime}>{entry.time}</Text>
             </View>
+            {isNew && (
+              <View style={styles.newBadge}>
+                <Text style={styles.newBadgeText}>NEW</Text>
+              </View>
+            )}
           </View>
         );
       })}
@@ -381,6 +417,31 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   logIcon: { backgroundColor: colors.backgroundSecondary, borderRadius: 12, padding: 6 },
+  logIconNew: { backgroundColor: colors.yellowSoft },
   logText: { fontSize: 14, lineHeight: 20, color: colors.text },
   logTime: { fontSize: 12, color: colors.muted, marginTop: 4 },
+  logItemNew: { borderColor: colors.yellow },
+  newBadge: {
+    backgroundColor: colors.yellow,
+    borderRadius: radius.full,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    alignSelf: "flex-start",
+  },
+  newBadgeText: { fontSize: 9, fontWeight: "800", color: colors.text },
+  addToLogBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 11,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.text,
+    backgroundColor: colors.background,
+  },
+  addToLogBtnDone: { borderColor: colors.sage, backgroundColor: `${colors.sage}10` },
+  addToLogBtnText: { fontSize: 13, fontWeight: "700", color: colors.text },
+  addToLogBtnTextDone: { color: colors.sage },
 });
