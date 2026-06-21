@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,11 +13,43 @@ import { ChevronLeft, Send, Sparkles } from "lucide-react-native";
 import { useApp } from "../context/AppContext";
 import { useLanguage } from "../LanguageContext";
 import { useScreenTopInset } from "../hooks/useScreenInsets";
+import { loadEventStore } from "../utils/eventStore";
 import { colors, radius } from "../theme";
 import type { DailyReport } from "../types/dailyReport";
+import type { CareEvent } from "../types/transcribe";
 import type { Locale } from "../i18n";
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const DEMO_EVENTS = require("../../demo-data/daily-events.json") as Record<string, { events: CareEvent[] }>;
+
 const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? "";
+
+function getRecentEventData(): string {
+  const store = loadEventStore();
+  const merged: Record<string, { events: CareEvent[] }> = { ...DEMO_EVENTS, ...store };
+
+  const sortedDates = Object.keys(merged).sort().reverse().slice(0, 7);
+  if (sortedDates.length === 0) return "";
+
+  return sortedDates
+    .map((date) => {
+      const events = merged[date]?.events ?? [];
+      if (events.length === 0) return null;
+      const lines = events
+        .filter((e) => e.category)
+        .map((e) => {
+          const rest = Object.entries(e)
+            .filter(([k]) => k !== "category")
+            .map(([k, v]) => `${k}: ${String(v ?? "")}`)
+            .join(", ");
+          return `  - ${e.category}${rest ? ` (${rest})` : ""}`;
+        })
+        .join("\n");
+      return `[${date}]\n${lines}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 function buildSystemPrompt(report: DailyReport | null, locale: Locale): string {
   const isKo = locale === "ko";
@@ -29,28 +61,31 @@ function buildSystemPrompt(report: DailyReport | null, locale: Locale): string {
 You help parents understand their child's daily care reports and give practical childcare advice.
 Keep responses concise (2-4 sentences). ${langInstruction}`;
 
-  if (!report) {
+  const eventData = getRecentEventData();
+  const eventSection = eventData
+    ? `\nYou have access to the child's recent care event log (last 7 days):\n${eventData}\n\nUse this data to give personalized, specific advice based on the child's actual patterns.`
+    : "";
+
+  if (!report && !eventData) {
     const noDataNote = isKo
       ? "현재 아이에 대한 리포트가 부족합니다. 정확한 상담을 원하시면 Log 탭에서 리포트를 작성해 주세요."
       : "There is currently not enough report data for your child. For accurate advice, please create a report in the Log tab.";
 
     return `${base}
 
-IMPORTANT: You do NOT have any report data for this child yet.
+IMPORTANT: You do NOT have any event data for this child yet.
 Always start every response with exactly this sentence: "${noDataNote}"
 Then provide a helpful general answer after that.`;
   }
 
-  return `${base}
+  const reportSection = report
+    ? `\nLatest generated report for ${report.child} (${report.date}, caregiver: ${report.caregiver}):
+- EN: ${report.reportEn}
+- KO: ${report.reportKo}
+${report.details ? `- Details: ${report.details.map((d) => `${d.type}: ${d.value}`).join(", ")}` : ""}`
+    : "";
 
-You have access to today's care report for ${report.child}:
-- Date: ${report.date}
-- Caregiver: ${report.caregiver}
-- Report (EN): ${report.reportEn}
-- Report (KO): ${report.reportKo}
-${report.details ? `- Care details: ${report.details.map((d) => `${d.type}: ${d.value}`).join(", ")}` : ""}
-
-Use this report data to give personalized, specific advice.`;
+  return `${base}${eventSection}${reportSection}`;
 }
 
 type Message = {
@@ -105,7 +140,7 @@ export function AIChatScreen({ onClose }: Props) {
   const [isTyping, setIsTyping] = useState(false);
   const nextId = useRef(1);
   const historyRef = useRef<OpenAIMessage[]>([]);
-  const systemPrompt = buildSystemPrompt(dailyReport, locale);
+  const systemPrompt = useMemo(() => buildSystemPrompt(dailyReport, locale), [dailyReport, locale]);
 
   useEffect(() => {
     const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);

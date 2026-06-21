@@ -17,6 +17,7 @@ import { generateDailyReportFromApi } from "../../api/generateReport";
 import { useVoiceRecording } from "../../context/VoiceRecordingContext";
 import { generateDailyReport } from "../../demo/dailyReport";
 import { normalizeDailyReport } from "../../utils/reportPresentation";
+import { appendEventsForToday } from "../../utils/eventStore";
 import { getLogEntries } from "../../i18n";
 import { useLanguage } from "../../LanguageContext";
 import type { DailyReport } from "../../types/dailyReport";
@@ -93,6 +94,9 @@ export function LogScreen() {
         rawText: voiceTranscript,
       }),
     );
+    if (savedNote?.events && savedNote.events.length > 0) {
+      appendEventsForToday(savedNote.events);
+    }
     resetToDefault();
   };
 
