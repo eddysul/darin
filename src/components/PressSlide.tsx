@@ -1,4 +1,4 @@
-import { Animated, Pressable, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
+import { Animated, Pressable, StyleSheet, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 import { useRef } from "react";
 
 type Props = PressableProps & {
@@ -27,8 +27,18 @@ export function PressSlide({ style, children, onPress, disabled, slideAmount = 5
     ]).start();
   };
 
+  // Forward layout props to Pressable so flex/width distribute correctly in parent containers.
+  // Without this, flex:1 on the inner Animated.View has no effect because Pressable has no size.
+  const flat = StyleSheet.flatten(style) as ViewStyle | undefined;
+  const pressableLayout: ViewStyle = {};
+  if (flat?.flex != null) pressableLayout.flex = flat.flex;
+  if (flat?.width != null) pressableLayout.width = flat.width;
+  if (flat?.height != null) pressableLayout.height = flat.height;
+  if (flat?.alignSelf != null) pressableLayout.alignSelf = flat.alignSelf;
+  if (flat?.minWidth != null) pressableLayout.minWidth = flat.minWidth;
+
   return (
-    <Pressable onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress} disabled={disabled} {...rest}>
+    <Pressable onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress} disabled={disabled} style={pressableLayout} {...rest}>
       <Animated.View
         style={[
           style,
