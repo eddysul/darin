@@ -1,5 +1,6 @@
 import { TRANSCRIBE_API_URL } from "../config/api";
 import type { TranscribeResult } from "../types/transcribe";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 function guessMimeType(uri: string) {
   const lower = uri.toLowerCase();
@@ -24,7 +25,7 @@ export async function transcribeRecording(uri: string): Promise<TranscribeResult
     type: guessMimeType(uri),
   } as unknown as Blob);
 
-  const response = await fetch(`${TRANSCRIBE_API_URL}/transcribe`, {
+  const response = await fetchWithTimeout(`${TRANSCRIBE_API_URL}/transcribe`, {
     method: "POST",
     body: formData,
     headers: {
@@ -42,7 +43,7 @@ export async function transcribeRecording(uri: string): Promise<TranscribeResult
 
 export async function checkTranscribeHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${TRANSCRIBE_API_URL}/health`);
+    const response = await fetchWithTimeout(`${TRANSCRIBE_API_URL}/health`, undefined, 5_000);
     return response.ok;
   } catch {
     return false;

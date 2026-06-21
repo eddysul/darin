@@ -1,20 +1,27 @@
-import { useRef, useState } from "react";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
+  Keyboard,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { CheckCircle, FileText, Mic, Send, Sparkles } from "lucide-react-native";
+import { CheckCircle, FileText, Mic, RotateCcw, Send, Sparkles } from "lucide-react-native";
 import { PressSlide } from "../../components/PressSlide";
+import { VoiceWaveform } from "../../components/VoiceWaveform";
+import { generateDailyReportFromApi } from "../../api/generateReport";
 import { useApp } from "../../context/AppContext";
+import { useVoiceRecording } from "../../context/VoiceRecordingContext";
+import { generateDailyReport } from "../../demo/dailyReport";
 import { useLanguage } from "../../LanguageContext";
 import type { MessageKey } from "../../i18n";
+import type { DailyReport } from "../../types/dailyReport";
 import { CATEGORY_META, type LogCategory } from "../../types/log";
 import { categorizeLog, extractSummary } from "../../utils/categorize";
+import { normalizeDailyReport } from "../../utils/reportPresentation";
 import { colors, radius } from "../../theme";
 
 export function LogScreen() {
@@ -47,13 +54,53 @@ function CaregiverLogView({
   t: (key: MessageKey) => string;
   fadeAnim: Animated.Value;
 }) {
-  const { logEntries, addLogEntry, generateDailyReportFromLogs, dailyReport } = useApp();
+  const {
+    logEntries,
+    addLogEntry,
+    generateDailyReportFromLogs,
+    dailyReport,
+    setDailyReport,
+  } = useApp();
+  const { isRecording, isTranscribing, levels, savedNote, clearSavedNote } = useVoiceRecording();
+
   const [text, setText] = useState("");
   const [lastAdded, setLastAdded] = useState<{ category: LogCategory } | null>(null);
   const [reportGenerated, setReportGenerated] = useState(false);
   const successAnim = useRef(new Animated.Value(0)).current;
 
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [inputText, setInputText] = useState("");
+  const [generated, setGenerated] = useState<DailyReport | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const reportSectionY = useRef(0);
+
   const sorted = [...logEntries].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  const hasTranscript = Boolean(voiceTranscript);
+
+  useEffect(() => {
+    if (savedNote?.transcript) {
+      setVoiceTranscript(savedNote.transcript);
+    }
+  }, [savedNote]);
+
+  useEffect(() => {
+    if (!generated || isGenerating) return;
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(reportSectionY.current - 16, 0),
+        animated: true,
+      });
+    });
+  }, [generated, isGenerating]);
+
+  const resetVoiceFlow = () => {
+    clearSavedNote();
+    setVoiceTranscript("");
+    setInputText("");
+    setGenerated(null);
+    setIsGenerating(false);
+  };
 
   const handleAdd = () => {
     const trimmed = text.trim();
@@ -67,16 +114,148 @@ function CaregiverLogView({
     Animated.spring(successAnim, { toValue: 1, useNativeDriver: true, speed: 16, bounciness: 8 }).start();
   };
 
-  const handleGenerateReport = () => {
+  const handleGenerateFromApi = async () => {
+    const source = [voiceTranscript, inputText].filter(Boolean).join("\n\n");
+    if (!source.trim()) return;
+    Keyboard.dismiss();
+    setIsGenerating(true);
+    setGenerated(null);
+    try {
+      const report = await generateDailyReportFromApi({
+        rawText: voiceTranscript,
+        events: savedNote?.events,
+        quickNotes: inputText,
+        sourceNote: source,
+      });
+      setGenerated(report);
+    } catch {
+      setGenerated(generateDailyReport(source));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleSaveGenerated = () => {
+    if (!generated) return;
+    setDailyReport(
+      normalizeDailyReport(generated, {
+        events: savedNote?.events,
+        rawText: voiceTranscript,
+      }),
+    );
+    setReportGenerated(true);
+    resetVoiceFlow();
+  };
+
+  const handleGenerateFromLogs = () => {
     generateDailyReportFromLogs(locale);
     setReportGenerated(true);
   };
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      ref={scrollRef}
+      style={styles.scroll}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <Animated.View style={{ opacity: fadeAnim }}>
         <Text style={styles.title}>{t("log.title")}</Text>
         <Text style={styles.subtitle}>{t("log.subtitle")}</Text>
+
+        <View style={styles.voiceCard}>
+          <View style={styles.voiceHeader}>
+            <Text style={styles.voiceTitle}>{t("log.voiceNote")}</Text>
+            <View style={styles.voiceBadge}>
+              <Sparkles size={10} color={colors.yellow} />
+              <Text style={styles.voiceBadgeText}>AI</Text>
+            </View>
+          </View>
+
+          {isRecording ? (
+            <>
+              <Text style={styles.recording}>{t("log.recordingLive")}</Text>
+              <View style={styles.waveWrap}>
+                <VoiceWaveform levels={levels} barCount={32} height={48} />
+              </View>
+            </>
+          ) : isTranscribing ? (
+            <>
+              <Text style={styles.recording}>{t("log.transcribing")}</Text>
+              <View style={styles.waveWrap}>
+                <VoiceWaveform levels={levels} barCount={32} height={48} active={false} />
+              </View>
+            </>
+          ) : hasTranscript ? (
+            <>
+              <Text style={styles.transcript}>{voiceTranscript}</Text>
+              {savedNote?.events && savedNote.events.length > 0 && (
+                <View style={styles.eventList}>
+                  {savedNote.events.map((event, index) => (
+                    <View key={`${event.category}-${index}`} style={styles.eventChip}>
+                      <Text style={styles.eventChipText}>{event.category}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              {savedNote?.usedFallbackTranscript && (
+                <Text style={styles.fallbackHint}>{t("log.transcribeFallback")}</Text>
+              )}
+              <View style={styles.voiceActions}>
+                <Pressable style={styles.retakeBtn} onPress={resetVoiceFlow}>
+                  <RotateCcw size={14} color={colors.text} />
+                  <Text style={styles.retakeBtnText}>{t("log.retake")}</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.generateVoiceBtn, isGenerating && styles.btnDisabled]}
+                  onPress={handleGenerateFromApi}
+                  disabled={isGenerating}
+                >
+                  <Sparkles size={14} color={colors.yellow} />
+                  <Text style={styles.generateVoiceBtnText}>
+                    {isGenerating ? t("log.generating") : t("log.generateReport")}
+                  </Text>
+                </Pressable>
+              </View>
+              {savedNote && (
+                <View style={styles.savedVoiceRow}>
+                  <CheckCircle size={11} color={colors.muted} />
+                  <Text style={styles.savedVoiceHint}>
+                    {t("log.voiceSaved")} · {savedNote.savedAt}
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <Text style={styles.holdHint}>{t("log.holdCenterHint")}</Text>
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t("log.quickNotes")}</Text>
+          <TextInput
+            style={styles.textarea}
+            multiline
+            numberOfLines={4}
+            placeholder={t("log.placeholder")}
+            placeholderTextColor={colors.muted}
+            value={inputText}
+            onChangeText={setInputText}
+            textAlignVertical="top"
+          />
+          {!hasTranscript && (
+            <Pressable
+              style={[styles.generatePrimaryBtn, (!inputText.trim() || isGenerating) && styles.btnDisabled]}
+              onPress={handleGenerateFromApi}
+              disabled={isGenerating || !inputText.trim()}
+            >
+              <Sparkles size={15} color={colors.yellow} />
+              <Text style={styles.generatePrimaryBtnText}>
+                {isGenerating ? t("log.generating") : t("log.generateReport")}
+              </Text>
+            </Pressable>
+          )}
+        </View>
 
         <View style={styles.card}>
           <View style={styles.cardTitleRow}>
@@ -117,6 +296,52 @@ function CaregiverLogView({
           </Animated.View>
         )}
 
+        {(isGenerating || generated) && (
+          <View
+            onLayout={(event) => {
+              reportSectionY.current = event.nativeEvent.layout.y;
+            }}
+          >
+            {isGenerating && (
+              <View style={[styles.card, styles.aiCard, styles.centerCard]}>
+                <Sparkles size={24} color={colors.yellow} />
+                <Text style={styles.generatingText}>{t("log.generating")}</Text>
+              </View>
+            )}
+
+            {generated && !isGenerating && (
+              <>
+                {[
+                  { title: t("log.originalNote"), body: generated.sourceNote, ai: false },
+                  { title: t("log.aiReportEn"), body: generated.reportEn, ai: true },
+                  { title: t("log.aiReportKo"), body: generated.reportKo, ai: true },
+                  { title: t("log.parentReplyDraft"), body: generated.parentReplyDraft, ai: true, italic: true },
+                ].map((section) => (
+                  <View key={section.title} style={[styles.card, section.ai && styles.aiCard]}>
+                    <Text style={styles.sectionLabel}>
+                      {section.ai && <Sparkles size={11} color={colors.yellow} />} {section.title}
+                    </Text>
+                    <Text style={[styles.sectionBody, section.italic && styles.italic]}>{section.body}</Text>
+                  </View>
+                ))}
+                <View style={[styles.card, styles.saveCard]}>
+                  <View style={styles.saveHeader}>
+                    <Sparkles size={14} color={colors.yellow} />
+                    <Text style={styles.saveTitle}>{t("log.aiDraft")}</Text>
+                    <Text style={styles.saveHint}>{t("log.readyToSend")}</Text>
+                  </View>
+                  <View style={styles.saveActions}>
+                    <Pressable style={styles.sendBtn} onPress={handleSaveGenerated}>
+                      <Send size={14} color={colors.primaryForeground} />
+                      <Text style={styles.sendBtnText}>{t("log.sendToParent")}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </>
+            )}
+          </View>
+        )}
+
         <View style={styles.timelineHeader}>
           <Text style={styles.timelineTitle}>{t("log.timeline")}</Text>
           <Text style={styles.entryCount}>{logEntries.length} {ko ? "건" : "entries"}</Text>
@@ -152,7 +377,7 @@ function CaregiverLogView({
           })
         )}
 
-        {logEntries.length > 0 && (
+        {logEntries.length > 0 && !generated && (
           <View style={styles.reportSection}>
             {reportGenerated || dailyReport ? (
               <View style={styles.reportDoneRow}>
@@ -160,7 +385,7 @@ function CaregiverLogView({
                 <Text style={styles.reportDoneText}>{t("log.savedToReports")}</Text>
               </View>
             ) : (
-              <PressSlide style={styles.generateBtn} onPress={handleGenerateReport}>
+              <PressSlide style={styles.generateBtn} onPress={handleGenerateFromLogs}>
                 <Sparkles size={14} color="#fff" />
                 <Text style={styles.generateBtnText}>{t("log.generateFromEntries")}</Text>
               </PressSlide>
@@ -260,6 +485,77 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "700", color: colors.text },
   subtitle: { fontSize: 14, color: colors.muted, marginTop: 4, marginBottom: 16 },
 
+  voiceCard: {
+    backgroundColor: colors.yellowSoft,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.yellow,
+    padding: 18,
+    marginBottom: 14,
+  },
+  voiceHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  voiceTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  voiceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.background,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  voiceBadgeText: { fontSize: 10, fontWeight: "700", color: colors.text },
+  recording: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 8 },
+  holdHint: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: colors.muted,
+    textAlign: "center",
+    paddingVertical: 8,
+  },
+  waveWrap: { marginTop: 2 },
+  transcript: { fontSize: 14, lineHeight: 22, color: colors.text },
+  eventList: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
+  eventChip: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  eventChipText: { fontSize: 11, fontWeight: "600", color: colors.text },
+  fallbackHint: { fontSize: 11, color: colors.muted, marginTop: 10 },
+  voiceActions: { flexDirection: "row", gap: 8, marginTop: 16 },
+  retakeBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    backgroundColor: colors.background,
+  },
+  retakeBtnText: { fontSize: 13, fontWeight: "600", color: colors.text },
+  generateVoiceBtn: {
+    flex: 1.2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+  },
+  generateVoiceBtnText: { fontSize: 13, fontWeight: "600", color: colors.primaryForeground },
+  savedVoiceRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
+  savedVoiceHint: { fontSize: 11, color: colors.muted, fontWeight: "500" },
+
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.xl,
@@ -268,6 +564,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 14,
   },
+  aiCard: { backgroundColor: colors.yellowSoft, borderColor: colors.border },
   cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 10 },
   cardTitle: { fontSize: 14, fontWeight: "600", color: colors.text },
 
@@ -284,6 +581,18 @@ const styles = StyleSheet.create({
   },
   previewRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
   previewLabel: { fontSize: 12, color: colors.muted },
+
+  generatePrimaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+  },
+  generatePrimaryBtnText: { fontSize: 14, fontWeight: "600", color: colors.primaryForeground },
+  btnDisabled: { opacity: 0.4 },
 
   submitBtn: {
     flexDirection: "row",
@@ -307,6 +616,28 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   successText: { fontSize: 13, color: colors.sage, fontWeight: "600" },
+
+  centerCard: { alignItems: "center", paddingVertical: 24 },
+  generatingText: { marginTop: 8, fontSize: 14, fontWeight: "600", color: colors.text },
+  sectionLabel: { fontSize: 12, fontWeight: "600", color: colors.text, marginBottom: 8 },
+  sectionBody: { fontSize: 14, lineHeight: 22, color: colors.muted },
+  italic: { fontStyle: "italic", color: colors.text },
+  saveCard: { borderTopWidth: 3, borderTopColor: colors.yellow },
+  saveHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  saveTitle: { fontSize: 14, fontWeight: "600", color: colors.text, flex: 1 },
+  saveHint: { fontSize: 12, color: colors.muted },
+  saveActions: { flexDirection: "row" },
+  sendBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+  },
+  sendBtnText: { fontSize: 14, fontWeight: "600", color: colors.primaryForeground },
 
   timelineHeader: {
     flexDirection: "row",

@@ -16,8 +16,9 @@
 | 네비게이션 | React Navigation (Bottom Tabs) |
 | UI | React Native StyleSheet, expo-linear-gradient |
 | 이미지 | expo-image, expo-image-picker |
+| 오디오 | expo-av (음성 녹음·metering) |
 | 아이콘 | lucide-react-native |
-| 상태 | React Context (`Language`, `App`, `Chat`, `CareFlow`) |
+| 상태 | React Context (`Language`, `App`, `Chat`, `CareFlow`, `VoiceRecording`) |
 | 패키지 매니저 | pnpm |
 
 > **Web 레거시:** Vite + React 프로토타입은 `src/app/`에 별도로 존재합니다. HeyDealer 스타일 Care Request 플로우가 web에도 구현되어 있으나, **iOS 시뮬레이터(`pnpm ios`) 기준 메인 코드는 `src/` (RN)** 입니다.
@@ -29,14 +30,20 @@
 ```
 Childcare Management App/
 ├── App.tsx                     # RN 루트 (Provider + phase 관리)
+├── .env / .env.example         # BIZCRUSH, OPENAI, EXPO_PUBLIC_TRANSCRIBE_URL
 ├── assets/
 │   └── darin-logo.png
 ├── src/
+│   ├── api/
+│   │   ├── transcribe.ts       # POST /transcribe
+│   │   └── generateReport.ts   # POST /generate-report
+│   ├── config/
+│   │   └── api.ts              # TRANSCRIBE_API_URL (플랫폼별 호스트)
 │   ├── screens/
 │   │   ├── SplashScreen.tsx
 │   │   ├── LoginScreen.tsx
 │   │   ├── OnboardingScreen.tsx
-│   │   ├── MainTabs.tsx
+│   │   ├── MainTabs.tsx        # 중앙 Log 버튼 3초 hold 녹음
 │   │   └── tabs/
 │   │       ├── HomeScreen.tsx
 │   │       ├── ReportScreen.tsx
@@ -46,6 +53,9 @@ Childcare Management App/
 │   ├── components/
 │   │   ├── CareInboxModal.tsx       # 메시지 목록 + 채팅 (단일 Modal)
 │   │   ├── CareProposalChatModal.tsx # 제안 채팅 + Care Plan 협상
+│   │   ├── CarePlanNegotiationBlocks.tsx  # Draft / Tracker 공유 UI
+│   │   ├── VoiceWaveform.tsx
+│   │   ├── VoiceRecordingOverlay.tsx
 │   │   ├── CareRequestModal.tsx
 │   │   ├── CareProposalsSheet.tsx
 │   │   ├── CarePlanModal.tsx
@@ -58,21 +68,29 @@ Childcare Management App/
 │   ├── context/
 │   │   ├── AppContext.tsx
 │   │   ├── ChatContext.tsx
-│   │   └── CareFlowContext.tsx      # Care Request / Proposal / Match 상태
+│   │   ├── CareFlowContext.tsx      # Care Request / Proposal / Match 상태
+│   │   └── VoiceRecordingContext.tsx
 │   ├── demo/
 │   │   ├── caregivers.ts
 │   │   ├── careFlow.ts              # mock proposals, chat seeds
+│   │   ├── dailyReport.ts           # API 실패 시 fallback 리포트
 │   │   └── childProfile.ts          # Emma mock child profile
 │   ├── types/
 │   │   ├── profile.ts
 │   │   ├── dailyReport.ts
+│   │   ├── transcribe.ts
+│   │   ├── voiceNote.ts
 │   │   ├── careFlow.ts
 │   │   └── childProfile.ts
+│   ├── utils/
+│   │   └── fetchWithTimeout.ts
 │   ├── i18n.ts
 │   ├── theme.ts
 │   └── app/                         # Web 레거시 (Vite)
 └── work.md
 ```
+
+**dh 서버 (별도 worktree):** `../darin-dh` (`origin/dh`) — `script/main.py` (FastAPI)
 
 ---
 
@@ -131,49 +149,30 @@ Darin 미니멀 **흑백 + 옅은 노랑** 팔레트:
 - **Quick Actions**
   - **Message Ji-yeon** → Ji-yeon 채팅방 **바로** 열기 (목록 생략)
   - Schedule Pickup, Translate Report, View History (UI만)
-- **Today's Report** — AI 번역 일일 리포트
+- **Today's Report** — Log에서 저장한 AI 일일 리포트 미리보기
 - **AI Draft Reply**
 - **매칭 확정 후:** **Active Care Relationship** 카드
   - Ji-yeon Park · Mon–Fri 3 PM–8 PM
-  - Chat saved · Daily reports enabled
   - Open Chat · View Care Plan
+  - **Care Plan Draft** + **Agreement Tracker** + **Adjust Care Plan** (Find 채팅과 동일 블록)
+  - Home Messages 채팅(`CareInboxModal`)에서도 협상 UI 표시
 
 ### 2. Reports (리포트)
 
-- Emma 돌봄 기록 타임라인, 날짜별 카드
+- Ji-yeon Park 제출 타임라인, 날짜별 카드
+- Log에서 **리포트에 저장**한 당일 리포트 표시
+- 카테고리 아이콘 pill (meal · nap · activity · health · reminder)
+- 펼치면 EN/KO 본문 + 항목별 상세 + AI 번역 박스
+- 자세한 생성·API 흐름 → **문서 하단 「일일 리포트 & dh API」** 참고
 
 ### 3. Log (기록)
 
-- **Voice Note** — 중앙 Log 버튼 3초 길게 누르기 → 녹음 → 탭으로 저장 → **dh `/transcribe` API** 전사 + 이벤트 분류
-- 녹음 전: 노란 카드에 “중앙 기록 버튼 길게 누르기” 안내
-- 저장 후: 전사문 → Retake / Generate Report
-- Quick Notes, Today's Log
-
-#### dh transcribe 서버 연동
-
-| 항목 | 경로 |
-|------|------|
-| dh worktree | `../darin-dh` (`origin/dh` checkout) |
-| FastAPI | `../darin-dh/script/main.py` |
-| 앱 API 클라이언트 | `src/api/transcribe.ts` |
-| 녹음 상태 | `src/context/VoiceRecordingContext.tsx` |
-
-**로컬 실행**
-
-```bash
-# 1) dh 서버 (별 터미널)
-cp .env ../darin-dh/script/.env   # BIZCRUSH + OPENAI 키
-pnpm server:dh                    # http://127.0.0.1:8000
-
-# 2) Expo 앱 (.env에 EXPO_PUBLIC_TRANSCRIBE_URL=http://127.0.0.1:8000)
-pnpm ios
-```
-
-- `GET /health` — 키 설정 확인
-- `POST /transcribe` — 오디오 → BizCrush STT → GPT 이벤트 JSON
-- 서버 미연결 시 데모 전사문 fallback
-- iOS 시뮬레이터: `127.0.0.1:8000` / Android 에뮬레이터: `10.0.2.2:8000`
-- **ffmpeg** 필요 (`brew install ffmpeg`)
+- **Voice Note** — 하단 탭 **중앙 Log 버튼 3초 길게 누르기** → 녹음(웨이브폼) → 다시 탭하면 저장·전사
+- 녹음 전: 「중앙 기록 노란 버튼을 길게 눌러주세요」
+- 저장 후: 전사문 + 이벤트 칩 → **Retake** / **일일 리포트 생성**
+- **Quick Notes** — 텍스트만으로도 리포트 생성 가능 (음성 없을 때 버튼 표시)
+- **리포트에 저장** 후 Log 화면 **초기 상태로 자동 복귀**
+- **Today's Log** — 데모 타임라인 항목
 
 ### 4. Find (돌봄 찾기) — `MatchScreen`
 
@@ -299,6 +298,7 @@ RN: `ProfileScreen.tsx` · Web: `src/app/App.tsx` ProfileTab (동일 UX)
 - Home **Messages** → 목록 → 대화 탭
 - Home **Message Ji-yeon** → `startThreadId=1` 로 Ji-yeon 채팅 **직진**
 - 매칭 후: Saved chat · Active care relationship 배지
+- 매칭 확정 시 채팅 내 **Care Plan Draft / Agreement Tracker / Adjust Care Plan** 표시
 
 ### `ChatContext`
 
@@ -344,7 +344,7 @@ RN: `ProfileScreen.tsx` · Web: `src/app/App.tsx` ProfileTab (동일 UX)
 ## 다국어 (i18n)
 
 - `LanguageContext` + `src/i18n.ts` — 한/영
-- Care Request, Proposals, Chat, Negotiation, Care Plan, Home active care, **Child Snapshot** 문자열 포함
+- Care Request, Proposals, Chat, Negotiation, Care Plan, Home active care, **Child Snapshot**, **Log 음성·리포트** 문자열 포함
 - Profile → Language Preference
 
 ---
@@ -367,7 +367,7 @@ pnpm run typecheck
 3. **Send Care Request** → Proposals → Ji-yeon **Chat**
 4. **Adjust Care Plan** → Send → 카드 **Accept**
 5. **Confirm Match** → **Simulate caregiver confirmation**
-6. **Home** → Active Care Relationship 확인
+6. **Home** → Active Care Relationship + Care Plan 블록 확인
 
 ### Child Care Snapshot 데모
 
@@ -376,14 +376,22 @@ pnpm run typecheck
 3. Special Notes에 Allergy + 텍스트 입력 → **Save note**
 4. **Share with Caregiver** → mock 확인 토스트
 
+### Voice → 일일 리포트 데모 (요약)
+
+1. dh 서버 실행 (`pnpm server:dh`) — **문서 하단** 상세 참고
+2. **Log** → 중앙 버튼 3초 hold → 녹음 → 탭으로 저장
+3. **일일 리포트 생성** → AI EN/KO 초안 확인
+4. **리포트에 저장** → **Reports** 탭에서 카테고리 아이콘·본문 확인
+
 ---
 
 ## 프로토타입 한계 (미구현)
 
-- 실제 OAuth, SMS, 백엔드, DB, 결제, 캘린더 연동
+- 실제 OAuth, SMS, 백엔드 DB, 결제, 캘린더 연동 (리포트·전사는 **로컬 dh FastAPI** 프로토타입만)
 - Caregiver Accept / Counter는 mock (Accept → 즉시 수락 메시지)
 - Special Notes · Edit Info · Share — **로컬 state / mock 토스트만** (백엔드 저장 없음)
 - Settings, Billing, Forgot password 등 UI만
+- 리포트·전사 결과 **영구 저장 없음** (`AppContext` in-memory)
 - `CareChatScreen.tsx`, `CareChatListScreen.tsx` — 구버전, `CareInboxModal` / `CareProposalChatModal`로 대체됨
 
 ---
@@ -443,9 +451,28 @@ pnpm run typecheck
 28. **`ChildCareSnapshotModal`** — RN + Web Profile Children → Emma 탭
 29. `ChildProfile` 타입, `EMMA_CHILD_PROFILE` mock, Special Notes 로컬 추가, Edit/Share mock
 
+### Home · 매칭 후 Care Plan
+
+30. **`CarePlanNegotiationBlocks.tsx`** — Draft / Tracker 공유 컴포넌트
+31. **Home** 매칭 확정 후 Care Plan Draft · Agreement Tracker · Adjust Care Plan 표시
+32. **`CareInboxModal`** Home 채팅에서도 동일 협상 UI
+
+### Voice · Log · dh API
+
+33. **`VoiceRecordingContext`** — 3초 hold, metering 웨이브폼, stop/save
+34. **`MainTabs`** 중앙 Log 탭 hold/save, **`VoiceRecordingOverlay`**
+35. **Log UI** — mic 버튼 제거, hold 안내, 전사문 + Retake / 일일 리포트 생성
+36. **`src/api/transcribe.ts`** + **`config/api.ts`** — dh `POST /transcribe` 연동
+37. **`src/api/generateReport.ts`** — dh `POST /generate-report` (GPT EN/KO 요약)
+38. **Reports** — `items[].type` 기반 카테고리 아이콘 (meal · nap · activity · health · reminder)
+39. **리포트에 저장** 후 Log **기본 화면 자동 복귀**
+40. API URL `:800` 오타 보정, `fetchWithTimeout`, 생성 후 리포트 섹션 스크롤
+41. dh 서버: BizCrush STT + OpenAI categorize/generate-report, CORS, lazy OpenAI init
+
 ### Git / PR
 
-30. `Joon` 브랜치 → [PR #2](https://github.com/eddysul/darin/pull/2) (Care Request · proposal chat · Messages, main 대비)
+42. `Joon` → [PR #2](https://github.com/eddysul/darin/pull/2) (Care Request · proposal chat · Messages)
+43. `joon-into-dh` → [PR #3](https://github.com/eddysul/darin/pull/3) (Joon + dh 병합, unrelated histories)
 
 ---
 
@@ -454,9 +481,14 @@ pnpm run typecheck
 | 파일 | 역할 |
 |------|------|
 | `MatchScreen.tsx` | Find 탭, Care Request → Proposals → Chat 연결 |
-| `HomeScreen.tsx` | Messages, Quick Actions, Active Care card |
+| `HomeScreen.tsx` | Messages, Quick Actions, Active Care + Care Plan 블록 |
+| `LogScreen.tsx` | Voice Note, Quick Notes, AI 리포트 생성·저장 |
+| `ReportScreen.tsx` | 저장된 일일 리포트 타임라인 |
+| `MainTabs.tsx` | 중앙 Log hold 녹음, 탭 바 |
+| `VoiceRecordingContext.tsx` | 녹음·전사 상태 |
+| `CarePlanNegotiationBlocks.tsx` | Care Plan Draft / Agreement Tracker |
 | `CareProposalChatModal.tsx` | 제안 채팅 + Care Plan 협상 + Match 확정 |
-| `CareInboxModal.tsx` | Home 메시지 inbox + saved chat |
+| `CareInboxModal.tsx` | Home 메시지 inbox + saved chat + 협상 UI |
 | `CareRequestModal.tsx` | Care Request 폼 |
 | `CareProposalsSheet.tsx` | 3 proposals 비교 |
 | `CarePlanAdjustModal.tsx` | Care Plan Update 편집 |
@@ -466,7 +498,114 @@ pnpm run typecheck
 | `ChatContext.tsx` | 대화 thread·메시지 |
 | `ChildCareSnapshotModal.tsx` | Profile → Emma Child Care Snapshot |
 | `ProfileScreen.tsx` | Children 카드 탭 → snapshot 오픈 |
+| `api/transcribe.ts` | 오디오 업로드 → 전사 + events |
+| `api/generateReport.ts` | 전사·메모 → AI 일일 리포트 |
 
 ---
 
-*마지막 업데이트: 2026-06-20 — Child Care Snapshot (Profile), Care Plan 협상, Find 플로우, PR #2 반영*
+## 일일 리포트 & dh API 연동
+
+음성/텍스트 기록 → AI 전사·분류 → 일일 리포트 생성 → Reports 탭 저장까지의 **전체 파이프라인**입니다.
+
+### End-to-end 흐름
+
+```
+[Log] 중앙 버튼 3초 hold → 녹음 (웨이브폼)
+  → 탭으로 저장 → POST /transcribe
+       ├─ BizCrush STT (language_hints=ko)
+       └─ GPT → events[] (식사, 수면, 배변, …)
+  → 전사문 + 이벤트 칩 표시
+  → [일일 리포트 생성] → POST /generate-report
+       └─ GPT → reportEn, reportKo, parentReplyDraft, items[]
+  → AI 리포트 초안 카드 (원본 / EN / KO / 부모 답장 초안)
+  → [리포트에 저장] → AppContext.dailyReport
+  → Log 화면 초기화 · Reports 탭에 타임라인 반영
+```
+
+**Quick Notes만** 입력해도 `/generate-report` 호출 가능 (음성 없이 텍스트만).
+
+### Reports UI — 카테고리 아이콘
+
+서버가 내려주는 `items[].type`에 따라 아이콘이 매핑됩니다 (앱이 키워드 파싱하는 것이 아님).
+
+| type | 아이콘 | 예 |
+|------|--------|-----|
+| `meal` | 수저 | 점심 식사 |
+| `nap` | 달 | 낮잠 |
+| `activity` | 활동 | 놀이 |
+| `health` | 체온계 | 기침·건강 |
+| `reminder` | 벨 | 여벌 옷 등 |
+
+`/transcribe` 단계의 `events` (한국어 카테고리)와 `/generate-report`의 `items` (영문 type)는 **별도 GPT 단계**입니다.
+
+### dh FastAPI 서버
+
+| 항목 | 경로 |
+|------|------|
+| dh worktree | `../darin-dh` (`origin/dh` checkout) |
+| FastAPI | `../darin-dh/script/main.py` |
+| 앱 transcribe 클라이언트 | `src/api/transcribe.ts` |
+| 앱 report 클라이언트 | `src/api/generateReport.ts` |
+| URL 설정 | `src/config/api.ts` · `.env` `EXPO_PUBLIC_TRANSCRIBE_URL` |
+
+**API 엔드포인트**
+
+| Method | Path | 설명 |
+|--------|------|------|
+| `GET` | `/health` | `bizcrush_configured`, `openai_configured` |
+| `POST` | `/transcribe` | multipart `file` → `{ raw_text, events, date }` |
+| `POST` | `/generate-report` | JSON `{ raw_text, events, quick_notes, child_name, caregiver_name }` → `{ reportEn, reportKo, parentReplyDraft, items }` |
+
+**환경 변수 (앱 `.env` + dh `script/.env`)**
+
+```env
+BIZCRUSH_API_KEY=...
+OPENAI_API_KEY=...
+EXPO_PUBLIC_TRANSCRIBE_URL=http://127.0.0.1:8000
+```
+
+- iOS 시뮬레이터: `127.0.0.1:8000`
+- Android 에뮬레이터: `10.0.2.2:8000`
+- 실기기: ngrok/배포 URL (HTTPS 권장) — **앱은 dh 레포에 묶이지 않음**, URL만 맞으면 자체 서버 가능
+- **ffmpeg** 필요 (`brew install ffmpeg`)
+- `.env` 변경 후 Expo **재시작** 필요
+- 포트 `:800` 오타는 `api.ts`에서 `:8000`으로 자동 보정
+
+**로컬 실행**
+
+```bash
+# 1) dh 서버 (별 터미널)
+cp .env ../darin-dh/script/.env
+pnpm server:dh                    # http://127.0.0.1:8000
+
+# 2) 헬스 체크
+curl http://127.0.0.1:8000/health
+
+# 3) Expo 앱
+pnpm ios
+```
+
+### Fallback 동작
+
+| 상황 | 동작 |
+|------|------|
+| 서버 미연결 / 전사 실패 | `DEMO_VOICE_TRANSCRIPT` (Emma 점심·낮잠 데모) |
+| `/generate-report` 실패 | `demo/dailyReport.ts` 로컬 fallback (입력 텍스트 기반) |
+| API 타임아웃 | 30초 후 fallback (`fetchWithTimeout.ts`) |
+
+데모 전사문과 **동일한** 입력일 때만 Emma 고정 5카테고리 리포트가 나옵니다. 실제 녹음/메모 내용이면 입력 기반 또는 AI 결과가 표시됩니다.
+
+### 자체 서버 배포
+
+dh `main.py`를 Railway / Render / VPS 등에 배포하고 `EXPO_PUBLIC_TRANSCRIBE_URL`만 변경하면 됩니다. STT를 Whisper 등으로 바꿔도 **응답 JSON 형식**만 맞추면 앱 수정 없이 동작합니다.
+
+### 알려진 제한
+
+- BizCrush STT `language_hints=ko` 고정
+- `/generate-report` `items`가 label/value 없이 type만 오는 경우 있음 (프롬프트 개선 여지)
+- 리포트·전사 **DB 저장 없음** — 앱 재시작 시 소실
+- dh 브랜치와 Joon 브랜치 **git history 분리** — PR #3으로 통합 진행 중
+
+---
+
+*마지막 업데이트: 2026-06-20 — Voice·Log·dh API·일일 리포트 파이프라인, Home Care Plan, PR #3 반영*
