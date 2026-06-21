@@ -1,4 +1,4 @@
-import { CheckCircle } from "lucide-react-native";
+import { CheckCircle, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
   Modal,
@@ -28,6 +28,7 @@ type Props = {
 export function ContractSigningModal({ open, interview, onClose, onSigned }: Props) {
   const { profile, signContract } = useApp();
   const { locale, t } = useLanguage();
+  const ko = locale === "ko";
 
   const [fields, setFields] = useState<ContractFields>(() =>
     defaultContractFields(profile, interview?.weeklyPay ?? ""),
@@ -80,12 +81,19 @@ export function ContractSigningModal({ open, interview, onClose, onSigned }: Pro
             </View>
           ) : (
             <>
-              <Text style={styles.title}>{t("contract.title")}</Text>
-              <Text style={styles.subtitle}>
-                {t("contract.subtitle")} {interview.caregiverName}
-              </Text>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.title}>{t("contract.title")}</Text>
+                  <Text style={styles.subtitle}>
+                    {t("contract.subtitle")} {interview.caregiverName}
+                  </Text>
+                </View>
+                <Pressable style={styles.closeBtn} onPress={onClose}>
+                  <X size={18} color={colors.muted} />
+                </Pressable>
+              </View>
 
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={styles.scrollArea}>
                 <Text style={styles.sectionLabel}>{t("contract.fillFields")}</Text>
 
                 <Field label={t("contract.startDate")}>
@@ -156,15 +164,14 @@ export function ContractSigningModal({ open, interview, onClose, onSigned }: Pro
 
               <View style={styles.actions}>
                 <PressSlide style={styles.cancelBtn} onPress={onClose}>
-                  <Text style={styles.cancelText}>{t("profile.cancel")}</Text>
+                  <Text style={styles.cancelText}>{ko ? "닫기" : "Close"}</Text>
                 </PressSlide>
                 <PressSlide
                   style={[styles.signBtn, !signature.trim() && styles.signBtnDisabled]}
                   onPress={handleSign}
                   disabled={!signature.trim()}
-                 
                 >
-                  <Text style={styles.signText}>{t("contract.sign")}</Text>
+                  <Text style={styles.signText}>{ko ? "제출 · 서명" : "Submit & Sign"}</Text>
                 </PressSlide>
               </View>
             </>
@@ -200,8 +207,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  modalHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 },
+  closeBtn: { padding: 4, marginTop: 2 },
+  scrollArea: { maxHeight: "62%" as unknown as number },
   title: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: 4 },
-  subtitle: { fontSize: 13, color: colors.muted, marginBottom: 16 },
+  subtitle: { fontSize: 13, color: colors.muted },
   sectionLabel: { fontSize: 12, fontWeight: "700", color: colors.gold, marginBottom: 10, marginTop: 4 },
   field: { marginBottom: 12 },
   label: { fontSize: 12, fontWeight: "600", color: colors.text, marginBottom: 6 },

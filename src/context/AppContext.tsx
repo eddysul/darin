@@ -21,6 +21,7 @@ const DEFAULT_PARENT_PROFILE: UserProfile = {
   experience: "First-time parent",
   breastfeeding: true,
   notes: "",
+  ethnicity: "Korean",
 };
 
 const DEFAULT_CAREGIVER_PROFILE: UserProfile = {
@@ -36,6 +37,7 @@ const DEFAULT_CAREGIVER_PROFILE: UserProfile = {
   liveIn: true,
   breastfeeding: true,
   licenseNumber: "WA-2019-PCN-4821",
+  ethnicity: "Korean",
 };
 
 const DEFAULT_PROFILE = DEFAULT_PARENT_PROFILE;

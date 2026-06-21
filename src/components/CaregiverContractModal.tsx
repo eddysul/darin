@@ -1,4 +1,4 @@
-import { CheckCircle } from "lucide-react-native";
+import { CheckCircle, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
   Modal,
@@ -26,6 +26,7 @@ type Props = {
 export function CaregiverContractModal({ open, request, onClose }: Props) {
   const { profile, caregiverSignContract } = useApp();
   const { locale, t } = useLanguage();
+  const ko = locale === "ko";
   const [signature, setSignature] = useState(profile.name);
   const [notes, setNotes] = useState("");
   const [signed, setSigned] = useState(false);
@@ -76,7 +77,12 @@ export function CaregiverContractModal({ open, request, onClose }: Props) {
             </View>
           ) : (
             <>
-              <Text style={styles.title}>{t("caregiverContract.title")}</Text>
+              <View style={styles.modalHeader}>
+                <Text style={styles.title}>{t("caregiverContract.title")}</Text>
+                <Pressable style={styles.closeBtn} onPress={onClose}>
+                  <X size={18} color={colors.muted} />
+                </Pressable>
+              </View>
               <View style={styles.parentSignedBadge}>
                 <CheckCircle size={13} color={colors.sage} />
                 <Text style={styles.parentSignedText}>
@@ -114,15 +120,14 @@ export function CaregiverContractModal({ open, request, onClose }: Props) {
 
               <View style={styles.actions}>
                 <PressSlide style={styles.cancelBtn} onPress={onClose}>
-                  <Text style={styles.cancelText}>{t("profile.cancel")}</Text>
+                  <Text style={styles.cancelText}>{ko ? "닫기" : "Close"}</Text>
                 </PressSlide>
                 <PressSlide
                   style={[styles.signBtn, !signature.trim() && styles.signBtnDisabled]}
                   onPress={handleSign}
                   disabled={!signature.trim()}
-                 
                 >
-                  <Text style={styles.signText}>{t("caregiverContract.sign")}</Text>
+                  <Text style={styles.signText}>{ko ? "제출 · 서명" : "Submit & Sign"}</Text>
                 </PressSlide>
               </View>
             </>
@@ -135,6 +140,8 @@ export function CaregiverContractModal({ open, request, onClose }: Props) {
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  closeBtn: { padding: 4 },
   sheet: {
     backgroundColor: colors.card,
     borderTopLeftRadius: radius.xl,

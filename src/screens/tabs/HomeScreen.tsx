@@ -17,6 +17,7 @@ export function HomeScreen() {
   const [contractRequest, setContractRequest] = useState<IncomingRequest | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<WeeklyPayment | null>(null);
+  const [activeTab, setActiveTab] = useState<"interviews" | "payments">("interviews");
   const fadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -26,10 +27,6 @@ export function HomeScreen() {
   const reportPreview = dailyReport ? (locale === "ko" ? dailyReport.reportKo : dailyReport.reportEn) : null;
   const ko = locale === "ko";
 
-  const scheduledOnHome = scheduledInterviews.filter((i) => i.status === "scheduled");
-  const postInterview = scheduledInterviews.filter(
-    (i) => i.status === "completed" || i.status === "contract_signed",
-  );
   const activeContract = scheduledInterviews.find((i) => i.status === "contract_signed");
   const currentPayment = weeklyPayments[0] ?? null;
 
@@ -72,7 +69,7 @@ export function HomeScreen() {
               <Baby size={20} color={colors.gold} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.caregiverLabel}>{t("home.emmaWith")}</Text>
+              <Text style={styles.caregiverLabel}>{ko ? "케어기버" : "Caregiver"}</Text>
               <Text style={styles.caregiverName}>Ji-yeon Park · {t("home.until")}</Text>
             </View>
             <CheckCircle size={18} color={colors.sage} />
@@ -80,85 +77,108 @@ export function HomeScreen() {
         )}
       </LinearGradient>
 
-      {/* Scheduled interviews */}
-      {scheduledOnHome.length > 0 && (
+      {/* Interview / Payment tab bar */}
+      <View style={styles.tabBar}>
+        <Pressable
+          style={[styles.tabItem, activeTab === "interviews" && styles.tabItemActive]}
+          onPress={() => setActiveTab("interviews")}
+        >
+          <Calendar size={14} color={activeTab === "interviews" ? colors.navy : colors.muted} />
+          <Text style={[styles.tabLabel, activeTab === "interviews" && styles.tabLabelActive]}>
+            {ko ? "인터뷰" : "Interviews"}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tabItem, activeTab === "payments" && styles.tabItemActive, !activeContract && styles.tabItemDisabled]}
+          onPress={() => activeContract && setActiveTab("payments")}
+        >
+          <CreditCard size={14} color={activeTab === "payments" ? colors.navy : colors.muted} />
+          <Text style={[styles.tabLabel, activeTab === "payments" && styles.tabLabelActive, !activeContract && { color: colors.muted, opacity: 0.4 }]}>
+            {ko ? "결제" : "Payments"}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Interviews tab */}
+      {activeTab === "interviews" && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t("home.interviewsSection")}</Text>
-          {scheduledOnHome.map((interview) => (
-            <View key={interview.id} style={styles.interviewCard}>
-              <Avatar src={interview.caregiverAvatar} size={44} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.interviewLabel}>{t("home.upcomingInterview")}</Text>
-                <Text style={styles.interviewName}>{interview.caregiverName}</Text>
-                <Text style={styles.interviewTime}>
-                  {ko ? interview.slotLabelKo : interview.slotLabelEn}
-                </Text>
-              </View>
-              <PressSlide style={styles.completeBtn} onPress={() => completeInterview(interview.id)}>
-                <CheckCircle size={15} color="#fff" />
-                <Text style={styles.completeBtnText}>{ko ? "완료" : "Done"}</Text>
-              </PressSlide>
+          {scheduledInterviews.length === 0 ? (
+            <View style={styles.emptyTab}>
+              <Calendar size={24} color={colors.muted} />
+              <Text style={styles.emptyTabText}>{ko ? "예정된 인터뷰가 없습니다" : "No pending interviews"}</Text>
             </View>
-          ))}
+          ) : (
+            scheduledInterviews.map((interview) => {
+              const isScheduled = interview.status === "scheduled";
+              const isSigned = interview.status === "contract_signed";
+              const statusColor = isScheduled ? colors.gold : isSigned ? colors.sage : "#6B7FA8";
+              const statusLabel = isScheduled
+                ? (ko ? "예정됨" : "Scheduled")
+                : isSigned
+                  ? (ko ? "계약 완료" : "Contract signed")
+                  : (ko ? "서명 대기" : "Ready to sign");
+              return (
+                <View key={interview.id} style={[styles.interviewCard, { borderColor: statusColor }]}>
+                  <Avatar src={interview.caregiverAvatar} size={44} />
+                  <View style={{ flex: 1 }}>
+                    <View style={[styles.statusPill, { backgroundColor: `${statusColor}18` }]}>
+                      <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
+                    </View>
+                    <Text style={styles.interviewName}>{interview.caregiverName}</Text>
+                    <Text style={styles.interviewTime}>
+                      {ko ? interview.slotLabelKo : interview.slotLabelEn}
+                    </Text>
+                  </View>
+                  {isScheduled && (
+                    <PressSlide style={styles.completeBtn} onPress={() => completeInterview(interview.id)}>
+                      <CheckCircle size={15} color="#fff" />
+                      <Text style={styles.completeBtnText}>{ko ? "완료" : "Done"}</Text>
+                    </PressSlide>
+                  )}
+                  {interview.status === "completed" && (
+                    <PressSlide style={styles.signBtn} onPress={() => setPendingTab("Profile")}>
+                      <PenLine size={14} color="#fff" />
+                      <Text style={styles.signBtnText}>{ko ? "서명" : "Sign"}</Text>
+                    </PressSlide>
+                  )}
+                  {isSigned && <CheckCircle size={18} color={colors.sage} />}
+                </View>
+              );
+            })
+          )}
         </View>
       )}
 
-      {/* Post-interview: contract status */}
-      {postInterview.map((interview) => (
-        <View key={interview.id} style={styles.section}>
-          <View style={styles.interviewCard}>
-            <View style={styles.interviewIcon}>
-              <Calendar size={18} color={interview.status === "contract_signed" ? colors.sage : colors.gold} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.interviewLabel}>
-                {interview.status === "contract_signed"
-                  ? t("home.contractSigned")
-                  : t("home.readyToSign")}
-              </Text>
-              <Text style={styles.interviewName}>{interview.caregiverName}</Text>
-              <Text style={styles.interviewTime}>
-                {interview.status === "completed"
-                  ? t("home.signOnProfile")
-                  : t("home.contractActive")}
-              </Text>
-            </View>
-            {interview.status === "completed" && (
-              <PressSlide style={styles.signBtn} onPress={() => setPendingTab("Profile")}>
-                <PenLine size={14} color="#fff" />
-                <Text style={styles.signBtnText}>{ko ? "서명하기" : "Sign"}</Text>
-              </PressSlide>
-            )}
-            {interview.status === "contract_signed" && (
-              <CheckCircle size={18} color={colors.sage} />
-            )}
-          </View>
-        </View>
-      ))}
-
-      {/* Weekly payment card */}
-      {currentPayment && (
+      {/* Payments tab — only visible when contract signed */}
+      {activeTab === "payments" && activeContract && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t("payment.section")}</Text>
-          <View style={[styles.paymentCard, currentPayment.status === "paid" && styles.paymentCardPaid]}>
-            <View style={styles.paymentLeft}>
-              <CreditCard size={18} color={currentPayment.status === "paid" ? colors.sage : colors.gold} />
-              <View>
-                <Text style={styles.paymentWeek}>{ko ? currentPayment.weekLabelKo : currentPayment.weekLabel}</Text>
-                <Text style={styles.paymentAmount}>{currentPayment.amount}</Text>
+          {currentPayment ? (
+            <View style={[styles.paymentCard, currentPayment.status === "paid" && styles.paymentCardPaid]}>
+              <View style={styles.paymentLeft}>
+                <CreditCard size={18} color={currentPayment.status === "paid" ? colors.sage : colors.gold} />
+                <View>
+                  <Text style={styles.paymentWeek}>{ko ? currentPayment.weekLabelKo : currentPayment.weekLabel}</Text>
+                  <Text style={styles.paymentAmount}>{currentPayment.amount}</Text>
+                  <Text style={styles.paymentDue}>{ko ? `마감: ${currentPayment.dueDateKo}` : `Due: ${currentPayment.dueDate}`}</Text>
+                </View>
               </View>
+              {currentPayment.status === "paid" ? (
+                <View style={styles.paidBadge}>
+                  <CheckCircle size={13} color={colors.sage} />
+                  <Text style={styles.paidText}>{t("payment.received")}</Text>
+                </View>
+              ) : (
+                <PressSlide style={styles.payBtn} onPress={() => openPayment(currentPayment)}>
+                  <Text style={styles.payBtnText}>{t("payment.pay")}</Text>
+                </PressSlide>
+              )}
             </View>
-            {currentPayment.status === "paid" ? (
-              <View style={styles.paidBadge}>
-                <CheckCircle size={13} color={colors.sage} />
-                <Text style={styles.paidText}>{t("payment.received")}</Text>
-              </View>
-            ) : (
-              <PressSlide style={styles.payBtn} onPress={() => openPayment(currentPayment)}>
-                <Text style={styles.payBtnText}>{t("payment.pay")}</Text>
-              </PressSlide>
-            )}
-          </View>
+          ) : (
+            <View style={styles.emptyTab}>
+              <CreditCard size={24} color={colors.muted} />
+              <Text style={styles.emptyTabText}>{ko ? "결제 정보가 없습니다" : "No payment information"}</Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -228,6 +248,7 @@ function CaregiverHomeScreen({
   const ko = locale === "ko";
   const firstName = profile.name.split(" ")[0];
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [activeTab, setActiveTab] = useState<"interviews" | "payments">("interviews");
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
   }, []);
@@ -236,6 +257,7 @@ function CaregiverHomeScreen({
   const accepted = incomingRequests.filter((r) => r.status === "accepted" || r.status === "contract_signed");
   const activeContract = incomingRequests.find((r) => r.status === "contract_signed");
   const currentPayment = weeklyPayments[0] ?? null;
+  const allInterviews = [...pending, ...accepted];
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -278,93 +300,125 @@ function CaregiverHomeScreen({
         )}
       </LinearGradient>
 
-      {/* Pending interview requests */}
-      {pending.length > 0 && (
+      {/* Interview / Payment tab bar */}
+      <View style={styles.tabBar}>
+        <Pressable
+          style={[styles.tabItem, activeTab === "interviews" && styles.tabItemActive]}
+          onPress={() => setActiveTab("interviews")}
+        >
+          <Calendar size={14} color={activeTab === "interviews" ? colors.navy : colors.muted} />
+          <Text style={[styles.tabLabel, activeTab === "interviews" && styles.tabLabelActive]}>
+            {ko ? "인터뷰" : "Interviews"}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tabItem, activeTab === "payments" && styles.tabItemActive, !activeContract && styles.tabItemDisabled]}
+          onPress={() => activeContract && setActiveTab("payments")}
+        >
+          <CreditCard size={14} color={activeTab === "payments" ? colors.navy : colors.muted} />
+          <Text style={[styles.tabLabel, activeTab === "payments" && styles.tabLabelActive, !activeContract && { color: colors.muted, opacity: 0.4 }]}>
+            {ko ? "급여" : "Payments"}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Interviews tab */}
+      {activeTab === "interviews" && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t("caregiver.home.requests")}</Text>
-          {pending.map((req) => (
-            <View key={req.id} style={[styles.interviewCard, { borderColor: colors.gold }]}>
-              <Avatar src={req.parentAvatar} size={44} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.interviewLabel}>{ko ? "인터뷰 요청" : "Interview Request"}</Text>
-                <Text style={styles.interviewName}>{req.parentName}</Text>
-                <Text style={styles.interviewTime}>{ko ? req.slotLabelKo : req.slotLabelEn}</Text>
-                <Text style={styles.interviewSubtext}>
-                  {req.liveIn ? (ko ? "입주" : "Live-in") : (ko ? "출퇴근" : "Live-out")} · {req.budget}
-                </Text>
-              </View>
-              <View style={styles.requestActions}>
-                <PressSlide style={styles.acceptBtn} onPress={() => acceptRequest(req.id)}>
-                  <Text style={styles.acceptBtnText}>{t("caregiver.home.accept")}</Text>
-                </PressSlide>
-                <PressSlide style={styles.declineBtn}>
-                  <Text style={styles.declineBtnText}>{t("caregiver.home.decline")}</Text>
-                </PressSlide>
-              </View>
+          {allInterviews.length === 0 ? (
+            <View style={styles.emptyTab}>
+              <Calendar size={24} color={colors.muted} />
+              <Text style={styles.emptyTabText}>{ko ? "예정된 인터뷰가 없습니다" : "No pending interviews"}</Text>
             </View>
-          ))}
+          ) : (
+            <>
+              {pending.map((req) => (
+                <View key={req.id} style={[styles.interviewCard, { borderColor: colors.gold }]}>
+                  <Avatar src={req.parentAvatar} size={44} />
+                  <View style={{ flex: 1 }}>
+                    <View style={[styles.statusPill, { backgroundColor: `${colors.gold}18` }]}>
+                      <Text style={[styles.statusPillText, { color: colors.gold }]}>{ko ? "인터뷰 요청" : "Interview Request"}</Text>
+                    </View>
+                    <Text style={styles.interviewName}>{req.parentName}</Text>
+                    <Text style={styles.interviewTime}>{ko ? req.slotLabelKo : req.slotLabelEn}</Text>
+                    <Text style={styles.interviewSubtext}>
+                      {req.liveIn ? (ko ? "입주" : "Live-in") : (ko ? "출퇴근" : "Live-out")} · {req.budget}
+                    </Text>
+                  </View>
+                  <View style={styles.requestActions}>
+                    <PressSlide style={styles.acceptBtn} onPress={() => acceptRequest(req.id)}>
+                      <Text style={styles.acceptBtnText}>{t("caregiver.home.accept")}</Text>
+                    </PressSlide>
+                    <PressSlide style={styles.declineBtn}>
+                      <Text style={styles.declineBtnText}>{t("caregiver.home.decline")}</Text>
+                    </PressSlide>
+                  </View>
+                </View>
+              ))}
+              {accepted.map((req) => {
+                const isSigned = req.status === "contract_signed";
+                const hasParentSig = !!req.parentSignature;
+                const statusColor = isSigned ? colors.sage : colors.gold;
+                const statusLabel = isSigned
+                  ? t("caregiver.home.contractSigned")
+                  : hasParentSig ? t("caregiver.home.contractReady") : t("caregiver.home.accepted");
+                return (
+                  <View key={req.id} style={[styles.interviewCard, { borderColor: statusColor }]}>
+                    <View style={[styles.interviewIcon, { backgroundColor: `${statusColor}18` }]}>
+                      <Users size={18} color={statusColor} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={[styles.statusPill, { backgroundColor: `${statusColor}18` }]}>
+                        <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
+                      </View>
+                      <Text style={styles.interviewName}>{req.parentName}</Text>
+                      <Text style={styles.interviewTime}>{ko ? req.slotLabelKo : req.slotLabelEn}</Text>
+                    </View>
+                    {hasParentSig && !isSigned && (
+                      <PressSlide style={styles.signBtn} onPress={() => setContractRequest(req)}>
+                        <PenLine size={13} color="#fff" />
+                        <Text style={styles.signBtnText}>{ko ? "서명" : "Sign"}</Text>
+                      </PressSlide>
+                    )}
+                    {isSigned && <CheckCircle size={18} color={colors.sage} />}
+                  </View>
+                );
+              })}
+            </>
+          )}
         </View>
       )}
 
-      {/* Accepted / signed contracts */}
-      {accepted.length > 0 && (
+      {/* Payments tab — only visible when contract signed */}
+      {activeTab === "payments" && activeContract && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{ko ? "진행 중" : "In Progress"}</Text>
-          {accepted.map((req) => {
-            const isSigned = req.status === "contract_signed";
-            const hasParentSig = !!req.parentSignature;
-            return (
-              <View key={req.id} style={[styles.interviewCard, { borderColor: isSigned ? colors.sage : colors.gold }]}>
-                <View style={[styles.interviewIcon, { backgroundColor: isSigned ? `${colors.sage}18` : colors.champagne }]}>
-                  <Users size={18} color={isSigned ? colors.sage : colors.gold} />
+          {currentPayment ? (
+            <View style={[styles.paymentCard, currentPayment.status === "paid" && styles.paymentCardPaid]}>
+              <View style={styles.paymentLeft}>
+                <CreditCard size={18} color={currentPayment.status === "paid" ? colors.sage : "#f59e0b"} />
+                <View>
+                  <Text style={styles.paymentWeek}>{ko ? currentPayment.weekLabelKo : currentPayment.weekLabel}</Text>
+                  <Text style={styles.paymentAmount}>{currentPayment.amount}</Text>
+                  <Text style={styles.paymentDue}>{ko ? `마감: ${currentPayment.dueDateKo}` : `Due: ${currentPayment.dueDate}`}</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.interviewLabel, { color: isSigned ? colors.sage : colors.gold }]}>
-                    {isSigned
-                      ? t("caregiver.home.contractSigned")
-                      : hasParentSig
-                        ? t("caregiver.home.contractReady")
-                        : t("caregiver.home.accepted")}
-                  </Text>
-                  <Text style={styles.interviewName}>{req.parentName}</Text>
-                  <Text style={styles.interviewTime}>{ko ? req.slotLabelKo : req.slotLabelEn}</Text>
+              </View>
+              {currentPayment.status === "paid" ? (
+                <View style={styles.paidBadge}>
+                  <CheckCircle size={13} color={colors.sage} />
+                  <Text style={styles.paidText}>{t("payment.caregiverPaid")}</Text>
                 </View>
-                {hasParentSig && !isSigned && (
-                  <PressSlide style={styles.signBtn} onPress={() => setContractRequest(req)}>
-                    <PenLine size={13} color="#fff" />
-                    <Text style={styles.signBtnText}>{ko ? "서명하기" : "Sign"}</Text>
-                  </PressSlide>
-                )}
-                {isSigned && <CheckCircle size={18} color={colors.sage} />}
-              </View>
-            );
-          })}
-        </View>
-      )}
-
-      {/* Weekly payment status */}
-      {currentPayment && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t("payment.section")}</Text>
-          <View style={[styles.paymentCard, currentPayment.status === "paid" && styles.paymentCardPaid]}>
-            <View style={styles.paymentLeft}>
-              <CreditCard size={18} color={currentPayment.status === "paid" ? colors.sage : "#f59e0b"} />
-              <View>
-                <Text style={styles.paymentWeek}>{ko ? currentPayment.weekLabelKo : currentPayment.weekLabel}</Text>
-                <Text style={styles.paymentAmount}>{currentPayment.amount}</Text>
-              </View>
+              ) : (
+                <View style={styles.pendingBadge}>
+                  <Text style={styles.pendingText}>{t("payment.caregiverPending")}</Text>
+                </View>
+              )}
             </View>
-            {currentPayment.status === "paid" ? (
-              <View style={styles.paidBadge}>
-                <CheckCircle size={13} color={colors.sage} />
-                <Text style={styles.paidText}>{t("payment.caregiverPaid")}</Text>
-              </View>
-            ) : (
-              <View style={styles.pendingBadge}>
-                <Text style={styles.pendingText}>{t("payment.caregiverPending")}</Text>
-              </View>
-            )}
-          </View>
+          ) : (
+            <View style={styles.emptyTab}>
+              <CreditCard size={24} color={colors.muted} />
+              <Text style={styles.emptyTabText}>{ko ? "결제 정보가 없습니다" : "No payment information"}</Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -561,4 +615,54 @@ const styles = StyleSheet.create({
   pendingText: { fontSize: 12, fontWeight: "700", color: "#f59e0b" },
 
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+
+  tabBar: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: colors.card,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 4,
+    gap: 4,
+  },
+  tabItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: radius.lg,
+  },
+  tabItemActive: {
+    backgroundColor: `${colors.navy}12`,
+  },
+  tabItemDisabled: { opacity: 0.45 },
+  tabLabel: { fontSize: 13, fontWeight: "600", color: colors.muted },
+  tabLabelActive: { color: colors.navy },
+
+  statusPill: {
+    alignSelf: "flex-start",
+    borderRadius: radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 4,
+  },
+  statusPillText: { fontSize: 11, fontWeight: "700" },
+
+  paymentDue: { fontSize: 11, color: colors.muted, marginTop: 2 },
+
+  emptyTab: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.card,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 32,
+  },
+  emptyTabText: { fontSize: 14, color: colors.muted, fontWeight: "500" },
 });

@@ -25,6 +25,7 @@ export type UserProfile = {
   bidNote?: string;
   bio?: string;
   availability?: string;
+  ethnicity?: string;
   licenseNumber?: string;
   licensePhoto?: string;
   certificates?: CaregiverCertificate[];

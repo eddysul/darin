@@ -193,6 +193,7 @@ export function ProfileScreen() {
               { icon: Home, color: "#8b5cf6", label: t("profile.liveIn"), value: profile.liveIn ? t("profile.liveInYes") : t("profile.liveInNo") },
               { icon: Calendar, color: "#f59e0b", label: t("profile.experience"), value: profile.experience || "—" },
               { icon: Milk, color: "#243036", label: t("profile.breastfeeding"), value: profile.breastfeeding ? t("profile.breastfeedingYes") : t("profile.breastfeedingNo") },
+              { icon: Globe, color: "#6B7FA8", label: t("profile.ethnicity"), value: profile.ethnicity || "—" },
               { icon: FileText, color: "#64748b", label: t("profile.notes"), value: profile.notes || "—" },
             ].map(({ icon: Icon, color, label, value }, i) => (
               <View key={label} style={[styles.careRow, i > 0 && styles.careRowBorder]}>
@@ -226,6 +227,7 @@ export function ProfileScreen() {
               { icon: Home, color: "#6B7FA8", label: t("profile.availability"), value: profile.availability || "—" },
               { icon: Baby, color: "#ec4899", label: t("profile.liveIn"), value: profile.liveIn ? t("profile.liveInYes") : t("profile.liveInNo") },
               { icon: Milk, color: "#243036", label: t("profile.breastfeeding"), value: profile.breastfeeding ? t("profile.breastfeedingYes") : t("profile.breastfeedingNo") },
+              { icon: Globe, color: "#6B7FA8", label: t("profile.ethnicity"), value: profile.ethnicity || "—" },
             ].map(({ icon: Icon, color, label, value }, i) => (
               <View key={label} style={[styles.careRow, i > 0 && styles.careRowBorder]}>
                 <View style={[styles.careIcon, { backgroundColor: `${color}18` }]}>
