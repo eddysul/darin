@@ -29,6 +29,7 @@ export async function transcribeRecording(uri: string): Promise<TranscribeResult
     body: formData,
     headers: {
       Accept: "application/json",
+      "ngrok-skip-browser-warning": "true",
     },
   });
 
@@ -42,7 +43,9 @@ export async function transcribeRecording(uri: string): Promise<TranscribeResult
 
 export async function checkTranscribeHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${TRANSCRIBE_API_URL}/health`);
+    const response = await fetch(`${TRANSCRIBE_API_URL}/health`, {
+      headers: { "ngrok-skip-browser-warning": "true" },
+    });
     return response.ok;
   } catch {
     return false;
