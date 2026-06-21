@@ -29,7 +29,7 @@ export const PARENT_LISTINGS: ParentListing[] = [
     locationKo: "시애틀 캐피톨힐",
     dueDate: "Aug 15, 2026",
     dueDateKo: "2026년 8월 15일",
-    budget: "$1,500–$2,000/wk",
+    budget: "$2,500–$3,000/wk",
     liveIn: true,
     breastfeeding: true,
     languages: ["Korean", "English"],
