@@ -19,6 +19,7 @@ import { useVoiceRecording } from "../../context/VoiceRecordingContext";
 import { getLogEntries } from "../../i18n";
 import { useLanguage } from "../../LanguageContext";
 import { createId } from "../../utils/id";
+import { appendEventsForToday } from "../../utils/eventStore";
 import type { DailyReport } from "../../types/dailyReport";
 import { colors, radius } from "../../theme";
 
@@ -64,6 +65,7 @@ export function LogScreen() {
     const now = new Date();
     const time = now.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
     setLocalEntries((prev) => [{ type, text: voiceTranscript.trim(), time }, ...prev]);
+    appendEventsForToday(savedNote?.events ?? []);
     setAddedToLog(true);
   };
 

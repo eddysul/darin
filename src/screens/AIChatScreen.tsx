@@ -17,6 +17,7 @@ import { loadEventStore } from "../utils/eventStore";
 import { colors, radius } from "../theme";
 import type { DailyReport } from "../types/dailyReport";
 import type { CareEvent } from "../types/transcribe";
+import type { LogEntry } from "../types/log";
 import type { Locale } from "../i18n";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -51,7 +52,18 @@ function getRecentEventData(): string {
     .join("\n\n");
 }
 
-function buildSystemPrompt(report: DailyReport | null, locale: Locale): string {
+function formatLogEntries(entries: LogEntry[]): string {
+  if (!entries.length) return "";
+  const today = new Date().toISOString().slice(0, 10);
+  const lines = entries.map((e) => {
+    const time = new Date(e.timestamp).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+    const detail = e.summary ?? e.rawText;
+    return `  - ${e.category} at ${time}: ${detail}`;
+  });
+  return `[${today} - caregiver app log]\n${lines.join("\n")}`;
+}
+
+function buildSystemPrompt(report: DailyReport | null, locale: Locale, logEntries: LogEntry[]): string {
   const isKo = locale === "ko";
   const langInstruction = isKo
     ? "Always respond in Korean (한국어로만 답변하세요)."
@@ -62,11 +74,13 @@ You help parents understand their child's daily care reports and give practical 
 Keep responses concise (2-4 sentences). ${langInstruction}`;
 
   const eventData = getRecentEventData();
-  const eventSection = eventData
-    ? `\nYou have access to the child's recent care event log (last 7 days):\n${eventData}\n\nUse this data to give personalized, specific advice based on the child's actual patterns.`
+  const appLogData = formatLogEntries(logEntries);
+  const combinedData = [eventData, appLogData].filter(Boolean).join("\n\n");
+  const eventSection = combinedData
+    ? `\nYou have access to the child's recent care event log:\n${combinedData}\n\nUse this data to give personalized, specific advice based on the child's actual patterns.`
     : "";
 
-  if (!report && !eventData) {
+  if (!report && !combinedData) {
     const noDataNote = isKo
       ? "현재 아이에 대한 리포트가 부족합니다. 정확한 상담을 원하시면 Log 탭에서 리포트를 작성해 주세요."
       : "There is currently not enough report data for your child. For accurate advice, please create a report in the Log tab.";
@@ -126,7 +140,7 @@ type Props = {
 };
 
 export function AIChatScreen({ onClose }: Props) {
-  const { dailyReport } = useApp();
+  const { dailyReport, logEntries } = useApp();
   const { locale } = useLanguage();
   const topInset = useScreenTopInset(8);
   const scrollRef = useRef<ScrollView>(null);
@@ -140,7 +154,7 @@ export function AIChatScreen({ onClose }: Props) {
   const [isTyping, setIsTyping] = useState(false);
   const nextId = useRef(1);
   const historyRef = useRef<OpenAIMessage[]>([]);
-  const systemPrompt = useMemo(() => buildSystemPrompt(dailyReport, locale), [dailyReport, locale]);
+  const systemPrompt = useMemo(() => buildSystemPrompt(dailyReport, locale, logEntries), [dailyReport, locale, logEntries]);
 
   useEffect(() => {
     const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
