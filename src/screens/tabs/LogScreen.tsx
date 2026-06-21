@@ -1,7 +1,5 @@
-import { useRef, useState } from "react";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Pressable,
   ScrollView,
@@ -10,12 +8,22 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { CheckCircle, FileText, Mic, Send, Sparkles, X } from "lucide-react-native";
+import {
+  CheckCircle,
+  FileText,
+  Mic,
+  RotateCcw,
+  Send,
+  Sparkles,
+} from "lucide-react-native";
 import { PressSlide } from "../../components/PressSlide";
+import { VoiceWaveform } from "../../components/VoiceWaveform";
 import { useApp } from "../../context/AppContext";
 import { useVoiceRecording } from "../../context/VoiceRecordingContext";
+import { generateDailyReport } from "../../demo/dailyReport";
 import { useLanguage } from "../../LanguageContext";
 import type { MessageKey } from "../../i18n";
+import type { DailyReport } from "../../types/dailyReport";
 import { CATEGORY_META, type LogCategory } from "../../types/log";
 import { categorizeLog, extractSummary } from "../../utils/categorize";
 import { colors, radius } from "../../theme";
@@ -33,8 +41,8 @@ export function LogScreen() {
   const { profile, logEntries } = useApp();
   const { locale, t } = useLanguage();
   const ko = locale === "ko";
-
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
   }, []);
@@ -60,127 +68,225 @@ function CaregiverLogView({
   fadeAnim: Animated.Value;
 }) {
   const { logEntries, addLogEntry, generateDailyReportFromLogs, dailyReport } = useApp();
-  const { isRecording, isTranscribing, savedNote, startRecording, clearSavedNote } = useVoiceRecording();
-  const [text, setText] = useState("");
+  const { isRecording, isTranscribing, levels, savedNote, startRecording, clearSavedNote } =
+    useVoiceRecording();
+
+  // Voice / text state
+  const [voiceTranscript, setVoiceTranscript] = useState("");
   const [serverCategory, setServerCategory] = useState<LogCategory | null>(null);
+  const [quickNote, setQuickNote] = useState("");
+
+  // AI report state
+  const [generated, setGenerated] = useState<DailyReport | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [reportSaved, setReportSaved] = useState(false);
+
+  // Entry submit state
   const [lastAdded, setLastAdded] = useState<{ category: LogCategory } | null>(null);
   const [reportGenerated, setReportGenerated] = useState(false);
   const successAnim = useRef(new Animated.Value(0)).current;
 
-  // When transcription arrives, pre-fill text and pick server category
+  // Receive transcript from Bizcrush pipeline
   useEffect(() => {
-    if (!savedNote || !savedNote.transcript) return;
-    setText(savedNote.transcript);
+    if (!savedNote?.transcript) return;
+    setVoiceTranscript(savedNote.transcript);
     if (savedNote.events && savedNote.events.length > 0) {
       setServerCategory(serverCatToLogCategory(savedNote.events[0].category));
     }
   }, [savedNote]);
 
+  const hasTranscript = Boolean(voiceTranscript);
   const sorted = [...logEntries].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
-  const detectedCategory = serverCategory ?? (text.trim().length > 3 ? categorizeLog(text) : null);
+  const handleRetake = () => {
+    clearSavedNote();
+    setVoiceTranscript("");
+    setServerCategory(null);
+    setGenerated(null);
+    setReportSaved(false);
+  };
 
-  const handleAdd = () => {
-    const trimmed = text.trim();
+  const handleGenerate = () => {
+    const source = [voiceTranscript, quickNote].filter(Boolean).join("\n\n");
+    if (!source.trim()) return;
+    setIsGenerating(true);
+    setReportSaved(false);
+    setTimeout(() => {
+      setGenerated(generateDailyReport(source));
+      setIsGenerating(false);
+    }, 900);
+  };
+
+  const handleSaveReport = () => {
+    if (!generated) return;
+    generateDailyReportFromLogs(locale);
+    setReportSaved(true);
+    setReportGenerated(true);
+  };
+
+  // Add current transcript / note as a categorized log entry
+  const handleAddEntry = (rawText: string) => {
+    const trimmed = rawText.trim();
     if (!trimmed) return;
     const category = serverCategory ?? categorizeLog(trimmed);
     const summary = extractSummary(trimmed, category);
     addLogEntry({ category, timestamp: new Date().toISOString(), rawText: trimmed, summary });
     setLastAdded({ category });
-    setText("");
-    setServerCategory(null);
-    clearSavedNote();
+    setQuickNote("");
+    handleRetake();
     successAnim.setValue(0);
     Animated.spring(successAnim, { toValue: 1, useNativeDriver: true, speed: 16, bounciness: 8 }).start();
   };
 
-  const handleGenerateReport = () => {
-    generateDailyReportFromLogs(locale);
-    setReportGenerated(true);
-  };
-
-  const handleClearVoice = () => {
-    clearSavedNote();
-    setText("");
-    setServerCategory(null);
-  };
-
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <Animated.View style={{ opacity: fadeAnim }}>
         <Text style={styles.title}>{t("log.title")}</Text>
         <Text style={styles.subtitle}>{t("log.subtitle")}</Text>
 
-        <View style={styles.card}>
-          {/* Card header: title + mic button */}
-          <View style={styles.cardTitleRow}>
-            <Pressable
-              style={[styles.micBtn, isRecording && styles.micBtnActive]}
-              onPress={() => void startRecording()}
-            >
-              <Mic size={15} color={isRecording ? "#fff" : colors.gold} />
-            </Pressable>
-            <Text style={styles.cardTitle}>{t("log.addEntry")}</Text>
-            {isTranscribing && (
-              <View style={styles.transcribingBadge}>
-                <ActivityIndicator size="small" color={colors.gold} />
-                <Text style={styles.transcribingText}>{ko ? "변환 중…" : "Transcribing…"}</Text>
-              </View>
-            )}
+        {/* ── Voice Card ──────────────────────────────────── */}
+        <View style={styles.voiceCard}>
+          <View style={styles.voiceHeader}>
+            <Text style={styles.voiceTitle}>{t("log.voiceNote")}</Text>
+            <View style={styles.voiceBadge}>
+              <Sparkles size={10} color={colors.yellow} />
+              <Text style={styles.voiceBadgeText}>AI</Text>
+            </View>
           </View>
 
-          {/* Voice result banner */}
-          {savedNote && savedNote.transcript && !isTranscribing && (
-            <View style={styles.voiceBanner}>
-              <View style={styles.voiceBannerHeader}>
-                <Mic size={11} color={colors.gold} />
-                <Text style={styles.voiceBannerLabel}>{ko ? "음성 인식 결과 — 확인 후 저장하세요" : "Voice result — review & save"}</Text>
-                <Pressable onPress={handleClearVoice}>
-                  <X size={13} color={colors.muted} />
-                </Pressable>
+          {isRecording ? (
+            <>
+              <Text style={styles.recordingLabel}>{t("log.recordingLive")}</Text>
+              <View style={styles.waveWrap}>
+                <VoiceWaveform levels={levels} barCount={32} height={48} />
               </View>
-              {savedNote.usedFallbackTranscript && (
+            </>
+          ) : isTranscribing ? (
+            <>
+              <Text style={styles.recordingLabel}>{ko ? "변환 중…" : "Transcribing…"}</Text>
+              <View style={styles.waveWrap}>
+                <VoiceWaveform levels={levels} barCount={32} height={48} active={false} />
+              </View>
+            </>
+          ) : hasTranscript ? (
+            <>
+              <Text style={styles.transcript}>{voiceTranscript}</Text>
+
+              {/* Server-detected category chips */}
+              {savedNote?.events && savedNote.events.length > 0 && (
+                <View style={styles.eventList}>
+                  {savedNote.events.map((event, i) => {
+                    const cat = serverCatToLogCategory(event.category);
+                    const meta = CATEGORY_META[cat];
+                    return (
+                      <View key={i} style={[styles.eventChip, { backgroundColor: meta.bg }]}>
+                        <Text style={styles.eventChipEmoji}>{meta.emoji}</Text>
+                        <Text style={[styles.eventChipText, { color: meta.color }]}>
+                          {ko ? meta.labelKo : meta.labelEn}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {savedNote?.usedFallbackTranscript && (
                 <Text style={styles.fallbackNote}>
-                  {ko ? "⚠ 서버 미연결 — 예시 텍스트입니다" : "⚠ Server offline — showing demo text"}
+                  {ko ? "⚠ 서버 미연결 — 예시 텍스트" : "⚠ Server offline — demo text"}
                 </Text>
               )}
-            </View>
-          )}
 
-          <TextInput
-            style={[styles.textarea, savedNote?.transcript && !isTranscribing && styles.textareaVoice]}
-            multiline
-            numberOfLines={3}
-            placeholder={isTranscribing
-              ? (ko ? "음성을 텍스트로 변환 중…" : "Converting voice to text…")
-              : t("log.addPlaceholder")}
-            placeholderTextColor={colors.muted}
-            value={text}
-            onChangeText={(v) => { setText(v); setServerCategory(null); }}
-            textAlignVertical="top"
-            editable={!isTranscribing}
-          />
-
-          {detectedCategory && (
-            <View style={styles.previewRow}>
-              <Text style={styles.previewLabel}>{t("log.categoryDetected")}:</Text>
-              <CategoryChip category={detectedCategory} ko={ko} />
-              {serverCategory && (
-                <Text style={styles.aiLabel}>{ko ? "AI 분류" : "AI classified"}</Text>
+              {savedNote && (
+                <View style={styles.savedRow}>
+                  <CheckCircle size={11} color={colors.muted} />
+                  <Text style={styles.savedHint}>{t("log.voiceSaved")} · {savedNote.savedAt}</Text>
+                </View>
               )}
-            </View>
-          )}
 
-          <PressSlide
-            style={[styles.submitBtn, (!text.trim() || isTranscribing) && styles.submitBtnDisabled]}
-            onPress={handleAdd}
-            disabled={!text.trim() || isTranscribing}
-          >
-            <Send size={14} color={colors.text} />
-            <Text style={styles.submitBtnText}>{t("log.submitEntry")}</Text>
-          </PressSlide>
+              <View style={styles.voiceActions}>
+                <Pressable style={styles.retakeBtn} onPress={handleRetake}>
+                  <RotateCcw size={14} color={colors.text} />
+                  <Text style={styles.retakeBtnText}>{t("log.retake")}</Text>
+                </Pressable>
+                <PressSlide
+                  style={[styles.addEntryBtn, isGenerating && styles.btnDisabled]}
+                  onPress={() => handleAddEntry(voiceTranscript)}
+                >
+                  <Send size={14} color={colors.text} />
+                  <Text style={styles.addEntryBtnText}>{t("log.submitEntry")}</Text>
+                </PressSlide>
+                <PressSlide
+                  style={[styles.generateVoiceBtn, isGenerating && styles.btnDisabled]}
+                  onPress={handleGenerate}
+                  disabled={isGenerating}
+                >
+                  <Sparkles size={14} color={colors.yellow} />
+                  <Text style={styles.generateVoiceBtnText}>
+                    {isGenerating ? t("log.generating") : t("log.generateReport")}
+                  </Text>
+                </PressSlide>
+              </View>
+            </>
+          ) : (
+            /* Idle — tap mic to start */
+            <Pressable style={styles.micIdleRow} onPress={() => void startRecording()}>
+              <View style={styles.micIdleBtn}>
+                <Mic size={22} color={colors.yellow} />
+              </View>
+              <Text style={styles.holdHint}>{t("log.holdCenterHint")}</Text>
+            </Pressable>
+          )}
         </View>
 
+        {/* ── Quick Notes ─────────────────────────────────── */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t("log.quickNotes")}</Text>
+          <TextInput
+            style={styles.textarea}
+            multiline
+            numberOfLines={4}
+            placeholder={t("log.addPlaceholder")}
+            placeholderTextColor={colors.muted}
+            value={quickNote}
+            onChangeText={setQuickNote}
+            textAlignVertical="top"
+          />
+          {quickNote.trim().length > 3 && (
+            <View style={styles.previewRow}>
+              <Text style={styles.previewLabel}>{t("log.categoryDetected")}:</Text>
+              <CategoryChip category={categorizeLog(quickNote)} ko={ko} />
+            </View>
+          )}
+          <View style={styles.quickActions}>
+            {!hasTranscript && (
+              <PressSlide
+                style={[styles.generateBtn, (!quickNote.trim() || isGenerating) && styles.btnDisabled]}
+                onPress={handleGenerate}
+                disabled={isGenerating || !quickNote.trim()}
+              >
+                <Sparkles size={14} color={colors.yellow} />
+                <Text style={styles.generateBtnText}>
+                  {isGenerating ? t("log.generating") : t("log.generateReport")}
+                </Text>
+              </PressSlide>
+            )}
+            {quickNote.trim().length > 0 && (
+              <PressSlide
+                style={styles.addNoteBtn}
+                onPress={() => handleAddEntry(quickNote)}
+              >
+                <Send size={13} color={colors.text} />
+                <Text style={styles.addNoteBtnText}>{t("log.submitEntry")}</Text>
+              </PressSlide>
+            )}
+          </View>
+        </View>
+
+        {/* ── Success toast ───────────────────────────────── */}
         {lastAdded && (
           <Animated.View style={[styles.successRow, { opacity: successAnim, transform: [{ scale: successAnim }] }]}>
             <CheckCircle size={14} color={colors.sage} />
@@ -189,9 +295,57 @@ function CaregiverLogView({
           </Animated.View>
         )}
 
+        {/* ── Generating spinner ──────────────────────────── */}
+        {isGenerating && (
+          <View style={[styles.card, styles.aiCard, styles.centerCard]}>
+            <Sparkles size={24} color={colors.yellow} />
+            <Text style={styles.generatingText}>{t("log.generating")}</Text>
+          </View>
+        )}
+
+        {/* ── AI Report sections ──────────────────────────── */}
+        {generated && !isGenerating && (
+          <>
+            {[
+              { title: t("log.originalNote"), body: generated.sourceNote, ai: false },
+              { title: t("log.aiReportEn"), body: generated.reportEn, ai: true },
+              { title: t("log.aiReportKo"), body: generated.reportKo, ai: true },
+              { title: t("log.parentReplyDraft"), body: generated.parentReplyDraft, ai: true, italic: true },
+            ].map((section) => (
+              <View key={section.title} style={[styles.card, section.ai && styles.aiCard]}>
+                <Text style={styles.sectionLabel}>
+                  {section.ai && <Sparkles size={11} color={colors.yellow} />} {section.title}
+                </Text>
+                <Text style={[styles.sectionBody, section.italic && styles.italic]}>
+                  {section.body}
+                </Text>
+              </View>
+            ))}
+            <View style={[styles.card, styles.saveCard]}>
+              <View style={styles.saveHeader}>
+                <Sparkles size={14} color={colors.yellow} />
+                <Text style={styles.saveTitle}>{t("log.aiDraft")}</Text>
+                <Text style={styles.saveHint}>{t("log.readyToSend")}</Text>
+              </View>
+              <PressSlide style={styles.sendBtn} onPress={handleSaveReport}>
+                <Send size={14} color={colors.primaryForeground} />
+                <Text style={styles.sendBtnText}>{t("log.sendToParent")}</Text>
+              </PressSlide>
+              {reportSaved && (
+                <Text style={styles.savedText}>
+                  <CheckCircle size={12} color={colors.muted} /> {t("log.savedToReports")}
+                </Text>
+              )}
+            </View>
+          </>
+        )}
+
+        {/* ── Timeline ────────────────────────────────────── */}
         <View style={styles.timelineHeader}>
           <Text style={styles.timelineTitle}>{t("log.timeline")}</Text>
-          <Text style={styles.entryCount}>{logEntries.length} {ko ? "건" : "entries"}</Text>
+          <Text style={styles.entryCount}>
+            {logEntries.length} {ko ? "건" : "entries"}
+          </Text>
         </View>
 
         {sorted.length === 0 ? (
@@ -232,9 +386,9 @@ function CaregiverLogView({
                 <Text style={styles.reportDoneText}>{t("log.savedToReports")}</Text>
               </View>
             ) : (
-              <PressSlide style={styles.generateBtn} onPress={handleGenerateReport}>
+              <PressSlide style={styles.generateFullBtn} onPress={() => { generateDailyReportFromLogs(locale); setReportGenerated(true); }}>
                 <Sparkles size={14} color="#fff" />
-                <Text style={styles.generateBtnText}>{t("log.generateFromEntries")}</Text>
+                <Text style={styles.generateFullBtnText}>{t("log.generateFromEntries")}</Text>
               </PressSlide>
             )}
           </View>
@@ -285,7 +439,6 @@ function ParentLogView({
                 );
               })}
             </View>
-
             {sorted.map((entry) => {
               const meta = CATEGORY_META[entry.category];
               const time = new Date(entry.timestamp).toLocaleTimeString(ko ? "ko-KR" : "en-US", {
@@ -332,47 +485,113 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "700", color: colors.text },
   subtitle: { fontSize: 14, color: colors.muted, marginTop: 4, marginBottom: 16 },
 
+  // ── Voice card ──────────────────────────────────────────────────────────────
+  voiceCard: {
+    backgroundColor: colors.yellowSoft,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.yellow,
+    padding: 18,
+    marginBottom: 14,
+  },
+  voiceHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  voiceTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  voiceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.background,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  voiceBadgeText: { fontSize: 10, fontWeight: "700", color: colors.text },
+  recordingLabel: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 8 },
+  waveWrap: { marginTop: 2 },
+  micIdleRow: { alignItems: "center", paddingVertical: 8, gap: 10 },
+  micIdleBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: `${colors.yellow}22`,
+    borderWidth: 1.5,
+    borderColor: `${colors.yellow}60`,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  holdHint: { fontSize: 13, color: colors.muted, textAlign: "center" },
+  transcript: { fontSize: 14, lineHeight: 22, color: colors.text },
+  eventList: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
+  eventChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  eventChipEmoji: { fontSize: 11 },
+  eventChipText: { fontSize: 11, fontWeight: "600" },
+  fallbackNote: { fontSize: 11, color: colors.muted, marginTop: 10 },
+  savedRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
+  savedHint: { fontSize: 11, color: colors.muted, fontWeight: "500" },
+  voiceActions: { flexDirection: "row", gap: 7, marginTop: 16 },
+  retakeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: 11,
+    paddingHorizontal: 11,
+    backgroundColor: colors.background,
+  },
+  retakeBtnText: { fontSize: 12, fontWeight: "600", color: colors.text },
+  addEntryBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: `${colors.navy}14`,
+    borderRadius: radius.md,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: `${colors.navy}25`,
+  },
+  addEntryBtnText: { fontSize: 12, fontWeight: "700", color: colors.navy },
+  generateVoiceBtn: {
+    flex: 1.2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 11,
+  },
+  generateVoiceBtnText: { fontSize: 12, fontWeight: "600", color: colors.primaryForeground },
+
+  // ── Quick notes card ────────────────────────────────────────────────────────
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
     padding: 16,
-    marginBottom: 14,
+    marginBottom: 12,
   },
-  cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
-  cardTitle: { fontSize: 14, fontWeight: "600", color: colors.text, flex: 1 },
-
-  micBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: `${colors.gold}18`,
-    borderWidth: 1,
-    borderColor: `${colors.gold}40`,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  micBtnActive: {
-    backgroundColor: colors.gold,
-    borderColor: colors.gold,
-  },
-
-  transcribingBadge: { flexDirection: "row", alignItems: "center", gap: 5 },
-  transcribingText: { fontSize: 11, color: colors.gold, fontWeight: "600" },
-
-  voiceBanner: {
-    backgroundColor: `${colors.gold}12`,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: `${colors.gold}30`,
-    padding: 8,
-    marginBottom: 8,
-  },
-  voiceBannerHeader: { flexDirection: "row", alignItems: "center", gap: 5 },
-  voiceBannerLabel: { flex: 1, fontSize: 11, color: colors.gold, fontWeight: "600" },
-  fallbackNote: { fontSize: 11, color: colors.muted, marginTop: 4 },
-
+  aiCard: { backgroundColor: colors.yellowSoft, borderColor: colors.border },
+  cardTitle: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 10 },
   textarea: {
     backgroundColor: colors.inputBg,
     borderRadius: radius.lg,
@@ -384,24 +603,34 @@ const styles = StyleSheet.create({
     minHeight: 80,
     marginBottom: 10,
   },
-  textareaVoice: { borderColor: `${colors.gold}60`, backgroundColor: `${colors.gold}08` },
-
   previewRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
   previewLabel: { fontSize: 12, color: colors.muted },
-  aiLabel: { fontSize: 10, color: colors.gold, fontWeight: "600", marginLeft: 2 },
-
-  submitBtn: {
+  quickActions: { flexDirection: "row", gap: 8 },
+  generateBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
+    gap: 6,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 11,
+  },
+  btnDisabled: { opacity: 0.4 },
+  generateBtnText: { fontSize: 13, fontWeight: "600", color: colors.primaryForeground },
+  addNoteBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
     backgroundColor: colors.gold,
     borderRadius: radius.md,
-    paddingVertical: 12,
+    paddingVertical: 11,
   },
-  submitBtnDisabled: { opacity: 0.4 },
-  submitBtnText: { fontSize: 14, fontWeight: "700", color: colors.text },
+  addNoteBtnText: { fontSize: 13, fontWeight: "700", color: colors.text },
 
+  // ── Toast / success ─────────────────────────────────────────────────────────
   successRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -413,6 +642,30 @@ const styles = StyleSheet.create({
   },
   successText: { fontSize: 13, color: colors.sage, fontWeight: "600" },
 
+  // ── AI Report ───────────────────────────────────────────────────────────────
+  centerCard: { alignItems: "center", paddingVertical: 24 },
+  generatingText: { marginTop: 8, fontSize: 14, fontWeight: "600", color: colors.text },
+  sectionLabel: { fontSize: 12, fontWeight: "600", color: colors.text, marginBottom: 8 },
+  sectionBody: { fontSize: 14, lineHeight: 22, color: colors.muted },
+  italic: { fontStyle: "italic", color: colors.text },
+  saveCard: { borderTopWidth: 3, borderTopColor: colors.yellow },
+  saveHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  saveTitle: { fontSize: 14, fontWeight: "600", color: colors.text, flex: 1 },
+  saveHint: { fontSize: 12, color: colors.muted },
+  sendBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+  },
+  sendBtnText: { fontSize: 14, fontWeight: "600", color: colors.primaryForeground },
+  savedText: { marginTop: 10, fontSize: 12, color: colors.muted, fontWeight: "500" },
+
+  // ── Timeline ────────────────────────────────────────────────────────────────
   timelineHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -422,7 +675,6 @@ const styles = StyleSheet.create({
   },
   timelineTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
   entryCount: { fontSize: 12, color: colors.muted },
-
   emptyCard: {
     alignItems: "center",
     justifyContent: "center",
@@ -435,7 +687,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   emptyText: { fontSize: 14, color: colors.muted, textAlign: "center" },
-
   entryCard: {
     flexDirection: "row",
     gap: 12,
@@ -466,7 +717,7 @@ const styles = StyleSheet.create({
   entryText: { fontSize: 14, lineHeight: 20, color: colors.text, opacity: 0.85 },
 
   reportSection: { marginTop: 8 },
-  generateBtn: {
+  generateFullBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -475,7 +726,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: 14,
   },
-  generateBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  generateFullBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
   reportDoneRow: {
     flexDirection: "row",
     alignItems: "center",
