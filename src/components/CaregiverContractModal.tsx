@@ -119,16 +119,16 @@ export function CaregiverContractModal({ open, request, onClose }: Props) {
               </ScrollView>
 
               <View style={styles.actions}>
-                <PressSlide style={styles.cancelBtn} onPress={onClose}>
+                <Pressable style={styles.cancelBtn} onPress={onClose}>
                   <Text style={styles.cancelText}>{ko ? "닫기" : "Close"}</Text>
-                </PressSlide>
-                <PressSlide
+                </Pressable>
+                <Pressable
                   style={[styles.signBtn, !signature.trim() && styles.signBtnDisabled]}
                   onPress={handleSign}
                   disabled={!signature.trim()}
                 >
                   <Text style={styles.signText}>{ko ? "제출 · 서명" : "Submit & Sign"}</Text>
-                </PressSlide>
+                </Pressable>
               </View>
             </>
           )}
@@ -199,16 +199,18 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     borderRadius: radius.md,
-    backgroundColor: colors.champagne,
+    backgroundColor: "#8E8E93",
     alignItems: "center",
+    justifyContent: "center",
   },
-  cancelText: { fontSize: 14, fontWeight: "600", color: colors.muted },
+  cancelText: { fontSize: 14, fontWeight: "600", color: "#fff" },
   signBtn: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: radius.md,
-    backgroundColor: colors.sage,
+    backgroundColor: "#1A1A1A",
     alignItems: "center",
+    justifyContent: "center",
   },
   signBtnDisabled: { opacity: 0.4 },
   signText: { fontSize: 14, fontWeight: "700", color: "#fff" },
