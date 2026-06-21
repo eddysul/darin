@@ -195,12 +195,12 @@ function ParentProfileSheet({
 
           {/* Action */}
           <View style={styles.sheetActions}>
-            <PressSlide style={styles.cancelBtn} onPress={onClose}>
+            <Pressable style={styles.cancelBtn} onPress={onClose}>
               <Text style={styles.cancelText}>{ko ? "닫기" : "Close"}</Text>
-            </PressSlide>
-            <PressSlide style={styles.sheetRequestBtn}>
+            </Pressable>
+            <Pressable style={styles.sheetRequestBtn}>
               <Text style={styles.sheetRequestBtnText}>{t("caregiver.find.requestInterview")}</Text>
-            </PressSlide>
+            </Pressable>
           </View>
         </Pressable>
       </Pressable>
@@ -349,16 +349,18 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 13,
     borderRadius: radius.md,
-    backgroundColor: colors.champagne,
+    backgroundColor: "#8E8E93",
     alignItems: "center",
+    justifyContent: "center",
   },
-  cancelText: { fontSize: 14, fontWeight: "600", color: colors.muted },
+  cancelText: { fontSize: 14, fontWeight: "600", color: "#fff" },
   sheetRequestBtn: {
     flex: 1,
-    backgroundColor: colors.gold,
+    backgroundColor: "#1A1A1A",
     borderRadius: radius.md,
     paddingVertical: 13,
     alignItems: "center",
+    justifyContent: "center",
   },
-  sheetRequestBtnText: { fontSize: 14, fontWeight: "700", color: colors.text },
+  sheetRequestBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
 });

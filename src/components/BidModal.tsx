@@ -84,19 +84,18 @@ export function BidModal({ open, onClose }: Props) {
                 />
               </ScrollView>
               <View style={styles.actions}>
-                <PressSlide style={styles.cancelBtn} onPress={onClose}>
+                <Pressable style={styles.cancelBtn} onPress={onClose}>
                   <Text style={styles.cancelText}>{t("profile.cancel")}</Text>
-                </PressSlide>
-                <PressSlide
+                </Pressable>
+                <Pressable
                   style={[styles.submitBtn, !rate.trim() && styles.submitBtnDisabled]}
                   onPress={handleSubmit}
                   disabled={!rate.trim()}
-                 
                 >
                   <Text style={styles.submitText}>
                     {profile.bidRate ? t("profile.updateBid") : t("profile.submitBid")}
                   </Text>
-                </PressSlide>
+                </Pressable>
               </View>
             </>
           )}
@@ -138,19 +137,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     borderRadius: radius.md,
-    backgroundColor: colors.champagne,
+    backgroundColor: "#8E8E93",
     alignItems: "center",
+    justifyContent: "center",
   },
-  cancelText: { fontSize: 14, fontWeight: "600", color: colors.muted },
+  cancelText: { fontSize: 14, fontWeight: "600", color: "#fff" },
   submitBtn: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: radius.md,
-    backgroundColor: colors.gold,
+    backgroundColor: "#1A1A1A",
     alignItems: "center",
+    justifyContent: "center",
   },
   submitBtnDisabled: { opacity: 0.4 },
-  submitText: { fontSize: 14, fontWeight: "700", color: colors.text },
+  submitText: { fontSize: 14, fontWeight: "700", color: "#fff" },
   success: { alignItems: "center", paddingVertical: 28 },
   successTitle: { fontSize: 17, fontWeight: "700", color: colors.text, marginTop: 14 },
   successRate: { fontSize: 22, fontWeight: "800", color: colors.gold, marginTop: 6 },
