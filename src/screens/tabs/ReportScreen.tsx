@@ -1,33 +1,223 @@
 import {
-  Activity,
-  Bell,
+  Baby,
+  ChevronDown,
+  ChevronUp,
+  CircleDot,
+  Cookie,
   Globe,
   Moon,
+  Pill,
+  PillBottle,
   Sparkles,
+  Stethoscope,
   Thermometer,
+  TrendingUp,
   Utensils,
+  Waves,
 } from "lucide-react-native";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
 import { ScreenScrollView } from "../../components/ScreenScrollView";
 import { useApp } from "../../context/AppContext";
+import { createT, type Locale } from "../../i18n";
 import { useLanguage } from "../../LanguageContext";
-import type { DailyReportItemType } from "../../types/dailyReport";
+import type { DailyReport, ReportDetailCategory, ReportMainCategory } from "../../types/dailyReport";
+import { getReportPresentation } from "../../utils/reportPresentation";
 import { colors, radius } from "../../theme";
 
-const ITEM_META: Record<DailyReportItemType, { icon: typeof Utensils; color: string; bg: string; accent?: boolean }> = {
-  meal: { icon: Utensils, color: colors.text, bg: colors.yellowSoft, accent: true },
-  nap: { icon: Moon, color: colors.muted, bg: colors.backgroundSecondary },
-  activity: { icon: Activity, color: colors.text, bg: colors.backgroundSecondary },
-  health: { icon: Thermometer, color: colors.text, bg: colors.backgroundSecondary },
-  reminder: { icon: Bell, color: colors.yellow, bg: colors.yellowSoft, accent: true },
+type CardLanguageMode = Locale;
+
+const ACTIVE_PILL = {
+  backgroundColor: "#FFF8E7",
+  borderColor: "#E0B23F",
+  color: "#111111",
 };
+
+const INACTIVE_PILL = {
+  backgroundColor: "#FFFFFF",
+  borderColor: "#EAEAEA",
+  color: "#666666",
+};
+
+const MAIN_META: Record<
+  ReportMainCategory,
+  { icon: typeof Utensils; labelKey: `report.cat.${ReportMainCategory}` }
+> = {
+  bowel: { icon: CircleDot, labelKey: "report.cat.bowel" },
+  sleep: { icon: Moon, labelKey: "report.cat.sleep" },
+  meal: { icon: Utensils, labelKey: "report.cat.meal" },
+  growth: { icon: TrendingUp, labelKey: "report.cat.growth" },
+  clinic: { icon: Stethoscope, labelKey: "report.cat.clinic" },
+};
+
+const DETAIL_META: Record<
+  ReportDetailCategory,
+  { icon: typeof Utensils; labelKey: `report.detail.${ReportDetailCategory}` }
+> = {
+  bowel: { icon: CircleDot, labelKey: "report.detail.bowel" },
+  meal: { icon: Utensils, labelKey: "report.detail.meal" },
+  sleep: { icon: Moon, labelKey: "report.detail.sleep" },
+  growth: { icon: TrendingUp, labelKey: "report.detail.growth" },
+  bath: { icon: Waves, labelKey: "report.detail.bath" },
+  clinic: { icon: Stethoscope, labelKey: "report.detail.clinic" },
+  environment: { icon: Thermometer, labelKey: "report.detail.environment" },
+  supplement: { icon: Pill, labelKey: "report.detail.supplement" },
+  tummy_time: { icon: Baby, labelKey: "report.detail.tummy_time" },
+  snack: { icon: Cookie, labelKey: "report.detail.snack" },
+  medication: { icon: PillBottle, labelKey: "report.detail.medication" },
+};
+
+function MainCategoryPill({
+  type,
+  active,
+  label,
+}: {
+  type: ReportMainCategory;
+  active: boolean;
+  label: string;
+}) {
+  const { icon: Icon } = MAIN_META[type];
+  const palette = active ? ACTIVE_PILL : INACTIVE_PILL;
+
+  return (
+    <View
+      style={[
+        styles.mainPill,
+        { backgroundColor: palette.backgroundColor, borderColor: palette.borderColor },
+      ]}
+    >
+      <Icon size={14} color={palette.color} />
+      <Text style={[styles.mainPillText, { color: palette.color }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function DetailRowCard({
+  type,
+  value,
+  recorded,
+  label,
+}: {
+  type: ReportDetailCategory;
+  value: string;
+  recorded: boolean;
+  label: string;
+}) {
+  const { icon: Icon } = DETAIL_META[type];
+
+  return (
+    <View style={[styles.detailCard, recorded && styles.detailCardActive]}>
+      <View style={[styles.detailIconWrap, recorded && styles.detailIconWrapActive]}>
+        <Icon size={14} color={recorded ? colors.text : colors.muted} />
+      </View>
+      <View style={styles.detailBody}>
+        <Text style={[styles.detailTitle, !recorded && styles.detailTitleMuted]}>{label}</Text>
+        <Text style={[styles.detailValue, !recorded && styles.detailValueMuted]}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
+function DailyReportCard({ report }: { report: DailyReport }) {
+  const { t: appT } = useLanguage();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [languageMode, setLanguageMode] = useState<CardLanguageMode>("en");
+
+  const cardT = useMemo(() => createT(languageMode), [languageMode]);
+  const view = useMemo(
+    () => getReportPresentation(report, languageMode),
+    [report, languageMode],
+  );
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Avatar src="photo-1544005313-94ddf0286df2" size={36} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.caregiver}>{report.caregiver}</Text>
+          <Text style={styles.submitted}>
+            {appT("report.submitted")} · {report.savedAt}
+          </Text>
+        </View>
+        <View style={styles.fromLogBadge}>
+          <Sparkles size={11} color={colors.yellow} />
+          <Text style={styles.fromLogText}>{appT("report.fromLog")}</Text>
+        </View>
+      </View>
+
+      <View style={styles.mainPillGrid}>
+        {view.mainCategories.map((type) => (
+          <MainCategoryPill
+            key={type}
+            type={type}
+            active={view.activeMain.has(type)}
+            label={cardT(MAIN_META[type].labelKey)}
+          />
+        ))}
+      </View>
+
+      <View style={styles.summaryBlock}>
+        <Text style={styles.summaryHeading}>{cardT("report.todaysCareSummary")}</Text>
+        <Text style={styles.careSummary}>{view.careSummary}</Text>
+      </View>
+
+      {isExpanded && (
+        <>
+          <View style={styles.fullReportBlock}>
+            <Text style={styles.summaryHeading}>{cardT("report.fullReport")}</Text>
+            <Text style={styles.fullReport}>{view.fullReport}</Text>
+          </View>
+
+          <View style={styles.detailsSection}>
+            <Text style={styles.detailsHeading}>{cardT("report.careDetails")}</Text>
+            {view.details.map((row) => (
+              <DetailRowCard
+                key={row.type}
+                type={row.type}
+                value={row.value}
+                recorded={row.recorded}
+                label={cardT(DETAIL_META[row.type].labelKey)}
+              />
+            ))}
+          </View>
+        </>
+      )}
+
+      <View style={styles.actionRow}>
+        <Pressable
+          style={styles.actionBtn}
+          onPress={() => setIsExpanded((prev) => !prev)}
+        >
+          <Text style={styles.actionBtnText}>
+            {isExpanded ? cardT("report.hideDetails") : cardT("report.viewDetails")}
+          </Text>
+          {isExpanded ? (
+            <ChevronUp size={14} color={colors.text} />
+          ) : (
+            <ChevronDown size={14} color={colors.text} />
+          )}
+        </Pressable>
+
+        <Pressable
+          style={[styles.actionBtn, languageMode === "ko" && styles.actionBtnActive]}
+          onPress={() => setLanguageMode((prev) => (prev === "en" ? "ko" : "en"))}
+        >
+          <Globe size={13} color={languageMode === "ko" ? colors.yellow : colors.muted} />
+          <Text style={[styles.actionBtnText, languageMode === "ko" && styles.actionBtnTextActive]}>
+            {languageMode === "en" ? cardT("report.viewInKorean") : cardT("report.viewInEnglish")}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
 export function ReportScreen() {
   const { dailyReport } = useApp();
   const { locale, t } = useLanguage();
-  const [expanded, setExpanded] = useState(true);
   const dates = ["June 20", "June 19", "June 18"];
 
   return (
@@ -45,82 +235,18 @@ export function ReportScreen() {
               <Text style={styles.dateLabel}>{date.toUpperCase()}</Text>
               <View style={styles.dateLine} />
             </View>
-            <Pressable style={styles.card} onPress={() => isToday && setExpanded(!expanded)}>
-              <View style={styles.cardHeader}>
-                <Avatar src="photo-1544005313-94ddf0286df2" size={36} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.caregiver}>Ji-yeon Park</Text>
-                  <Text style={styles.submitted}>
-                    {report ? `${t("report.submitted")} · ${report.savedAt}` : t("report.submitted")}
-                  </Text>
-                </View>
-                {isToday && report && (
-                  <View style={styles.fromLogBadge}>
-                    <Sparkles size={11} color={colors.yellow} />
-                    <Text style={styles.fromLogText}>{t("report.fromLog")}</Text>
-                  </View>
-                )}
-              </View>
 
-              {report ? (
-                <>
-                  <View style={styles.pillGrid}>
-                    {report.items.slice(0, 3).map((item) => {
-                      const meta = ITEM_META[item.type];
-                      const Icon = meta.icon;
-                      return (
-                        <View
-                          key={item.type}
-                          style={[
-                            styles.pill,
-                            { backgroundColor: meta.bg },
-                            meta.accent && styles.pillAccent,
-                          ]}
-                        >
-                          <Icon size={16} color={meta.color} />
-                          <Text style={[styles.pillText, { color: meta.color }]}>{item.label}</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                  {expanded && (
-                    <View style={styles.expanded}>
-                      <Text style={styles.summary}>
-                        {locale === "ko" ? report.reportKo : report.reportEn}
-                      </Text>
-                      {report.items.map((item) => {
-                        const meta = ITEM_META[item.type];
-                        const Icon = meta.icon;
-                        return (
-                          <View key={item.type} style={styles.detailRow}>
-                            <View style={[styles.detailIcon, { backgroundColor: meta.bg }]}>
-                              <Icon size={14} color={meta.color} />
-                            </View>
-                            <View>
-                              <Text style={styles.detailLabel}>{item.label}</Text>
-                              <Text style={styles.detailValue}>{item.value}</Text>
-                            </View>
-                          </View>
-                        );
-                      })}
-                      <View style={styles.translationBox}>
-                        <Globe size={14} color={colors.yellow} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.translationTitle}>{t("report.aiTranslated")}</Text>
-                          <Text style={styles.translationBody}>{report.reportKo}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  )}
-                </>
-              ) : (
+            {report ? (
+              <DailyReportCard report={report} />
+            ) : (
+              <View style={styles.card}>
                 <Text style={styles.placeholder}>
                   {locale === "ko"
                     ? "Log 탭에서 오늘 리포트를 생성할 수 있습니다."
                     : "Generate today's report from the Log tab."}
                 </Text>
-              )}
-            </Pressable>
+              </View>
+            )}
           </View>
         );
       })}
@@ -156,27 +282,105 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   fromLogText: { fontSize: 10, fontWeight: "600", color: colors.text },
-  pillGrid: { flexDirection: "row", gap: 8 },
-  pill: { flex: 1, borderRadius: radius.lg, padding: 10, alignItems: "center", gap: 4, borderWidth: 1, borderColor: colors.border },
-  pillAccent: { borderColor: colors.yellow },
-  pillText: { fontSize: 11, fontWeight: "600" },
-  expanded: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border },
-  summary: { fontSize: 14, lineHeight: 24, color: colors.text, marginBottom: 14 },
-  detailRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
-  detailIcon: { borderRadius: 12, padding: 6 },
-  detailLabel: { fontSize: 11, fontWeight: "600", color: colors.muted, textTransform: "uppercase", letterSpacing: 0.5 },
-  detailValue: { fontSize: 14, color: colors.text, marginTop: 2 },
-  translationBox: {
+  mainPillGrid: {
     flexDirection: "row",
-    gap: 10,
-    backgroundColor: colors.yellowSoft,
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 14,
+  },
+  mainPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    minWidth: "30%",
+    flexGrow: 1,
+    flexBasis: "30%",
+    maxWidth: "48%",
+  },
+  mainPillText: { fontSize: 11, fontWeight: "600", flexShrink: 1 },
+  summaryBlock: {
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.lg,
     padding: 12,
-    marginTop: 8,
+    marginBottom: 12,
   },
-  translationTitle: { fontSize: 12, fontWeight: "600", color: colors.text, marginBottom: 4 },
-  translationBody: { fontSize: 12, lineHeight: 18, color: colors.muted },
+  summaryHeading: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.muted,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  careSummary: { fontSize: 14, lineHeight: 22, color: colors.text, fontWeight: "500" },
+  fullReportBlock: { marginBottom: 14 },
+  fullReport: { fontSize: 14, lineHeight: 24, color: colors.muted },
+  detailsSection: { gap: 8, marginBottom: 14 },
+  detailsHeading: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: 4,
+  },
+  detailCard: {
+    flexDirection: "row",
+    gap: 10,
+    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 10,
+  },
+  detailCardActive: {
+    backgroundColor: colors.backgroundSecondary,
+  },
+  detailIconWrap: {
+    borderRadius: 10,
+    padding: 6,
+    backgroundColor: colors.backgroundSecondary,
+    alignSelf: "flex-start",
+  },
+  detailIconWrapActive: {
+    backgroundColor: colors.yellowSoft,
+    borderWidth: 1,
+    borderColor: colors.yellow,
+  },
+  detailBody: { flex: 1 },
+  detailTitle: { fontSize: 12, fontWeight: "700", color: colors.text },
+  detailTitleMuted: { color: colors.muted },
+  detailValue: { fontSize: 13, lineHeight: 20, color: colors.text, marginTop: 2 },
+  detailValueMuted: { color: colors.muted },
+  actionRow: {
+    flexDirection: "row",
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  actionBtnActive: {
+    backgroundColor: colors.yellowSoft,
+    borderColor: colors.yellow,
+  },
+  actionBtnText: { fontSize: 12, fontWeight: "600", color: colors.text },
+  actionBtnTextActive: { color: colors.text },
   placeholder: { fontSize: 14, color: colors.muted, lineHeight: 20 },
 });

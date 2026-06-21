@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Activity,
   CheckCircle,
@@ -9,12 +9,14 @@ import {
   Thermometer,
   Utensils,
 } from "lucide-react-native";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenScrollView } from "../../components/ScreenScrollView";
 import { VoiceWaveform } from "../../components/VoiceWaveform";
 import { useApp } from "../../context/AppContext";
+import { generateDailyReportFromApi } from "../../api/generateReport";
 import { useVoiceRecording } from "../../context/VoiceRecordingContext";
 import { generateDailyReport } from "../../demo/dailyReport";
+import { normalizeDailyReport } from "../../utils/reportPresentation";
 import { getLogEntries } from "../../i18n";
 import { useLanguage } from "../../LanguageContext";
 import type { DailyReport } from "../../types/dailyReport";
@@ -29,7 +31,8 @@ export function LogScreen() {
   const [inputText, setInputText] = useState("");
   const [generated, setGenerated] = useState<DailyReport | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const reportSectionY = useRef(0);
 
   useEffect(() => {
     if (savedNote?.transcript) {
@@ -39,32 +42,62 @@ export function LogScreen() {
 
   const hasTranscript = Boolean(voiceTranscript);
 
-  const handleRetake = () => {
+  const resetToDefault = () => {
     clearSavedNote();
     setVoiceTranscript("");
+    setInputText("");
     setGenerated(null);
-    setSaved(false);
+    setIsGenerating(false);
   };
 
-  const handleGenerate = () => {
+  const handleRetake = () => {
+    resetToDefault();
+  };
+
+  const handleGenerate = async () => {
     const source = [voiceTranscript, inputText].filter(Boolean).join("\n\n");
     if (!source.trim()) return;
+    Keyboard.dismiss();
     setIsGenerating(true);
-    setSaved(false);
-    setTimeout(() => {
+    setGenerated(null);
+    try {
+      const report = await generateDailyReportFromApi({
+        rawText: voiceTranscript,
+        events: savedNote?.events,
+        quickNotes: inputText,
+        sourceNote: source,
+      });
+      setGenerated(report);
+    } catch {
       setGenerated(generateDailyReport(source));
+    } finally {
       setIsGenerating(false);
-    }, 900);
+    }
   };
+
+  useEffect(() => {
+    if (!generated || isGenerating) return;
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(reportSectionY.current - 16, 0),
+        animated: true,
+      });
+    });
+  }, [generated, isGenerating]);
 
   const handleSave = () => {
     if (!generated) return;
-    setDailyReport(generated);
-    setSaved(true);
+    setDailyReport(
+      normalizeDailyReport(generated, {
+        events: savedNote?.events,
+        rawText: voiceTranscript,
+      }),
+    );
+    resetToDefault();
   };
 
   return (
-    <ScreenScrollView contentContainerStyle={styles.content}>
+    <ScreenScrollView innerRef={scrollRef} contentContainerStyle={styles.content}>
       <Text style={styles.title}>{t("log.title")}</Text>
       <Text style={styles.subtitle}>{t("log.subtitle")}</Text>
 
@@ -159,47 +192,50 @@ export function LogScreen() {
         )}
       </View>
 
-      {isGenerating && (
-        <View style={[styles.card, styles.aiCard, styles.centerCard]}>
-          <Sparkles size={24} color={colors.yellow} />
-          <Text style={styles.generatingText}>{t("log.generating")}</Text>
-        </View>
-      )}
+      {(isGenerating || generated) && (
+        <View
+          onLayout={(event) => {
+            reportSectionY.current = event.nativeEvent.layout.y;
+          }}
+        >
+          {isGenerating && (
+            <View style={[styles.card, styles.aiCard, styles.centerCard]}>
+              <Sparkles size={24} color={colors.yellow} />
+              <Text style={styles.generatingText}>{t("log.generating")}</Text>
+            </View>
+          )}
 
-      {generated && !isGenerating && (
-        <>
-          {[
-            { title: t("log.originalNote"), body: generated.sourceNote, ai: false },
-            { title: t("log.aiReportEn"), body: generated.reportEn, ai: true },
-            { title: t("log.aiReportKo"), body: generated.reportKo, ai: true },
-            { title: t("log.parentReplyDraft"), body: generated.parentReplyDraft, ai: true, italic: true },
-          ].map((section) => (
-            <View key={section.title} style={[styles.card, section.ai && styles.aiCard]}>
-              <Text style={styles.sectionLabel}>
-                {section.ai && <Sparkles size={11} color={colors.yellow} />} {section.title}
-              </Text>
-              <Text style={[styles.sectionBody, section.italic && styles.italic]}>{section.body}</Text>
-            </View>
-          ))}
-          <View style={[styles.card, styles.saveCard]}>
-            <View style={styles.saveHeader}>
-              <Sparkles size={14} color={colors.yellow} />
-              <Text style={styles.saveTitle}>{t("log.aiDraft")}</Text>
-              <Text style={styles.saveHint}>{t("log.readyToSend")}</Text>
-            </View>
-            <View style={styles.saveActions}>
-              <Pressable style={styles.sendBtn} onPress={handleSave}>
-                <Send size={14} color={colors.primaryForeground} />
-                <Text style={styles.sendBtnText}>{t("log.sendToParent")}</Text>
-              </Pressable>
-            </View>
-            {saved && (
-              <Text style={styles.savedText}>
-                <CheckCircle size={12} color={colors.text} /> {t("log.savedToReports")}
-              </Text>
-            )}
-          </View>
-        </>
+          {generated && !isGenerating && (
+            <>
+              {[
+                { title: t("log.originalNote"), body: generated.sourceNote, ai: false },
+                { title: t("log.aiReportEn"), body: generated.reportEn, ai: true },
+                { title: t("log.aiReportKo"), body: generated.reportKo, ai: true },
+                { title: t("log.parentReplyDraft"), body: generated.parentReplyDraft, ai: true, italic: true },
+              ].map((section) => (
+                <View key={section.title} style={[styles.card, section.ai && styles.aiCard]}>
+                  <Text style={styles.sectionLabel}>
+                    {section.ai && <Sparkles size={11} color={colors.yellow} />} {section.title}
+                  </Text>
+                  <Text style={[styles.sectionBody, section.italic && styles.italic]}>{section.body}</Text>
+                </View>
+              ))}
+              <View style={[styles.card, styles.saveCard]}>
+                <View style={styles.saveHeader}>
+                  <Sparkles size={14} color={colors.yellow} />
+                  <Text style={styles.saveTitle}>{t("log.aiDraft")}</Text>
+                  <Text style={styles.saveHint}>{t("log.readyToSend")}</Text>
+                </View>
+                <View style={styles.saveActions}>
+                  <Pressable style={styles.sendBtn} onPress={handleSave}>
+                    <Send size={14} color={colors.primaryForeground} />
+                    <Text style={styles.sendBtnText}>{t("log.sendToParent")}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </>
+          )}
+        </View>
       )}
 
       <Text style={styles.logTitle}>{t("log.todaysLog")}</Text>
