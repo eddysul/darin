@@ -1,21 +1,33 @@
 import { useRef, useState } from "react";
 import { useEffect } from "react";
 import {
+  ActivityIndicator,
   Animated,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { CheckCircle, FileText, Mic, Send, Sparkles } from "lucide-react-native";
+import { CheckCircle, FileText, Mic, Send, Sparkles, X } from "lucide-react-native";
 import { PressSlide } from "../../components/PressSlide";
 import { useApp } from "../../context/AppContext";
+import { useVoiceRecording } from "../../context/VoiceRecordingContext";
 import { useLanguage } from "../../LanguageContext";
 import type { MessageKey } from "../../i18n";
 import { CATEGORY_META, type LogCategory } from "../../types/log";
 import { categorizeLog, extractSummary } from "../../utils/categorize";
 import { colors, radius } from "../../theme";
+
+function serverCatToLogCategory(serverCat: string): LogCategory {
+  if (serverCat.includes("배변")) return "diaper";
+  if (serverCat.includes("수면")) return "sleep";
+  if (serverCat.includes("식사") || serverCat.includes("수유") || serverCat.includes("간식")) return "meal";
+  if (serverCat.includes("키") || serverCat.includes("몸무게") || serverCat.includes("성장")) return "growth";
+  if (serverCat.includes("진료") || serverCat.includes("복용") || serverCat.includes("병원")) return "medical";
+  return "meal";
+}
 
 export function LogScreen() {
   const { profile, logEntries } = useApp();
@@ -48,21 +60,36 @@ function CaregiverLogView({
   fadeAnim: Animated.Value;
 }) {
   const { logEntries, addLogEntry, generateDailyReportFromLogs, dailyReport } = useApp();
+  const { isRecording, isTranscribing, savedNote, startRecording, clearSavedNote } = useVoiceRecording();
   const [text, setText] = useState("");
+  const [serverCategory, setServerCategory] = useState<LogCategory | null>(null);
   const [lastAdded, setLastAdded] = useState<{ category: LogCategory } | null>(null);
   const [reportGenerated, setReportGenerated] = useState(false);
   const successAnim = useRef(new Animated.Value(0)).current;
 
+  // When transcription arrives, pre-fill text and pick server category
+  useEffect(() => {
+    if (!savedNote || !savedNote.transcript) return;
+    setText(savedNote.transcript);
+    if (savedNote.events && savedNote.events.length > 0) {
+      setServerCategory(serverCatToLogCategory(savedNote.events[0].category));
+    }
+  }, [savedNote]);
+
   const sorted = [...logEntries].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  const detectedCategory = serverCategory ?? (text.trim().length > 3 ? categorizeLog(text) : null);
 
   const handleAdd = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    const category = categorizeLog(trimmed);
+    const category = serverCategory ?? categorizeLog(trimmed);
     const summary = extractSummary(trimmed, category);
     addLogEntry({ category, timestamp: new Date().toISOString(), rawText: trimmed, summary });
     setLastAdded({ category });
     setText("");
+    setServerCategory(null);
+    clearSavedNote();
     successAnim.setValue(0);
     Animated.spring(successAnim, { toValue: 1, useNativeDriver: true, speed: 16, bounciness: 8 }).start();
   };
@@ -72,6 +99,12 @@ function CaregiverLogView({
     setReportGenerated(true);
   };
 
+  const handleClearVoice = () => {
+    clearSavedNote();
+    setText("");
+    setServerCategory(null);
+  };
+
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Animated.View style={{ opacity: fadeAnim }}>
@@ -79,30 +112,69 @@ function CaregiverLogView({
         <Text style={styles.subtitle}>{t("log.subtitle")}</Text>
 
         <View style={styles.card}>
+          {/* Card header: title + mic button */}
           <View style={styles.cardTitleRow}>
-            <Mic size={14} color={colors.gold} />
+            <Pressable
+              style={[styles.micBtn, isRecording && styles.micBtnActive]}
+              onPress={() => void startRecording()}
+            >
+              <Mic size={15} color={isRecording ? "#fff" : colors.gold} />
+            </Pressable>
             <Text style={styles.cardTitle}>{t("log.addEntry")}</Text>
+            {isTranscribing && (
+              <View style={styles.transcribingBadge}>
+                <ActivityIndicator size="small" color={colors.gold} />
+                <Text style={styles.transcribingText}>{ko ? "변환 중…" : "Transcribing…"}</Text>
+              </View>
+            )}
           </View>
-          <TextInput
-            style={styles.textarea}
-            multiline
-            numberOfLines={3}
-            placeholder={t("log.addPlaceholder")}
-            placeholderTextColor={colors.muted}
-            value={text}
-            onChangeText={setText}
-            textAlignVertical="top"
-          />
-          {text.trim().length > 3 && (
-            <View style={styles.previewRow}>
-              <Text style={styles.previewLabel}>{t("log.categoryDetected")}:</Text>
-              <CategoryChip category={categorizeLog(text)} ko={ko} />
+
+          {/* Voice result banner */}
+          {savedNote && savedNote.transcript && !isTranscribing && (
+            <View style={styles.voiceBanner}>
+              <View style={styles.voiceBannerHeader}>
+                <Mic size={11} color={colors.gold} />
+                <Text style={styles.voiceBannerLabel}>{ko ? "음성 인식 결과 — 확인 후 저장하세요" : "Voice result — review & save"}</Text>
+                <Pressable onPress={handleClearVoice}>
+                  <X size={13} color={colors.muted} />
+                </Pressable>
+              </View>
+              {savedNote.usedFallbackTranscript && (
+                <Text style={styles.fallbackNote}>
+                  {ko ? "⚠ 서버 미연결 — 예시 텍스트입니다" : "⚠ Server offline — showing demo text"}
+                </Text>
+              )}
             </View>
           )}
+
+          <TextInput
+            style={[styles.textarea, savedNote?.transcript && !isTranscribing && styles.textareaVoice]}
+            multiline
+            numberOfLines={3}
+            placeholder={isTranscribing
+              ? (ko ? "음성을 텍스트로 변환 중…" : "Converting voice to text…")
+              : t("log.addPlaceholder")}
+            placeholderTextColor={colors.muted}
+            value={text}
+            onChangeText={(v) => { setText(v); setServerCategory(null); }}
+            textAlignVertical="top"
+            editable={!isTranscribing}
+          />
+
+          {detectedCategory && (
+            <View style={styles.previewRow}>
+              <Text style={styles.previewLabel}>{t("log.categoryDetected")}:</Text>
+              <CategoryChip category={detectedCategory} ko={ko} />
+              {serverCategory && (
+                <Text style={styles.aiLabel}>{ko ? "AI 분류" : "AI classified"}</Text>
+              )}
+            </View>
+          )}
+
           <PressSlide
-            style={[styles.submitBtn, !text.trim() && styles.submitBtnDisabled]}
+            style={[styles.submitBtn, (!text.trim() || isTranscribing) && styles.submitBtnDisabled]}
             onPress={handleAdd}
-            disabled={!text.trim()}
+            disabled={!text.trim() || isTranscribing}
           >
             <Send size={14} color={colors.text} />
             <Text style={styles.submitBtnText}>{t("log.submitEntry")}</Text>
@@ -268,8 +340,38 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 14,
   },
-  cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 10 },
-  cardTitle: { fontSize: 14, fontWeight: "600", color: colors.text },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  cardTitle: { fontSize: 14, fontWeight: "600", color: colors.text, flex: 1 },
+
+  micBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: `${colors.gold}18`,
+    borderWidth: 1,
+    borderColor: `${colors.gold}40`,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  micBtnActive: {
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
+  },
+
+  transcribingBadge: { flexDirection: "row", alignItems: "center", gap: 5 },
+  transcribingText: { fontSize: 11, color: colors.gold, fontWeight: "600" },
+
+  voiceBanner: {
+    backgroundColor: `${colors.gold}12`,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: `${colors.gold}30`,
+    padding: 8,
+    marginBottom: 8,
+  },
+  voiceBannerHeader: { flexDirection: "row", alignItems: "center", gap: 5 },
+  voiceBannerLabel: { flex: 1, fontSize: 11, color: colors.gold, fontWeight: "600" },
+  fallbackNote: { fontSize: 11, color: colors.muted, marginTop: 4 },
 
   textarea: {
     backgroundColor: colors.inputBg,
@@ -282,8 +384,11 @@ const styles = StyleSheet.create({
     minHeight: 80,
     marginBottom: 10,
   },
+  textareaVoice: { borderColor: `${colors.gold}60`, backgroundColor: `${colors.gold}08` },
+
   previewRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
   previewLabel: { fontSize: 12, color: colors.muted },
+  aiLabel: { fontSize: 10, color: colors.gold, fontWeight: "600", marginLeft: 2 },
 
   submitBtn: {
     flexDirection: "row",
