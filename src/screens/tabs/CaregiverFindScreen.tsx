@@ -1,6 +1,6 @@
-import { Baby, DollarSign, Home, MapPin, Search, Sparkles } from "lucide-react-native";
+import { Baby, DollarSign, Globe, Home, MapPin, Milk, Search, Sparkles, User, X } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
 import { PressSlide } from "../../components/PressSlide";
 import { PARENT_LISTINGS, type ParentListing } from "../../demo/parents";
@@ -12,40 +12,51 @@ export function CaregiverFindScreen() {
   const { locale, t } = useLanguage();
   const ko = locale === "ko";
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [profileParent, setProfileParent] = useState<ParentListing | null>(null);
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>{t("caregiver.find.title")}</Text>
-          <Text style={styles.subtitle}>{t("caregiver.find.subtitle")}</Text>
+    <>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>{t("caregiver.find.title")}</Text>
+            <Text style={styles.subtitle}>{t("caregiver.find.subtitle")}</Text>
+          </View>
+          <View style={styles.aiBadge}>
+            <Sparkles size={11} color={colors.gold} />
+            <Text style={styles.aiBadgeText}>{t("match.aiRecommended")}</Text>
+          </View>
         </View>
-        <View style={styles.aiBadge}>
-          <Sparkles size={11} color={colors.gold} />
-          <Text style={styles.aiBadgeText}>{t("match.aiRecommended")}</Text>
+
+        <View style={styles.search}>
+          <Search size={16} color={colors.muted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={ko ? "지역, 예산, 입주 여부 검색…" : "Search by location, budget, live-in…"}
+            placeholderTextColor={colors.muted}
+          />
         </View>
-      </View>
 
-      <View style={styles.search}>
-        <Search size={16} color={colors.muted} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={ko ? "지역, 예산, 입주 여부 검색…" : "Search by location, budget, live-in…"}
-          placeholderTextColor={colors.muted}
-        />
-      </View>
+        {PARENT_LISTINGS.map((parent) => (
+          <ParentCard
+            key={parent.id}
+            parent={parent}
+            ko={ko}
+            expanded={expanded === parent.id}
+            onToggle={() => setExpanded(expanded === parent.id ? null : parent.id)}
+            onViewProfile={() => setProfileParent(parent)}
+            t={t}
+          />
+        ))}
+      </ScrollView>
 
-      {PARENT_LISTINGS.map((parent) => (
-        <ParentCard
-          key={parent.id}
-          parent={parent}
-          ko={ko}
-          expanded={expanded === parent.id}
-          onToggle={() => setExpanded(expanded === parent.id ? null : parent.id)}
-          t={t}
-        />
-      ))}
-    </ScrollView>
+      <ParentProfileSheet
+        parent={profileParent}
+        ko={ko}
+        onClose={() => setProfileParent(null)}
+        t={t}
+      />
+    </>
   );
 }
 
@@ -54,12 +65,14 @@ function ParentCard({
   ko,
   expanded,
   onToggle,
+  onViewProfile,
   t,
 }: {
   parent: ParentListing;
   ko: boolean;
   expanded: boolean;
   onToggle: () => void;
+  onViewProfile: () => void;
   t: (key: MessageKey) => string;
 }) {
   return (
@@ -99,12 +112,99 @@ function ParentCard({
         <View style={styles.expanded}>
           <Text style={styles.notesLabel}>{ko ? "특이사항" : "Special Notes"}</Text>
           <Text style={styles.notes}>{ko ? parent.notesKo : parent.notes}</Text>
-          <PressSlide style={styles.requestBtn}>
-            <Text style={styles.requestBtnText}>{t("caregiver.find.requestInterview")}</Text>
-          </PressSlide>
+          <View style={styles.expandedActions}>
+            <PressSlide style={styles.profileBtn} onPress={onViewProfile}>
+              <User size={14} color={colors.navy} />
+              <Text style={styles.profileBtnText}>{ko ? "프로필 보기" : "View Profile"}</Text>
+            </PressSlide>
+            <PressSlide style={styles.requestBtn}>
+              <Text style={styles.requestBtnText}>{t("caregiver.find.requestInterview")}</Text>
+            </PressSlide>
+          </View>
         </View>
       )}
     </PressSlide>
+  );
+}
+
+function ParentProfileSheet({
+  parent,
+  ko,
+  onClose,
+  t,
+}: {
+  parent: ParentListing | null;
+  ko: boolean;
+  onClose: () => void;
+  t: (key: MessageKey) => string;
+}) {
+  if (!parent) return null;
+
+  const rows = [
+    { icon: MapPin, color: "#6B7FA8", label: ko ? "위치" : "Location", value: ko ? parent.locationKo : parent.location },
+    { icon: Baby, color: "#ec4899", label: ko ? "출산 예정일" : "Due Date", value: ko ? parent.dueDateKo : parent.dueDate },
+    { icon: DollarSign, color: "#22c55e", label: ko ? "예산" : "Budget", value: parent.budget },
+    { icon: Home, color: "#8b5cf6", label: ko ? "입주 여부" : "Live-in", value: parent.liveIn ? (ko ? "입주 선호" : "Live-in preferred") : (ko ? "출퇴근 선호" : "Live-out preferred") },
+    { icon: Milk, color: "#243036", label: ko ? "모유수유" : "Breastfeeding", value: parent.breastfeeding ? (ko ? "모유수유 예정" : "Breastfeeding") : (ko ? "분유 수유" : "Formula feeding") },
+    { icon: Globe, color: "#6B7FA8", label: ko ? "언어" : "Languages", value: parent.languages.join(", ") },
+  ];
+
+  return (
+    <Modal visible={true} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+          {/* Header */}
+          <View style={styles.sheetHeader}>
+            <View style={styles.sheetProfile}>
+              <Avatar src={parent.avatar} size={56} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetName}>{ko ? parent.nameKo : parent.name}</Text>
+                <View style={styles.sheetMatchRow}>
+                  <Sparkles size={10} color={colors.gold} />
+                  <Text style={styles.sheetMatch}>{parent.matchScore}% {ko ? "매칭" : "match"}</Text>
+                </View>
+              </View>
+            </View>
+            <Pressable style={styles.closeBtn} onPress={onClose}>
+              <X size={18} color={colors.muted} />
+            </Pressable>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.sheetScroll}>
+            {/* Details */}
+            <View style={styles.sheetCard}>
+              {rows.map(({ icon: Icon, color, label, value }, i) => (
+                <View key={label} style={[styles.profileRow, i > 0 && styles.profileRowBorder]}>
+                  <View style={[styles.profileIcon, { backgroundColor: `${color}18` }]}>
+                    <Icon size={14} color={color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.profileLabel}>{label}</Text>
+                    <Text style={styles.profileValue}>{value}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* Notes */}
+            <View style={styles.sheetCard}>
+              <Text style={styles.notesLabel}>{ko ? "특이사항" : "Special Notes"}</Text>
+              <Text style={styles.sheetNotes}>{ko ? parent.notesKo : parent.notes}</Text>
+            </View>
+          </ScrollView>
+
+          {/* Action */}
+          <View style={styles.sheetActions}>
+            <PressSlide style={styles.cancelBtn} onPress={onClose}>
+              <Text style={styles.cancelText}>{ko ? "닫기" : "Close"}</Text>
+            </PressSlide>
+            <PressSlide style={styles.sheetRequestBtn}>
+              <Text style={styles.sheetRequestBtnText}>{t("caregiver.find.requestInterview")}</Text>
+            </PressSlide>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -188,11 +288,77 @@ const styles = StyleSheet.create({
   expanded: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border },
   notesLabel: { fontSize: 11, fontWeight: "600", color: colors.muted, marginBottom: 4 },
   notes: { fontSize: 13, lineHeight: 20, color: colors.text, opacity: 0.85, marginBottom: 14 },
+  expandedActions: { flexDirection: "row", gap: 10 },
+  profileBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: `${colors.navy}12`,
+    borderRadius: radius.md,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: `${colors.navy}20`,
+  },
+  profileBtnText: { fontSize: 13, fontWeight: "700", color: colors.navy },
   requestBtn: {
+    flex: 1,
     backgroundColor: colors.gold,
     borderRadius: radius.md,
-    paddingVertical: 12,
+    paddingVertical: 11,
     alignItems: "center",
   },
-  requestBtnText: { fontSize: 14, fontWeight: "700", color: colors.text },
+  requestBtnText: { fontSize: 13, fontWeight: "700", color: colors.text },
+
+  // Profile sheet
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" },
+  sheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: 24,
+    paddingBottom: 32,
+    maxHeight: "88%",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sheetHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 },
+  sheetProfile: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  sheetName: { fontSize: 18, fontWeight: "700", color: colors.text },
+  sheetMatchRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  sheetMatch: { fontSize: 12, fontWeight: "600", color: colors.gold },
+  closeBtn: { padding: 4 },
+  sheetScroll: { maxHeight: "65%" as unknown as number },
+  sheetCard: {
+    backgroundColor: colors.inputBg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 12,
+  },
+  profileRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
+  profileRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  profileIcon: { borderRadius: 10, padding: 8 },
+  profileLabel: { fontSize: 11, color: colors.muted, fontWeight: "600" },
+  profileValue: { fontSize: 14, color: colors.text, fontWeight: "500", marginTop: 1 },
+  sheetNotes: { fontSize: 13, lineHeight: 20, color: colors.text, opacity: 0.85 },
+  sheetActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: radius.md,
+    backgroundColor: colors.champagne,
+    alignItems: "center",
+  },
+  cancelText: { fontSize: 14, fontWeight: "600", color: colors.muted },
+  sheetRequestBtn: {
+    flex: 1,
+    backgroundColor: colors.gold,
+    borderRadius: radius.md,
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  sheetRequestBtnText: { fontSize: 14, fontWeight: "700", color: colors.text },
 });
