@@ -54,6 +54,7 @@ Childcare Management App/
 │   │   ├── CareInboxModal.tsx       # 메시지 목록 + 채팅 (단일 Modal)
 │   │   ├── CareProposalChatModal.tsx # 제안 채팅 + Care Plan 협상
 │   │   ├── CarePlanNegotiationBlocks.tsx  # Draft / Tracker 공유 UI
+│   │   ├── DarinCareChatModal.tsx     # Ask Darin · 리포트 상담 채팅
 │   │   ├── VoiceWaveform.tsx
 │   │   ├── VoiceRecordingOverlay.tsx
 │   │   ├── CareRequestModal.tsx
@@ -74,16 +75,20 @@ Childcare Management App/
 │   │   ├── caregivers.ts
 │   │   ├── careFlow.ts              # mock proposals, chat seeds
 │   │   ├── dailyReport.ts           # API 실패 시 fallback 리포트
+│   │   ├── reportHistory.ts         # June 19·18 mock 히스토리 리포트
+│   │   ├── reportConsultation.ts    # Ask Darin mock 응답
 │   │   └── childProfile.ts          # Emma mock child profile
 │   ├── types/
 │   │   ├── profile.ts
 │   │   ├── dailyReport.ts
+│   │   ├── reportConsultation.ts
 │   │   ├── transcribe.ts
 │   │   ├── voiceNote.ts
 │   │   ├── careFlow.ts
 │   │   └── childProfile.ts
 │   ├── utils/
-│   │   └── fetchWithTimeout.ts
+│   │   ├── fetchWithTimeout.ts
+│   │   └── reportPresentation.ts    # 5+11 카테고리 정규화·fallback
 │   ├── i18n.ts
 │   ├── theme.ts
 │   └── app/                         # Web 레거시 (Vite)
@@ -159,11 +164,26 @@ Darin 미니멀 **흑백 + 옅은 노랑** 팔레트:
 
 ### 2. Reports (리포트)
 
-- Ji-yeon Park 제출 타임라인, 날짜별 카드
-- Log에서 **리포트에 저장**한 당일 리포트 표시
-- 카테고리 아이콘 pill (meal · nap · activity · health · reminder)
-- 펼치면 EN/KO 본문 + 항목별 상세 + AI 번역 박스
-- 자세한 생성·API 흐름 → **문서 하단 「일일 리포트 & dh API」** 참고
+- Ji-yeon Park 제출 타임라인 (June 20 · 19 · 18)
+- **당일:** Log에서 **리포트에 저장**한 `AppContext.dailyReport`
+- **히스토리:** `demo/reportHistory.ts` mock (June 19·18 — 선택·Ask Darin 테스트용)
+- **리포트 카드 (progressive UX)**
+  - 기본: 5개 요약 pill (배변·수면·식사·성장·진료) + **오늘 돌봄 요약**
+  - **상세 보기** → Full Report + 11항목 Detailed Care Log
+  - **한국어 보기 / English** — 카드별 view toggle (별도 번역 박스 없음)
+- **Ask Darin** (우측 상단)
+  1. 선택 모드 진입 → 리포트 카드 다중 선택 (노란 하이라이트)
+  2. Select all / Clear all
+  3. 하단 sticky bar → **Ask Darin** → `DarinCareChatModal`
+  4. 선택 리포트 기반 mock 상담 (수면·식사·배변·건강·케어기버 메시지·케어 플랜)
+- 생성·API 흐름 → **문서 하단 「일일 리포트 & dh API」** 참고
+
+### Ask Darin 데모 (요약)
+
+1. **Reports** → **Ask Darin**
+2. June 19·18 (또는 오늘 저장 리포트) 선택
+3. 하단 **Ask Darin** → Darin Care Chat
+4. 칩 또는 직접 입력 (예: 「최근 수면 변화 요약해줘」)
 
 ### 3. Log (기록)
 
@@ -464,15 +484,24 @@ pnpm run typecheck
 35. **Log UI** — mic 버튼 제거, hold 안내, 전사문 + Retake / 일일 리포트 생성
 36. **`src/api/transcribe.ts`** + **`config/api.ts`** — dh `POST /transcribe` 연동
 37. **`src/api/generateReport.ts`** — dh `POST /generate-report` (GPT EN/KO 요약)
-38. **Reports** — `items[].type` 기반 카테고리 아이콘 (meal · nap · activity · health · reminder)
-39. **리포트에 저장** 후 Log **기본 화면 자동 복귀**
-40. API URL `:800` 오타 보정, `fetchWithTimeout`, 생성 후 리포트 섹션 스크롤
-41. dh 서버: BizCrush STT + OpenAI categorize/generate-report, CORS, lazy OpenAI init
+38. **Reports** — 2단 UI: 5 요약 pill + 11항목 detail log (`reportPresentation.ts`)
+39. **Reports** — progressive card (요약만 → 상세 보기, EN/KO toggle)
+40. **리포트에 저장** 후 Log **기본 화면 자동 복귀**
+41. API URL `:800` 오타 보정, `fetchWithTimeout`, 생성 후 스크롤
+42. dh 서버: BizCrush STT + OpenAI categorize/generate-report, CORS, lazy OpenAI init
+
+### Reports · Ask Darin
+
+43. **`DarinCareChatModal`** — 선택 리포트 기반 Darin Care Chat (mock)
+44. **Report selection mode** — 다중 선택, Select all/Clear, sticky bottom bar
+45. **`demo/reportHistory.ts`** — June 19·18 mock 리포트 타임라인
+46. **`demo/reportConsultation.ts`** — `report_consultation` payload + mock 응답
+47. **`types/reportConsultation.ts`** — API-ready 상담 payload 타입
 
 ### Git / PR
 
-42. `Joon` → [PR #2](https://github.com/eddysul/darin/pull/2) (Care Request · proposal chat · Messages)
-43. `joon-into-dh` → [PR #3](https://github.com/eddysul/darin/pull/3) (Joon + dh 병합, unrelated histories)
+48. `Joon` → [PR #2](https://github.com/eddysul/darin/pull/2) (Care Request · proposal chat · Messages)
+49. `joon-into-dh` → [PR #3](https://github.com/eddysul/darin/pull/3) (Joon + dh 병합, unrelated histories)
 
 ---
 
@@ -483,7 +512,11 @@ pnpm run typecheck
 | `MatchScreen.tsx` | Find 탭, Care Request → Proposals → Chat 연결 |
 | `HomeScreen.tsx` | Messages, Quick Actions, Active Care + Care Plan 블록 |
 | `LogScreen.tsx` | Voice Note, Quick Notes, AI 리포트 생성·저장 |
-| `ReportScreen.tsx` | 저장된 일일 리포트 타임라인 |
+| `ReportScreen.tsx` | 일일 리포트 타임라인 · Ask Darin 선택 · progressive card |
+| `DarinCareChatModal.tsx` | 선택 리포트 기반 Darin AI 상담 (mock) |
+| `reportPresentation.ts` | main/detail 카테고리 정규화·fallback |
+| `demo/reportHistory.ts` | June 19·18 mock 히스토리 |
+| `demo/reportConsultation.ts` | report_consultation mock 응답 |
 | `MainTabs.tsx` | 중앙 Log hold 녹음, 탭 바 |
 | `VoiceRecordingContext.tsx` | 녹음·전사 상태 |
 | `CarePlanNegotiationBlocks.tsx` | Care Plan Draft / Agreement Tracker |
@@ -524,7 +557,46 @@ pnpm run typecheck
 
 **Quick Notes만** 입력해도 `/generate-report` 호출 가능 (음성 없이 텍스트만).
 
-### Reports UI — 카테고리 아이콘
+### Reports UI — 2단 카테고리 구조
+
+**상단 5개 요약 pill (항상 라벨 표시):** bowel · sleep · meal · growth · clinic  
+- 기록 있음: `#FFF8E7` / `#E0B23F` · 없음: neutral gray
+
+**Detailed Care Log (11항목, 상세 보기 시):**  
+bowel · meal · sleep · growth · bath · clinic · environment · supplement · tummy_time · snack · medication
+
+`reportPresentation.ts`가 API `items`, transcribe `events`, 텍스트에서 카테고리를 추론하고 fallback을 채웁니다.
+
+### Reports UI — legacy items 매핑
+
+서버 `items[].type` (meal · nap · activity · health · reminder)은 하위 호환용으로 유지됩니다.
+
+| legacy type | 매핑 |
+|-------------|------|
+| `meal` | meal |
+| `nap` | sleep |
+| `activity` | tummy_time |
+| `health` | clinic |
+| `reminder` | snack |
+
+### Ask Darin · report_consultation (프로토타입)
+
+향후 Darin AI API 연동용 payload:
+
+```json
+{
+  "task": "report_consultation",
+  "childName": "Emma",
+  "selectedReports": [ "...DailyReport[]" ],
+  "childProfile": "...",
+  "activeCarePlan": "...",
+  "userQuestion": "..."
+}
+```
+
+현재는 `getMockConsultationResponse()` 로컬 mock만 사용합니다.
+
+### Reports UI — 카테고리 아이콘 (legacy)
 
 서버가 내려주는 `items[].type`에 따라 아이콘이 매핑됩니다 (앱이 키워드 파싱하는 것이 아님).
 
@@ -608,4 +680,4 @@ dh `main.py`를 Railway / Render / VPS 등에 배포하고 `EXPO_PUBLIC_TRANSCRI
 
 ---
 
-*마지막 업데이트: 2026-06-20 — Voice·Log·dh API·일일 리포트 파이프라인, Home Care Plan, PR #3 반영*
+*마지막 업데이트: 2026-06-20 — Reports progressive UX, Ask Darin 선택·상담, 2단 카테고리, PR #3*
