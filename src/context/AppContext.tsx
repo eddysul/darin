@@ -42,7 +42,7 @@ const DEFAULT_CAREGIVER_PROFILE: UserProfile = {
 
 const DEFAULT_PROFILE = DEFAULT_PARENT_PROFILE;
 
-export { DEFAULT_CAREGIVER_PROFILE };
+export { DEFAULT_CAREGIVER_PROFILE, DEFAULT_PARENT_PROFILE };
 
 type AppContextValue = {
   profile: UserProfile;
