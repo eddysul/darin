@@ -29,6 +29,7 @@ export async function transcribeRecording(uri: string): Promise<TranscribeResult
     body: formData,
     headers: {
       Accept: "application/json",
+      "ngrok-skip-browser-warning": "true",
     },
   });
 
@@ -40,9 +41,40 @@ export async function transcribeRecording(uri: string): Promise<TranscribeResult
   return (await response.json()) as TranscribeResult;
 }
 
+export type ReportResult = {
+  reportEn: string;
+  reportKo: string;
+  parentReplyDraft: string;
+  items: { type: "meal" | "nap" | "activity" | "health" | "reminder"; label: string; value: string }[];
+};
+
+export async function generateReport(
+  transcript: string,
+  events: Record<string, unknown>[] = [],
+): Promise<ReportResult> {
+  const response = await fetch(`${TRANSCRIBE_API_URL}/report`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "ngrok-skip-browser-warning": "true",
+    },
+    body: JSON.stringify({ transcript, events }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || `Report generation failed (${response.status})`);
+  }
+
+  return (await response.json()) as ReportResult;
+}
+
 export async function checkTranscribeHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${TRANSCRIBE_API_URL}/health`);
+    const response = await fetch(`${TRANSCRIBE_API_URL}/health`, {
+      headers: { "ngrok-skip-browser-warning": "true" },
+    });
     return response.ok;
   } catch {
     return false;

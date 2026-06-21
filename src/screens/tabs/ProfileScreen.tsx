@@ -23,14 +23,16 @@ import { Avatar } from "../../components/Avatar";
 import { BidModal } from "../../components/BidModal";
 import { ContractSigningModal } from "../../components/ContractSigningModal";
 import { PressSlide } from "../../components/PressSlide";
-import { useApp } from "../../context/AppContext";
+import { useApp, DEFAULT_CAREGIVER_PROFILE } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
+import { DEFAULT_PARENT_PROFILE } from "../../context/AppContext";
 import type { ScheduledInterview } from "../../types/interview";
 import { colors, radius } from "../../theme";
 
 export function ProfileScreen() {
   const {
     profile,
+    setProfile,
     setLangPickerOpen,
     setProfileEditOpen,
     scheduledInterviews,
@@ -58,7 +60,7 @@ export function ProfileScreen() {
     }
   }, [pendingContractInterviewId, scheduledInterviews, clearPendingContractInterview]);
 
-  const children = [{ name: "Emma", age: locale === "ko" ? "2세 4개월" : "2 yrs 4 mo", img: "photo-1594608661623-aa0bd3a69d98" }];
+  const children = [{ name: "Emma", age: locale === "ko" ? "8개월" : "8 mo", img: "photo-1594608661623-aa0bd3a69d98" }];
 
   const settings = [
     {
@@ -303,7 +305,7 @@ export function ProfileScreen() {
               key={label}
               style={[styles.settingRow, i > 0 && styles.settingBorder]}
               onPress={onPress}
-             
+
             >
               <View style={styles.settingIcon}>
                 <Icon size={16} color={colors.muted} />
@@ -316,6 +318,26 @@ export function ProfileScreen() {
             </PressSlide>
           ))}
         </View>
+      </View>
+
+      {/* Demo role switcher */}
+      <View style={styles.section}>
+        <Pressable
+          style={styles.switchRoleBtn}
+          onPress={() =>
+            setProfile(profile.role === "caregiver" ? DEFAULT_PARENT_PROFILE : DEFAULT_CAREGIVER_PROFILE)
+          }
+        >
+          <UserCog size={16} color={colors.navy} />
+          <Text style={styles.switchRoleBtnText}>
+            {profile.role === "caregiver"
+              ? (ko ? "부모 계정으로 전환 (Jisoo Kim)" : "Switch to Parent (Jisoo Kim)")
+              : (ko ? "케어기버 계정으로 전환 (Ji-yeon Park)" : "Switch to Caregiver (Ji-yeon Park)")}
+          </Text>
+        </Pressable>
+        <Text style={styles.switchRoleHint}>
+          {ko ? "입력한 내용은 유지됩니다" : "Your changes stay saved — state persists across switches"}
+        </Text>
       </View>
 
       </Animated.View>
@@ -410,6 +432,20 @@ const styles = StyleSheet.create({
   settingIcon: { backgroundColor: colors.champagne, borderRadius: 12, padding: 8 },
   settingLabel: { fontSize: 14, fontWeight: "600", color: colors.text },
   settingValue: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  switchRoleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: `${colors.navy}12`,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: `${colors.navy}30`,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+  },
+  switchRoleBtnText: { fontSize: 14, fontWeight: "700", color: colors.navy },
+  switchRoleHint: { fontSize: 12, color: colors.muted, textAlign: "center", marginTop: 8 },
   careCard: {
     backgroundColor: colors.card,
     borderRadius: radius.xl,
