@@ -1,8 +1,12 @@
 import { CheckCircle, ClipboardList, Sparkles } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useApp } from "../context/AppContext";
+import { useCareFlow } from "../context/CareFlowContext";
+import { useSchedule } from "../context/ScheduleContext";
 import type { AgreementTerms, CarePlanDraft, NegotiationChatItem, TermStatus } from "../types/careFlow";
 import { useLanguage } from "../LanguageContext";
 import { Avatar } from "./Avatar";
+import { ScheduleProposalCard } from "./ScheduleProposalCard";
 import { colors, radius } from "../theme";
 
 export function CarePlanDetailRow({ label, value }: { label: string; value: string }) {
@@ -81,15 +85,52 @@ export function NegotiationItem({
   onAccept,
   onCounter,
   onAskDarin,
+  onScheduleCounter,
 }: {
   item: NegotiationChatItem;
   caregiverImg: string;
   onAccept: () => void;
   onCounter: () => void;
   onAskDarin: () => void;
+  onScheduleCounter?: (eventId: string) => void;
 }) {
   const { locale, t } = useLanguage();
+  const { profile } = useApp();
+  const { getEventById, acceptSchedule, declineSchedule } = useSchedule();
+  const { appendScheduleSystemMessage, agreeScheduleTerm } = useCareFlow();
   const text = locale === "ko" ? item.textKo : item.textEn;
+  const userRole = profile.role === "caregiver" ? "caregiver" : "parent";
+
+  if (item.type === "schedule_proposal" && item.scheduleEventId) {
+    const event = getEventById(item.scheduleEventId);
+    if (!event) {
+      return (
+        <View style={styles.systemCard}>
+          <Text style={styles.systemText}>{text}</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScheduleProposalCard
+        event={event}
+        currentUserRole={userRole}
+        onAccept={() => {
+          const updated = acceptSchedule(event.id, userRole);
+          if (updated?.status === "accepted") {
+            agreeScheduleTerm(event.linkedCaregiverId ?? 1);
+            appendScheduleSystemMessage(
+              event.linkedCaregiverId ?? 1,
+              "Schedule accepted. This event now appears on both calendars.",
+              "일정이 수락되었습니다. 양쪽 캘린더에 표시됩니다.",
+            );
+          }
+        }}
+        onCounter={() => onScheduleCounter?.(event.id)}
+        onDecline={() => declineSchedule(event.id, userRole)}
+      />
+    );
+  }
 
   if (item.type === "care_plan_update" && item.update) {
     const u = item.update;

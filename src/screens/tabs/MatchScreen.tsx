@@ -17,9 +17,12 @@ import { getCaregiverRole } from "../../i18n";
 import { useLanguage } from "../../LanguageContext";
 import type { MainTabParamList } from "../MainTabs";
 import { getBackgroundCheckLabel, isBackgroundCheckComplete } from "../../utils/caregiverLabels";
+import { useApp } from "../../context/AppContext";
+import { CaregiverFindView } from "./CaregiverFindView";
 import { colors, radius } from "../../theme";
 
 export function MatchScreen() {
+  const { profile } = useApp();
   const { locale, t } = useLanguage();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const {
@@ -41,6 +44,10 @@ export function MatchScreen() {
   const [proposalChatId, setProposalChatId] = useState(1);
   const [carePlanOpen, setCarePlanOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  if (profile.role === "caregiver") {
+    return <CaregiverFindView />;
+  }
 
   const openProfile = (caregiver: CaregiverMatch) => {
     setSelected(caregiver);

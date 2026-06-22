@@ -46,6 +46,7 @@ export type CarePlanDraft = {
   startDate: string;
   careNeeds: string[];
   trialSession: string | null;
+  trialSlotId?: string | null;
   dailyReportIncluded: boolean;
 };
 
@@ -76,11 +77,12 @@ export type CarePlanUpdatePayload = {
 
 export type NegotiationChatItem = {
   id: string;
-  type: "text" | "care_plan_update" | "system" | "ai_summary" | "trial_proposal";
+  type: "text" | "care_plan_update" | "system" | "ai_summary" | "trial_proposal" | "schedule_proposal";
   role: "parent" | "caregiver" | "ai" | "system";
   textEn: string;
   textKo: string;
   update?: CarePlanUpdatePayload;
+  scheduleEventId?: string;
 };
 
 export type ChatMessage = {

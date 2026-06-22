@@ -8,16 +8,27 @@ import { AppProvider } from "./src/context/AppContext";
 import { CareFlowProvider } from "./src/context/CareFlowContext";
 import { ChatProvider } from "./src/context/ChatContext";
 import { VoiceRecordingProvider } from "./src/context/VoiceRecordingContext";
+import { ScheduleProvider } from "./src/context/ScheduleContext";
 import { LanguageProvider } from "./src/LanguageContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { MainTabs } from "./src/screens/MainTabs";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { SplashScreen } from "./src/screens/SplashScreen";
-import type { UserProfile } from "./src/types/profile";
+import { RoleSelectScreen } from "./src/screens/RoleSelectScreen";
+import { ParentSetupScreen } from "./src/screens/ParentSetupScreen";
+import { CaregiverSetupScreen } from "./src/screens/CaregiverSetupScreen";
+import type { UserProfile, UserRole } from "./src/types/profile";
 import { WebAppShell } from "./src/components/WebAppShell";
 import { colors } from "./src/theme";
 
-type AppPhase = "splash" | "login" | "onboarding" | "main";
+type AppPhase =
+  | "splash"
+  | "login"
+  | "onboarding"
+  | "role-select"
+  | "parent-setup"
+  | "caregiver-setup"
+  | "main";
 
 export default function App() {
   return (
@@ -26,11 +37,13 @@ export default function App() {
         <LanguageProvider>
           <AppProvider>
             <ChatProvider>
-              <CareFlowProvider>
-                <VoiceRecordingProvider>
-                  <RootApp />
-                </VoiceRecordingProvider>
-              </CareFlowProvider>
+              <ScheduleProvider>
+                <CareFlowProvider>
+                  <VoiceRecordingProvider>
+                    <RootApp />
+                  </VoiceRecordingProvider>
+                </CareFlowProvider>
+              </ScheduleProvider>
             </ChatProvider>
           </AppProvider>
         </LanguageProvider>
@@ -54,16 +67,33 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
 }
 
 function RootApp() {
+  const { setProfile } = useApp();
   const [phase, setPhase] = useState<AppPhase>("splash");
   const [onboardingProfile, setOnboardingProfile] = useState<UserProfile | null>(null);
 
   const handleSplashComplete = useCallback(() => setPhase("login"), []);
-  const handleLogin = useCallback(() => setPhase("main"), []);
+  const handleLogin = useCallback(() => setPhase("role-select"), []);
   const handleSignUp = useCallback(() => setPhase("onboarding"), []);
+
   const handleOnboardingComplete = useCallback((nextProfile: UserProfile) => {
     setOnboardingProfile(nextProfile);
+    setProfile(nextProfile);
     setPhase("main");
+  }, [setProfile]);
+
+  const handleRoleSelect = useCallback((role: UserRole) => {
+    setPhase(role === "parent" ? "parent-setup" : "caregiver-setup");
   }, []);
+
+  const handleParentSetupComplete = useCallback((nextProfile: UserProfile) => {
+    setProfile(nextProfile);
+    setPhase("main");
+  }, [setProfile]);
+
+  const handleCaregiverSetupComplete = useCallback((nextProfile: UserProfile) => {
+    setProfile(nextProfile);
+    setPhase("main");
+  }, [setProfile]);
 
   return (
     <View style={styles.root}>
@@ -72,6 +102,9 @@ function RootApp() {
       {phase === "splash" && <SplashScreen onComplete={handleSplashComplete} />}
       {phase === "login" && <LoginScreen onLogin={handleLogin} onSignUp={handleSignUp} />}
       {phase === "onboarding" && <OnboardingScreen onComplete={handleOnboardingComplete} />}
+      {phase === "role-select" && <RoleSelectScreen onSelect={handleRoleSelect} />}
+      {phase === "parent-setup" && <ParentSetupScreen onComplete={handleParentSetupComplete} />}
+      {phase === "caregiver-setup" && <CaregiverSetupScreen onComplete={handleCaregiverSetupComplete} />}
     </View>
   );
 }

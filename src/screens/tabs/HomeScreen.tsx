@@ -1,28 +1,37 @@
 import { useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { LinearGradient } from "expo-linear-gradient";
-import { Calendar, CheckCircle, ChevronRight, FileText, Globe, MessageCircle, Send, SlidersHorizontal, Sparkles } from "lucide-react-native";
+import { Calendar, CheckCircle, ChevronRight, FileText, Globe, MessageCircle, Search, Send, SlidersHorizontal, Sparkles } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
 import { CarePlanModal } from "../../components/CarePlanModal";
 import { CareInboxModal } from "../../components/CareInboxModal";
 import { CarePlanAdjustModal } from "../../components/CarePlanAdjustModal";
+import { CareScheduleModal } from "../../components/CareScheduleModal";
 import { AgreementTracker, CarePlanDraftCard } from "../../components/CarePlanNegotiationBlocks";
 import { ScreenScrollView } from "../../components/ScreenScrollView";
 import { useCareFlow } from "../../context/CareFlowContext";
+import { useSchedule } from "../../context/ScheduleContext";
 import { CAREGIVER_MATCHES } from "../../demo/caregivers";
 import { useApp } from "../../context/AppContext";
 import { useLanguage } from "../../LanguageContext";
 import type { CarePlanAdjustForm } from "../../types/careFlow";
+import type { MainTabParamList } from "../MainTabs";
+import { formatScheduleDayLabel, parseDateISO } from "../../utils/scheduleCalendar";
 import { colors, gradients, radius } from "../../theme";
 
 export function HomeScreen() {
-  const { profile, dailyReport } = useApp();
+  const { profile, dailyReport, incomingCareRequests } = useApp();
   const { locale, t } = useLanguage();
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const { activeRelationship, matchConfirmed, carePlan, getNegotiation, sendCarePlanUpdate } = useCareFlow();
+  const { getUpcomingEvents, getPendingEventsForRole } = useSchedule();
   const [inboxOpen, setInboxOpen] = useState(false);
   const [inboxStartThreadId, setInboxStartThreadId] = useState<number | null>(null);
   const [carePlanOpen, setCarePlanOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   const activeCaregiver = activeRelationship
     ? CAREGIVER_MATCHES.find((c) => c.id === activeRelationship.caregiverId)
@@ -54,6 +63,45 @@ export function HomeScreen() {
   const firstName = profile.name.split(" ")[0];
   const reportPreview = dailyReport ? (locale === "ko" ? dailyReport.reportKo : dailyReport.reportEn) : null;
   const replyDraft = dailyReport?.parentReplyDraft ?? t("home.draftText");
+  const openRequests = incomingCareRequests.filter((r) => r.status === "open").length;
+  const upcomingSchedules = getUpcomingEvents(2);
+  const pendingSchedules = getPendingEventsForRole(profile.role === "caregiver" ? "caregiver" : "parent");
+
+  if (profile.role === "caregiver") {
+    return (
+      <ScreenScrollView contentContainerStyle={styles.content}>
+        <LinearGradient colors={[...gradients.hero]} style={styles.hero}>
+          <View style={styles.heroRow}>
+            <View>
+              <Text style={styles.greeting}>{t("caregiverHome.greeting")}</Text>
+              <Text style={styles.name}>{firstName} 👋</Text>
+            </View>
+            <Avatar src={profile.avatar} size={48} />
+          </View>
+          <Text style={styles.caregiverSubtitle}>{t("caregiverHome.subtitle")}</Text>
+        </LinearGradient>
+
+        <Pressable style={styles.requestCard} onPress={() => navigation.navigate("Find")}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.requestTitle}>{t("caregiverHome.viewRequests")}</Text>
+            <Text style={styles.requestSub}>
+              {t("caregiverHome.openRequests").replace("{count}", String(openRequests))}
+            </Text>
+          </View>
+          <Search size={18} color={colors.yellow} />
+        </Pressable>
+
+        <View style={styles.placeholderCard}>
+          <Sparkles size={14} color={colors.yellow} />
+          <Text style={styles.placeholderText}>
+            {locale === "ko"
+              ? "매칭 확정 후 Care Agreement 및 결제 설정이 이어집니다."
+              : "After match confirmed: Care Agreement and payment setup coming next."}
+          </Text>
+        </View>
+      </ScreenScrollView>
+    );
+  }
 
   return (
     <>
@@ -111,6 +159,28 @@ export function HomeScreen() {
         </View>
       )}
 
+      {upcomingSchedules.length > 0 && (
+        <Pressable style={styles.upcomingScheduleCard} onPress={() => setScheduleOpen(true)}>
+          <View style={styles.upcomingHeader}>
+            <Text style={styles.upcomingTitle}>{t("home.upcomingSchedule")}</Text>
+            {pendingSchedules.length > 0 && (
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingBadgeText}>
+                  {t("home.pendingScheduleBadge").replace("{count}", String(pendingSchedules.length))}
+                </Text>
+              </View>
+            )}
+          </View>
+          {upcomingSchedules.map((event) => (
+            <Text key={event.id} style={styles.upcomingLine}>
+              {formatScheduleDayLabel(parseDateISO(event.date), locale === "ko")} · {event.displayTime} ·{" "}
+              {event.title}
+            </Text>
+          ))}
+          <Text style={styles.upcomingLink}>{t("home.viewSchedule")}</Text>
+        </Pressable>
+      )}
+
       <Pressable style={styles.chatEntry} onPress={openInbox}>
         <View style={styles.chatEntryIcon}>
           <MessageCircle size={18} color={colors.text} />
@@ -162,7 +232,7 @@ export function HomeScreen() {
         <View style={styles.actionsGrid}>
           {[
             { icon: MessageCircle, label: t("home.messageNanny"), onPress: openJiyeonChat },
-            { icon: Calendar, label: t("home.schedulePickup") },
+            { icon: Calendar, label: t("home.schedule"), onPress: () => setScheduleOpen(true) },
             { icon: Globe, label: t("home.translateReport") },
             { icon: FileText, label: t("home.viewHistory") },
           ].map(({ icon: Icon, label, onPress }) => (
@@ -199,6 +269,13 @@ export function HomeScreen() {
     <CareInboxModal visible={inboxOpen} onClose={closeInbox} startThreadId={inboxStartThreadId} />
     <CarePlanModal open={carePlanOpen} plan={carePlan} onClose={() => setCarePlanOpen(false)} />
     <CarePlanAdjustModal open={adjustOpen} onClose={() => setAdjustOpen(false)} onSend={handleAdjustCarePlan} />
+    <CareScheduleModal
+      open={scheduleOpen}
+      onClose={() => setScheduleOpen(false)}
+      caregiverName={activeCaregiver?.name ?? "Ji-yeon Park"}
+      childName="Emma"
+      linkedCaregiverId={chatCaregiverId}
+    />
     </>
   );
 }
@@ -292,6 +369,29 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   adjustBtnText: { fontSize: 13, fontWeight: "600", color: colors.text },
+  upcomingScheduleCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: colors.card,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    gap: 6,
+  },
+  upcomingHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
+  upcomingTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
+  pendingBadge: {
+    backgroundColor: colors.yellowSoft,
+    borderWidth: 1,
+    borderColor: colors.yellow,
+    borderRadius: radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  pendingBadgeText: { fontSize: 10, fontWeight: "700", color: colors.text },
+  upcomingLine: { fontSize: 12, lineHeight: 18, color: colors.muted },
+  upcomingLink: { fontSize: 12, fontWeight: "700", color: colors.text, marginTop: 6 },
   section: { marginHorizontal: 16, marginTop: 24 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginBottom: 12 },
@@ -372,4 +472,29 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   secondaryBtnText: { fontSize: 14, fontWeight: "600", color: colors.text },
+  caregiverSubtitle: { fontSize: 14, color: colors.muted, marginTop: 8, lineHeight: 20 },
+  requestCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.xl,
+    padding: 16,
+    marginBottom: 12,
+  },
+  requestTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
+  requestSub: { fontSize: 12, color: colors.muted, marginTop: 4 },
+  placeholderCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: colors.yellowSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: 14,
+  },
+  placeholderText: { flex: 1, fontSize: 13, lineHeight: 20, color: colors.muted },
 });

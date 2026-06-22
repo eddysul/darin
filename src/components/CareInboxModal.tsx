@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Calendar,
   ChevronLeft,
   ChevronRight,
-  Globe,
   MessageCircle,
   Send,
-  SlidersHorizontal,
   Sparkles,
-  Wand2,
 } from "lucide-react-native";
 import {
   KeyboardAvoidingView,
@@ -30,6 +26,7 @@ import { CAREGIVER_MATCHES } from "../demo/caregivers";
 import { useCareFlow } from "../context/CareFlowContext";
 import { useChat } from "../context/ChatContext";
 import type { CarePlanAdjustForm } from "../types/careFlow";
+import type { TrialSlot } from "../types/trialSlot";
 import { useScreenTopInset } from "../hooks/useScreenInsets";
 import { useLanguage } from "../LanguageContext";
 import { Avatar } from "./Avatar";
@@ -40,6 +37,9 @@ import {
   NegotiationItem,
 } from "./CarePlanNegotiationBlocks";
 import { ScheduleTrialModal } from "./ScheduleTrialModal";
+import { ProposalChatActionRow } from "./ProposalChatActionRow";
+import { ProposalAskDarinSheet } from "./ProposalAskDarinSheet";
+import { ProposalCarePlanSheet } from "./ProposalCarePlanSheet";
 import { colors, radius } from "../theme";
 
 const SUGGESTION_CHIPS = [
@@ -76,6 +76,8 @@ export function CareInboxModal({
     sendCarePlanUpdate,
     acceptCarePlanUpdate,
     askDarinOnUpdate,
+    summarizeAgreement,
+    suggestQuestions,
     proposeTrialSession,
   } = useCareFlow();
   const { threads, getPreview, getThread, sendMessage } = useChat();
@@ -88,6 +90,8 @@ export function CareInboxModal({
   const [translatePreview, setTranslatePreview] = useState<string | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [trialOpen, setTrialOpen] = useState(false);
+  const [askDarinOpen, setAskDarinOpen] = useState(false);
+  const [carePlanOpen, setCarePlanOpen] = useState(false);
 
   const caregiver = CAREGIVER_MATCHES.find((c) => c.id === threadId) ?? CAREGIVER_MATCHES[0];
   const negotiation = getNegotiation(threadId);
@@ -156,9 +160,17 @@ export function CareInboxModal({
     setAdjustOpen(false);
   };
 
-  const handleProposeTrial = () => {
-    proposeTrialSession(threadId, draft.trialSession ?? "Friday 4 PM");
-    setTrialOpen(false);
+  const handleProposeTrial = (slot: TrialSlot) => {
+    proposeTrialSession(threadId, slot);
+  };
+
+  const handleDraftReply = () => {
+    setInput(locale === "ko" ? AI_DRAFT_MESSAGE.ko : AI_DRAFT_MESSAGE.en);
+  };
+
+  const handleTranslateChat = () => {
+    setInput(AI_TRANSLATE_DEMO.inputKo);
+    setTranslatePreview(AI_TRANSLATE_DEMO.outputEn);
   };
 
   return (
@@ -321,32 +333,10 @@ export function CareInboxModal({
                 </View>
               )}
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolsRow}>
-                <Pressable style={styles.toolBtn} onPress={() => setInput(locale === "ko" ? AI_DRAFT_MESSAGE.ko : AI_DRAFT_MESSAGE.en)}>
-                  <Wand2 size={13} color={colors.text} />
-                  <Text style={styles.toolText}>{t("chat.draftAI")}</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.toolBtn}
-                  onPress={() => {
-                    setInput(AI_TRANSLATE_DEMO.inputKo);
-                    setTranslatePreview(AI_TRANSLATE_DEMO.outputEn);
-                  }}
-                >
-                  <Globe size={13} color={colors.text} />
-                  <Text style={styles.toolText}>{t("chat.translate")}</Text>
-                </Pressable>
-                <Pressable style={styles.toolBtn} onPress={() => setTrialOpen(true)}>
-                  <Calendar size={13} color={colors.text} />
-                  <Text style={styles.toolText}>{t("chat.scheduleTrial")}</Text>
-                </Pressable>
-                {showNegotiation && (
-                  <Pressable style={styles.toolBtn} onPress={() => setAdjustOpen(true)}>
-                    <SlidersHorizontal size={13} color={colors.text} />
-                    <Text style={styles.toolText}>{t("negotiation.adjustCarePlan")}</Text>
-                  </Pressable>
-                )}
-              </ScrollView>
+              <ProposalChatActionRow
+                onAskDarin={() => setAskDarinOpen(true)}
+                onCarePlan={() => setCarePlanOpen(true)}
+              />
 
               <View style={styles.inputRow}>
                 <TextInput
@@ -376,7 +366,24 @@ export function CareInboxModal({
         open={trialOpen}
         onClose={() => setTrialOpen(false)}
         onPropose={handleProposeTrial}
-        suggestedTime={draft.trialSession ?? "Friday 4 PM"}
+        caregiverName={caregiver.name}
+        existingSlotId={draft.trialSlotId}
+      />
+      <ProposalAskDarinSheet
+        open={askDarinOpen}
+        onClose={() => setAskDarinOpen(false)}
+        onDraftReply={handleDraftReply}
+        onTranslateChat={handleTranslateChat}
+        onSummarizeAgreement={() => summarizeAgreement(threadId)}
+        onSuggestQuestions={() => suggestQuestions(threadId)}
+      />
+      <ProposalCarePlanSheet
+        open={carePlanOpen}
+        onClose={() => setCarePlanOpen(false)}
+        draft={draft}
+        terms={terms}
+        onEditPlan={() => setAdjustOpen(true)}
+        onScheduleTrial={() => setTrialOpen(true)}
       />
     </Modal>
   );

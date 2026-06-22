@@ -19,6 +19,7 @@ import type {
   MatchConfirmationStatus,
   NegotiationChatItem,
 } from "../types/careFlow";
+import type { TrialSlot } from "../types/trialSlot";
 
 type CaregiverNegotiation = {
   draft: CarePlanDraft;
@@ -48,7 +49,12 @@ type CareFlowContextValue = {
   sendCarePlanUpdate: (caregiverId: number, form: CarePlanAdjustForm) => void;
   acceptCarePlanUpdate: (caregiverId: number, itemId: string) => void;
   askDarinOnUpdate: (caregiverId: number) => void;
-  proposeTrialSession: (caregiverId: number, trialTime?: string) => void;
+  summarizeAgreement: (caregiverId: number) => void;
+  suggestQuestions: (caregiverId: number) => void;
+  proposeTrialSession: (caregiverId: number, slot: TrialSlot) => void;
+  appendScheduleProposal: (caregiverId: number, scheduleEventId: string, textEn: string, textKo: string, role: "parent" | "caregiver") => void;
+  appendScheduleSystemMessage: (caregiverId: number, textEn: string, textKo: string) => void;
+  agreeScheduleTerm: (caregiverId: number) => void;
   resetDemo: () => void;
 };
 
@@ -232,29 +238,125 @@ export function CareFlowProvider({ children }: { children: ReactNode }) {
     [updateNegotiation],
   );
 
-  const proposeTrialSession = useCallback(
-    (caregiverId: number, trialTime = "Friday 4 PM") => {
-      const caregiver = CAREGIVER_MATCHES.find((c) => c.id === caregiverId);
+  const summarizeAgreement = useCallback(
+    (caregiverId: number) => {
+      updateNegotiation(caregiverId, (current) => {
+        const summaryEn = buildAiAgreementSummaryEn(current.draft);
+        const summaryKo = buildAiAgreementSummaryKo(current.draft);
+        return {
+          ...current,
+          items: [
+            ...current.items,
+            {
+              id: `ai-summary-${Date.now()}`,
+              type: "ai_summary",
+              role: "ai",
+              textEn: `So far, both sides agree on:\n• ${summaryEn.agreed.join("\n• ")}\n\nStill needs confirmation:\n• ${summaryEn.pending.join("\n• ")}`,
+              textKo: `지금까지 양측이 합의한 내용:\n• ${summaryKo.agreed.join("\n• ")}\n\n아직 확인 필요:\n• ${summaryKo.pending.join("\n• ")}`,
+            },
+          ],
+        };
+      });
+    },
+    [updateNegotiation],
+  );
+
+  const suggestQuestions = useCallback(
+    (caregiverId: number) => {
       updateNegotiation(caregiverId, (current) => ({
-        draft: { ...current.draft, trialSession: trialTime },
-        terms: { ...current.terms, trialSession: "agreed" },
+        ...current,
+        items: [
+          ...current.items,
+          {
+            id: `ai-questions-${Date.now()}`,
+            type: "ai_summary",
+            role: "ai",
+            textEn:
+              "Suggested questions: Ask about newborn experience, nap routine, background check, trial session availability, and daily report language preference.",
+            textKo:
+              "추천 질문: 신생아 경험, 낮잠 루틴, 신원 조회, 시범 세션 가능 여부, 일일 리포트 언어 선호를 물어보세요.",
+          },
+        ],
+      }));
+    },
+    [updateNegotiation],
+  );
+
+  const proposeTrialSession = useCallback(
+    (caregiverId: number, slot: TrialSlot) => {
+      updateNegotiation(caregiverId, (current) => ({
+        draft: {
+          ...current.draft,
+          trialSession: slot.labelEn,
+          trialSlotId: slot.id,
+        },
+        terms: { ...current.terms, trialSession: "discussing" },
         items: [
           ...current.items,
           {
             id: `trial-${Date.now()}`,
             type: "trial_proposal",
             role: "parent",
-            textEn: `Parent proposed a trial session for ${trialTime}.`,
-            textKo: `부모님이 ${trialTime} 시범 세션을 제안했습니다.`,
-          },
-          {
-            id: `trial-resp-${Date.now()}`,
-            type: "text",
-            role: "caregiver",
-            textEn: `That works for me. I'm available ${trialTime}.`,
-            textKo: `좋습니다. ${trialTime}에 가능합니다.`,
+            textEn: `Parent proposed a trial session for ${slot.labelEn}.`,
+            textKo: `부모님이 ${slot.labelKo} 시범 세션을 제안했습니다.`,
           },
         ],
+      }));
+    },
+    [updateNegotiation],
+  );
+
+  const appendScheduleProposal = useCallback(
+    (
+      caregiverId: number,
+      scheduleEventId: string,
+      textEn: string,
+      textKo: string,
+      role: "parent" | "caregiver",
+    ) => {
+      updateNegotiation(caregiverId, (current) => ({
+        ...current,
+        terms: { ...current.terms, schedule: "discussing" },
+        items: [
+          ...current.items,
+          {
+            id: `sched-${Date.now()}`,
+            type: "schedule_proposal",
+            role,
+            textEn,
+            textKo,
+            scheduleEventId,
+          },
+        ],
+      }));
+    },
+    [updateNegotiation],
+  );
+
+  const appendScheduleSystemMessage = useCallback(
+    (caregiverId: number, textEn: string, textKo: string) => {
+      updateNegotiation(caregiverId, (current) => ({
+        ...current,
+        items: [
+          ...current.items,
+          {
+            id: `sched-sys-${Date.now()}`,
+            type: "system",
+            role: "system",
+            textEn,
+            textKo,
+          },
+        ],
+      }));
+    },
+    [updateNegotiation],
+  );
+
+  const agreeScheduleTerm = useCallback(
+    (caregiverId: number) => {
+      updateNegotiation(caregiverId, (current) => ({
+        ...current,
+        terms: { ...current.terms, schedule: "agreed" },
       }));
     },
     [updateNegotiation],
@@ -324,7 +426,12 @@ export function CareFlowProvider({ children }: { children: ReactNode }) {
       sendCarePlanUpdate,
       acceptCarePlanUpdate,
       askDarinOnUpdate,
+      summarizeAgreement,
+      suggestQuestions,
       proposeTrialSession,
+      appendScheduleProposal,
+      appendScheduleSystemMessage,
+      agreeScheduleTerm,
       resetDemo,
     }),
     [
@@ -345,7 +452,12 @@ export function CareFlowProvider({ children }: { children: ReactNode }) {
       sendCarePlanUpdate,
       acceptCarePlanUpdate,
       askDarinOnUpdate,
+      summarizeAgreement,
+      suggestQuestions,
       proposeTrialSession,
+      appendScheduleProposal,
+      appendScheduleSystemMessage,
+      agreeScheduleTerm,
       resetDemo,
     ],
   );

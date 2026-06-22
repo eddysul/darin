@@ -1,13 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Calendar,
   CheckCircle,
   ChevronLeft,
-  Globe,
   Send,
-  SlidersHorizontal,
   Sparkles,
-  Wand2,
 } from "lucide-react-native";
 import {
   KeyboardAvoidingView,
@@ -26,9 +22,13 @@ import {
   AI_TRANSLATE_DEMO,
 } from "../demo/careFlow";
 import { CAREGIVER_MATCHES } from "../demo/caregivers";
+import { useApp } from "../context/AppContext";
 import { useCareFlow } from "../context/CareFlowContext";
 import { useChat } from "../context/ChatContext";
+import { useSchedule } from "../context/ScheduleContext";
+import { buildCareShiftScheduleEvent, buildTrialScheduleEvent } from "../demo/schedules";
 import type { CarePlanAdjustForm } from "../types/careFlow";
+import type { TrialSlot } from "../types/trialSlot";
 import { useScreenTopInset } from "../hooks/useScreenInsets";
 import { useLanguage } from "../LanguageContext";
 import { Avatar } from "./Avatar";
@@ -40,7 +40,13 @@ import {
   NegotiationItem,
 } from "./CarePlanNegotiationBlocks";
 import { ScheduleTrialModal } from "./ScheduleTrialModal";
+import { ProposalChatActionRow } from "./ProposalChatActionRow";
+import { ProposalAskDarinSheet } from "./ProposalAskDarinSheet";
+import { ProposalCarePlanSheet } from "./ProposalCarePlanSheet";
+import { ScheduleProposalModal } from "./ScheduleProposalModal";
 import { colors, radius } from "../theme";
+import { formatDateISO } from "../utils/scheduleCalendar";
+import { parseTrialSlotId, TRIAL_TIMES } from "../utils/trialCalendar";
 
 const SUGGESTION_CHIPS = [
   "chat.chipInfant",
@@ -66,6 +72,7 @@ export function CareProposalChatModal({
   onGoHome,
 }: CareProposalChatModalProps) {
   const { locale, t } = useLanguage();
+  const { profile } = useApp();
   const {
     matchStatus,
     matchConfirmed,
@@ -77,8 +84,13 @@ export function CareProposalChatModal({
     sendCarePlanUpdate,
     acceptCarePlanUpdate,
     askDarinOnUpdate,
+    summarizeAgreement,
+    suggestQuestions,
     proposeTrialSession,
+    appendScheduleProposal,
+    appendScheduleSystemMessage,
   } = useCareFlow();
+  const { upsertSchedule, counterSchedule } = useSchedule();
   const { getThread, sendMessage, markThreadSaved, ensureProposalThread } = useChat();
   const topInset = useScreenTopInset(8);
   const scrollRef = useRef<ScrollView>(null);
@@ -87,6 +99,10 @@ export function CareProposalChatModal({
   const [translatePreview, setTranslatePreview] = useState<string | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [trialOpen, setTrialOpen] = useState(false);
+  const [askDarinOpen, setAskDarinOpen] = useState(false);
+  const [carePlanOpen, setCarePlanOpen] = useState(false);
+  const [scheduleCounterId, setScheduleCounterId] = useState<string | null>(null);
+  const [scheduleCounterOpen, setScheduleCounterOpen] = useState(false);
 
   const caregiver = CAREGIVER_MATCHES.find((c) => c.id === caregiverId) ?? CAREGIVER_MATCHES[0];
   const negotiation = getNegotiation(caregiverId);
@@ -124,12 +140,61 @@ export function CareProposalChatModal({
 
   const handleSendUpdate = (form: CarePlanAdjustForm) => {
     sendCarePlanUpdate(caregiverId, form);
+    const event = buildCareShiftScheduleEvent({
+      id: `care-shift-${Date.now()}`,
+      scheduleLabel: form.schedule,
+      displayTime: "3:00 PM – 8:00 PM",
+      startTime: "15:00",
+      endTime: "20:00",
+      date: formatDateISO(new Date(2026, 5, 22)),
+      proposedBy: "parent",
+      caregiverName: caregiver.name,
+      caregiverId,
+      note: form.message.trim() || "Care plan schedule update",
+    });
+    upsertSchedule(event);
+    appendScheduleProposal(
+      caregiverId,
+      event.id,
+      `Jisoo proposed a care schedule: ${form.schedule}.`,
+      `지수님이 케어 일정을 제안했습니다: ${form.schedule}.`,
+      "parent",
+    );
     setAdjustOpen(false);
   };
 
-  const handleProposeTrial = () => {
-    proposeTrialSession(caregiverId, draft.trialSession ?? "Friday 4 PM");
-    setTrialOpen(false);
+  const handleProposeTrial = (slot: TrialSlot) => {
+    proposeTrialSession(caregiverId, slot);
+    const parsed = parseTrialSlotId(slot.id);
+    const time = TRIAL_TIMES.find((t) => t.id === parsed.timeId);
+    const event = buildTrialScheduleEvent({
+      id: `trial-${slot.id}`,
+      date: parsed.date ? formatDateISO(parsed.date) : formatDateISO(new Date(2026, 5, 26)),
+      displayTime: locale === "ko" ? slot.labelKo.split(" · ")[1] ?? slot.labelKo : slot.labelEn.split(" · ")[1] ?? slot.labelEn,
+      startTime: time?.id === "4pm" ? "16:00" : "16:00",
+      endTime: "17:00",
+      proposedBy: "parent",
+      caregiverName: caregiver.name,
+      caregiverId,
+      note: "Parent proposed this trial session from chat.",
+    });
+    upsertSchedule(event);
+    appendScheduleProposal(
+      caregiverId,
+      event.id,
+      `Jisoo proposed a schedule: ${slot.labelEn}.`,
+      `지수님이 일정을 제안했습니다: ${slot.labelKo}.`,
+      "parent",
+    );
+  };
+
+  const handleDraftReply = () => {
+    setInput(locale === "ko" ? AI_DRAFT_MESSAGE.ko : AI_DRAFT_MESSAGE.en);
+  };
+
+  const handleTranslateChat = () => {
+    setInput(AI_TRANSLATE_DEMO.inputKo);
+    setTranslatePreview(AI_TRANSLATE_DEMO.outputEn);
   };
 
   const headerSubtitle = isConfirmed ? t("chat.savedChat") : t("chat.proposalDiscussion");
@@ -203,6 +268,10 @@ export function CareProposalChatModal({
                 onAccept={() => acceptCarePlanUpdate(caregiverId, item.id)}
                 onCounter={() => setAdjustOpen(true)}
                 onAskDarin={() => askDarinOnUpdate(caregiverId)}
+                onScheduleCounter={(eventId) => {
+                  setScheduleCounterId(eventId);
+                  setScheduleCounterOpen(true);
+                }}
               />
             ))}
 
@@ -275,30 +344,10 @@ export function CareProposalChatModal({
                 </View>
               )}
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolsScroll}>
-                <Pressable style={styles.toolBtn} onPress={() => setInput(locale === "ko" ? AI_DRAFT_MESSAGE.ko : AI_DRAFT_MESSAGE.en)}>
-                  <Wand2 size={13} color={colors.text} />
-                  <Text style={styles.toolText}>{t("chat.draftAI")}</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.toolBtn}
-                  onPress={() => {
-                    setInput(AI_TRANSLATE_DEMO.inputKo);
-                    setTranslatePreview(AI_TRANSLATE_DEMO.outputEn);
-                  }}
-                >
-                  <Globe size={13} color={colors.text} />
-                  <Text style={styles.toolText}>{t("chat.translate")}</Text>
-                </Pressable>
-                <Pressable style={styles.toolBtn} onPress={() => setTrialOpen(true)}>
-                  <Calendar size={13} color={colors.text} />
-                  <Text style={styles.toolText}>{t("chat.scheduleTrial")}</Text>
-                </Pressable>
-                <Pressable style={styles.toolBtn} onPress={() => setAdjustOpen(true)}>
-                  <SlidersHorizontal size={13} color={colors.text} />
-                  <Text style={styles.toolText}>{t("negotiation.adjustCarePlan")}</Text>
-                </Pressable>
-              </ScrollView>
+              <ProposalChatActionRow
+                onAskDarin={() => setAskDarinOpen(true)}
+                onCarePlan={() => setCarePlanOpen(true)}
+              />
 
               <View style={styles.inputRow}>
                 <TextInput
@@ -328,16 +377,10 @@ export function CareProposalChatModal({
               )}
 
               {isConfirmed && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolsScroll}>
-                  <Pressable style={styles.toolBtn} onPress={() => setTrialOpen(true)}>
-                    <Calendar size={13} color={colors.text} />
-                    <Text style={styles.toolText}>{t("chat.scheduleTrial")}</Text>
-                  </Pressable>
-                  <Pressable style={styles.toolBtn} onPress={() => setAdjustOpen(true)}>
-                    <SlidersHorizontal size={13} color={colors.text} />
-                    <Text style={styles.toolText}>{t("negotiation.adjustCarePlan")}</Text>
-                  </Pressable>
-                </ScrollView>
+                <ProposalChatActionRow
+                  onAskDarin={() => setAskDarinOpen(true)}
+                  onCarePlan={() => setCarePlanOpen(true)}
+                />
               )}
             </View>
         </KeyboardAvoidingView>
@@ -348,7 +391,50 @@ export function CareProposalChatModal({
         open={trialOpen}
         onClose={() => setTrialOpen(false)}
         onPropose={handleProposeTrial}
-        suggestedTime={draft.trialSession ?? "Friday 4 PM"}
+        caregiverName={caregiver.name}
+        existingSlotId={draft.trialSlotId}
+      />
+      <ProposalAskDarinSheet
+        open={askDarinOpen}
+        onClose={() => setAskDarinOpen(false)}
+        onDraftReply={handleDraftReply}
+        onTranslateChat={handleTranslateChat}
+        onSummarizeAgreement={() => summarizeAgreement(caregiverId)}
+        onSuggestQuestions={() => suggestQuestions(caregiverId)}
+      />
+      <ProposalCarePlanSheet
+        open={carePlanOpen}
+        onClose={() => setCarePlanOpen(false)}
+        draft={draft}
+        terms={terms}
+        onEditPlan={() => setAdjustOpen(true)}
+        onScheduleTrial={() => setTrialOpen(true)}
+      />
+      <ScheduleProposalModal
+        open={scheduleCounterOpen}
+        onClose={() => {
+          setScheduleCounterOpen(false);
+          setScheduleCounterId(null);
+        }}
+        defaultRole={profile.role === "caregiver" ? "caregiver" : "parent"}
+        caregiverName={caregiver.name}
+        linkedCaregiverId={caregiverId}
+        counterMode
+        onCounterSubmit={(input) => {
+          if (!scheduleCounterId) return;
+          const role = profile.role === "caregiver" ? "caregiver" : "parent";
+          const counter = counterSchedule(scheduleCounterId, input, role);
+          if (counter) {
+            appendScheduleProposal(
+              caregiverId,
+              counter.id,
+              "Counter time proposed.",
+              "대안 시간이 제안되었습니다.",
+              role,
+            );
+          }
+        }}
+        onSubmit={() => {}}
       />
     </Modal>
   );

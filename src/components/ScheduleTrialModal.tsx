@@ -1,90 +1,304 @@
-import { Calendar, MapPin, Clock, X } from "lucide-react-native";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Calendar, CheckCircle, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { PressSlide } from "./PressSlide";
 import { useLanguage } from "../LanguageContext";
+import type { TrialSlot } from "../types/trialSlot";
+import {
+  buildTrialSlot,
+  CALENDAR_ANCHOR,
+  formatMonthTitle,
+  getMonthMatrix,
+  isBeforeDay,
+  isSameDay,
+  parseTrialSlotId,
+  startOfDay,
+  TRIAL_TIMES,
+} from "../utils/trialCalendar";
 import { colors, radius } from "../theme";
 
 type ScheduleTrialModalProps = {
   open: boolean;
   onClose: () => void;
-  onPropose: () => void;
-  suggestedTime?: string;
+  onPropose: (slot: TrialSlot) => void;
+  caregiverName?: string;
+  existingSlotId?: string | null;
 };
+
+const WEEKDAYS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
 export function ScheduleTrialModal({
   open,
   onClose,
   onPropose,
-  suggestedTime = "Friday 4 PM",
+  caregiverName = "Caregiver",
+  existingSlotId,
 }: ScheduleTrialModalProps) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
+  const ko = locale === "ko";
+  const minDate = startOfDay(CALENDAR_ANCHOR);
+
+  const [viewYear, setViewYear] = useState(CALENDAR_ANCHOR.getFullYear());
+  const [viewMonth, setViewMonth] = useState(CALENDAR_ANCHOR.getMonth());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedTimeId, setSelectedTimeId] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [confirmedSlot, setConfirmedSlot] = useState<TrialSlot | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setConfirmed(false);
+    setConfirmedSlot(null);
+
+    if (existingSlotId) {
+      const { date, timeId } = parseTrialSlotId(existingSlotId);
+      if (date && timeId) {
+        setSelectedDate(date);
+        setViewYear(date.getFullYear());
+        setViewMonth(date.getMonth());
+        setSelectedTimeId(timeId);
+        return;
+      }
+    }
+
+    setSelectedDate(null);
+    setSelectedTimeId(null);
+    setViewYear(CALENDAR_ANCHOR.getFullYear());
+    setViewMonth(CALENDAR_ANCHOR.getMonth());
+  }, [open, existingSlotId]);
+
+  const monthCells = useMemo(() => getMonthMatrix(viewYear, viewMonth), [viewYear, viewMonth]);
+  const weekdays = ko ? WEEKDAYS_KO : WEEKDAYS_EN;
+  const selectedTime = TRIAL_TIMES.find((time) => time.id === selectedTimeId);
+  const canConfirm = selectedDate && selectedTime;
+
+  const shiftMonth = (delta: number) => {
+    const d = new Date(viewYear, viewMonth + delta, 1);
+    setViewYear(d.getFullYear());
+    setViewMonth(d.getMonth());
+  };
+
+  const handleConfirm = () => {
+    if (!selectedDate || !selectedTime) return;
+    const slot = buildTrialSlot(selectedDate, selectedTime);
+    setConfirmedSlot(slot);
+    setConfirmed(true);
+    onPropose(slot);
+    setTimeout(onClose, 1400);
+  };
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={styles.card}>
-          <Pressable style={styles.closeBtn} onPress={onClose}>
-            <X size={18} color={colors.muted} />
-          </Pressable>
-          <Text style={styles.title}>{t("negotiation.trialTitle")}</Text>
-          <View style={styles.row}>
-            <Calendar size={14} color={colors.text} />
-            <Text style={styles.rowText}>
-              {t("negotiation.trialSuggested")}: {suggestedTime}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Clock size={14} color={colors.muted} />
-            <Text style={styles.rowSub}>{t("negotiation.trialDuration")}</Text>
-          </View>
-          <View style={styles.row}>
-            <MapPin size={14} color={colors.muted} />
-            <Text style={styles.rowSub}>{t("negotiation.trialLocation")}</Text>
-          </View>
-          <Text style={styles.purpose}>{t("negotiation.trialPurpose")}</Text>
-          <Pressable style={styles.primaryBtn} onPress={onPropose}>
-            <Text style={styles.primaryBtnText}>{t("negotiation.proposeTrial")}</Text>
-          </Pressable>
-          <Pressable style={styles.secondaryBtn} onPress={onClose}>
-            <Text style={styles.secondaryBtnText}>{t("negotiation.cancel")}</Text>
-          </Pressable>
-        </View>
-      </View>
+    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+          {confirmed && confirmedSlot ? (
+            <View style={styles.success}>
+              <View style={styles.successIcon}>
+                <CheckCircle size={32} color={colors.yellow} />
+              </View>
+              <Text style={styles.successTitle}>{t("trial.confirmed")}</Text>
+              <Text style={styles.successBody}>
+                {caregiverName} · {ko ? confirmedSlot.labelKo : confirmedSlot.labelEn}
+              </Text>
+              <Text style={styles.successHint}>{t("trial.addedToChat")}</Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.header}>
+                <Calendar size={20} color={colors.yellow} />
+                <Text style={styles.title}>{t("negotiation.trialTitle")}</Text>
+              </View>
+              <Text style={styles.subtitle}>
+                {t("trial.subtitle")} {caregiverName}
+              </Text>
+
+              <View style={styles.metaRow}>
+                <Clock size={13} color={colors.muted} />
+                <Text style={styles.metaText}>{t("negotiation.trialDuration")}</Text>
+              </View>
+              <View style={styles.metaRow}>
+                <MapPin size={13} color={colors.muted} />
+                <Text style={styles.metaText}>{t("negotiation.trialLocation")}</Text>
+              </View>
+              <Text style={styles.purpose}>{t("negotiation.trialPurpose")}</Text>
+
+              <View style={styles.monthRow}>
+                <Pressable style={styles.monthBtn} onPress={() => shiftMonth(-1)}>
+                  <ChevronLeft size={20} color={colors.text} />
+                </Pressable>
+                <Text style={styles.monthTitle}>{formatMonthTitle(viewYear, viewMonth, ko)}</Text>
+                <Pressable style={styles.monthBtn} onPress={() => shiftMonth(1)}>
+                  <ChevronRight size={20} color={colors.text} />
+                </Pressable>
+              </View>
+
+              <View style={styles.weekdayRow}>
+                {weekdays.map((d) => (
+                  <Text key={d} style={styles.weekday}>
+                    {d}
+                  </Text>
+                ))}
+              </View>
+
+              <View style={styles.grid}>
+                {monthCells.map((date, idx) => {
+                  if (!date) return <View key={`empty-${idx}`} style={styles.dayCell} />;
+                  const disabled = isBeforeDay(date, minDate);
+                  const selected = selectedDate ? isSameDay(date, selectedDate) : false;
+                  const isToday = isSameDay(date, minDate);
+                  return (
+                    <Pressable
+                      key={date.toISOString()}
+                      style={[
+                        styles.dayCell,
+                        selected && styles.daySelected,
+                        isToday && !selected && styles.dayToday,
+                        disabled && styles.dayDisabled,
+                      ]}
+                      onPress={() => !disabled && setSelectedDate(date)}
+                      disabled={disabled}
+                    >
+                      <Text
+                        style={[
+                          styles.dayText,
+                          selected && styles.dayTextSelected,
+                          disabled && styles.dayTextDisabled,
+                        ]}
+                      >
+                        {date.getDate()}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.timeLabel}>{t("trial.pickTime")}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.times}>
+                {TRIAL_TIMES.map((time) => {
+                  const active = time.id === selectedTimeId;
+                  return (
+                    <Pressable
+                      key={time.id}
+                      style={[styles.timeChip, active && styles.timeChipActive]}
+                      onPress={() => setSelectedTimeId(time.id)}
+                    >
+                      <Text style={[styles.timeText, active && styles.timeTextActive]}>
+                        {ko ? time.labelKo : time.labelEn}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              <View style={styles.actions}>
+                <Pressable style={styles.cancelBtn} onPress={onClose}>
+                  <Text style={styles.cancelText}>{t("negotiation.cancel")}</Text>
+                </Pressable>
+                <PressSlide
+                  style={[styles.confirmBtn, !canConfirm && styles.confirmBtnDisabled]}
+                  onPress={handleConfirm}
+                  disabled={!canConfirm}
+                >
+                  <Text style={styles.confirmText}>{t("trial.confirm")}</Text>
+                </PressSlide>
+              </View>
+            </>
+          )}
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: "center", paddingHorizontal: 24 },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.45)" },
-  card: {
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
     backgroundColor: colors.card,
-    borderRadius: radius.xl,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: 24,
+    paddingBottom: 32,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 20,
+    maxHeight: "92%",
   },
-  closeBtn: { position: "absolute", top: 12, right: 12, padding: 4 },
-  title: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: 14 },
-  row: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-  rowText: { fontSize: 14, fontWeight: "600", color: colors.text, flex: 1 },
-  rowSub: { fontSize: 13, color: colors.muted, flex: 1 },
-  purpose: { fontSize: 13, color: colors.muted, lineHeight: 20, marginTop: 8, marginBottom: 16 },
-  primaryBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    paddingVertical: 12,
+  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
+  title: { fontSize: 18, fontWeight: "700", color: colors.text },
+  subtitle: { fontSize: 13, color: colors.muted, lineHeight: 18, marginBottom: 10 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  metaText: { fontSize: 12, color: colors.muted, flex: 1 },
+  purpose: { fontSize: 12, color: colors.muted, lineHeight: 18, marginTop: 6, marginBottom: 14 },
+  monthRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  monthBtn: { padding: 8, borderRadius: radius.md, backgroundColor: colors.yellowSoft },
+  monthTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  weekdayRow: { flexDirection: "row", marginBottom: 4 },
+  weekday: { flex: 1, textAlign: "center", fontSize: 11, fontWeight: "600", color: colors.muted },
+  grid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 16 },
+  dayCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
     alignItems: "center",
-    marginBottom: 8,
+    justifyContent: "center",
+    padding: 2,
   },
-  primaryBtnText: { fontSize: 14, fontWeight: "600", color: colors.primaryForeground },
-  secondaryBtn: {
-    borderWidth: 1,
+  daySelected: { backgroundColor: colors.yellow, borderRadius: radius.md },
+  dayToday: { borderWidth: 1.5, borderColor: colors.yellow, borderRadius: radius.md },
+  dayDisabled: { opacity: 0.3 },
+  dayText: { fontSize: 14, fontWeight: "500", color: colors.text },
+  dayTextSelected: { fontWeight: "700", color: colors.text },
+  dayTextDisabled: { color: colors.muted },
+  timeLabel: { fontSize: 12, fontWeight: "600", color: colors.text, marginBottom: 8 },
+  times: { marginBottom: 16, maxHeight: 44 },
+  timeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
     borderColor: colors.border,
+    backgroundColor: colors.inputBg,
+    marginRight: 8,
+  },
+  timeChipActive: { borderColor: colors.yellow, backgroundColor: colors.yellowSoft },
+  timeText: { fontSize: 13, fontWeight: "500", color: colors.muted },
+  timeTextActive: { color: colors.text, fontWeight: "700" },
+  actions: { flexDirection: "row", gap: 10 },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
     borderRadius: radius.md,
-    paddingVertical: 12,
-    alignItems: "center",
     backgroundColor: colors.backgroundSecondary,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  secondaryBtnText: { fontSize: 14, fontWeight: "600", color: colors.text },
+  cancelText: { fontSize: 14, fontWeight: "600", color: colors.muted },
+  confirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+  },
+  confirmBtnDisabled: { opacity: 0.4 },
+  confirmText: { fontSize: 14, fontWeight: "700", color: colors.primaryForeground },
+  success: { alignItems: "center", paddingVertical: 24 },
+  successIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.yellowSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.yellow,
+  },
+  successTitle: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: 8 },
+  successBody: { fontSize: 14, color: colors.text, textAlign: "center", lineHeight: 20, fontWeight: "600" },
+  successHint: { fontSize: 13, color: colors.muted, marginTop: 8, textAlign: "center" },
 });

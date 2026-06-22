@@ -16,6 +16,14 @@ export type UserProfile = {
   languages?: string;
   experience?: string;
   specialty?: string;
+  budget?: string;
+  liveIn?: boolean;
+  breastfeeding?: boolean;
+  notes?: string;
+  weeklyRate?: string;
+  proposedRate?: string;
+  bio?: string;
+  availability?: string;
   licenseNumber?: string;
   licensePhoto?: string;
   certificates?: CaregiverCertificate[];

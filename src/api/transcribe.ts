@@ -25,13 +25,17 @@ export async function transcribeRecording(uri: string): Promise<TranscribeResult
     type: guessMimeType(uri),
   } as unknown as Blob);
 
-  const response = await fetchWithTimeout(`${TRANSCRIBE_API_URL}/transcribe`, {
-    method: "POST",
-    body: formData,
-    headers: {
-      Accept: "application/json",
+  const response = await fetchWithTimeout(
+    `${TRANSCRIBE_API_URL}/transcribe`,
+    {
+      method: "POST",
+      body: formData,
+      headers: {
+        Accept: "application/json",
+      },
     },
-  });
+    90_000,
+  );
 
   if (!response.ok) {
     const detail = await response.text();
