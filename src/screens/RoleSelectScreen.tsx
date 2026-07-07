@@ -26,7 +26,13 @@ export function RoleSelectScreen({ onSelect }: Props) {
           style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
           onPress={() => onSelect("parent")}
         >
-          <Text style={styles.emoji}>👶</Text>
+          <Image
+            source={require("../../assets/parent-expecting-icon.png")}
+            style={styles.roleIcon}
+            contentFit="contain"
+            allowDownscaling={false}
+            transition={0}
+          />
           <Text style={styles.cardTitle}>{t("onboarding.roleParent")}</Text>
           <Text style={styles.cardDesc}>{t("onboarding.roleParentDesc")}</Text>
         </Pressable>
@@ -35,7 +41,13 @@ export function RoleSelectScreen({ onSelect }: Props) {
           style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
           onPress={() => onSelect("caregiver")}
         >
-          <Text style={styles.emoji}>👩‍⚕️</Text>
+          <Image
+            source={require("../../assets/caregiver-icon.png")}
+            style={styles.roleIcon}
+            contentFit="contain"
+            allowDownscaling={false}
+            transition={0}
+          />
           <Text style={styles.cardTitle}>{t("onboarding.roleCaregiver")}</Text>
           <Text style={styles.cardDesc}>
             {ko
@@ -50,7 +62,7 @@ export function RoleSelectScreen({ onSelect }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 28 },
-  logo: { width: 160, height: 96, marginBottom: 32 },
+  logo: { width: 240, height: 180, marginBottom: 32 },
   title: { fontSize: 22, fontWeight: "700", color: colors.text, textAlign: "center", marginBottom: 8 },
   subtitle: { fontSize: 14, color: colors.muted, textAlign: "center", marginBottom: 36, lineHeight: 20 },
   cards: { width: "100%", gap: 14 },
@@ -64,7 +76,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cardPressed: { borderColor: colors.yellow, backgroundColor: colors.yellowSoft },
-  emoji: { fontSize: 40, marginBottom: 4 },
+  roleIcon: { width: 52, height: 48, marginBottom: 4 },
   cardTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
   cardDesc: { fontSize: 13, color: colors.muted, textAlign: "center", lineHeight: 18 },
 });

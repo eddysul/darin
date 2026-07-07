@@ -182,7 +182,7 @@ export function LoginScreen({ onLogin, onSignUp }: LoginScreenProps) {
         <img
           src="/darin-logo.png"
           alt="Darin — Your first motherhood companion"
-          className="w-[200px] h-auto select-none"
+          className="w-[240px] h-auto select-none"
           draggable={false}
         />
       </div>

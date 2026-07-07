@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, zIndex: 55 },
   scrollView: { flex: 1 },
   scroll: { paddingHorizontal: 28, paddingBottom: 48 },
-  logo: { width: 200, height: 120, alignSelf: "center", marginBottom: 20 },
+  logo: { width: 240, height: 180, alignSelf: "center", marginBottom: 20 },
   title: { fontSize: 24, fontWeight: "700", color: colors.text, marginBottom: 4 },
   subtitle: { fontSize: 14, color: colors.muted, lineHeight: 20, marginBottom: 20 },
   field: { marginBottom: 12, position: "relative" },

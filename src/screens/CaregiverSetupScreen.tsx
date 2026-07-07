@@ -191,7 +191,7 @@ function ToggleRow<T>({
 
 const styles = StyleSheet.create({
   scroll: { padding: 28, paddingBottom: 48 },
-  logo: { width: 160, height: 96, alignSelf: "center", marginBottom: 24 },
+  logo: { width: 220, height: 165, alignSelf: "center", marginBottom: 24 },
   title: { fontSize: 22, fontWeight: "700", color: colors.text, marginBottom: 6 },
   subtitle: { fontSize: 14, color: colors.muted, lineHeight: 20, marginBottom: 28 },
   field: { marginBottom: 20 },

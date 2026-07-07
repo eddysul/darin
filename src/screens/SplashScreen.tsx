@@ -28,5 +28,5 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
 const styles = StyleSheet.create({
   root: { ...StyleSheet.absoluteFillObject, zIndex: 60 },
   center: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 40 },
-  logo: { width: "100%", maxWidth: 280, height: 220 },
+  logo: { width: "100%", maxWidth: 260, height: 240 },
 });
