@@ -8,5 +8,5 @@
     }
   },
   "include": ["App.tsx", "index.js", "src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "src/app"]
+  "exclude": ["node_modules"]
 }

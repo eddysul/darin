@@ -32,6 +32,7 @@ type VoiceRecordingContextValue = {
   endHold: () => void;
   startRecording: () => Promise<void>;
   stopAndSave: () => Promise<void>;
+  cancelRecording: () => Promise<void>;
   clearSavedNote: () => void;
   clearRecordingError: () => void;
   consumeSkipPress: () => boolean;
@@ -233,6 +234,30 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
     }
   }, [clearHoldTimer, durationMs, isRecording]);
 
+  const cancelRecording = useCallback(async () => {
+    clearHoldTimer();
+    setIsHolding(false);
+    setHoldProgress(0);
+    isSavingRef.current = false;
+    isStartingRef.current = false;
+
+    const recording = recordingRef.current;
+    if (recording) {
+      try {
+        await recording.stopAndUnloadAsync();
+      } catch {
+        // ignore
+      }
+      recordingRef.current = null;
+    }
+
+    recordingStartedAtRef.current = null;
+    setIsRecording(false);
+    setDurationMs(0);
+    setIsTranscribing(false);
+    await resetAudioMode();
+  }, [clearHoldTimer]);
+
   const beginHold = useCallback(() => {
     if (isRecording) return;
 
@@ -307,6 +332,7 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
       endHold,
       startRecording,
       stopAndSave,
+      cancelRecording,
       clearSavedNote,
       clearRecordingError,
       consumeSkipPress,
@@ -327,6 +353,7 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
       savedNote,
       startRecording,
       stopAndSave,
+      cancelRecording,
     ],
   );
 

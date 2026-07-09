@@ -30,10 +30,8 @@ pnpm run verify:ai-reports
 ## 프로젝트 구조 (요약)
 
 ```
-src/           # RN 메인 앱
-src/app/       # Web 레거시 프로토타입
+src/           # RN 메인 앱 (단일 코드베이스)
 scripts/       # AI 검증 스크립트
-legacy/web/    # 미사용 web scaffold
 docs/          # 브랜치 비교 등 참고 문서
 ```
 

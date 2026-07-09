@@ -50,9 +50,7 @@ export function RoleSelectScreen({ onSelect }: Props) {
           />
           <Text style={styles.cardTitle}>{t("onboarding.roleCaregiver")}</Text>
           <Text style={styles.cardDesc}>
-            {ko
-              ? "가족 찾기, Care Proposal 제출, 돌봄 기록 작성"
-              : "Find families, submit Care Proposals & log care"}
+            {ko ? "아기 돌봄 기록 작성 · 일일 리포트 공유" : "Log infant care and share daily reports"}
           </Text>
         </Pressable>
       </View>

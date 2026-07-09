@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { useApp } from "./src/context/AppContext";
+import { DEFAULT_PARENT_PROFILE, useApp } from "./src/context/AppContext";
 import { NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppProvider } from "./src/context/AppContext";
-import { CareFlowProvider } from "./src/context/CareFlowContext";
-import { ChatProvider } from "./src/context/ChatContext";
+import { BabyLogProvider } from "./src/context/BabyLogContext";
 import { VoiceRecordingProvider } from "./src/context/VoiceRecordingContext";
-import { ScheduleProvider } from "./src/context/ScheduleContext";
-import { LanguageProvider } from "./src/LanguageContext";
+import { LanguageProvider, useLanguage } from "./src/LanguageContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { MainTabs } from "./src/screens/MainTabs";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
@@ -17,6 +15,7 @@ import { SplashScreen } from "./src/screens/SplashScreen";
 import { RoleSelectScreen } from "./src/screens/RoleSelectScreen";
 import { ParentSetupScreen } from "./src/screens/ParentSetupScreen";
 import { CaregiverSetupScreen } from "./src/screens/CaregiverSetupScreen";
+import type { CareSetup } from "./src/types/careSetup";
 import type { UserProfile, UserRole } from "./src/types/profile";
 import { WebAppShell } from "./src/components/WebAppShell";
 import { colors } from "./src/theme";
@@ -36,15 +35,11 @@ export default function App() {
       <WebAppShell>
         <LanguageProvider>
           <AppProvider>
-            <ChatProvider>
-              <ScheduleProvider>
-                <CareFlowProvider>
-                  <VoiceRecordingProvider>
-                    <RootApp />
-                  </VoiceRecordingProvider>
-                </CareFlowProvider>
-              </ScheduleProvider>
-            </ChatProvider>
+            <BabyLogProvider>
+              <VoiceRecordingProvider>
+                <RootApp />
+              </VoiceRecordingProvider>
+            </BabyLogProvider>
           </AppProvider>
         </LanguageProvider>
       </WebAppShell>
@@ -67,7 +62,8 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
 }
 
 function RootApp() {
-  const { setProfile } = useApp();
+  const { setProfile, setCareSetup } = useApp();
+  const { setLocale } = useLanguage();
   const [phase, setPhase] = useState<AppPhase>("splash");
   const [onboardingProfile, setOnboardingProfile] = useState<UserProfile | null>(null);
 
@@ -85,10 +81,21 @@ function RootApp() {
     setPhase(role === "parent" ? "parent-setup" : "caregiver-setup");
   }, []);
 
-  const handleParentSetupComplete = useCallback((nextProfile: UserProfile) => {
-    setProfile(nextProfile);
-    setPhase("main");
-  }, [setProfile]);
+  const handleParentSetupComplete = useCallback(
+    (setup: CareSetup) => {
+      setCareSetup(setup);
+      setLocale(setup.parent.preferredLanguage);
+      setProfile({
+        ...DEFAULT_PARENT_PROFILE,
+        name: setup.parent.parentName,
+        role: "parent",
+        dueDate: setup.child.dueDate ?? setup.child.birthDate ?? DEFAULT_PARENT_PROFILE.dueDate,
+        languages: setup.parent.preferredLanguage === "ko" ? "Korean" : "English",
+      });
+      setPhase("main");
+    },
+    [setCareSetup, setLocale, setProfile],
+  );
 
   const handleCaregiverSetupComplete = useCallback((nextProfile: UserProfile) => {
     setProfile(nextProfile);

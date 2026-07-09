@@ -8,6 +8,7 @@ type VoiceWaveformProps = {
   height?: number;
   minBarHeight?: number;
   active?: boolean;
+  barColor?: string;
 };
 
 export function VoiceWaveform({
@@ -16,6 +17,7 @@ export function VoiceWaveform({
   height = 56,
   minBarHeight = 4,
   active = true,
+  barColor = colors.text,
 }: VoiceWaveformProps) {
   const bars = useMemo(() => {
     const slice = levels.slice(-barCount);
@@ -35,6 +37,7 @@ export function VoiceWaveform({
               {
                 height: Math.max(minBarHeight, normalized * height),
                 opacity: active ? 0.45 + normalized * 0.55 : 0.35,
+                backgroundColor: barColor,
               },
             ]}
           />
@@ -56,6 +59,5 @@ const styles = StyleSheet.create({
     flex: 1,
     maxWidth: 6,
     borderRadius: 999,
-    backgroundColor: colors.text,
   },
 });

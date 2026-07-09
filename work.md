@@ -23,7 +23,7 @@
 | 상태 | React Context (`Language`, `App`, `Chat`, `Schedule`, `CareFlow`, `VoiceRecording`) |
 | 패키지 매니저 | pnpm |
 
-> **Web 레거시:** Vite + React 프로토타입은 `src/app/`에 별도로 존재합니다. **iOS 시뮬레이터(`pnpm ios`) 기준 메인 코드는 `src/` (RN)** 입니다.
+> **단일 코드베이스:** Expo React Native (`src/`)만 유지합니다. Web 레거시(`src/app/`, `legacy/web/`)는 제거되었습니다.
 
 ---
 
@@ -40,7 +40,6 @@ Childcare Management App/
 │   └── verify-ai-report-context.mjs
 ├── assets/
 │   └── darin-logo.png
-├── legacy/web/                 # 미사용 Vite/web scaffold 잔여물
 ├── src/
 │   ├── api/
 │   │   ├── transcribe.ts       # POST /transcribe
@@ -501,7 +500,6 @@ pnpm ios
 - Get advice는 OpenAI 직접 호출 (dh 서버 경유 아님)
 - Parent Profile Edit Preferences — mock alert
 - Schedule · Care Plan — in-memory + AsyncStorage (서버 sync 없음)
-- Web `src/app/` — RN과 완전 동기화 아님
 
 ---
 
