@@ -1,21 +1,28 @@
 import { useRef } from "react";
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
-import { formatLogMeta, getCategory } from "../../constants/babyLogCategories";
+import { BabyLogIcon } from "./BabyLogIcon";
+import { LogCategoryIcon } from "./LogCategoryIcon";
+import { formatLogMeta } from "../../constants/babyLogCategories";
 import type { BabyLogEntry } from "../../types/babyLog";
+import type { CustomCategory } from "../../types/logCategory";
+import { resolveLogCategory } from "../../utils/resolveLogCategory";
 import { colors } from "../../theme";
 
 type Props = {
   logs: BabyLogEntry[];
+  customCategories?: CustomCategory[];
   onPress: (entry: BabyLogEntry) => void;
   onDelete: (id: string) => void;
 };
 
 function SwipeRow({
   entry,
+  customCategories = [],
   onPress,
   onDelete,
 }: {
   entry: BabyLogEntry;
+  customCategories?: CustomCategory[];
   onPress: () => void;
   onDelete: () => void;
 }) {
@@ -41,12 +48,12 @@ function SwipeRow({
     }),
   ).current;
 
-  const c = getCategory(entry.cat);
+  const c = resolveLogCategory(entry.cat, customCategories);
 
   return (
     <View style={styles.swipeWrap}>
       <View style={styles.swipeBg}>
-        <Text style={styles.deleteIcon}>🗑️</Text>
+        <BabyLogIcon kind="trash" size={18} color="#FFFFFF" />
       </View>
       <Animated.View style={[styles.swipeFg, { transform: [{ translateX }] }]} {...pan.panHandlers}>
         <Pressable
@@ -63,25 +70,25 @@ function SwipeRow({
           <View style={[styles.dot, { backgroundColor: c.color }]} />
           <View style={styles.body}>
             <View style={styles.titleRow}>
-              <Text style={styles.title}>
-                {c.emoji} {c.label}
-              </Text>
+              <LogCategoryIcon categoryKey={entry.cat} customCategories={customCategories} size={16} />
+              <Text style={styles.title}>{c.label}</Text>
               {entry.voice && (
                 <View style={styles.voiceTag}>
-                  <Text style={styles.voiceTagText}>🎙️ 음성</Text>
+                  <BabyLogIcon kind="voice" size={11} color={colors.amber} strokeWidth={2.2} />
+                  <Text style={styles.voiceTagText}>음성</Text>
                 </View>
               )}
             </View>
-            <Text style={styles.meta}>{formatLogMeta(entry)}</Text>
+            <Text style={styles.meta}>{formatLogMeta(entry, customCategories)}</Text>
           </View>
-          <Text style={styles.chevron}>›</Text>
+          <BabyLogIcon kind="chevron" size={16} color={colors.faint} strokeWidth={2} />
         </Pressable>
       </Animated.View>
     </View>
   );
 }
 
-export function LogList({ logs, onPress, onDelete }: Props) {
+export function LogList({ logs, customCategories = [], onPress, onDelete }: Props) {
   if (logs.length === 0) {
     return <Text style={styles.empty}>아직 기록이 없어요. 위 카테고리를 눌러보세요.</Text>;
   }
@@ -91,7 +98,13 @@ export function LogList({ logs, onPress, onDelete }: Props) {
   return (
     <View>
       {sorted.map((entry) => (
-        <SwipeRow key={entry.id} entry={entry} onPress={() => onPress(entry)} onDelete={() => onDelete(entry.id)} />
+        <SwipeRow
+          key={entry.id}
+          entry={entry}
+          customCategories={customCategories}
+          onPress={() => onPress(entry)}
+          onDelete={() => onDelete(entry.id)}
+        />
       ))}
     </View>
   );
@@ -107,7 +120,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingRight: 18,
   },
-  deleteIcon: { fontSize: 18 },
   swipeFg: { backgroundColor: colors.background },
   item: { flexDirection: "row", gap: 12, paddingVertical: 10, paddingHorizontal: 2, alignItems: "flex-start" },
   time: { fontSize: 12, color: colors.faint, width: 44, fontVariant: ["tabular-nums"], paddingTop: 2 },
@@ -116,6 +128,9 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
   title: { fontSize: 14.5, fontWeight: "700", color: colors.text },
   voiceTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
     backgroundColor: colors.amberSoft,
     borderRadius: 8,
     paddingHorizontal: 7,
@@ -123,5 +138,4 @@ const styles = StyleSheet.create({
   },
   voiceTagText: { fontSize: 10, color: colors.amber, fontWeight: "600" },
   meta: { fontSize: 12, color: colors.muted, marginTop: 2 },
-  chevron: { color: colors.faint, fontSize: 13, alignSelf: "center" },
 });

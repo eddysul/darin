@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppHeader } from "../../components/babylog/AppHeader";
+import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import {
   BABY_LOG_CATEGORIES,
   CAT_HISTORY,
@@ -11,6 +12,7 @@ import {
   type BabyLogCategoryId,
 } from "../../constants/babyLogCategories";
 import { useBabyLog } from "../../context/BabyLogContext";
+import type { BabyLogEntry } from "../../types/babyLog";
 import { colors, radius } from "../../theme";
 
 type Props = {
@@ -50,14 +52,16 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
       <ScrollView showsVerticalScrollIndicator={false}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           <FilterChip
-            label="🗂️ 전체"
+            label="전체"
+            icon={<BabyLogIcon kind="folder" size={14} color={reportCat === "all" ? colors.amberDark : colors.muted} />}
             active={reportCat === "all"}
             onPress={() => setReportCat("all")}
           />
           {BABY_LOG_CATEGORIES.map((c) => (
             <FilterChip
               key={c.id}
-              label={`${c.emoji} ${c.label}`}
+              label={c.label}
+              icon={<BabyLogIcon catId={c.id} size={14} />}
               active={reportCat === c.id}
               onPress={() => setReportCat(c.id)}
             />
@@ -68,7 +72,8 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
           <View style={styles.pad}>
             <View style={styles.aiSummary}>
               <View style={styles.aiTag}>
-                <Text style={styles.aiTagText}>✨ AI 오늘의 요약</Text>
+                <BabyLogIcon kind="sparkles" size={12} color={colors.amber} strokeWidth={2.2} />
+                <Text style={styles.aiTagText}>AI 오늘의 요약</Text>
               </View>
               <Text style={styles.aiText}>{aiSummary}</Text>
             </View>
@@ -80,9 +85,10 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
                 const lastTime = todays.length ? todays[todays.length - 1].time : "-";
                 return (
                   <Pressable key={id} style={styles.insightCard} onPress={() => setReportCat(id)}>
-                    <Text style={styles.insightTop}>
-                      {c.emoji} {c.label}
-                    </Text>
+                    <View style={styles.insightTop}>
+                      <BabyLogIcon catId={id} size={14} />
+                      <Text style={styles.insightTopText}>{c.label}</Text>
+                    </View>
                     <Text style={styles.insightVal}>{todays.length}회</Text>
                     <Text style={styles.insightSub}>마지막 {lastTime}</Text>
                   </Pressable>
@@ -112,10 +118,23 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
   );
 }
 
-function FilterChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function FilterChip({
+  label,
+  icon,
+  active,
+  onPress,
+}: {
+  label: string;
+  icon?: ReactNode;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable style={[styles.filterChip, active && styles.filterChipActive]} onPress={onPress}>
-      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+      <View style={styles.filterChipInner}>
+        {icon}
+        <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -174,9 +193,9 @@ function CategoryDetail({ catId, logs }: { catId: BabyLogCategoryId; logs: Retur
   return (
     <View style={styles.pad}>
       <View style={styles.statRow}>
-        <StatCard icon={c.emoji} num={`${logs.length}회`} lbl="오늘 횟수" />
-        <StatCard icon="🕐" num={lastTime} lbl="마지막 기록" />
-        <StatCard icon="↔️" num={avgGapStr} lbl="평균 간격" />
+        <StatCard icon={<BabyLogIcon catId={catId} size={18} />} num={`${logs.length}회`} lbl="오늘 횟수" />
+        <StatCard icon={<BabyLogIcon kind="clock" size={18} color={colors.muted} />} num={lastTime} lbl="마지막 기록" />
+        <StatCard icon={<BabyLogIcon kind="interval" size={18} color={colors.muted} />} num={avgGapStr} lbl="평균 간격" />
       </View>
 
       <Text style={styles.chartTitle}>
@@ -256,10 +275,10 @@ function CategoryDetail({ catId, logs }: { catId: BabyLogCategoryId; logs: Retur
   );
 }
 
-function StatCard({ icon, num, lbl }: { icon: string; num: string; lbl: string }) {
+function StatCard({ icon, num, lbl }: { icon: ReactNode; num: string; lbl: string }) {
   return (
     <View style={styles.statCard}>
-      <Text style={styles.statIco}>{icon}</Text>
+      <View style={styles.statIco}>{icon}</View>
       <Text style={styles.statNum}>{num}</Text>
       <Text style={styles.statLbl}>{lbl}</Text>
     </View>
@@ -270,7 +289,7 @@ function IntervalRow({
   entry,
   c,
 }: {
-  entry: { time: string; cat: BabyLogCategoryId; chip?: string; chip2?: string; amount?: string; duration?: string; notes?: string };
+  entry: BabyLogEntry;
   c: ReturnType<typeof getCategory>;
 }) {
   const meta = formatLogMeta(entry);
@@ -278,9 +297,14 @@ function IntervalRow({
     <View style={styles.intervalRow}>
       <Text style={styles.intervalTime}>{entry.time}</Text>
       <View style={[styles.intervalDot, { backgroundColor: c.color }]} />
-      <Text style={styles.intervalLabel}>
-        {c.emoji} {meta === "기록됨" ? c.label : meta}
-      </Text>
+      <View style={styles.intervalLabelRow}>
+        {!entry.cat.startsWith("custom:") && (
+          <BabyLogIcon catId={entry.cat as BabyLogCategoryId} size={15} />
+        )}
+        <Text style={styles.intervalLabel}>
+          {meta === "기록됨" ? c.label : meta}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -297,6 +321,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 8,
   },
+  filterChipInner: { flexDirection: "row", alignItems: "center", gap: 6 },
   filterChipActive: { backgroundColor: colors.amber, borderColor: colors.amber },
   filterChipText: { fontSize: 12.5, fontWeight: "700", color: colors.muted },
   filterChipTextActive: { color: colors.amberDark },
@@ -310,6 +335,9 @@ const styles = StyleSheet.create({
   },
   aiTag: {
     alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
     backgroundColor: colors.amberSoft,
     borderRadius: 8,
     paddingHorizontal: 9,
@@ -327,7 +355,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
   },
-  insightTop: { fontSize: 12, fontWeight: "700", color: colors.muted, marginBottom: 7 },
+  insightTop: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 7 },
+  insightTopText: { fontSize: 12, fontWeight: "700", color: colors.muted },
   insightVal: { fontSize: 15, fontWeight: "700", color: colors.text },
   insightSub: { fontSize: 10.5, color: colors.faint, marginTop: 2 },
   chartTitle: { fontSize: 12.5, fontWeight: "700", color: colors.text, marginBottom: 10 },
@@ -350,13 +379,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
   },
-  statIco: { fontSize: 18 },
+  statIco: { height: 22, alignItems: "center", justifyContent: "center" },
   statNum: { fontSize: 15, fontWeight: "700", color: colors.text, marginTop: 4 },
   statLbl: { fontSize: 10, color: colors.faint, marginTop: 1 },
   hint: { textAlign: "center", color: colors.faint, fontSize: 12.5, paddingVertical: 20 },
   intervalRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 7 },
   intervalTime: { fontSize: 12.5, color: colors.muted, width: 42, fontVariant: ["tabular-nums"] },
   intervalDot: { width: 9, height: 9, borderRadius: 5 },
+  intervalLabelRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
   intervalLabel: { fontSize: 13, fontWeight: "700", color: colors.text, flex: 1 },
   gapRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 18, paddingVertical: 2 },
   gapPill: {

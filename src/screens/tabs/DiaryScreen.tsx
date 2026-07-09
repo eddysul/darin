@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Image } from "expo-image";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppHeader } from "../../components/babylog/AppHeader";
+import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { DiaryComposeModal } from "../../components/babylog/DiaryComposeModal";
 import { PushToast } from "../../components/babylog/PushToast";
 import { useBabyLog } from "../../context/BabyLogContext";
@@ -37,10 +38,16 @@ export function DiaryScreen({ onOpenProfile }: Props) {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topRow}>
           <Pressable style={[styles.btn, styles.btnPrimary]} onPress={() => openCompose(false)}>
-            <Text style={styles.btnPrimaryText}>✏️ 새 일기 쓰기</Text>
+            <View style={styles.btnInner}>
+              <BabyLogIcon kind="edit" size={14} color={colors.amberDark} strokeWidth={2.2} />
+              <Text style={styles.btnPrimaryText}>새 일기 쓰기</Text>
+            </View>
           </Pressable>
           <Pressable style={[styles.btn, styles.btnGhost]} onPress={() => setPushVisible(true)}>
-            <Text style={styles.btnGhostText}>🔔 알림 눌러보기</Text>
+            <View style={styles.btnInner}>
+              <BabyLogIcon kind="bell" size={14} color={colors.muted} />
+              <Text style={styles.btnGhostText}>알림 눌러보기</Text>
+            </View>
           </Pressable>
         </View>
 
@@ -53,7 +60,7 @@ export function DiaryScreen({ onOpenProfile }: Props) {
                 <Image source={{ uri: d.photoUri }} style={styles.thumb} contentFit="cover" />
               ) : (
                 <View style={styles.thumbPlaceholder}>
-                  <Text style={styles.thumbEmoji}>{d.emoji}</Text>
+                  <BabyLogIcon catId="memo" size={24} />
                 </View>
               )}
               <View style={styles.body}>
@@ -91,6 +98,7 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
   btn: { flex: 1, borderRadius: 14, paddingVertical: 11, alignItems: "center" },
   btnPrimary: { backgroundColor: colors.amber },
+  btnInner: { flexDirection: "row", alignItems: "center", gap: 6 },
   btnPrimaryText: { color: colors.amberDark, fontWeight: "700", fontSize: 13 },
   btnGhost: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   btnGhostText: { color: colors.muted, fontWeight: "700", fontSize: 13 },
@@ -114,7 +122,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  thumbEmoji: { fontSize: 22 },
   body: { flex: 1 },
   date: { fontSize: 11, color: colors.faint, fontWeight: "600" },
   comment: { fontSize: 13, color: colors.text, marginTop: 3, lineHeight: 20 },

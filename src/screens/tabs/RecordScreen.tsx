@@ -1,12 +1,21 @@
-import { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppHeader } from "../../components/babylog/AppHeader";
-import { CategoryGrid } from "../../components/babylog/CategoryGrid";
-import { LogList } from "../../components/babylog/LogList";
+import { useState } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
+import {
+  CategorySetupSheet,
+  type CategorySetupDraft,
+} from "../../components/babylog/CategorySetupSheet";
+import { FrequentRecordSection } from "../../components/babylog/FrequentRecordSection";
+import { MoreRecordGrid } from "../../components/babylog/MoreRecordGrid";
+import { NewCategorySheet } from "../../components/babylog/NewCategorySheet";
+import { QuickStatusRow } from "../../components/babylog/QuickStatusRow";
 import { RecordDetailSheet, type RecordSheetPrefill } from "../../components/babylog/RecordDetailSheet";
+import { RecordHomeHeader } from "../../components/babylog/RecordHomeHeader";
+import { TodayTimeline } from "../../components/babylog/TodayTimeline";
 import { useBabyLog } from "../../context/BabyLogContext";
 import type { BabyLogCategoryId } from "../../constants/babyLogCategories";
+import type { CustomCategoryTemplate } from "../../constants/customCategoryTemplates";
 import type { BabyLogEntry } from "../../types/babyLog";
+import type { LogCategoryKey } from "../../types/logCategory";
 import { colors } from "../../theme";
 
 type Props = {
@@ -14,19 +23,30 @@ type Props = {
 };
 
 export function RecordScreen({ onOpenProfile }: Props) {
-  const { logs, addLog, updateLog, deleteLog, defaultFeedingMethod, enabledCategoryIds } = useBabyLog();
-  const [sheetCat, setSheetCat] = useState<BabyLogCategoryId | null>(null);
+  const {
+    logs,
+    addLog,
+    updateLog,
+    deleteLog,
+    defaultFeedingMethod,
+    frequentShortcuts,
+    setFrequentShortcuts,
+    customCategories,
+    addCustomFromTemplate,
+    addCustomByLabel,
+  } = useBabyLog();
+  const [sheetCat, setSheetCat] = useState<LogCategoryKey | null>(null);
   const [prefill, setPrefill] = useState<RecordSheetPrefill | null>(null);
+  const [newCategoryOpen, setNewCategoryOpen] = useState(false);
+  const [setupDraft, setSetupDraft] = useState<CategorySetupDraft | null>(null);
 
-  const dayLabel = useMemo(() => {
-    const d = new Date();
-    const days = ["일", "월", "화", "수", "목", "금", "토"];
-    return `오늘 · ${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
-  }, []);
-
-  const openSheet = (catId: BabyLogCategoryId, nextPrefill?: RecordSheetPrefill) => {
+  const openSheet = (catKey: LogCategoryKey, nextPrefill?: RecordSheetPrefill) => {
     setPrefill(nextPrefill ?? null);
-    setSheetCat(catId);
+    setSheetCat(catKey);
+  };
+
+  const openBuiltinSheet = (catId: BabyLogCategoryId, nextPrefill?: RecordSheetPrefill) => {
+    openSheet(catId, nextPrefill);
   };
 
   const openEdit = (entry: BabyLogEntry) => {
@@ -47,18 +67,68 @@ export function RecordScreen({ onOpenProfile }: Props) {
     else addLog(entry);
   };
 
+  const closeNewCategoryFlow = () => {
+    setNewCategoryOpen(false);
+    setSetupDraft(null);
+  };
+
+  const handleSetupSave = (payload: { label: string; template?: CustomCategoryTemplate }) => {
+    if (payload.template) {
+      addCustomFromTemplate({ ...payload.template, label: payload.label });
+    } else {
+      addCustomByLabel(payload.label);
+    }
+    closeNewCategoryFlow();
+  };
+
   return (
     <View style={styles.root}>
-      <AppHeader onOpenProfile={onOpenProfile} />
+      <RecordHomeHeader onOpenProfile={onOpenProfile} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <CategoryGrid enabledCategoryIds={enabledCategoryIds} onSelect={(id) => openSheet(id)} />
-        <Text style={styles.dayLabel}>{dayLabel}</Text>
-        <LogList logs={logs} onPress={openEdit} onDelete={deleteLog} />
+        <QuickStatusRow logs={logs} />
+        <FrequentRecordSection
+          shortcuts={frequentShortcuts}
+          defaultFeedingMethod={defaultFeedingMethod}
+          onSelect={openBuiltinSheet}
+          onSaveShortcuts={setFrequentShortcuts}
+        />
+        <MoreRecordGrid
+          customCategories={customCategories}
+          onSelect={openSheet}
+          onNewPress={() => setNewCategoryOpen(true)}
+        />
+        <TodayTimeline logs={logs} customCategories={customCategories} onPress={openEdit} />
       </ScrollView>
+
+      <NewCategorySheet
+        visible={newCategoryOpen && setupDraft === null}
+        onClose={closeNewCategoryFlow}
+        onSelectTemplate={(template) => {
+          setNewCategoryOpen(false);
+          setSetupDraft({ mode: "template", template });
+        }}
+        onCustomPress={() => {
+          setNewCategoryOpen(false);
+          setSetupDraft({ mode: "custom" });
+        }}
+      />
+
+      <CategorySetupSheet
+        visible={setupDraft !== null}
+        draft={setupDraft}
+        existingCategories={customCategories}
+        onClose={closeNewCategoryFlow}
+        onBack={() => {
+          setSetupDraft(null);
+          setNewCategoryOpen(true);
+        }}
+        onSave={handleSetupSave}
+      />
 
       <RecordDetailSheet
         visible={sheetCat !== null}
-        catId={sheetCat}
+        catKey={sheetCat}
+        customCategories={customCategories}
         prefill={prefill}
         defaultFeedingMethod={defaultFeedingMethod}
         onClose={() => {
@@ -78,14 +148,5 @@ export function RecordScreen({ onOpenProfile }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  content: { paddingHorizontal: 18, paddingBottom: 24 },
-  dayLabel: {
-    fontSize: 12.5,
-    color: colors.faint,
-    fontWeight: "600",
-    marginBottom: 8,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+  content: { paddingHorizontal: 20, paddingBottom: 32 },
 });

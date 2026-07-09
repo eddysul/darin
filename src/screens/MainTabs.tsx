@@ -4,10 +4,12 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLanguage } from "../LanguageContext";
 import {
   BabyLogVoiceOverlay,
   voiceResultToLog,
 } from "../components/babylog/BabyLogVoiceOverlay";
+import { BabyLogIcon, type TabIconKey } from "../components/babylog/BabyLogIcon";
 import { RecordDetailSheet, type RecordSheetPrefill } from "../components/babylog/RecordDetailSheet";
 import { useBabyLog } from "../context/BabyLogContext";
 import { BabyProfileScreen } from "./BabyProfileScreen";
@@ -15,8 +17,17 @@ import { BabyReportScreen } from "./tabs/BabyReportScreen";
 import { ConsultScreen } from "./tabs/ConsultScreen";
 import { DiaryScreen } from "./tabs/DiaryScreen";
 import { RecordScreen } from "./tabs/RecordScreen";
-import type { BabyLogCategoryId } from "../constants/babyLogCategories";
+import type { LogCategoryKey } from "../types/logCategory";
+import type { MessageKey } from "../i18n";
 import { colors, gradients } from "../theme";
+
+const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
+  Record: "tabs.record",
+  Diary: "tabs.diary",
+  Mic: "tabs.voice",
+  Report: "tabs.overview",
+  Consult: "tabs.consult",
+};
 
 export type MainTabParamList = {
   Record: undefined;
@@ -28,12 +39,11 @@ export type MainTabParamList = {
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-const TAB_LABELS: Record<keyof MainTabParamList, string> = {
-  Record: "기록",
-  Diary: "일기",
-  Mic: "",
-  Report: "리포트",
-  Consult: "상담",
+const TAB_ICONS: Record<Exclude<keyof MainTabParamList, "Mic">, TabIconKey> = {
+  Record: "record",
+  Diary: "diary",
+  Report: "report",
+  Consult: "consult",
 };
 
 function MicPlaceholder() {
@@ -42,9 +52,10 @@ function MicPlaceholder() {
 
 function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const { addLog, updateLog, deleteLog, defaultFeedingMethod } = useBabyLog();
+  const { t } = useLanguage();
+  const { addLog, updateLog, deleteLog, defaultFeedingMethod, customCategories } = useBabyLog();
   const [voiceOpen, setVoiceOpen] = useState(false);
-  const [voiceSheetCat, setVoiceSheetCat] = useState<BabyLogCategoryId | null>(null);
+  const [voiceSheetCat, setVoiceSheetCat] = useState<LogCategoryKey | null>(null);
   const [voicePrefill, setVoicePrefill] = useState<RecordSheetPrefill | null>(null);
 
   const tabs: { name: keyof MainTabParamList; center?: boolean }[] = [
@@ -60,26 +71,33 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
       <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
         {tabs.map(({ name, center }, index) => {
           const active = state.index === index;
-          const label = TAB_LABELS[name];
+          const labelKey = TAB_LABEL_KEYS[name];
+          const label = labelKey ? t(labelKey) : "";
 
           if (center) {
             return (
               <Pressable key={name} style={styles.tabItem} onPress={() => setVoiceOpen(true)}>
                 <View style={styles.centerBtnWrap}>
                   <LinearGradient colors={[...gradients.mic]} style={styles.centerBtn}>
-                    <Text style={styles.micEmoji}>🎙️</Text>
+                    <BabyLogIcon kind="tab" tab="mic" size={24} color="#FFFFFF" strokeWidth={2.2} />
                   </LinearGradient>
                 </View>
-                <Text style={[styles.tabLabel, styles.centerLabel]}>음성</Text>
+                <Text style={[styles.tabLabel, styles.centerLabel]}>{t("tabs.voice")}</Text>
               </Pressable>
             );
           }
 
+          const tabIcon = TAB_ICONS[name as Exclude<keyof MainTabParamList, "Mic">];
+
           return (
             <Pressable key={name} style={styles.tabItem} onPress={() => navigation.navigate(name)}>
-              <Text style={[styles.tabIcon, active && styles.tabIconActive]}>
-                {name === "Record" ? "📋" : name === "Diary" ? "📔" : name === "Report" ? "📊" : "💬"}
-              </Text>
+              <BabyLogIcon
+                kind="tab"
+                tab={tabIcon}
+                size={22}
+                color={active ? colors.amber : colors.faint}
+                strokeWidth={active ? 2.2 : 1.8}
+              />
               <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
             </Pressable>
           );
@@ -112,7 +130,8 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
       <RecordDetailSheet
         visible={voiceSheetCat !== null}
-        catId={voiceSheetCat}
+        catKey={voiceSheetCat}
+        customCategories={customCategories}
         prefill={voicePrefill}
         defaultFeedingMethod={defaultFeedingMethod}
         onClose={() => {
@@ -185,8 +204,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   tabItem: { flex: 1, alignItems: "center", gap: 3 },
-  tabIcon: { fontSize: 20, opacity: 0.45 },
-  tabIconActive: { opacity: 1 },
   centerBtnWrap: { marginTop: -22 },
   centerBtn: {
     width: 54,
@@ -200,7 +217,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
-  micEmoji: { fontSize: 22 },
   tabLabel: { fontSize: 10.5, fontWeight: "600", color: colors.faint },
   tabLabelActive: { color: colors.amber },
   centerLabel: { marginTop: 2 },

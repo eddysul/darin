@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useVoiceRecording } from "../../context/VoiceRecordingContext";
 import { getCategory, nowTime } from "../../constants/babyLogCategories";
+import { BabyLogIcon } from "./BabyLogIcon";
 import { transcribeToVoiceResult, type VoiceParseResult } from "../../utils/voiceToBabyLog";
 import { VoiceWaveform } from "../VoiceWaveform";
 import { colors } from "../../theme";
@@ -196,7 +197,7 @@ function ResultCard({ result }: { result: VoiceResult }) {
     <View style={styles.resultCard}>
       <View style={styles.resultCat}>
         <View style={[styles.resultCircle, { backgroundColor: c.color }]}>
-          <Text>{c.emoji}</Text>
+          <BabyLogIcon catId={result.cat} size={22} color="#FFFFFF" strokeWidth={2} />
         </View>
         <Text style={styles.resultLabel}>{c.label}</Text>
       </View>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { BabyLogIcon } from "./BabyLogIcon";
 import { colors, radius } from "../../theme";
 
 type Props = {
@@ -42,7 +43,10 @@ export function DiaryComposeModal({ visible, fromPush, onClose, onSave }: Props)
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <Pressable style={styles.overlay} onPress={handleClose}>
         <Pressable style={styles.stage} onPress={() => {}}>
-          <Text style={styles.state}>{fromPush ? "🔔 알림에서 바로 쓰는 일기" : "오늘 일기 쓰기"}</Text>
+          <View style={styles.stateRow}>
+            {fromPush && <BabyLogIcon kind="bell" size={16} color={colors.amber} />}
+            <Text style={styles.state}>{fromPush ? "알림에서 바로 쓰는 일기" : "오늘 일기 쓰기"}</Text>
+          </View>
 
           <Pressable style={styles.photoBox} onPress={() => void pickPhoto()}>
             {photoUri ? (
@@ -84,14 +88,13 @@ const styles = StyleSheet.create({
     padding: 30,
   },
   stage: { width: "100%" },
+  stateRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 22 },
   state: {
     color: colors.faint,
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 1,
     textTransform: "uppercase",
-    marginBottom: 22,
-    textAlign: "center",
   },
   photoBox: {
     height: 150,

@@ -1,8 +1,8 @@
-import type { BabyLogCategoryId } from "../constants/babyLogCategories";
+import type { LogCategoryKey } from "./logCategory";
 
 export type BabyLogEntry = {
   id: string;
-  cat: BabyLogCategoryId;
+  cat: LogCategoryKey;
   time: string;
   chip?: string;
   chip2?: string;

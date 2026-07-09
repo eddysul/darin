@@ -1,4 +1,6 @@
 import { categoryColors } from "../theme";
+import type { CustomCategory, LogCategoryKey } from "../types/logCategory";
+import { resolveLogCategory } from "../utils/resolveLogCategory";
 
 export type BabyLogCategoryId =
   | "breast"
@@ -76,15 +78,18 @@ export const CAT_HISTORY: Record<BabyLogCategoryId, number[]> = {
 
 export const HISTORY_DAYS = ["월", "화", "수", "목", "금", "토"];
 
-export function formatLogMeta(entry: {
-  cat: BabyLogCategoryId;
-  chip?: string;
-  chip2?: string;
-  amount?: string;
-  duration?: string;
-  notes?: string;
-}): string {
-  const c = getCategory(entry.cat);
+export function formatLogMeta(
+  entry: {
+    cat: LogCategoryKey;
+    chip?: string;
+    chip2?: string;
+    amount?: string;
+    duration?: string;
+    notes?: string;
+  },
+  customCategories: CustomCategory[] = [],
+): string {
+  const c = resolveLogCategory(entry.cat, customCategories);
   const parts: string[] = [];
   if (entry.chip) parts.push(entry.chip);
   if (entry.chip2) parts.push(entry.chip2);

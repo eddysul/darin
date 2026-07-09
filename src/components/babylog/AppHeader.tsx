@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BabyLogIcon } from "./BabyLogIcon";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { colors, radius } from "../../theme";
 
@@ -10,25 +11,24 @@ type Props = {
 
 export function AppHeader({ onOpenProfile, onOpenShared }: Props) {
   const insets = useSafeAreaInsets();
-  const { babyName, babyEmoji, babyBadge } = useBabyLog();
+  const { babyName, babyBadge } = useBabyLog();
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 12) }]}>
       <View style={styles.row}>
         <View style={styles.left}>
           <View style={styles.chip}>
-            <Text style={styles.chipText}>
-              {babyEmoji} {babyName}
-            </Text>
+            <BabyLogIcon kind="baby" size={16} color={colors.amber} />
+            <Text style={styles.chipText}>{babyName}</Text>
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{babyBadge}</Text>
             </View>
           </View>
           <Pressable style={styles.sharedRow} onPress={onOpenShared ?? onOpenProfile}>
             <View style={styles.avatarStack}>
-              {["👩", "👨", "🧑‍🍼"].map((emoji, i) => (
-                <View key={emoji} style={[styles.avatar, i > 0 && styles.avatarOverlap]}>
-                  <Text style={styles.avatarEmoji}>{emoji}</Text>
+              {[colors.amber, "#7c83fd", "#5CB87A"].map((tone, i) => (
+                <View key={tone} style={[styles.avatar, i > 0 && styles.avatarOverlap]}>
+                  <BabyLogIcon kind="profile" size={10} color={tone} strokeWidth={2.2} />
                 </View>
               ))}
             </View>
@@ -36,7 +36,7 @@ export function AppHeader({ onOpenProfile, onOpenShared }: Props) {
           </Pressable>
         </View>
         <Pressable style={styles.profileBtn} onPress={onOpenProfile}>
-          <Text style={styles.profileEmoji}>👶</Text>
+          <BabyLogIcon kind="profile" size={16} color={colors.muted} />
         </Pressable>
       </View>
     </View>
@@ -69,7 +69,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   avatarOverlap: { marginLeft: -7 },
-  avatarEmoji: { fontSize: 10 },
   sharedText: { fontSize: 11.5, color: colors.faint, fontWeight: "600" },
   profileBtn: {
     width: 34,
@@ -82,5 +81,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 2,
   },
-  profileEmoji: { fontSize: 15 },
 });

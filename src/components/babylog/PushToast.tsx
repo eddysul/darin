@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius } from "../../theme";
+import { BabyLogIcon } from "./BabyLogIcon";
+import { colors } from "../../theme";
 
 type Props = {
   visible: boolean;
@@ -19,10 +20,10 @@ export function PushToast({ visible, onPress, onDismiss }: Props) {
 
   return (
     <Pressable style={styles.toast} onPress={onPress}>
-      <Text style={styles.icon}>🔔</Text>
+      <BabyLogIcon kind="bell" size={20} color={colors.amber} />
       <View style={styles.body}>
         <Text style={styles.title}>콩이로그</Text>
-        <Text style={styles.sub}>오늘 하루 어땠나요? 일기를 남겨보세요 ✍️</Text>
+        <Text style={styles.sub}>오늘 하루 어땠나요? 일기를 남겨보세요</Text>
       </View>
     </Pressable>
   );
@@ -44,7 +45,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
   },
-  icon: { fontSize: 20 },
   body: { flex: 1 },
   title: { fontSize: 12.5, fontWeight: "700", color: colors.text },
   sub: { fontSize: 11.5, color: colors.faint, marginTop: 2 },

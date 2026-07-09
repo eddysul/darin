@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { BabyLogIcon } from "./BabyLogIcon";
 import { BABY_LOG_CATEGORIES, type BabyLogCategoryId } from "../../constants/babyLogCategories";
 import { colors } from "../../theme";
 
@@ -17,7 +18,7 @@ export function CategoryGrid({ enabledCategoryIds, onSelect }: Props) {
       {categories.map((c) => (
         <Pressable key={c.id} style={styles.btn} onPress={() => onSelect(c.id)}>
           <View style={[styles.circle, { backgroundColor: c.color }]}>
-            <Text style={styles.emoji}>{c.emoji}</Text>
+            <BabyLogIcon catId={c.id} size={24} color="#FFFFFF" strokeWidth={2} />
           </View>
           <Text style={styles.lbl}>{c.label}</Text>
         </Pressable>
@@ -46,6 +47,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  emoji: { fontSize: 24 },
   lbl: { fontSize: 11.5, color: colors.faint, fontWeight: "500", textAlign: "center" },
 });

@@ -1,23 +1,36 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   resolveEnabledCategoryIds,
   sortCategoriesForFeeding,
 } from "../constants/logCategoryGroups";
+import type { CustomCategoryTemplate } from "../constants/customCategoryTemplates";
 import type { BabyLogCategoryId } from "../constants/babyLogCategories";
+import type { CustomCategory } from "../types/logCategory";
+import type { FrequentShortcutId } from "../constants/frequentShortcuts";
 import { useApp } from "./AppContext";
 import type { BabyLogEntry, CaregiverMember, ChatMessage, DiaryEntry } from "../types/babyLog";
 import type { CareSetup, DefaultFeedingMethod } from "../types/careSetup";
 import { buildBabyDisplay } from "../utils/childDisplay";
+import {
+  getCustomCategories,
+  hydrateCustomCategories,
+  saveCustomCategories,
+} from "../utils/customCategoriesStore";
+import {
+  getFrequentShortcuts,
+  hydrateFrequentShortcuts,
+  saveFrequentShortcuts,
+} from "../utils/frequentShortcutsStore";
 import { createId } from "../utils/id";
 
 const SEED_LOGS: Omit<BabyLogEntry, "id">[] = [
-  { cat: "breast", time: "07:10", chip: "좌측", duration: "12", voice: false },
-  { cat: "diaper", time: "08:32", chip: "소변", voice: false },
-  { cat: "sleep", time: "09:28", duration: "40", voice: false },
+  { cat: "formula", time: "14:10", amount: "80", voice: false },
+  { cat: "sleep", time: "13:20", duration: "35", voice: false },
+  { cat: "diaper", time: "12:40", chip: "소변", voice: false },
+  { cat: "breast", time: "11:30", chip: "좌측", duration: "12", voice: false },
   { cat: "diaper", time: "09:42", chip: "대변", chip2: "황금색", voice: true },
-  { cat: "formula", time: "12:10", amount: "150", voice: false },
-  { cat: "diaper", time: "13:05", chip: "소변", voice: false },
-  { cat: "sleep", time: "13:40", duration: "35", voice: false },
+  { cat: "sleep", time: "09:28", duration: "40", voice: false },
+  { cat: "diaper", time: "08:32", chip: "소변", voice: false },
   { cat: "tummy", time: "15:00", duration: "10", voice: true },
 ];
 
@@ -50,6 +63,12 @@ type BabyLogContextValue = {
   babyBirthMeta: string;
   defaultFeedingMethod: DefaultFeedingMethod;
   enabledCategoryIds: BabyLogCategoryId[];
+  customCategories: CustomCategory[];
+  upsertCustomCategory: (category: CustomCategory) => CustomCategory;
+  addCustomFromTemplate: (template: CustomCategoryTemplate) => CustomCategory;
+  addCustomByLabel: (label: string) => CustomCategory;
+  frequentShortcuts: FrequentShortcutId[];
+  setFrequentShortcuts: (shortcuts: FrequentShortcutId[]) => void;
   logs: BabyLogEntry[];
   diaryEntries: DiaryEntry[];
   caregivers: CaregiverMember[];
@@ -77,6 +96,70 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     { id: createId(), role: "ai", text: "안녕하세요! 콩이 정보를 확인했어요. 무엇이든 편하게 물어보세요 😊" },
   ]);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [frequentShortcuts, setFrequentShortcutsState] = useState<FrequentShortcutId[]>(getFrequentShortcuts);
+  const [customCategories, setCustomCategoriesState] = useState<CustomCategory[]>(getCustomCategories);
+
+  useEffect(() => {
+    void Promise.all([hydrateFrequentShortcuts(), hydrateCustomCategories()]).then(() => {
+      setFrequentShortcutsState(getFrequentShortcuts());
+      setCustomCategoriesState(getCustomCategories());
+    });
+  }, []);
+
+  const setFrequentShortcuts = useCallback((shortcuts: FrequentShortcutId[]) => {
+    setFrequentShortcutsState(shortcuts);
+    void saveFrequentShortcuts(shortcuts);
+  }, []);
+
+  const upsertCustomCategory = useCallback(
+    (category: CustomCategory) => {
+      setCustomCategoriesState((prev) => {
+        const exists = prev.some((c) => c.id === category.id);
+        const next = exists ? prev.map((c) => (c.id === category.id ? category : c)) : [...prev, category];
+        void saveCustomCategories(next);
+        return next;
+      });
+      return category;
+    },
+    [],
+  );
+
+  const addCustomFromTemplate = useCallback(
+    (template: CustomCategoryTemplate): CustomCategory => {
+      const existing = customCategories.find((c) => c.templateId === template.templateId);
+      if (existing) return existing;
+
+      const category: CustomCategory = {
+        id: createId(),
+        label: template.label,
+        color: template.color,
+        templateId: template.templateId,
+        chips: template.chips,
+        duration: template.duration,
+        amount: template.amount,
+      };
+      upsertCustomCategory(category);
+      return category;
+    },
+    [customCategories, upsertCustomCategory],
+  );
+
+  const addCustomByLabel = useCallback(
+    (label: string): CustomCategory => {
+      const trimmed = label.trim();
+      const existing = customCategories.find((c) => c.label === trimmed && !c.templateId);
+      if (existing) return existing;
+
+      const category: CustomCategory = {
+        id: createId(),
+        label: trimmed,
+        color: "#9096a6",
+      };
+      upsertCustomCategory(category);
+      return category;
+    },
+    [customCategories, upsertCustomCategory],
+  );
 
   const locale = careSetup.parent.preferredLanguage;
   const display = useMemo(() => buildBabyDisplay(careSetup.child, locale), [careSetup.child, locale]);
@@ -125,6 +208,12 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       babyBirthMeta: display.babyBirthMeta,
       defaultFeedingMethod: careSetup.preferences.defaultFeedingMethod,
       enabledCategoryIds,
+      customCategories,
+      upsertCustomCategory,
+      addCustomFromTemplate,
+      addCustomByLabel,
+      frequentShortcuts,
+      setFrequentShortcuts,
       logs,
       diaryEntries,
       caregivers,
@@ -144,6 +233,12 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       careSetup,
       display,
       enabledCategoryIds,
+      customCategories,
+      upsertCustomCategory,
+      addCustomFromTemplate,
+      addCustomByLabel,
+      frequentShortcuts,
+      setFrequentShortcuts,
       logs,
       diaryEntries,
       caregivers,

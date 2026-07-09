@@ -13,7 +13,11 @@ import {
   nowTime,
   type BabyLogCategoryId,
 } from "../../constants/babyLogCategories";
+import { LogCategoryIcon } from "./LogCategoryIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
+import type { CustomCategory, LogCategoryKey } from "../../types/logCategory";
+import { isCustomCategoryKey } from "../../types/logCategory";
+import { resolveLogCategory } from "../../utils/resolveLogCategory";
 import type { DefaultFeedingMethod } from "../../types/careSetup";
 import { isFeedingCategory } from "../../constants/logCategoryGroups";
 import { colors } from "../../theme";
@@ -31,7 +35,8 @@ function feedingHint(method: DefaultFeedingMethod | undefined, catId: BabyLogCat
 
 type Props = {
   visible: boolean;
-  catId: BabyLogCategoryId | null;
+  catKey: LogCategoryKey | null;
+  customCategories: CustomCategory[];
   prefill?: RecordSheetPrefill | null;
   defaultFeedingMethod?: DefaultFeedingMethod;
   onClose: () => void;
@@ -41,7 +46,8 @@ type Props = {
 
 export function RecordDetailSheet({
   visible,
-  catId,
+  catKey,
+  customCategories,
   prefill,
   defaultFeedingMethod,
   onClose,
@@ -57,7 +63,7 @@ export function RecordDetailSheet({
   const [voice, setVoice] = useState(false);
 
   useEffect(() => {
-    if (!visible || !catId) return;
+    if (!visible || !catKey) return;
     setTime(prefill?.time ?? nowTime());
     setChip(prefill?.chip ?? "");
     setChip2(prefill?.chip2 ?? "");
@@ -65,22 +71,25 @@ export function RecordDetailSheet({
     setDuration(prefill?.duration ?? "");
     setNotes(prefill?.notes ?? "");
     setVoice(prefill?.voice ?? false);
-  }, [visible, catId, prefill]);
+  }, [visible, catKey, prefill]);
 
-  if (!catId) return null;
-  const c = getCategory(catId);
+  if (!catKey) return null;
+  const c = resolveLogCategory(catKey, customCategories);
+  const builtinId = isCustomCategoryKey(catKey) ? null : (catKey as BabyLogCategoryId);
   const isEdit = Boolean(prefill?.editId);
-  const hint = feedingHint(defaultFeedingMethod, catId);
+  const hint = builtinId ? feedingHint(defaultFeedingMethod, builtinId) : null;
   const emphasizeAmount =
-    isFeedingCategory(catId) &&
+    builtinId &&
+    isFeedingCategory(builtinId) &&
     (defaultFeedingMethod === "formula" || defaultFeedingMethod === "pumped_milk") &&
     Boolean(c.amount);
-  const emphasizeDuration = isFeedingCategory(catId) && defaultFeedingMethod === "breastfeeding" && Boolean(c.duration);
+  const emphasizeDuration =
+    builtinId && isFeedingCategory(builtinId) && defaultFeedingMethod === "breastfeeding" && Boolean(c.duration);
 
   const handleSave = () => {
     onSave(
       {
-        cat: catId,
+        cat: catKey,
         time,
         chip: chip || undefined,
         chip2: chip2 || undefined,
@@ -101,8 +110,9 @@ export function RecordDetailSheet({
           <View style={styles.handle} />
           <View style={styles.titleRow}>
             <View style={[styles.dot, { backgroundColor: c.color }]} />
+            <LogCategoryIcon categoryKey={catKey} customCategories={customCategories} size={18} />
             <Text style={styles.title}>
-              {c.emoji} {c.label} 기록{isEdit ? " 수정" : ""}
+              {c.label} 기록{isEdit ? " 수정" : ""}
             </Text>
           </View>
 
@@ -138,7 +148,7 @@ export function RecordDetailSheet({
 
             {c.chips && (
               <>
-                <Text style={styles.fieldLabel}>{c.id === "diaper" ? "구분" : "상태"}</Text>
+                <Text style={styles.fieldLabel}>{builtinId === "diaper" ? "구분" : "상태"}</Text>
                 <View style={styles.chipRow}>
                   {c.chips.map((ch) => (
                     <Pressable

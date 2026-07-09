@@ -1,4 +1,5 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
 import { useBabyLog } from "../context/BabyLogContext";
 import { colors, radius } from "../theme";
 
@@ -7,8 +8,10 @@ type Props = {
   onClose: () => void;
 };
 
+const MEMBER_COLORS = [colors.amber, "#7c83fd", "#5CB87A"];
+
 export function BabyProfileScreen({ visible, onClose }: Props) {
-  const { babyName, babyEmoji, babyBirthMeta, caregivers } = useBabyLog();
+  const { babyName, babyBirthMeta, caregivers } = useBabyLog();
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -22,7 +25,9 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
 
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.babyCard}>
-            <Text style={styles.babyEmoji}>{babyEmoji}</Text>
+            <View style={styles.babyAvatar}>
+              <BabyLogIcon kind="baby" size={32} color={colors.amber} />
+            </View>
             <View>
               <Text style={styles.babyName}>{babyName}</Text>
               <Text style={styles.babyAge}>{babyBirthMeta}</Text>
@@ -30,10 +35,10 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
           </View>
 
           <Text style={styles.sectionTitle}>함께 보는 가족</Text>
-          {caregivers.map((m) => (
+          {caregivers.map((m, i) => (
             <View key={m.id} style={styles.memberRow}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarEmoji}>{m.emoji}</Text>
+                <BabyLogIcon kind="profile" size={18} color={MEMBER_COLORS[i % MEMBER_COLORS.length]} />
               </View>
               <View style={styles.memberInfo}>
                 <Text style={styles.memberName}>{m.name}</Text>
@@ -44,7 +49,10 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
           ))}
 
           <Pressable style={styles.inviteBtn}>
-            <Text style={styles.inviteText}>+ 보호자 초대하기</Text>
+            <View style={styles.inviteInner}>
+              <BabyLogIcon kind="new" size={14} color={colors.amber} strokeWidth={2.2} />
+              <Text style={styles.inviteText}>보호자 초대하기</Text>
+            </View>
           </Pressable>
         </ScrollView>
       </View>
@@ -78,7 +86,14 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 24,
   },
-  babyEmoji: { fontSize: 40 },
+  babyAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.cardHi,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   babyName: { fontSize: 18, fontWeight: "700", color: colors.text },
   babyAge: { fontSize: 13, color: colors.muted, marginTop: 2 },
   sectionTitle: { fontSize: 13, fontWeight: "700", color: colors.faint, marginBottom: 10 },
@@ -101,7 +116,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.cardHi,
   },
-  avatarEmoji: { fontSize: 20 },
   memberInfo: { flex: 1 },
   memberName: { fontSize: 14, fontWeight: "700", color: colors.text },
   memberRole: { fontSize: 11.5, color: colors.faint, marginTop: 1 },
@@ -115,5 +129,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
+  inviteInner: { flexDirection: "row", alignItems: "center", gap: 6 },
   inviteText: { fontSize: 13, fontWeight: "700", color: colors.amber },
 });
