@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "./BabyLogIcon";
+import { SharedCaregiversRow } from "./SharedCaregiversRow";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { colors, radius } from "../../theme";
 
@@ -24,16 +25,9 @@ export function AppHeader({ onOpenProfile, onOpenShared }: Props) {
               <Text style={styles.badgeText}>{babyBadge}</Text>
             </View>
           </View>
-          <Pressable style={styles.sharedRow} onPress={onOpenShared ?? onOpenProfile}>
-            <View style={styles.avatarStack}>
-              {[colors.amber, "#7c83fd", "#5CB87A"].map((tone, i) => (
-                <View key={tone} style={[styles.avatar, i > 0 && styles.avatarOverlap]}>
-                  <BabyLogIcon kind="profile" size={10} color={tone} strokeWidth={2.2} />
-                </View>
-              ))}
-            </View>
-            <Text style={styles.sharedText}>엄마·아빠·시터와 공유 중</Text>
-          </Pressable>
+          <View style={styles.sharedWrap}>
+            <SharedCaregiversRow onPress={onOpenShared ?? onOpenProfile} />
+          </View>
         </View>
         <Pressable style={styles.profileBtn} onPress={onOpenProfile}>
           <BabyLogIcon kind="profile" size={16} color={colors.muted} />
@@ -56,20 +50,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   badgeText: { color: colors.amber, fontSize: 12, fontWeight: "600" },
-  sharedRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
-  avatarStack: { flexDirection: "row" },
-  avatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.cardHi,
-    borderWidth: 2,
-    borderColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarOverlap: { marginLeft: -7 },
-  sharedText: { fontSize: 11.5, color: colors.faint, fontWeight: "600" },
+  sharedWrap: { marginTop: 8 },
   profileBtn: {
     width: 34,
     height: 34,

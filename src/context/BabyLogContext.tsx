@@ -1,10 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import {
-  resolveEnabledCategoryIds,
-  sortCategoriesForFeeding,
-} from "../constants/logCategoryGroups";
 import type { CustomCategoryTemplate } from "../constants/customCategoryTemplates";
-import type { BabyLogCategoryId } from "../constants/babyLogCategories";
 import type { CustomCategory } from "../types/logCategory";
 import type { FrequentShortcutId } from "../constants/frequentShortcuts";
 import { useApp } from "./AppContext";
@@ -62,7 +57,6 @@ type BabyLogContextValue = {
   babyBadge: string;
   babyBirthMeta: string;
   defaultFeedingMethod: DefaultFeedingMethod;
-  enabledCategoryIds: BabyLogCategoryId[];
   customCategories: CustomCategory[];
   upsertCustomCategory: (category: CustomCategory) => CustomCategory;
   addCustomFromTemplate: (template: CustomCategoryTemplate) => CustomCategory;
@@ -164,11 +158,6 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const locale = careSetup.parent.preferredLanguage;
   const display = useMemo(() => buildBabyDisplay(careSetup.child, locale), [careSetup.child, locale]);
 
-  const enabledCategoryIds = useMemo(() => {
-    const ids = resolveEnabledCategoryIds(careSetup.preferences.enabledLogCategories);
-    return sortCategoriesForFeeding(ids, careSetup.preferences.defaultFeedingMethod);
-  }, [careSetup.preferences.enabledLogCategories, careSetup.preferences.defaultFeedingMethod]);
-
   const addLog = useCallback((entry: Omit<BabyLogEntry, "id">) => {
     setLogs((prev) => [...prev, { ...entry, id: createId() }]);
   }, []);
@@ -207,7 +196,6 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       babyBadge: display.babyBadge,
       babyBirthMeta: display.babyBirthMeta,
       defaultFeedingMethod: careSetup.preferences.defaultFeedingMethod,
-      enabledCategoryIds,
       customCategories,
       upsertCustomCategory,
       addCustomFromTemplate,
@@ -232,7 +220,6 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     [
       careSetup,
       display,
-      enabledCategoryIds,
       customCategories,
       upsertCustomCategory,
       addCustomFromTemplate,

@@ -1,0 +1,78 @@
+import { StyleSheet } from "react-native";
+import { colors } from "../../../theme";
+
+export const sheetStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: colors.backgroundSecondary,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+    maxHeight: "88%",
+  },
+  sheetCompact: {
+    maxHeight: "82%",
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 4,
+    alignSelf: "center",
+    marginVertical: 10,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: colors.text,
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 12.5,
+    color: colors.faint,
+    marginBottom: 14,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    color: colors.faint,
+    fontWeight: "600",
+    marginTop: 14,
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  input: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    color: colors.text,
+    fontSize: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  chipSel: { backgroundColor: colors.amber, borderColor: colors.amber },
+  chipText: { fontSize: 13, color: colors.muted, fontWeight: "600" },
+  chipTextSel: { color: colors.amberDark },
+  actions: { flexDirection: "row", gap: 10, marginTop: 16 },
+  btn: { flex: 1, borderRadius: 14, paddingVertical: 13, alignItems: "center" },
+  btnGhost: { backgroundColor: colors.card },
+  btnGhostText: { color: colors.muted, fontWeight: "700", fontSize: 14.5 },
+  btnPrimary: { backgroundColor: colors.amber },
+  btnPrimaryText: { color: colors.amberDark, fontWeight: "700", fontSize: 14.5 },
+  btnDisabled: { opacity: 0.45 },
+});

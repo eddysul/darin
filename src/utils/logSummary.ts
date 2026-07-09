@@ -1,4 +1,5 @@
-import { formatLogMeta, toMinutes, type BabyLogCategoryId } from "../constants/babyLogCategories";
+import { formatLogMeta, toMinutes } from "./formatLog";
+import type { BabyLogCategoryId } from "../constants/babyLogCategories";
 import type { BabyLogEntry } from "../types/babyLog";
 import type { CustomCategory } from "../types/logCategory";
 import { isCustomCategoryKey } from "../types/logCategory";

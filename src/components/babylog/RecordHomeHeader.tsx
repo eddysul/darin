@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "./BabyLogIcon";
+import { SharedCaregiversRow } from "./SharedCaregiversRow";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { colors } from "../../theme";
 
@@ -22,16 +23,9 @@ export function RecordHomeHeader({ onOpenProfile }: Props) {
         <View style={styles.info}>
           <Text style={styles.name}>{babyName}</Text>
           <Text style={styles.age}>{babyBirthMeta}</Text>
-          <Pressable style={styles.sharedRow} onPress={onOpenProfile}>
-            <View style={styles.avatarStack}>
-              {[colors.amber, "#7c83fd", "#5CB87A"].map((tone, i) => (
-                <View key={tone} style={[styles.miniAvatar, i > 0 && styles.miniOverlap]}>
-                  <BabyLogIcon kind="profile" size={10} color={tone} strokeWidth={2.2} />
-                </View>
-              ))}
-            </View>
-            <Text style={styles.sharedText}>엄마 · 아빠 · 시터와 공유 중</Text>
-          </Pressable>
+          <View style={styles.sharedWrap}>
+            <SharedCaregiversRow onPress={onOpenProfile} size="sm" />
+          </View>
         </View>
 
         <Pressable style={styles.profileBtn} onPress={onOpenProfile}>
@@ -58,20 +52,7 @@ const styles = StyleSheet.create({
   info: { flex: 1, paddingTop: 2 },
   name: { fontSize: 20, fontWeight: "800", color: colors.text, letterSpacing: -0.3 },
   age: { fontSize: 13, color: colors.muted, marginTop: 2, fontWeight: "500" },
-  sharedRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
-  avatarStack: { flexDirection: "row" },
-  miniAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.cardHi,
-    borderWidth: 1.5,
-    borderColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  miniOverlap: { marginLeft: -6 },
-  sharedText: { fontSize: 11, color: colors.faint, fontWeight: "600" },
+  sharedWrap: { marginTop: 8 },
   profileBtn: {
     width: 36,
     height: 36,

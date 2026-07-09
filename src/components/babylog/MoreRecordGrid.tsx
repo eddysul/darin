@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { LogCategoryIcon } from "./LogCategoryIcon";
-import { MAIN_LOG_CATEGORY_IDS } from "../../constants/mainLogCategories";
+import { MAIN_LOG_CATEGORY_IDS } from "../../constants/babyLogCategories";
+import { ExpandableSectionHeader } from "./ExpandableSectionHeader";
 import { getCategory } from "../../constants/babyLogCategories";
 import type { CustomCategory, LogCategoryKey } from "../../types/logCategory";
 import { customCategoryKey } from "../../types/logCategory";
@@ -39,14 +40,12 @@ export function MoreRecordGrid({ customCategories, onSelect, onNewPress }: Props
 
   return (
     <View style={styles.section}>
-      <View style={styles.header}>
-        <Text style={styles.title}>기록하기</Text>
-        {canExpand && (
-          <Pressable onPress={() => setExpanded((v) => !v)} hitSlop={8}>
-            <Text style={styles.viewAll}>{expanded ? "접기" : "전체 보기 ›"}</Text>
-          </Pressable>
-        )}
-      </View>
+      <ExpandableSectionHeader
+        title="기록하기"
+        expanded={expanded}
+        canExpand={canExpand}
+        onToggle={() => setExpanded((v) => !v)}
+      />
 
       <View style={styles.grid}>
         {visibleItems.map((item) => {
@@ -87,14 +86,6 @@ export function MoreRecordGrid({ customCategories, onSelect, onNewPress }: Props
 
 const styles = StyleSheet.create({
   section: { marginBottom: 22 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  title: { fontSize: 16, fontWeight: "800", color: colors.text },
-  viewAll: { fontSize: 13, color: colors.amber, fontWeight: "700" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   cell: {
     width: "22%",

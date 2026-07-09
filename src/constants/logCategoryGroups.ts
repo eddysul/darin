@@ -1,4 +1,4 @@
-import type { BabyLogCategoryId } from "../constants/babyLogCategories";
+import type { BabyLogCategoryId } from "./babyLogCategories";
 import type { DefaultFeedingMethod, LogCategoryGroup } from "../types/careSetup";
 
 export const LOG_GROUP_CATEGORIES: Record<LogCategoryGroup, BabyLogCategoryId[]> = {

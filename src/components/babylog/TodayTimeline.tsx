@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ExpandableSectionHeader } from "./ExpandableSectionHeader";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
@@ -22,14 +23,12 @@ export function TodayTimeline({ logs, customCategories, onPress, limit = 3 }: Pr
 
   return (
     <View style={styles.section}>
-      <View style={styles.header}>
-        <Text style={styles.title}>오늘 기록</Text>
-        {sorted.length > limit && (
-          <Pressable onPress={() => setExpanded((v) => !v)} hitSlop={8}>
-            <Text style={styles.viewAll}>{expanded ? "접기" : "전체 보기 ›"}</Text>
-          </Pressable>
-        )}
-      </View>
+      <ExpandableSectionHeader
+        title="오늘 기록"
+        expanded={expanded}
+        canExpand={sorted.length > limit}
+        onToggle={() => setExpanded((v) => !v)}
+      />
 
       {visible.length === 0 ? (
         <Text style={styles.empty}>아직 기록이 없어요. 위에서 빠르게 기록해 보세요.</Text>
@@ -67,14 +66,6 @@ export function TodayTimeline({ logs, customCategories, onPress, limit = 3 }: Pr
 
 const styles = StyleSheet.create({
   section: { marginBottom: 24 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  title: { fontSize: 16, fontWeight: "800", color: colors.text },
-  viewAll: { fontSize: 13, color: colors.amber, fontWeight: "700" },
   empty: {
     textAlign: "center",
     color: colors.faint,
