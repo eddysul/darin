@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
+import { InviteFamilyModal } from "../components/babylog/InviteFamilyModal";
 import { useBabyLog } from "../context/BabyLogContext";
+import { canInvite, FAMILY_ROLE_LABELS, type FamilyRole } from "../types/family";
 import { colors, radius } from "../theme";
 
 type Props = {
@@ -8,10 +11,19 @@ type Props = {
   onClose: () => void;
 };
 
-const MEMBER_COLORS = [colors.amber, "#7c83fd", "#5CB87A"];
+const MEMBER_COLORS = [colors.amber, "#7c83fd", "#5CB87A", "#c98a54"];
 
 export function BabyProfileScreen({ visible, onClose }: Props) {
-  const { babyName, babyBirthMeta, caregivers } = useBabyLog();
+  const {
+    babyName,
+    babyBirthMeta,
+    familyMembers,
+    myFamilyRole,
+    inviteFamilyMember,
+    updateFamilyMemberRole,
+  } = useBabyLog();
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const allowInvite = canInvite(myFamilyRole);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -35,27 +47,58 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
           </View>
 
           <Text style={styles.sectionTitle}>함께 보는 가족</Text>
-          {caregivers.map((m, i) => (
+          {familyMembers.map((m, i) => (
             <View key={m.id} style={styles.memberRow}>
               <View style={styles.avatar}>
                 <BabyLogIcon kind="profile" size={18} color={MEMBER_COLORS[i % MEMBER_COLORS.length]} />
               </View>
               <View style={styles.memberInfo}>
-                <Text style={styles.memberName}>{m.name}</Text>
-                <Text style={styles.memberRole}>{m.role}</Text>
+                <Text style={styles.memberName}>
+                  {m.name}
+                  {m.isMe ? " (나)" : ""}
+                </Text>
+                <Text style={styles.memberRole}>
+                  {FAMILY_ROLE_LABELS[m.role]}
+                  {m.contact ? ` · ${m.contact}` : ""}
+                </Text>
+                {!m.isMe && allowInvite && (
+                  <View style={styles.miniRoles}>
+                    {(["admin", "editor", "viewer", "caregiver"] as FamilyRole[]).map((r) => (
+                      <Pressable
+                        key={r}
+                        style={[styles.miniChip, m.role === r && styles.miniChipActive]}
+                        onPress={() => updateFamilyMemberRole(m.id, r)}
+                      >
+                        <Text style={[styles.miniChipText, m.role === r && styles.miniChipTextActive]}>
+                          {FAMILY_ROLE_LABELS[r]}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
               </View>
-              <Text style={styles.memberStatus}>{m.badge}</Text>
+              <Text style={styles.memberStatus}>{m.status === "pending" ? "초대중" : m.isMe ? "나" : "공유중"}</Text>
             </View>
           ))}
 
-          <Pressable style={styles.inviteBtn}>
-            <View style={styles.inviteInner}>
-              <BabyLogIcon kind="new" size={14} color={colors.amber} strokeWidth={2.2} />
-              <Text style={styles.inviteText}>보호자 초대하기</Text>
-            </View>
-          </Pressable>
+          {allowInvite ? (
+            <Pressable style={styles.inviteBtn} onPress={() => setInviteOpen(true)}>
+              <View style={styles.inviteInner}>
+                <BabyLogIcon kind="new" size={14} color={colors.amber} strokeWidth={2.2} />
+                <Text style={styles.inviteText}>보호자 초대하기</Text>
+              </View>
+            </Pressable>
+          ) : (
+            <Text style={styles.viewerHint}>초대 권한이 없어요. 관리자에게 요청해 주세요.</Text>
+          )}
         </ScrollView>
       </View>
+
+      <InviteFamilyModal
+        visible={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        onInvite={inviteFamilyMember}
+      />
     </Modal>
   );
 }
@@ -99,7 +142,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 13, fontWeight: "700", color: colors.faint, marginBottom: 10 },
   memberRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 12,
     backgroundColor: colors.backgroundSecondary,
     borderWidth: 1,
@@ -119,7 +162,18 @@ const styles = StyleSheet.create({
   memberInfo: { flex: 1 },
   memberName: { fontSize: 14, fontWeight: "700", color: colors.text },
   memberRole: { fontSize: 11.5, color: colors.faint, marginTop: 1 },
-  memberStatus: { fontSize: 11, color: colors.amber, fontWeight: "600" },
+  memberStatus: { fontSize: 11, color: colors.amber, fontWeight: "600", marginTop: 4 },
+  miniRoles: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8 },
+  miniChip: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  miniChipActive: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
+  miniChipText: { fontSize: 10, color: colors.faint, fontWeight: "600" },
+  miniChipTextActive: { color: colors.text },
   inviteBtn: {
     marginTop: 12,
     borderWidth: 1,
@@ -131,4 +185,5 @@ const styles = StyleSheet.create({
   },
   inviteInner: { flexDirection: "row", alignItems: "center", gap: 6 },
   inviteText: { fontSize: 13, fontWeight: "700", color: colors.amber },
+  viewerHint: { marginTop: 12, textAlign: "center", color: colors.faint, fontSize: 12.5 },
 });

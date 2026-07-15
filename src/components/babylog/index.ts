@@ -1,10 +1,15 @@
 /** Public exports for baby log UI — prefer importing from here in screens. */
 export { AppHeader } from "./AppHeader";
 export { BabyLogIcon, ShortcutIcon, type TabIconKey } from "./BabyLogIcon";
-export { BabyLogVoiceOverlay, voiceResultToLog } from "./BabyLogVoiceOverlay";
+export {
+  BabyLogVoiceOverlay,
+  voiceResultToLog,
+  type VoiceResult,
+  type VoiceSessionPayload,
+} from "./BabyLogVoiceOverlay";
 export { CategorySetupSheet, type CategorySetupDraft } from "./CategorySetupSheet";
 export { DiaryComposeModal } from "./DiaryComposeModal";
-export { FrequentEditSheet } from "./FrequentEditSheet";
+export { InviteFamilyModal } from "./InviteFamilyModal";
 export { FrequentRecordSection } from "./FrequentRecordSection";
 export { LogCategoryIcon } from "./LogCategoryIcon";
 export { MoreRecordGrid } from "./MoreRecordGrid";

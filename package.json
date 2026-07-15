@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "server:dh": "cd ../darin-dh/script && .venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+    "server:dh": "bash -lc 'set -a && source .env && set +a && cd ../darin-dh/script && exec .venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8000'"
   },
   "dependencies": {
     "@babel/runtime": "^8.0.0",

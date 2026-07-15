@@ -1,22 +1,56 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useLanguage } from "../../LanguageContext";
 import { useVoiceRecording } from "../../context/VoiceRecordingContext";
-import { getCategory, nowTime } from "../../constants/babyLogCategories";
+import { getCategory } from "../../constants/babyLogCategories";
+import type { MessageKey } from "../../i18n";
+import type { BabyLogActor } from "../../types/babyLog";
 import { BabyLogIcon } from "./BabyLogIcon";
-import { transcribeToVoiceResult, type VoiceParseResult } from "../../utils/voiceToBabyLog";
+import {
+  buildVoiceSession,
+  voiceEventToLogFields,
+  type VoiceEventDraft,
+} from "../../utils/voiceToBabyLog";
 import { VoiceWaveform } from "../VoiceWaveform";
 import { colors } from "../../theme";
 
-export type VoiceResult = VoiceParseResult;
+export type VoiceResult = VoiceEventDraft;
+
+export type VoiceSessionPayload = {
+  rawTranscript: string;
+  events: VoiceResult[];
+};
 
 type Stage = "listening" | "analyzing" | "result" | "error";
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onConfirm: (result: VoiceResult) => void;
-  onEdit: (result: VoiceResult) => void;
+  onConfirmAll: (session: VoiceSessionPayload) => void;
+  onEditEvent: (event: VoiceResult, rawTranscript: string) => void;
+  onManualEntry: () => void;
+  /** When set, replaces the matching card in the open review session. */
+  eventPatch?: VoiceResult | null;
+  onEventPatchConsumed?: () => void;
 };
+
+const ERROR_KEYS: Record<string, MessageKey> = {
+  micPermissionDenied: "voice.micPermissionDenied",
+  recordingTooShort: "voice.recordingTooShort",
+  noSpeechDetected: "voice.noSpeechDetected",
+  transcribeFailed: "voice.transcribeFailed",
+  recordingFailed: "voice.recordingFailed",
+};
+
+const LOW_CONFIDENCE = 0.55;
 
 function formatDuration(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -25,24 +59,49 @@ function formatDuration(ms: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function errorMessage(code: string | null): string {
-  switch (code) {
-    case "micPermissionDenied":
-      return "마이크 권한이 필요해요. 설정에서 허용해 주세요.";
-    case "recordingTooShort":
-      return "녹음이 너무 짧아요. 조금 더 길게 말해 주세요.";
-    case "noSpeechDetected":
-      return "음성이 감지되지 않았어요. 다시 시도해 주세요.";
-    case "transcribeFailed":
-      return "전사 서버에 연결하지 못했어요. 데모 결과를 표시합니다.";
-    case "recordingFailed":
-      return "녹음에 실패했어요. 다시 시도해 주세요.";
-    default:
-      return "문제가 발생했어요. 다시 시도해 주세요.";
-  }
+function formatKoClock(hhmm: string): string {
+  const [hRaw, mRaw] = hhmm.split(":");
+  const h = Number(hRaw);
+  const m = Number(mRaw);
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm;
+  const period = h < 12 ? "오전" : "오후";
+  const h12 = h % 12 || 12;
+  return `${period} ${h12}:${String(m).padStart(2, "0")}`;
 }
 
-export function BabyLogVoiceOverlay({ visible, onClose, onConfirm, onEdit }: Props) {
+function cardSummary(event: VoiceResult): string {
+  const c = getCategory(event.cat);
+  const bits = [c.label];
+  if (event.amount) {
+    const unit = event.cat === "temp" ? "℃" : event.cat === "food" ? "g" : "ml";
+    bits.push(`${event.amount}${unit}`);
+  }
+  if (event.duration) bits.push(`${event.duration}분`);
+  if (event.chip) bits.push(event.chip);
+  if (event.chip2) bits.push(event.chip2);
+  bits.push(formatKoClock(event.time));
+  return bits.join(" · ");
+}
+
+function needsConfirm(event: VoiceResult) {
+  return (
+    event.confidence < LOW_CONFIDENCE ||
+    Boolean(event.flags?.includes("low_confidence")) ||
+    Boolean(event.timeAmbiguous) ||
+    Boolean(event.flags?.includes("time_ambiguous"))
+  );
+}
+
+export function BabyLogVoiceOverlay({
+  visible,
+  onClose,
+  onConfirmAll,
+  onEditEvent,
+  onManualEntry,
+  eventPatch = null,
+  onEventPatchConsumed,
+}: Props) {
+  const { t } = useLanguage();
   const {
     isRecording,
     levels,
@@ -52,22 +111,31 @@ export function BabyLogVoiceOverlay({ visible, onClose, onConfirm, onEdit }: Pro
     recordingError,
     startRecording,
     stopAndSave,
+    retryTranscribe,
     cancelRecording,
     clearSavedNote,
     clearRecordingError,
   } = useVoiceRecording();
 
   const [stage, setStage] = useState<Stage>("listening");
-  const [result, setResult] = useState<VoiceResult | null>(null);
-  const [transcript, setTranscript] = useState("");
+  const [events, setEvents] = useState<VoiceResult[]>([]);
+  const [rawTranscript, setRawTranscript] = useState("");
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const openedRef = useRef(false);
+  const appliedKeyRef = useRef<string | null>(null);
+
+  const resetLocal = () => {
+    setStage("listening");
+    setEvents([]);
+    setRawTranscript("");
+    setTranscriptOpen(false);
+    appliedKeyRef.current = null;
+  };
 
   useEffect(() => {
     if (!visible) {
       openedRef.current = false;
-      setStage("listening");
-      setResult(null);
-      setTranscript("");
+      resetLocal();
       void cancelRecording();
       clearSavedNote();
       clearRecordingError();
@@ -78,9 +146,7 @@ export function BabyLogVoiceOverlay({ visible, onClose, onConfirm, onEdit }: Pro
     openedRef.current = true;
     clearSavedNote();
     clearRecordingError();
-    setStage("listening");
-    setResult(null);
-    setTranscript("");
+    resetLocal();
     void startRecording();
   }, [visible, startRecording, clearSavedNote, clearRecordingError, cancelRecording]);
 
@@ -89,29 +155,31 @@ export function BabyLogVoiceOverlay({ visible, onClose, onConfirm, onEdit }: Pro
 
     if (isTranscribing) {
       setStage("analyzing");
-      if (savedNote?.transcript) setTranscript(savedNote.transcript);
-      return;
-    }
-
-    if (savedNote?.transcript) {
-      const parsed = transcribeToVoiceResult(savedNote.transcript, savedNote.events ?? []);
-      setTranscript(savedNote.transcript);
-      setResult(parsed);
-      setStage("result");
       return;
     }
 
     if (recordingError && !isRecording && !isTranscribing) {
-      if (savedNote?.usedFallbackTranscript && savedNote.transcript) {
-        const parsed = transcribeToVoiceResult(savedNote.transcript, savedNote.events ?? []);
-        setTranscript(savedNote.transcript);
-        setResult(parsed);
-        setStage("result");
-        return;
-      }
       setStage("error");
+      return;
+    }
+
+    if (savedNote?.transcript) {
+      const applyKey = `${savedNote.id}:${savedNote.transcript}`;
+      if (appliedKeyRef.current === applyKey) return;
+      const session = buildVoiceSession(savedNote.transcript, savedNote.events ?? []);
+      appliedKeyRef.current = applyKey;
+      setRawTranscript(session.rawTranscript);
+      setEvents(session.events);
+      setTranscriptOpen(false);
+      setStage("result");
     }
   }, [visible, isTranscribing, savedNote, recordingError, isRecording]);
+
+  useEffect(() => {
+    if (!eventPatch) return;
+    setEvents((prev) => prev.map((e) => (e.id === eventPatch.id ? eventPatch : e)));
+    onEventPatchConsumed?.();
+  }, [eventPatch, onEventPatchConsumed]);
 
   const handleClose = () => {
     void cancelRecording();
@@ -120,9 +188,43 @@ export function BabyLogVoiceOverlay({ visible, onClose, onConfirm, onEdit }: Pro
     onClose();
   };
 
-  const handleStop = () => {
-    void stopAndSave();
+  const handleRetake = () => {
+    clearSavedNote();
+    clearRecordingError();
+    resetLocal();
+    void startRecording();
   };
+
+  const handleRetryAnalyze = () => {
+    clearRecordingError();
+    void retryTranscribe();
+  };
+
+  const handleRemove = (id: string) => {
+    setEvents((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  const resolveTime = (id: string, time: string) => {
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id !== id) return e;
+        const next = {
+          ...e,
+          time,
+          timeAmbiguous: false,
+          timeOptions: undefined,
+          flags: (e.flags ?? []).filter((f) => f !== "time_ambiguous"),
+        };
+        return next;
+      }),
+    );
+  };
+
+  const errorText = recordingError
+    ? t(ERROR_KEYS[recordingError] ?? "voice.errorGeneric")
+    : t("voice.errorGeneric");
+
+  const canRetry = Boolean(savedNote?.uri) && recordingError === "transcribeFailed";
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
@@ -130,59 +232,109 @@ export function BabyLogVoiceOverlay({ visible, onClose, onConfirm, onEdit }: Pro
         <Pressable style={styles.stage} onPress={() => {}}>
           {stage === "listening" && (
             <>
-              <Text style={styles.state}>{isRecording ? "듣고 있어요" : "준비 중"}</Text>
+              <Text style={styles.state}>{isRecording ? t("voice.listening") : t("voice.preparing")}</Text>
               <VoiceWaveform levels={levels} barCount={28} height={64} barColor={colors.amber} />
               <Text style={styles.duration}>{formatDuration(durationMs)}</Text>
-              <Text style={styles.hint}>말씀해 주세요. 끝나면 아래 버튼을 눌러 주세요.</Text>
-              <Pressable style={[styles.btn, styles.btnPrimary, styles.stopBtn]} onPress={handleStop}>
-                <Text style={styles.btnPrimaryText}>녹음 완료</Text>
+              <Text style={styles.hint}>{t("voice.hint")}</Text>
+              <Pressable style={[styles.btn, styles.btnPrimary, styles.stopBtn]} onPress={() => void stopAndSave()}>
+                <Text style={styles.btnPrimaryText}>{t("voice.stop")}</Text>
               </Pressable>
             </>
           )}
 
           {stage === "analyzing" && (
             <>
-              <Text style={styles.state}>자동 분류 중</Text>
+              <Text style={styles.state}>{t("voice.analyzing")}</Text>
               <ActivityIndicator size="large" color={colors.amber} style={{ marginBottom: 16 }} />
-              <Text style={styles.analyzingText}>
-                {transcript ? `"${transcript}"` : "음성을 텍스트로 변환하고 있어요..."}
-              </Text>
+              <Text style={styles.analyzingText}>{t("voice.analyzingHint")}</Text>
             </>
           )}
 
-          {stage === "result" && result && (
-            <>
-              <Text style={styles.state}>기록으로 변환됐어요</Text>
-              {savedNote?.usedFallbackTranscript && (
-                <Text style={styles.fallbackNote}>서버 연결 실패 — 데모 전사 결과입니다</Text>
+          {stage === "result" && (
+            <ScrollView
+              style={styles.resultScroll}
+              contentContainerStyle={styles.resultScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.state}>{t("voice.resultTitle")}</Text>
+              {events.length > 1 && (
+                <Text style={styles.eventCount}>
+                  {t("voice.eventCount").replace("{count}", String(events.length))}
+                </Text>
               )}
-              <ResultCard result={result} />
-              <View style={styles.actions}>
-                <Pressable style={[styles.btn, styles.btnGhost]} onPress={() => onEdit(result)}>
-                  <Text style={styles.btnGhostText}>수정하기</Text>
-                </Pressable>
-                <Pressable style={[styles.btn, styles.btnPrimary]} onPress={() => onConfirm(result)}>
-                  <Text style={styles.btnPrimaryText}>기록에 추가</Text>
-                </Pressable>
-              </View>
-            </>
+
+              {events.length === 0 ? (
+                <Text style={styles.emptyEvents}>{t("voice.noEvents")}</Text>
+              ) : (
+                events.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onEdit={() => onEditEvent(event, rawTranscript)}
+                    onRemove={() => handleRemove(event.id)}
+                    onResolveTime={(time) => resolveTime(event.id, time)}
+                    t={t}
+                  />
+                ))
+              )}
+
+              <Pressable style={styles.transcriptToggle} onPress={() => setTranscriptOpen((v) => !v)}>
+                <Text style={styles.transcriptToggleText}>
+                  {transcriptOpen ? t("voice.heardHide") : t("voice.heardToggle")}
+                </Text>
+              </Pressable>
+              {transcriptOpen && (
+                <View style={styles.transcriptBox}>
+                  <Text style={styles.transcriptBody}>
+                    {rawTranscript ? `"${rawTranscript}"` : t("voice.noTranscript")}
+                  </Text>
+                </View>
+              )}
+
+              <Pressable
+                style={[styles.btn, styles.btnPrimary, styles.confirmBtn, events.length === 0 && styles.btnDisabled]}
+                disabled={events.length === 0}
+                onPress={() => onConfirmAll({ rawTranscript, events })}
+              >
+                <Text style={styles.btnPrimaryText}>{t("voice.confirm")}</Text>
+              </Pressable>
+              <Pressable style={[styles.btn, styles.btnGhost, styles.retakeBtn]} onPress={handleRetake}>
+                <Text style={styles.btnGhostText}>{t("voice.retake")}</Text>
+              </Pressable>
+            </ScrollView>
           )}
 
           {stage === "error" && (
             <>
-              <Text style={styles.state}>다시 시도해 주세요</Text>
-              <Text style={styles.errorText}>{errorMessage(recordingError)}</Text>
-              <Pressable
-                style={[styles.btn, styles.btnPrimary, styles.stopBtn]}
-                onPress={() => {
-                  clearSavedNote();
-                  clearRecordingError();
-                  setStage("listening");
-                  void startRecording();
-                }}
-              >
-                <Text style={styles.btnPrimaryText}>다시 녹음</Text>
-              </Pressable>
+              <Text style={styles.state}>{t("voice.errorTitle")}</Text>
+              <Text style={styles.errorText}>{errorText}</Text>
+              {recordingError === "transcribeFailed" && (
+                <Text style={styles.errorHint}>{t("voice.transcribeFailedHint")}</Text>
+              )}
+              <View style={styles.errorActions}>
+                {canRetry && (
+                  <Pressable style={[styles.btn, styles.btnPrimary, styles.stopBtn]} onPress={handleRetryAnalyze}>
+                    <Text style={styles.btnPrimaryText}>{t("voice.retryAnalyze")}</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  style={[styles.btn, styles.btnPrimary, styles.stopBtn, !canRetry && { marginTop: 0 }]}
+                  onPress={handleRetake}
+                >
+                  <Text style={styles.btnPrimaryText}>{t("voice.retake")}</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.btn, styles.btnGhost, styles.stopBtn]}
+                  onPress={() => {
+                    clearSavedNote();
+                    clearRecordingError();
+                    onManualEntry();
+                  }}
+                >
+                  <Text style={styles.btnGhostText}>{t("voice.manualEntry")}</Text>
+                </Pressable>
+              </View>
             </>
           )}
         </Pressable>
@@ -191,31 +343,78 @@ export function BabyLogVoiceOverlay({ visible, onClose, onConfirm, onEdit }: Pro
   );
 }
 
-function ResultCard({ result }: { result: VoiceResult }) {
-  const c = getCategory(result.cat);
+function EventCard({
+  event,
+  onEdit,
+  onRemove,
+  onResolveTime,
+  t,
+}: {
+  event: VoiceResult;
+  onEdit: () => void;
+  onRemove: () => void;
+  onResolveTime: (time: string) => void;
+  t: (key: MessageKey) => string;
+}) {
+  const c = getCategory(event.cat);
+  const summary = cardSummary(event);
+  const warn = needsConfirm(event);
+
   return (
-    <View style={styles.resultCard}>
+    <View style={[styles.resultCard, warn && styles.resultCardWarn]}>
+      {warn && (
+        <Text style={styles.warnBanner}>
+          {event.timeAmbiguous
+            ? t("voice.timeAmbiguous")
+            : t("voice.needsConfirm")}
+        </Text>
+      )}
       <View style={styles.resultCat}>
         <View style={[styles.resultCircle, { backgroundColor: c.color }]}>
-          <BabyLogIcon catId={result.cat} size={22} color="#FFFFFF" strokeWidth={2} />
+          <BabyLogIcon catId={event.cat} size={22} color="#FFFFFF" strokeWidth={2} />
         </View>
-        <Text style={styles.resultLabel}>{c.label}</Text>
+        <View style={styles.resultTextWrap}>
+          <Text style={styles.resultLabel}>{c.label}</Text>
+          <Text style={styles.resultMeta}>{summary}</Text>
+          {event.notes ? <Text style={styles.resultNotes}>{event.notes}</Text> : null}
+          {warn && !event.timeAmbiguous ? (
+            <Text style={styles.understoodAs}>
+              {t("voice.understoodAs").replace("{summary}", summary)}
+            </Text>
+          ) : null}
+        </View>
       </View>
-      <Text style={styles.resultFrom}>"{result.text}"</Text>
-      <Text style={styles.resultMeta}>{result.extraLabel}</Text>
+
+      {event.timeAmbiguous && event.timeOptions && event.timeOptions.length >= 2 && (
+        <View style={styles.timeChoices}>
+          {event.timeOptions.map((opt) => (
+            <Pressable key={opt} style={styles.timeChoice} onPress={() => onResolveTime(opt)}>
+              <Text style={styles.timeChoiceText}>{formatKoClock(opt)}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      <View style={styles.cardActions}>
+        <Pressable style={styles.cardBtn} onPress={onEdit}>
+          <Text style={styles.cardBtnText}>{t("voice.edit")}</Text>
+        </Pressable>
+        <Pressable style={styles.cardBtn} onPress={onRemove}>
+          <Text style={[styles.cardBtnText, styles.cardBtnDanger]}>{t("voice.removeCard")}</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
-export function voiceResultToLog(result: VoiceResult) {
+export function voiceResultToLog(
+  result: VoiceResult,
+  rawTranscript: string,
+  createdBy?: BabyLogActor,
+) {
   return {
-    cat: result.cat,
-    time: nowTime(),
-    chip: result.chip,
-    chip2: result.chip2,
-    amount: result.amount,
-    duration: result.duration,
-    voice: true,
+    ...voiceEventToLogFields(result, rawTranscript),
+    createdBy,
   };
 }
 
@@ -225,17 +424,21 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(46,42,38,0.92)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 30,
+    padding: 24,
   },
-  stage: { width: "100%", alignItems: "center" },
+  stage: { width: "100%", maxHeight: "92%", alignItems: "center" },
+  resultScroll: { width: "100%" },
+  resultScrollContent: { alignItems: "stretch", paddingBottom: 8 },
   state: {
     color: "#A39E96",
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 1,
     textTransform: "uppercase",
-    marginBottom: 22,
+    marginBottom: 12,
+    textAlign: "center",
   },
+  eventCount: { fontSize: 12, color: "#7A746C", textAlign: "center", marginBottom: 12 },
   duration: {
     fontSize: 28,
     fontWeight: "700",
@@ -246,26 +449,68 @@ const styles = StyleSheet.create({
   },
   hint: { fontSize: 13, color: "#A39E96", textAlign: "center", marginBottom: 20 },
   analyzingText: { color: "#D8D2CB", fontSize: 14, textAlign: "center", lineHeight: 22, paddingHorizontal: 8 },
-  fallbackNote: { fontSize: 11.5, color: colors.amber, marginBottom: 10, textAlign: "center" },
-  errorText: { fontSize: 14, color: "#D8D2CB", textAlign: "center", lineHeight: 22, marginBottom: 20 },
+  errorText: { fontSize: 14, color: "#D8D2CB", textAlign: "center", lineHeight: 22, marginBottom: 10 },
+  errorHint: { fontSize: 12.5, color: "#A39E96", textAlign: "center", lineHeight: 20, marginBottom: 18 },
+  errorActions: { width: "100%", gap: 10 },
+  emptyEvents: { color: "#D8D2CB", textAlign: "center", marginBottom: 16, lineHeight: 22 },
   resultCard: {
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 18,
-    padding: 20,
+    padding: 16,
     width: "100%",
+    marginBottom: 12,
   },
-  resultCat: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
+  resultCardWarn: { borderColor: colors.amber },
+  warnBanner: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: colors.amberDark,
+    marginBottom: 10,
+  },
+  resultCat: { flexDirection: "row", alignItems: "center", gap: 10 },
   resultCircle: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  resultTextWrap: { flex: 1 },
   resultLabel: { fontSize: 16, fontWeight: "700", color: colors.text },
-  resultFrom: { fontSize: 12, color: colors.faint, marginBottom: 14, paddingLeft: 44 },
-  resultMeta: { fontSize: 13, color: colors.muted, paddingLeft: 44 },
-  actions: { flexDirection: "row", gap: 10, marginTop: 18, width: "100%" },
-  btn: { flex: 1, borderRadius: 14, paddingVertical: 13, alignItems: "center" },
-  stopBtn: { flex: 0, width: "100%", marginTop: 4 },
+  resultMeta: { fontSize: 12.5, color: colors.muted, marginTop: 2 },
+  resultNotes: { fontSize: 11.5, color: colors.faint, marginTop: 4 },
+  understoodAs: { fontSize: 11.5, color: colors.amberDark, marginTop: 6 },
+  timeChoices: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  timeChoice: {
+    backgroundColor: colors.amberSoft,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  timeChoiceText: { fontSize: 13, fontWeight: "700", color: colors.amberDark },
+  cardActions: { flexDirection: "row", gap: 8, marginTop: 14 },
+  cardBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+    backgroundColor: colors.backgroundSecondary,
+  },
+  cardBtnText: { fontSize: 13.5, fontWeight: "700", color: colors.muted },
+  cardBtnDanger: { color: "#B45309" },
+  transcriptToggle: { alignSelf: "center", paddingVertical: 10, marginBottom: 4 },
+  transcriptToggleText: { fontSize: 13, fontWeight: "600", color: "#A39E96" },
+  transcriptBox: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  transcriptBody: { color: "#D8D2CB", fontSize: 13.5, lineHeight: 20 },
+  actions: { flexDirection: "row", gap: 10, width: "100%" },
+  btn: { borderRadius: 14, paddingVertical: 13, alignItems: "center" },
+  stopBtn: { width: "100%" },
+  confirmBtn: { width: "100%", marginTop: 6 },
+  retakeBtn: { width: "100%", marginTop: 10 },
   btnGhost: { backgroundColor: colors.card },
   btnGhostText: { color: colors.muted, fontWeight: "700", fontSize: 14.5 },
   btnPrimary: { backgroundColor: colors.amber },
   btnPrimaryText: { color: colors.amberDark, fontWeight: "700", fontSize: 14.5 },
+  btnDisabled: { opacity: 0.45 },
 });

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { useMemo, useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import {
   CategorySetupSheet,
   type CategorySetupDraft,
@@ -16,6 +16,9 @@ import type { BabyLogCategoryId } from "../../constants/babyLogCategories";
 import type { CustomCategoryTemplate } from "../../constants/customCategoryTemplates";
 import type { BabyLogEntry } from "../../types/babyLog";
 import type { LogCategoryKey } from "../../types/logCategory";
+import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
+import { formatDateKey } from "../../utils/dateKey";
+import { getLogsForDay } from "../../utils/reportAggregates";
 import { colors } from "../../theme";
 
 type Props = {
@@ -34,13 +37,21 @@ export function RecordScreen({ onOpenProfile }: Props) {
     customCategories,
     addCustomFromTemplate,
     addCustomByLabel,
+    myFamilyRole,
+    familyMembers,
   } = useBabyLog();
   const [sheetCat, setSheetCat] = useState<LogCategoryKey | null>(null);
   const [prefill, setPrefill] = useState<RecordSheetPrefill | null>(null);
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
   const [setupDraft, setSetupDraft] = useState<CategorySetupDraft | null>(null);
 
+  const me = familyMembers.find((m) => m.isMe);
+  const allowAdd = canAddLog(myFamilyRole);
+  const todayKey = formatDateKey();
+  const todayLogs = useMemo(() => getLogsForDay(logs, todayKey, todayKey), [logs, todayKey]);
+
   const openSheet = (catKey: LogCategoryKey, nextPrefill?: RecordSheetPrefill) => {
+    if (!nextPrefill?.editId && !allowAdd) return;
     setPrefill(nextPrefill ?? null);
     setSheetCat(catKey);
   };
@@ -50,6 +61,7 @@ export function RecordScreen({ onOpenProfile }: Props) {
   };
 
   const openEdit = (entry: BabyLogEntry) => {
+    if (!canEditLog(myFamilyRole, entry.createdBy, me)) return;
     openSheet(entry.cat, {
       editId: entry.id,
       time: entry.time,
@@ -59,12 +71,18 @@ export function RecordScreen({ onOpenProfile }: Props) {
       duration: entry.duration,
       notes: entry.notes,
       voice: entry.voice,
+      source: entry.source,
+      rawTranscript: entry.rawTranscript,
+      createdBy: entry.createdBy,
+      dateKey: entry.dateKey,
+      flags: entry.flags,
+      confidence: entry.confidence,
     });
   };
 
   const handleSave = (entry: Omit<BabyLogEntry, "id">, editId?: string) => {
     if (editId) updateLog(editId, entry);
-    else addLog(entry);
+    else if (allowAdd) addLog(entry);
   };
 
   const closeNewCategoryFlow = () => {
@@ -81,23 +99,31 @@ export function RecordScreen({ onOpenProfile }: Props) {
     closeNewCategoryFlow();
   };
 
+  const editingEntry = prefill?.editId ? logs.find((l) => l.id === prefill.editId) : null;
+  const allowDelete = editingEntry
+    ? canDeleteLog(myFamilyRole, editingEntry.createdBy, me)
+    : false;
+
   return (
     <View style={styles.root}>
       <RecordHomeHeader onOpenProfile={onOpenProfile} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <QuickStatusRow logs={logs} />
+        {!allowAdd && (
+          <Text style={styles.viewerBanner}>보기 전용 계정이에요. 기록 추가·수정은 제한돼요.</Text>
+        )}
+        <QuickStatusRow logs={todayLogs} />
         <FrequentRecordSection
           shortcuts={frequentShortcuts}
           defaultFeedingMethod={defaultFeedingMethod}
           onSelect={openBuiltinSheet}
-          onSaveShortcuts={setFrequentShortcuts}
+          onSaveShortcuts={allowAdd ? setFrequentShortcuts : () => {}}
         />
         <MoreRecordGrid
           customCategories={customCategories}
           onSelect={openSheet}
-          onNewPress={() => setNewCategoryOpen(true)}
+          onNewPress={() => allowAdd && setNewCategoryOpen(true)}
         />
-        <TodayTimeline logs={logs} customCategories={customCategories} onPress={openEdit} />
+        <TodayTimeline logs={todayLogs} customCategories={customCategories} onPress={openEdit} />
       </ScrollView>
 
       <NewCategorySheet
@@ -136,11 +162,15 @@ export function RecordScreen({ onOpenProfile }: Props) {
           setPrefill(null);
         }}
         onSave={handleSave}
-        onDelete={(id) => {
-          deleteLog(id);
-          setSheetCat(null);
-          setPrefill(null);
-        }}
+        onDelete={
+          allowDelete
+            ? (id) => {
+                deleteLog(id);
+                setSheetCat(null);
+                setPrefill(null);
+              }
+            : undefined
+        }
       />
     </View>
   );
@@ -149,4 +179,15 @@ export function RecordScreen({ onOpenProfile }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: 20, paddingBottom: 32 },
+  viewerBanner: {
+    backgroundColor: colors.amberSoft,
+    color: colors.amberDark,
+    fontSize: 12.5,
+    fontWeight: "600",
+    textAlign: "center",
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 12,
+    overflow: "hidden",
+  },
 });

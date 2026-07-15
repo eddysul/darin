@@ -9,33 +9,27 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DEMO_VOICE_TRANSCRIPT } from "../demo/dailyReport";
 import { transcribeRecording } from "../api/transcribe";
 import type { VoiceNote } from "../types/voiceNote";
 import { createId } from "../utils/id";
 
-const HOLD_MS = 600;
 const METER_INTERVAL_MS = 80;
 const MAX_LEVELS = 48;
 const MIN_RECORDING_MS = 400;
 
 type VoiceRecordingContextValue = {
   isRecording: boolean;
-  isHolding: boolean;
-  holdProgress: number;
   levels: number[];
   durationMs: number;
   savedNote: VoiceNote | null;
   isTranscribing: boolean;
   recordingError: string | null;
-  beginHold: () => void;
-  endHold: () => void;
   startRecording: () => Promise<void>;
   stopAndSave: () => Promise<void>;
+  retryTranscribe: () => Promise<void>;
   cancelRecording: () => Promise<void>;
   clearSavedNote: () => void;
   clearRecordingError: () => void;
-  consumeSkipPress: () => boolean;
 };
 
 const VoiceRecordingContext = createContext<VoiceRecordingContextValue | null>(null);
@@ -61,10 +55,17 @@ async function resetAudioMode() {
   }
 }
 
+/**
+ * MVP option B: drop the in-memory audio URI after success / cancel.
+ * File unlink is skipped (expo-file-system is not a direct dependency;
+ * Metro would fail on `require("expo-file-system")`).
+ */
+async function discardAudio(_uri: string | null | undefined) {
+  // Intentionally no-op for file deletion — callers clear `uri` from state.
+}
+
 export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
   const [isRecording, setIsRecording] = useState(false);
-  const [isHolding, setIsHolding] = useState(false);
-  const [holdProgress, setHoldProgress] = useState(0);
   const [levels, setLevels] = useState<number[]>(Array(MAX_LEVELS).fill(0.1));
   const [durationMs, setDurationMs] = useState(0);
   const [savedNote, setSavedNote] = useState<VoiceNote | null>(null);
@@ -72,24 +73,59 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
   const [recordingError, setRecordingError] = useState<string | null>(null);
 
   const recordingRef = useRef<Audio.Recording | null>(null);
-  const holdStartRef = useRef<number | null>(null);
-  const holdFrameRef = useRef<number | null>(null);
-  const holdStartedRecordingRef = useRef(false);
-  const skipNextPressRef = useRef(false);
   const recordingStartedAtRef = useRef<number | null>(null);
   const isSavingRef = useRef(false);
   const isStartingRef = useRef(false);
+  const savedNoteRef = useRef<VoiceNote | null>(null);
+
+  useEffect(() => {
+    savedNoteRef.current = savedNote;
+  }, [savedNote]);
 
   const pushLevel = useCallback((value: number) => {
     setLevels((prev) => [...prev.slice(-(MAX_LEVELS - 1)), value]);
   }, []);
 
-  const clearHoldTimer = useCallback(() => {
-    if (holdFrameRef.current != null) {
-      cancelAnimationFrame(holdFrameRef.current);
-      holdFrameRef.current = null;
+  const runTranscribe = useCallback(async (baseNote: VoiceNote) => {
+    if (!baseNote.uri) {
+      setRecordingError("recordingFailed");
+      return;
     }
-    holdStartRef.current = null;
+
+    setSavedNote(baseNote);
+    setIsTranscribing(true);
+    setRecordingError(null);
+
+    try {
+      const result = await transcribeRecording(baseNote.uri);
+      const transcript = result.raw_text?.trim() ?? "";
+
+      if (!transcript) {
+        setSavedNote({
+          ...baseNote,
+          transcript: "",
+          events: result.events,
+          transcribeDate: result.date,
+        });
+        setRecordingError("noSpeechDetected");
+        return;
+      }
+
+      await discardAudio(baseNote.uri);
+      setSavedNote({
+        ...baseNote,
+        uri: null,
+        transcript,
+        events: result.events,
+        transcribeDate: result.date,
+      });
+    } catch {
+      // Keep uri for retry — do not fake success with demo transcript
+      setSavedNote(baseNote);
+      setRecordingError("transcribeFailed");
+    } finally {
+      setIsTranscribing(false);
+    }
   }, []);
 
   const startRecording = useCallback(async () => {
@@ -97,6 +133,7 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
 
     isStartingRef.current = true;
     setRecordingError(null);
+    await discardAudio(savedNoteRef.current?.uri);
     setSavedNote(null);
     setIsTranscribing(false);
 
@@ -142,9 +179,6 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
     if (!isRecording || isSavingRef.current) return;
 
     isSavingRef.current = true;
-    clearHoldTimer();
-    setIsHolding(false);
-    setHoldProgress(0);
 
     let uri: string | null = null;
     let finalDuration = durationMs;
@@ -171,6 +205,7 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
     await resetAudioMode();
 
     if (finalDuration < MIN_RECORDING_MS) {
+      await discardAudio(uri);
       setRecordingError("recordingTooShort");
       isSavingRef.current = false;
       return;
@@ -185,59 +220,26 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
     };
 
     if (!uri) {
-      setSavedNote({
-        ...baseNote,
-        transcript: DEMO_VOICE_TRANSCRIPT,
-        usedFallbackTranscript: true,
-      });
+      setSavedNote(baseNote);
       setRecordingError("recordingFailed");
       isSavingRef.current = false;
       return;
     }
 
-    setSavedNote(baseNote);
-    setIsTranscribing(true);
-
     try {
-      const result = await transcribeRecording(uri);
-      const transcript = result.raw_text?.trim() ?? "";
-
-      if (!transcript) {
-        setSavedNote({
-          ...baseNote,
-          transcript: "",
-          events: result.events,
-          transcribeDate: result.date,
-          usedFallbackTranscript: false,
-        });
-        setRecordingError("noSpeechDetected");
-        return;
-      }
-
-      setSavedNote({
-        ...baseNote,
-        transcript,
-        events: result.events,
-        transcribeDate: result.date,
-        usedFallbackTranscript: false,
-      });
-    } catch {
-      setSavedNote({
-        ...baseNote,
-        transcript: DEMO_VOICE_TRANSCRIPT,
-        usedFallbackTranscript: true,
-      });
-      setRecordingError("transcribeFailed");
+      await runTranscribe(baseNote);
     } finally {
-      setIsTranscribing(false);
       isSavingRef.current = false;
     }
-  }, [clearHoldTimer, durationMs, isRecording]);
+  }, [durationMs, isRecording, runTranscribe]);
+
+  const retryTranscribe = useCallback(async () => {
+    const note = savedNoteRef.current;
+    if (!note?.uri || isTranscribing) return;
+    await runTranscribe(note);
+  }, [isTranscribing, runTranscribe]);
 
   const cancelRecording = useCallback(async () => {
-    clearHoldTimer();
-    setIsHolding(false);
-    setHoldProgress(0);
     isSavingRef.current = false;
     isStartingRef.current = false;
 
@@ -245,6 +247,8 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
     if (recording) {
       try {
         await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        await discardAudio(uri);
       } catch {
         // ignore
       }
@@ -256,104 +260,52 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
     setDurationMs(0);
     setIsTranscribing(false);
     await resetAudioMode();
-  }, [clearHoldTimer]);
-
-  const beginHold = useCallback(() => {
-    if (isRecording) return;
-
-    clearHoldTimer();
-    holdStartedRecordingRef.current = false;
-    setIsHolding(true);
-    setHoldProgress(0);
-    holdStartRef.current = Date.now();
-
-    const tick = () => {
-      if (holdStartRef.current == null) return;
-      const elapsed = Date.now() - holdStartRef.current;
-      const progress = Math.min(elapsed / HOLD_MS, 1);
-      setHoldProgress(progress);
-
-      if (elapsed >= HOLD_MS) {
-        holdStartedRecordingRef.current = true;
-        skipNextPressRef.current = true;
-        setIsHolding(false);
-        setHoldProgress(1);
-        clearHoldTimer();
-        void startRecording();
-        return;
-      }
-
-      holdFrameRef.current = requestAnimationFrame(tick);
-    };
-
-    holdFrameRef.current = requestAnimationFrame(tick);
-  }, [clearHoldTimer, isRecording, startRecording]);
-
-  const endHold = useCallback(() => {
-    if (isRecording) return;
-    clearHoldTimer();
-    setIsHolding(false);
-    setHoldProgress(0);
-  }, [clearHoldTimer, isRecording]);
+  }, []);
 
   const clearSavedNote = useCallback(() => {
+    void discardAudio(savedNoteRef.current?.uri);
     setSavedNote(null);
     setRecordingError(null);
   }, []);
 
   const clearRecordingError = useCallback(() => setRecordingError(null), []);
 
-  const consumeSkipPress = useCallback(() => {
-    if (!skipNextPressRef.current) return false;
-    skipNextPressRef.current = false;
-    return true;
-  }, []);
-
   useEffect(() => {
     return () => {
-      clearHoldTimer();
       if (recordingRef.current) {
         void recordingRef.current.stopAndUnloadAsync();
       }
     };
-  }, [clearHoldTimer]);
+  }, []);
 
   const value = useMemo(
     () => ({
       isRecording,
-      isHolding,
-      holdProgress,
       levels,
       durationMs,
       savedNote,
       isTranscribing,
       recordingError,
-      beginHold,
-      endHold,
       startRecording,
       stopAndSave,
+      retryTranscribe,
       cancelRecording,
       clearSavedNote,
       clearRecordingError,
-      consumeSkipPress,
     }),
     [
-      beginHold,
+      cancelRecording,
       clearRecordingError,
       clearSavedNote,
-      consumeSkipPress,
       durationMs,
-      endHold,
-      holdProgress,
-      isHolding,
       isRecording,
       isTranscribing,
       levels,
       recordingError,
+      retryTranscribe,
       savedNote,
       startRecording,
       stopAndSave,
-      cancelRecording,
     ],
   );
 

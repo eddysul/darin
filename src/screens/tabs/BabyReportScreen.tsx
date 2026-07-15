@@ -2,17 +2,18 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppHeader } from "../../components/babylog/AppHeader";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
-import {
-  BABY_LOG_CATEGORIES,
-  CAT_HISTORY,
-  formatLogMeta,
-  getCategory,
-  HISTORY_DAYS,
-  toMinutes,
-  type BabyLogCategoryId,
-} from "../../constants/babyLogCategories";
+import { BABY_LOG_CATEGORIES, formatLogMeta, getCategory, toMinutes, type BabyLogCategoryId } from "../../constants/babyLogCategories";
 import { useBabyLog } from "../../context/BabyLogContext";
 import type { BabyLogEntry } from "../../types/babyLog";
+import { formatDateKey } from "../../utils/dateKey";
+import {
+  buildSummaryCards,
+  buildTodaySummary,
+  categoryCountsLast7,
+  getLogsForDay,
+  toBarPercent,
+  weeklyTrend,
+} from "../../utils/reportAggregates";
 import { colors, radius } from "../../theme";
 
 type Props = {
@@ -22,29 +23,21 @@ type Props = {
 type ReportCat = "all" | BabyLogCategoryId;
 
 export function BabyReportScreen({ onOpenProfile }: Props) {
-  const { logs, feedCount, diaperCount, sleepMinutes } = useBabyLog();
+  const { logs, babyName } = useBabyLog();
   const [reportCat, setReportCat] = useState<ReportCat>("all");
 
-  const sleepStr =
-    sleepMinutes > 0
-      ? `${Math.floor(sleepMinutes / 60)}시간 ${sleepMinutes % 60}분`
-      : "0분";
+  const todayKey = formatDateKey();
+  const todayLogs = useMemo(() => getLogsForDay(logs, todayKey, todayKey), [logs, todayKey]);
+  const summary = useMemo(() => buildTodaySummary(logs), [logs]);
+  const cards = useMemo(() => buildSummaryCards(summary, babyName), [summary, babyName]);
+  const week = useMemo(() => weeklyTrend(logs), [logs]);
 
-  const aiSummary = `오늘 콩이는 ${feedCount}회 수유/식사를 했고, ${sleepStr} 잠들었어요. 기저귀는 ${diaperCount}회 교체했고, 최근 일주일과 비교해 배변 리듬이 안정적이에요. 오후엔 평소보다 낮잠이 짧았으니, 저녁 취침 시간을 조금 당겨보는 걸 추천해요.`;
+  const maxFeed = Math.max(...week.map((d) => d.feedingCount), 1);
+  const maxSleep = Math.max(...week.map((d) => d.sleepMinutes), 1);
+  const maxDiaper = Math.max(...week.map((d) => d.diaperCount), 1);
+  const weekHasData = week.some((d) => d.totalCount > 0);
 
-  const weekBars = useMemo(() => {
-    const days = [...HISTORY_DAYS, "오늘"];
-    return days.map((day, i) => {
-      const isToday = i === days.length - 1;
-      const feed = isToday ? Math.min(20 + feedCount * 15, 100) : [62, 70, 55, 80, 65, 58][i];
-      const sleep = isToday ? Math.min(sleepMinutes / 6, 100) : [74, 68, 80, 60, 72, 78][i];
-      const diaper = isToday ? Math.min(20 + diaperCount * 15, 100) : [50, 60, 45, 70, 55, 48][i];
-      return { day, feed, sleep, diaper };
-    });
-  }, [feedCount, diaperCount, sleepMinutes]);
-
-  const todayFor = (catId: BabyLogCategoryId) =>
-    logs.filter((l) => l.cat === catId).sort((a, b) => a.time.localeCompare(b.time));
+  const todayFor = (catId: BabyLogCategoryId) => todayLogs.filter((l) => l.cat === catId);
 
   return (
     <View style={styles.root}>
@@ -70,13 +63,20 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
 
         {reportCat === "all" ? (
           <View style={styles.pad}>
-            <View style={styles.aiSummary}>
-              <View style={styles.aiTag}>
-                <BabyLogIcon kind="sparkles" size={12} color={colors.amber} strokeWidth={2.2} />
-                <Text style={styles.aiTagText}>AI 오늘의 요약</Text>
+            <SummaryCard
+              tag="AI 오늘의 요약"
+              text={cards.overview}
+              icon={<BabyLogIcon kind="sparkles" size={12} color={colors.amber} strokeWidth={2.2} />}
+            />
+            <SummaryCard tag="오늘 주요 변화" text={cards.changes} />
+            <SummaryCard tag="다음에 체크할 것" text={cards.checklist} />
+
+            {summary.totalCount === 0 && (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyTitle}>아직 오늘 기록이 없어요</Text>
+                <Text style={styles.empty}>수유, 수면, 배변을 기록하면 한눈에 요약해드릴게요.</Text>
               </View>
-              <Text style={styles.aiText}>{aiSummary}</Text>
-            </View>
+            )}
 
             <View style={styles.insightGrid}>
               {(["breast", "formula", "food", "diaper", "sleep", "tummy"] as BabyLogCategoryId[]).map((id) => {
@@ -97,23 +97,41 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
             </View>
 
             <Text style={styles.chartTitle}>이번 주 한눈에 보기</Text>
-            {weekBars.map((d) => (
-              <View key={d.day}>
-                <BarRow day={d.day} width={d.feed} color="#f0a93c" />
-                <BarRow day="" width={d.sleep} color="#7c83fd" />
-                <BarRow day="" width={d.diaper} color="#c98a54" marginBottom />
-              </View>
-            ))}
-            <View style={styles.legend}>
-              <LegendDot color="#f0a93c" label="수유" />
-              <LegendDot color="#7c83fd" label="수면(시간)" />
-              <LegendDot color="#c98a54" label="배변" />
-            </View>
+            {!weekHasData ? (
+              <Text style={styles.empty}>최근 7일 기록이 없어요. 기록을 남기면 추세가 보여요.</Text>
+            ) : (
+              <>
+                {week.map((d) => (
+                  <View key={d.dateKey}>
+                    <BarRow day={d.label} width={toBarPercent(d.feedingCount, maxFeed)} color="#f0a93c" />
+                    <BarRow day="" width={toBarPercent(d.sleepMinutes, maxSleep)} color="#7c83fd" />
+                    <BarRow day="" width={toBarPercent(d.diaperCount, maxDiaper)} color="#c98a54" marginBottom />
+                  </View>
+                ))}
+                <View style={styles.legend}>
+                  <LegendDot color="#f0a93c" label="수유(회)" />
+                  <LegendDot color="#7c83fd" label="수면(분)" />
+                  <LegendDot color="#c98a54" label="배변(회)" />
+                </View>
+              </>
+            )}
           </View>
         ) : (
-          <CategoryDetail catId={reportCat} logs={todayFor(reportCat)} />
+          <CategoryDetail catId={reportCat} todayLogs={todayFor(reportCat)} allLogs={logs} />
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+function SummaryCard({ tag, text, icon }: { tag: string; text: string; icon?: ReactNode }) {
+  return (
+    <View style={styles.aiSummary}>
+      <View style={styles.aiTag}>
+        {icon}
+        <Text style={styles.aiTagText}>{tag}</Text>
+      </View>
+      <Text style={styles.aiText}>{text}</Text>
     </View>
   );
 }
@@ -169,31 +187,43 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   );
 }
 
-function CategoryDetail({ catId, logs }: { catId: BabyLogCategoryId; logs: ReturnType<typeof useBabyLog>["logs"] }) {
+function CategoryDetail({
+  catId,
+  todayLogs,
+  allLogs,
+}: {
+  catId: BabyLogCategoryId;
+  todayLogs: BabyLogEntry[];
+  allLogs: BabyLogEntry[];
+}) {
   const c = getCategory(catId);
-  const lastTime = logs.length ? logs[logs.length - 1].time : "없음";
+  const lastTime = todayLogs.length ? todayLogs[todayLogs.length - 1].time : "없음";
+  const trend = categoryCountsLast7(allLogs, catId);
+  const values = trend.map((t) => (catId === "sleep" ? (t.sleepMinutes ?? 0) : t.count));
+  const pastVals = values.slice(0, 6);
+  const pastAvg = pastVals.length ? pastVals.reduce((a, b) => a + b, 0) / pastVals.length : 0;
+  const todayVal = values[values.length - 1] ?? 0;
+  const isAnomaly = pastAvg > 0 && Math.abs(todayVal - pastAvg) >= Math.max(1, pastAvg * 0.4);
+  const isLow = todayVal < pastAvg;
+  const max = Math.max(...values, 1);
+  const weekHas = values.some((v) => v > 0);
 
   let avgGapStr = "-";
   let gaps: number[] = [];
-  if (logs.length >= 2) {
-    gaps = logs.slice(1).map((l, i) => toMinutes(l.time) - toMinutes(logs[i].time));
+  if (todayLogs.length >= 2) {
+    gaps = todayLogs.slice(1).map((l, i) => toMinutes(l.time) - toMinutes(todayLogs[i].time));
     const avg = gaps.reduce((a, b) => a + b, 0) / gaps.length;
     avgGapStr = `${Math.floor(avg / 60)}시간 ${Math.round(avg % 60)}분`;
   }
 
-  const history = CAT_HISTORY[catId] ?? [1, 1, 1, 1, 1, 1];
-  const todayVal = logs.length;
-  const avgHist = history.reduce((a, b) => a + b, 0) / history.length;
-  const isAnomaly = Math.abs(todayVal - avgHist) >= Math.max(1, avgHist * 0.4);
-  const isLow = todayVal < avgHist;
-  const values = [...history, todayVal];
-  const max = Math.max(...values, 1);
-  const days = [...HISTORY_DAYS, "오늘"];
-
   return (
     <View style={styles.pad}>
       <View style={styles.statRow}>
-        <StatCard icon={<BabyLogIcon catId={catId} size={18} />} num={`${logs.length}회`} lbl="오늘 횟수" />
+        <StatCard
+          icon={<BabyLogIcon catId={catId} size={18} />}
+          num={catId === "sleep" ? `${todayVal}분` : `${todayLogs.length}회`}
+          lbl={catId === "sleep" ? "오늘 수면" : "오늘 횟수"}
+        />
         <StatCard icon={<BabyLogIcon kind="clock" size={18} color={colors.muted} />} num={lastTime} lbl="마지막 기록" />
         <StatCard icon={<BabyLogIcon kind="interval" size={18} color={colors.muted} />} num={avgGapStr} lbl="평균 간격" />
       </View>
@@ -201,14 +231,14 @@ function CategoryDetail({ catId, logs }: { catId: BabyLogCategoryId; logs: Retur
       <Text style={styles.chartTitle}>
         오늘의 간격<Text style={styles.chartSub}>이벤트 사이 시간 차이</Text>
       </Text>
-      {logs.length === 0 ? (
+      {todayLogs.length === 0 ? (
         <Text style={styles.hint}>오늘 {c.label} 기록이 아직 없어요.</Text>
-      ) : logs.length === 1 ? (
-        <Text style={styles.hint}>기록이 2건 이상일 때 간격을 보여드려요. (현재 1건: {logs[0].time})</Text>
+      ) : todayLogs.length === 1 ? (
+        <Text style={styles.hint}>기록이 2건 이상일 때 간격을 보여드려요. (현재 1건: {todayLogs[0].time})</Text>
       ) : (
         <>
-          <IntervalRow entry={logs[0]} c={c} />
-          {logs.slice(1).map((entry, i) => {
+          <IntervalRow entry={todayLogs[0]} c={c} />
+          {todayLogs.slice(1).map((entry, i) => {
             const gap = gaps[i];
             const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
             const isShort = gap < avgGap * 0.5;
@@ -218,15 +248,7 @@ function CategoryDetail({ catId, logs }: { catId: BabyLogCategoryId; logs: Retur
             return (
               <View key={entry.id}>
                 <View style={styles.gapRow}>
-                  <Text
-                    style={[
-                      styles.gapPill,
-                      isShort && styles.gapShort,
-                      isLong && styles.gapLong,
-                    ]}
-                  >
-                    {gapTxt}
-                  </Text>
+                  <Text style={[styles.gapPill, isShort && styles.gapShort, isLong && styles.gapLong]}>{gapTxt}</Text>
                   <Text style={styles.gapFlag}>{flag}</Text>
                 </View>
                 <IntervalRow entry={entry} c={c} />
@@ -237,40 +259,46 @@ function CategoryDetail({ catId, logs }: { catId: BabyLogCategoryId; logs: Retur
       )}
 
       <Text style={[styles.chartTitle, { marginTop: 20 }]}>
-        7일 트렌드<Text style={styles.chartSub}>이상치는 강조돼요</Text>
+        7일 트렌드<Text style={styles.chartSub}>{catId === "sleep" ? "수면 분" : "횟수"} · 이상치는 강조</Text>
       </Text>
-      <View style={styles.trendChart}>
-        {days.map((d, i) => {
-          const v = values[i];
-          const h = Math.max(6, Math.round((v / max) * 100));
-          const isToday = i === days.length - 1;
-          const flagAnomaly = isToday && isAnomaly;
-          return (
-            <View key={d} style={styles.trendCol}>
-              <Text style={styles.trendFlag}>{flagAnomaly ? "⚠️" : ""}</Text>
-              <View style={styles.trendTrack}>
-                <View
-                  style={[
-                    styles.trendBar,
-                    {
-                      height: `${h}%`,
-                      backgroundColor: c.color,
-                      borderWidth: flagAnomaly ? 2 : 0,
-                      borderColor: colors.danger,
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={styles.trendDay}>{d}</Text>
-            </View>
-          );
-        })}
-      </View>
-      <Text style={styles.trendNote}>
-        {isAnomaly
-          ? `오늘 ${c.label} 기록이 최근 6일 평균(약 ${avgHist.toFixed(1)}회)보다 ${isLow ? "적어요" : "많아요"}. ${isLow ? "컨디션 변화가 있는지 살펴봐 주세요." : "평소보다 자주 기록됐어요."}`
-          : `오늘 ${c.label} 기록은 최근 6일 평균과 비슷한 수준이에요.`}
-      </Text>
+      {!weekHas ? (
+        <Text style={styles.empty}>최근 7일 {c.label} 기록이 없어요.</Text>
+      ) : (
+        <>
+          <View style={styles.trendChart}>
+            {trend.map((d, i) => {
+              const v = values[i];
+              const h = Math.max(6, Math.round((v / max) * 100));
+              const isToday = i === trend.length - 1;
+              const flagAnomaly = isToday && isAnomaly;
+              return (
+                <View key={d.dateKey} style={styles.trendCol}>
+                  <Text style={styles.trendFlag}>{flagAnomaly ? "⚠️" : ""}</Text>
+                  <View style={styles.trendTrack}>
+                    <View
+                      style={[
+                        styles.trendBar,
+                        {
+                          height: `${h}%`,
+                          backgroundColor: c.color,
+                          borderWidth: flagAnomaly ? 2 : 0,
+                          borderColor: colors.danger,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.trendDay}>{d.label}</Text>
+                </View>
+              );
+            })}
+          </View>
+          <Text style={styles.trendNote}>
+            {isAnomaly
+              ? `오늘 ${c.label}이(가) 최근 6일 평균(약 ${pastAvg.toFixed(1)})보다 ${isLow ? "적어요" : "많아요"}.`
+              : `오늘 ${c.label}은(는) 최근 6일 평균과 비슷한 수준이에요.`}
+          </Text>
+        </>
+      )}
     </View>
   );
 }
@@ -285,25 +313,15 @@ function StatCard({ icon, num, lbl }: { icon: ReactNode; num: string; lbl: strin
   );
 }
 
-function IntervalRow({
-  entry,
-  c,
-}: {
-  entry: BabyLogEntry;
-  c: ReturnType<typeof getCategory>;
-}) {
+function IntervalRow({ entry, c }: { entry: BabyLogEntry; c: ReturnType<typeof getCategory> }) {
   const meta = formatLogMeta(entry);
   return (
     <View style={styles.intervalRow}>
       <Text style={styles.intervalTime}>{entry.time}</Text>
       <View style={[styles.intervalDot, { backgroundColor: c.color }]} />
       <View style={styles.intervalLabelRow}>
-        {!entry.cat.startsWith("custom:") && (
-          <BabyLogIcon catId={entry.cat as BabyLogCategoryId} size={15} />
-        )}
-        <Text style={styles.intervalLabel}>
-          {meta === "기록됨" ? c.label : meta}
-        </Text>
+        {!entry.cat.startsWith("custom:") && <BabyLogIcon catId={entry.cat as BabyLogCategoryId} size={15} />}
+        <Text style={styles.intervalLabel}>{meta === "기록됨" ? c.label : meta}</Text>
       </View>
     </View>
   );
@@ -331,7 +349,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 18,
+    marginBottom: 12,
   },
   aiTag: {
     alignSelf: "flex-start",
@@ -346,7 +364,29 @@ const styles = StyleSheet.create({
   },
   aiTagText: { fontSize: 10.5, fontWeight: "700", color: colors.amber },
   aiText: { fontSize: 13, lineHeight: 22, color: colors.muted },
-  insightGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 },
+  empty: {
+    textAlign: "center",
+    color: colors.faint,
+    fontSize: 12.5,
+    paddingVertical: 8,
+    lineHeight: 18,
+  },
+  emptyBox: {
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: radius.md,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  emptyTitle: {
+    textAlign: "center",
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: 4,
+  },
+  insightGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20, marginTop: 8 },
   insightCard: {
     width: "48%",
     backgroundColor: colors.backgroundSecondary,
@@ -362,7 +402,7 @@ const styles = StyleSheet.create({
   chartTitle: { fontSize: 12.5, fontWeight: "700", color: colors.text, marginBottom: 10 },
   chartSub: { fontSize: 10.5, color: colors.faint, fontWeight: "500" },
   barRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 7 },
-  barDay: { fontSize: 10.5, color: colors.faint, width: 26 },
+  barDay: { fontSize: 10.5, color: colors.faint, width: 28 },
   barTrack: { flex: 1, height: 8, backgroundColor: colors.card, borderRadius: 6, overflow: "hidden" },
   barFill: { height: "100%", borderRadius: 6 },
   legend: { flexDirection: "row", gap: 14, marginTop: 6, marginBottom: 8 },

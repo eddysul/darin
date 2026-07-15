@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -14,48 +15,74 @@ import { callOpenAI, OpenAIChatError, type OpenAIMessage } from "../../api/opena
 import { AppHeader } from "../../components/babylog/AppHeader";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { useLanguage } from "../../LanguageContext";
-import { buildBabyLogConsultPrompt } from "../../utils/babyLogAIContext";
+import { buildBabyLogConsultPrompt, buildCareContextPack } from "../../utils/babyLogAIContext";
 import { colors } from "../../theme";
 
 const QUICK_CHIPS = [
-  "오늘 수면 패턴 어때?",
-  "수유 간격이 짧은데 괜찮아?",
-  "이번 주 성장 요약해줘",
-  "배변 이상 있어?",
+  "오늘 수면 괜찮아?",
+  "수유량이 부족해?",
+  "배변 패턴 어때?",
+  "오늘 특이한 점 있어?",
 ];
+
+const HAS_OPENAI_KEY = Boolean((process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? "").trim());
 
 type Props = {
   onOpenProfile: () => void;
 };
 
 export function ConsultScreen({ onOpenProfile }: Props) {
-  const { careSetup, logs, diaryEntries, feedCount, diaperCount, sleepMinutes, chatHistory, pushChat } =
-    useBabyLog();
+  const {
+    careSetup,
+    logs,
+    diaryEntries,
+    feedCount,
+    diaperCount,
+    sleepMinutes,
+    chatHistory,
+    pushChat,
+    babyName,
+    storageReady,
+  } = useBabyLog();
   const { locale, t } = useLanguage();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [bannerOpen, setBannerOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const historyRef = useRef<OpenAIMessage[]>([]);
+  const historySeeded = useRef(false);
 
-  const systemPrompt = useMemo(
-    () =>
-      buildBabyLogConsultPrompt({
-        careSetup,
-        logs,
-        diaryEntries,
-        feedCount,
-        diaperCount,
-        sleepMinutes,
-        locale,
-      }),
-    [careSetup, logs, diaryEntries, feedCount, diaperCount, sleepMinutes, locale],
+  const pack = useMemo(
+    () => buildCareContextPack({ careSetup, logs, diaryEntries, locale }),
+    [careSetup, logs, diaryEntries, locale],
   );
-  const systemPromptRef = useRef(systemPrompt);
-  systemPromptRef.current = systemPrompt;
+
+  const sparse = pack.todayLogCount === 0 || pack.weekLogCount < 3;
+
+  // Restore OpenAI turn history from persisted chat after hydrate
+  useEffect(() => {
+    if (!storageReady || historySeeded.current) return;
+    historySeeded.current = true;
+    historyRef.current = chatHistory
+      .filter((m) => m.id !== "greet-1")
+      .map((m) => ({
+        role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+        content: m.text,
+      }));
+  }, [storageReady, chatHistory]);
 
   const send = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || isTyping) return;
+
+    if (sparse && /진단|약|병원|괜찮은지|심각한|응급/.test(trimmed) && pack.todayLogCount === 0) {
+      pushChat("user", trimmed);
+      pushChat(
+        "ai",
+        "오늘 기록이 거의 없어 판단하기 어려워요. 수유·수면·배변을 남긴 뒤 다시 물어보시면, 최근 기록 기준으로 더 정확히 말씀드릴게요. 고열·호흡곤란·반복 구토·처짐이 있으면 바로 소아과나 응급 진료를 권해요.",
+      );
+      return;
+    }
 
     pushChat("user", trimmed);
     historyRef.current = [...historyRef.current, { role: "user", content: trimmed }];
@@ -63,8 +90,19 @@ export function ConsultScreen({ onOpenProfile }: Props) {
     setIsTyping(true);
     scrollRef.current?.scrollToEnd({ animated: true });
 
+    const prompt = buildBabyLogConsultPrompt({
+      careSetup,
+      logs,
+      diaryEntries,
+      feedCount,
+      diaperCount,
+      sleepMinutes,
+      locale,
+      question: trimmed,
+    });
+
     try {
-      const reply = await callOpenAI(historyRef.current, systemPromptRef.current);
+      const reply = await callOpenAI(historyRef.current, prompt);
       historyRef.current = [...historyRef.current, { role: "assistant", content: reply }];
       pushChat("ai", reply);
     } catch (error) {
@@ -79,6 +117,18 @@ export function ConsultScreen({ onOpenProfile }: Props) {
     }
   };
 
+  if (!storageReady) {
+    return (
+      <View style={styles.root}>
+        <AppHeader onOpenProfile={onOpenProfile} />
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={colors.amber} />
+          <Text style={styles.loadingText}>상담 기록을 불러오는 중…</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.root}
@@ -86,6 +136,39 @@ export function ConsultScreen({ onOpenProfile }: Props) {
       keyboardVerticalOffset={88}
     >
       <AppHeader onOpenProfile={onOpenProfile} />
+
+      <Pressable style={styles.banner} onPress={() => setBannerOpen(true)}>
+        <Text style={styles.bannerEyebrow}>AI가 참고 중</Text>
+        <Text style={styles.bannerTitle}>
+          {pack.babyName} · {pack.babyBirthMeta}
+        </Text>
+        <Text style={styles.bannerMeta}>
+          오늘 기록 {pack.todayLogCount}개 · 최근 7일 기록 {pack.weekLogCount}개 · 일기 {pack.diaryCount}개
+        </Text>
+        <Text style={styles.bannerTap}>탭하여 참고 정보 보기</Text>
+      </Pressable>
+
+      {!HAS_OPENAI_KEY && (
+        <View style={styles.warnBanner}>
+          <Text style={styles.warnText}>OpenAI 키가 없어요. `.env`에 EXPO_PUBLIC_OPENAI_API_KEY를 넣어 주세요.</Text>
+        </View>
+      )}
+
+      {sparse && (
+        <View style={styles.sparseBanner}>
+          <Text style={styles.sparseText}>
+            기록이 부족해요. 확정적으로 말하기 어려울 수 있어요 — 판단하기 어려우면 솔직히 알려드릴게요.
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.safetyStrip}>
+        <Text style={styles.safetyText}>
+          고열·호흡곤란·반복 구토·탈수·처짐이 있으면 소아과/응급 진료를 권해요. 의학적 진단이 아니며 최근 기록
+          기준입니다.
+        </Text>
+      </View>
+
       <ScrollView
         ref={scrollRef}
         style={styles.messages}
@@ -93,15 +176,26 @@ export function ConsultScreen({ onOpenProfile }: Props) {
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
         keyboardShouldPersistTaps="handled"
       >
-        {chatHistory.map((m) => (
-          <View key={m.id} style={[styles.bubble, m.role === "user" ? styles.userBubble : styles.aiBubble]}>
-            <Text style={[styles.bubbleText, m.role === "user" && styles.userText]}>{m.text}</Text>
-          </View>
-        ))}
+        {chatHistory.map((m) =>
+          m.role === "user" ? (
+            <View key={m.id} style={[styles.bubble, styles.userBubble]}>
+              <Text style={[styles.bubbleText, styles.userText]}>{m.text}</Text>
+            </View>
+          ) : (
+            <View key={m.id} style={styles.aiBlock}>
+              <View style={[styles.bubble, styles.aiBubble]}>
+                <Text style={styles.bubbleText}>{m.text}</Text>
+              </View>
+              <Text style={styles.answerFootnote}>최근 기록 기준입니다.</Text>
+            </View>
+          ),
+        )}
         {isTyping && (
-          <View style={[styles.bubble, styles.aiBubble, styles.typingBubble]}>
-            <ActivityIndicator size="small" color={colors.amber} />
-            <Text style={styles.typingText}>답변 작성 중...</Text>
+          <View style={styles.aiBlock}>
+            <View style={[styles.bubble, styles.aiBubble, styles.typingBubble]}>
+              <ActivityIndicator size="small" color={colors.amber} />
+              <Text style={styles.typingText}>답변 작성 중...</Text>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -122,7 +216,7 @@ export function ConsultScreen({ onOpenProfile }: Props) {
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder="콩이에 대해 물어보세요..."
+          placeholder={`${babyName}에 대해 물어보세요...`}
           placeholderTextColor={colors.faint}
           value={input}
           onChangeText={setInput}
@@ -138,20 +232,87 @@ export function ConsultScreen({ onOpenProfile }: Props) {
           <Text style={styles.sendIcon}>➤</Text>
         </Pressable>
       </View>
+
+      <Modal visible={bannerOpen} transparent animationType="fade" onRequestClose={() => setBannerOpen(false)}>
+        <Pressable style={styles.modalBg} onPress={() => setBannerOpen(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>참고한 정보</Text>
+            <EvidenceRow label="아기 프로필" detail={pack.babyBirthMeta} />
+            <EvidenceRow label="오늘 기록" detail={`${pack.todayLogCount}개 · 수유/수면/배변 요약`} />
+            <EvidenceRow label="최근 7일 트렌드" detail={`${pack.weekLogCount}개 이벤트`} />
+            <EvidenceRow label="최근 일기" detail={`${pack.diaryCount}개`} />
+            <Text style={styles.modalNote}>
+              답변은 위 범위의 최근 기록 기준입니다. 기록이 부족하면 “판단하기 어려워요”라고 말할 수 있어요.
+            </Text>
+            <Pressable style={styles.modalBtn} onPress={() => setBannerOpen(false)}>
+              <Text style={styles.modalBtnText}>닫기</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
+  );
+}
+
+function EvidenceRow({ label, detail }: { label: string; detail: string }) {
+  return (
+    <View style={styles.evidenceRow}>
+      <Text style={styles.evidenceLabel}>· {label}</Text>
+      <Text style={styles.evidenceDetail}>{detail}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  loadingBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
+  loadingText: { fontSize: 13, color: colors.muted },
+  banner: {
+    marginHorizontal: 18,
+    marginTop: 4,
+    marginBottom: 6,
+    backgroundColor: colors.amberSoft,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(232,163,61,0.35)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  bannerEyebrow: { fontSize: 10.5, fontWeight: "700", color: colors.amber, marginBottom: 4 },
+  bannerTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
+  bannerMeta: { fontSize: 12, color: colors.muted, marginTop: 4, lineHeight: 18 },
+  bannerTap: { fontSize: 11, color: colors.faint, marginTop: 6 },
+  warnBanner: {
+    marginHorizontal: 18,
+    marginBottom: 6,
+    backgroundColor: colors.dangerSoft,
+    borderRadius: 10,
+    padding: 10,
+  },
+  warnText: { fontSize: 12, color: colors.dangerText, lineHeight: 18 },
+  sparseBanner: {
+    marginHorizontal: 18,
+    marginBottom: 6,
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sparseText: { fontSize: 12, color: colors.muted, lineHeight: 18 },
+  safetyStrip: {
+    marginHorizontal: 18,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  safetyText: { fontSize: 11, color: colors.faint, lineHeight: 16 },
   messages: { flex: 1 },
   messagesContent: { paddingHorizontal: 18, paddingVertical: 12, gap: 10 },
   bubble: {
-    maxWidth: "85%",
+    maxWidth: "100%",
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    marginBottom: 8,
   },
   aiBubble: {
     alignSelf: "flex-start",
@@ -161,11 +322,20 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     alignSelf: "flex-end",
+    maxWidth: "85%",
     backgroundColor: colors.amber,
+    marginBottom: 8,
   },
+  aiBlock: { alignSelf: "flex-start", maxWidth: "85%", marginBottom: 8 },
   bubbleText: { fontSize: 13.5, lineHeight: 21, color: colors.text },
   userText: { color: colors.amberDark },
-  typingBubble: { flexDirection: "row", alignItems: "center", gap: 8 },
+  answerFootnote: {
+    fontSize: 10.5,
+    color: colors.faint,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  typingBubble: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 0 },
   typingText: { fontSize: 13, color: colors.muted },
   chipsScroll: { flexGrow: 0 },
   chips: { paddingHorizontal: 18, paddingVertical: 8, gap: 8, alignItems: "center" },
@@ -210,4 +380,28 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { opacity: 0.45 },
   sendIcon: { color: colors.amberDark, fontSize: 16, fontWeight: "700" },
+  modalBg: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    padding: 28,
+  },
+  modalCard: {
+    backgroundColor: colors.background,
+    borderRadius: 18,
+    padding: 20,
+  },
+  modalTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginBottom: 12 },
+  evidenceRow: { marginBottom: 10 },
+  evidenceLabel: { fontSize: 13.5, fontWeight: "700", color: colors.text },
+  evidenceDetail: { fontSize: 12.5, color: colors.muted, marginTop: 2, marginLeft: 10 },
+  modalNote: { fontSize: 12, color: colors.faint, marginTop: 8, lineHeight: 18 },
+  modalBtn: {
+    marginTop: 16,
+    backgroundColor: colors.amber,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  modalBtnText: { fontWeight: "700", color: colors.amberDark },
 });

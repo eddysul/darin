@@ -97,6 +97,12 @@ export function RecordDetailSheet({
         duration: duration || undefined,
         notes: notes.trim() || undefined,
         voice,
+        source: prefill?.source ?? (voice ? "voice" : "manual"),
+        rawTranscript: prefill?.rawTranscript,
+        confidence: prefill?.confidence,
+        flags: prefill?.flags,
+        createdBy: prefill?.createdBy,
+        dateKey: prefill?.dateKey,
       },
       prefill?.editId,
     );

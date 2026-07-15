@@ -435,7 +435,7 @@ EXPO_PUBLIC_TRANSCRIBE_URL=http://127.0.0.1:8000
 | `ParentProfileView.tsx` | 부모 프로필 (접기/펼치기 + Child Snapshot) |
 | `eventStore.ts` | voice note 이벤트 영구 저장 |
 | `reportStore.ts` | dailyReport 히스토리 영구 저장 |
-| `aiReportContext.ts` | AI system prompt 구성 |
+| `aiReportContext.ts` | AI system prompt 구성 |ㅇ
 | `ReportScreen.tsx` | 리포트 타임라인 + Get advice |
 | `LogScreen.tsx` | Voice Note, categorized logs, 리포트 저장 |
 | `HomeScreen.tsx` | Messages, Schedule, Active Care |
@@ -479,18 +479,30 @@ pnpm ios
 
 | 상황 | 동작 |
 |------|------|
-| 서버 미연결 | `DEMO_VOICE_TRANSCRIPT` + `demo/dailyReport.ts` fallback |
-| API 타임아웃 | 30s (`fetchWithTimeout.ts`) |
+| 서버 미연결 | 데모 성공 없음 → 재시도 / 직접 입력 CTA (임시 오디오 유지로 재분석) |
+| API 타임아웃 | 재시도 / 직접 입력 |
 | OpenAI 키 없음 | Get advice 안내 메시지 |
 
-### 영구 저장 (신규)
+### 음성 AI 기록 (2.2.x · CareLog)
 
-| 데이터 | 저장소 | 키 |
-|--------|--------|-----|
-| Voice note events | AsyncStorage / localStorage | `darin_daily_events` |
-| Daily reports | AsyncStorage / localStorage | `darin_daily_reports` |
+| 항목 | 상태 |
+|------|------|
+| 2.2.3 확인·수정·저장 | 결과 제목 「이렇게 이해했어요」, 카드별 수정/삭제, 전사 접기, `rawTranscript`+events 저장 |
+| 2.2.4 다중 이벤트 | 한 음성 → 여러 카드, 개별 삭제 후 「기록에 추가」 |
+| 2.2.5 표현·시간 | `voiceToBabyLog` 육아 사전 + `voiceTime` (방금/아까/새벽/어제/오전·오후 애매) + confidence |
+| 2.2.6 실패 UX | 한국어 에러, 재분석, 직접 입력 (메모 시트) |
+| 2.2.7 영속화·출처 | AsyncStorage `darin:baby-logs`, `source=voice`, `createdBy`, 성공 후 오디오 URI 폐기 |
 
-앱 재시작 시 `AppContext`가 `reportStore`에서 최신 리포트 복원.
+### 리포트 · 상담 · 가족 (2.4–2.6)
+
+| 항목 | 상태 |
+|------|------|
+| 2.4 리포트 실집계 | `reportAggregates` dateKey 7일, mock bars 제거, 요약 3카드(rule), empty state |
+| 2.5 상담 context pack | 배너 + `buildCareContextPack`, 질문 focus 로그, 의료 안전, chat AsyncStorage |
+| 2.6 가족 프로토타입 | `FamilyMember` 역할, 초대 모달(링크 mock), 권한 제한, timeline createdBy |
+| 2.7 영속화 | logs / diary / chat / family · `STORAGE_KEYS` · `storageReady` · dateKey 통일 |
+| 2.8 신뢰·안전 UX | 참고 정보 모달, 기록 부족 배너, 의료 위험 안내, 로컬 “판단하기 어려워요” |
+| 2.9 상태 | loading/empty/error(OpenAI key)·초대 mock 문구 |
 
 ---
 

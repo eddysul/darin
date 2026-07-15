@@ -1,25 +1,29 @@
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "../LanguageContext";
 import {
   BabyLogVoiceOverlay,
   voiceResultToLog,
+  type VoiceResult,
 } from "../components/babylog/BabyLogVoiceOverlay";
 import { BabyLogIcon, type TabIconKey } from "../components/babylog/BabyLogIcon";
 import { RecordDetailSheet, type RecordSheetPrefill } from "../components/babylog/RecordDetailSheet";
 import { useBabyLog } from "../context/BabyLogContext";
+import { getCategory, formatLogMeta } from "../constants/babyLogCategories";
 import { BabyProfileScreen } from "./BabyProfileScreen";
 import { BabyReportScreen } from "./tabs/BabyReportScreen";
 import { ConsultScreen } from "./tabs/ConsultScreen";
 import { DiaryScreen } from "./tabs/DiaryScreen";
 import { RecordScreen } from "./tabs/RecordScreen";
 import type { LogCategoryKey } from "../types/logCategory";
+import type { BabyLogCategoryId } from "../constants/babyLogCategories";
 import type { MessageKey } from "../i18n";
 import { colors, gradients } from "../theme";
+import { isCustomCategoryKey } from "../types/logCategory";
 
 const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
   Record: "tabs.record",
@@ -53,10 +57,13 @@ function MicPlaceholder() {
 function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
-  const { addLog, updateLog, deleteLog, defaultFeedingMethod, customCategories } = useBabyLog();
+  const { addLog, addLogs, updateLog, deleteLog, defaultFeedingMethod, customCategories, logAuthor } =
+    useBabyLog();
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceSheetCat, setVoiceSheetCat] = useState<LogCategoryKey | null>(null);
   const [voicePrefill, setVoicePrefill] = useState<RecordSheetPrefill | null>(null);
+  const [editingVoiceId, setEditingVoiceId] = useState<string | null>(null);
+  const [voiceEventPatch, setVoiceEventPatch] = useState<VoiceResult | null>(null);
 
   const tabs: { name: keyof MainTabParamList; center?: boolean }[] = [
     { name: "Record" },
@@ -108,24 +115,39 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         visible={voiceOpen}
         onClose={() => {
           setVoiceOpen(false);
+          setEditingVoiceId(null);
+          setVoiceEventPatch(null);
         }}
-        onConfirm={(result) => {
-          addLog(voiceResultToLog(result));
+        onConfirmAll={({ rawTranscript, events }) => {
+          addLogs(events.map((event) => voiceResultToLog(event, rawTranscript, logAuthor)));
           setVoiceOpen(false);
+          setEditingVoiceId(null);
           navigation.navigate("Record");
         }}
-        onEdit={(result) => {
-          setVoiceOpen(false);
+        onEditEvent={(event, rawTranscript) => {
+          const base = voiceResultToLog(event, rawTranscript, logAuthor);
+          setEditingVoiceId(event.id);
           setVoicePrefill({
-            ...voiceResultToLog(result),
-            chip: result.chip,
-            chip2: result.chip2,
-            amount: result.amount,
-            duration: result.duration,
+            ...base,
+            notes: event.notes ?? rawTranscript,
+            chip: event.chip,
+            chip2: event.chip2,
+            amount: event.amount,
+            duration: event.duration,
+            voice: true,
           });
-          setVoiceSheetCat(result.cat);
+          setVoiceSheetCat(event.cat);
+          // Keep voice overlay open so other cards aren't lost
+        }}
+        onManualEntry={() => {
+          setVoiceOpen(false);
+          setEditingVoiceId(null);
+          setVoicePrefill(null);
+          setVoiceSheetCat("memo");
           navigation.navigate("Record");
         }}
+        eventPatch={voiceEventPatch}
+        onEventPatchConsumed={() => setVoiceEventPatch(null)}
       />
 
       <RecordDetailSheet
@@ -137,17 +159,44 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         onClose={() => {
           setVoiceSheetCat(null);
           setVoicePrefill(null);
+          setEditingVoiceId(null);
         }}
         onSave={(entry, editId) => {
+          if (voiceOpen && editingVoiceId && !isCustomCategoryKey(entry.cat)) {
+            const cat = entry.cat as BabyLogCategoryId;
+            const meta = formatLogMeta(entry, customCategories);
+            const label = getCategory(cat).label;
+            setVoiceEventPatch({
+              id: editingVoiceId,
+              cat,
+              time: entry.time,
+              dateKey: entry.dateKey,
+              chip: entry.chip,
+              chip2: entry.chip2,
+              amount: entry.amount,
+              duration: entry.duration,
+              notes: entry.notes,
+              flags: entry.flags ?? voicePrefill?.flags,
+              confidence: entry.confidence ?? voicePrefill?.confidence ?? 0.9,
+              timeAmbiguous: false,
+              extraLabel: meta === "기록됨" ? label : `${label} · ${meta}`,
+            });
+            setVoiceSheetCat(null);
+            setVoicePrefill(null);
+            setEditingVoiceId(null);
+            return;
+          }
           if (editId) updateLog(editId, entry);
           else addLog(entry);
           setVoiceSheetCat(null);
           setVoicePrefill(null);
+          setEditingVoiceId(null);
         }}
         onDelete={(id) => {
           deleteLog(id);
           setVoiceSheetCat(null);
           setVoicePrefill(null);
+          setEditingVoiceId(null);
         }}
       />
     </>

@@ -3,6 +3,15 @@ import type { Locale } from "../i18n";
 import type { BabyLogEntry, DiaryEntry } from "../types/babyLog";
 import type { CareSetup, DefaultFeedingMethod } from "../types/careSetup";
 import { buildBabyDisplay, buildProfileContextBlock } from "./childDisplay";
+import { formatDateKey } from "./dateKey";
+import {
+  buildTodaySummary,
+  formatSleepDuration,
+  getLogsForDay,
+  weeklyTrend,
+  type DayAggregate,
+  type TodaySummary,
+} from "./reportAggregates";
 
 function feedingMethodLabel(method: DefaultFeedingMethod, locale: Locale): string {
   const ko: Record<DefaultFeedingMethod, string> = {
@@ -22,6 +31,92 @@ function feedingMethodLabel(method: DefaultFeedingMethod, locale: Locale): strin
   return locale === "ko" ? ko[method] : en[method];
 }
 
+export type QuestionFocus =
+  | "sleep"
+  | "feeding"
+  | "diaper"
+  | "health"
+  | "growth"
+  | "general";
+
+export function detectQuestionFocus(question: string): QuestionFocus {
+  const q = question.toLowerCase();
+  if (/수면|잠|낮잠|취침|깨|sleep|nap/.test(q)) return "sleep";
+  if (/수유|분유|모유|먹|젖|meal|feed|formula|breast/.test(q)) return "feeding";
+  if (/배변|기저귀|응가|쉬|소변|대변|diaper|poop|pee/.test(q)) return "diaper";
+  if (/기침|열|토|게움|호흡|탈수|증상|아프|병원|의사|fever|vomit|cough|sick/.test(q)) return "health";
+  if (/성장|몸무게|키|growth|weight/.test(q)) return "growth";
+  return "general";
+}
+
+const FOCUS_CATS: Record<QuestionFocus, string[]> = {
+  sleep: ["sleep"],
+  feeding: ["breast", "formula", "food", "snack", "pump"],
+  diaper: ["diaper"],
+  health: ["temp", "med", "doctor", "memo"],
+  growth: ["food", "formula", "breast", "memo"],
+  general: [],
+};
+
+export type CareContextPack = {
+  babyName: string;
+  babyBirthMeta: string;
+  todayLogCount: number;
+  weekLogCount: number;
+  diaryCount: number;
+  todaySummary: TodaySummary;
+  week: DayAggregate[];
+  sources: string[];
+  focus: QuestionFocus;
+};
+
+export function buildCareContextPack(input: {
+  careSetup: CareSetup;
+  logs: BabyLogEntry[];
+  diaryEntries: DiaryEntry[];
+  locale: Locale;
+  question?: string;
+}): CareContextPack {
+  const todayKey = formatDateKey();
+  const todayLogs = getLogsForDay(input.logs, todayKey, todayKey);
+  const week = weeklyTrend(input.logs);
+  const todaySummary = buildTodaySummary(input.logs);
+  const display = buildBabyDisplay(input.careSetup.child, input.locale);
+  const focus = input.question ? detectQuestionFocus(input.question) : "general";
+  const weekLogCount = week.reduce((s, d) => s + d.totalCount, 0);
+
+  const sources = [
+    input.locale === "ko" ? "아기 프로필" : "Baby profile",
+    input.locale === "ko" ? "오늘 수유/수면/배변 기록" : "Today feeding/sleep/diaper",
+    input.locale === "ko" ? "최근 7일 트렌드" : "Last 7-day trend",
+    input.locale === "ko" ? "최근 일기" : "Recent diaries",
+  ];
+  if (focus !== "general") {
+    sources.push(input.locale === "ko" ? `질문 관련 기록 (${focus})` : `Question-related logs (${focus})`);
+  }
+
+  return {
+    babyName: display.babyName,
+    babyBirthMeta: display.babyBirthMeta,
+    todayLogCount: todayLogs.length,
+    weekLogCount,
+    diaryCount: Math.min(3, input.diaryEntries.length),
+    todaySummary,
+    week,
+    sources,
+    focus,
+  };
+}
+
+function relevantLogs(logs: BabyLogEntry[], focus: QuestionFocus, todayKey: string): BabyLogEntry[] {
+  const cats = FOCUS_CATS[focus];
+  const pool =
+    focus === "general"
+      ? getLogsForDay(logs, todayKey, todayKey)
+      : logs.filter((l) => cats.includes(l.cat)).slice(-12);
+  return pool.sort((a, b) => a.time.localeCompare(b.time)).slice(-10);
+}
+
 export function buildBabyLogConsultPrompt(input: {
   careSetup: CareSetup;
   logs: BabyLogEntry[];
@@ -30,76 +125,104 @@ export function buildBabyLogConsultPrompt(input: {
   diaperCount: number;
   sleepMinutes: number;
   locale: Locale;
+  question?: string;
 }): string {
   const isKo = input.locale === "ko";
-  const langInstruction = isKo
-    ? "Always respond in Korean (한국어로만 답변하세요)."
-    : "Always respond in English.";
-
-  const display = buildBabyDisplay(input.careSetup.child, input.locale);
+  const pack = buildCareContextPack(input);
+  const todayKey = formatDateKey();
   const profileBlock = buildProfileContextBlock(
     input.careSetup.parent,
     input.careSetup.child,
     input.locale,
   );
 
-  const sleepStr =
-    input.sleepMinutes > 0
-      ? isKo
-        ? `${Math.floor(input.sleepMinutes / 60)}시간 ${input.sleepMinutes % 60}분`
-        : `${Math.floor(input.sleepMinutes / 60)}h ${input.sleepMinutes % 60}m`
-      : isKo
-        ? "기록 없음"
-        : "no data";
+  const safety = isKo
+    ? `\n[의료 안전]
+고열, 호흡곤란, 반복 구토, 탈수 의심, 처짐이 있으면 소아과나 응급 진료를 권하세요.
+의학적 진단처럼 말하지 마세요. 기록에 근거해 답하고, 확실하지 않으면 모른다고 말하세요.
+답변 끝에 짧게 "최근 기록 기준"임을 밝혀도 좋습니다.`
+    : `\n[SAFETY]
+If there are signs of high fever, breathing difficulty, repeated vomiting, dehydration, or lethargy, advise pediatric/ER care.
+Do not make medical diagnoses. Ground answers in logged data; say when unsure.
+You may note answers are based on recent logs.`;
 
-  const logLines = input.logs
-    .slice()
-    .sort((a, b) => a.time.localeCompare(b.time))
-    .map((entry) => {
-      const meta = formatLogMeta(entry);
-      return `  - ${entry.time} · ${meta}${entry.voice ? " (voice)" : ""}`;
-    })
+  const langInstruction = isKo
+    ? "Always respond in Korean (한국어로만 답변하세요)."
+    : "Always respond in English.";
+
+  const prefs = isKo
+    ? `기본 수유 방식: ${feedingMethodLabel(input.careSetup.preferences.defaultFeedingMethod, "ko")}`
+    : `Default feeding: ${feedingMethodLabel(input.careSetup.preferences.defaultFeedingMethod, "en")}`;
+
+  const s = pack.todaySummary;
+  const todayBlock = isKo
+    ? `[오늘 요약 — 최근 기록 기준]
+- 수유 ${s.feedCount}회 · 수면 ${s.sleepCount}회(${formatSleepDuration(s.totalSleepMinutes)}) · 배변 ${s.diaperCount}회
+- 전체 기록 ${s.totalCount}건`
+    : `[TODAY SUMMARY]
+- Feed ${s.feedCount} · Sleep ${s.sleepCount} (${formatSleepDuration(s.totalSleepMinutes)}) · Diaper ${s.diaperCount}
+- Total events ${s.totalCount}`;
+
+  const weekLines = pack.week
+    .map(
+      (d) =>
+        `  - ${d.dateKey} (${d.label}): feed ${d.feedingCount}, sleep ${d.sleepMinutes}m, diaper ${d.diaperCount}`,
+    )
     .join("\n");
+
+  const weekBlock = isKo
+    ? `[최근 7일 트렌드]\n${weekLines || "  (데이터 없음)"}`
+    : `[LAST 7 DAYS]\n${weekLines || "  (no data)"}`;
+
+  const focusLogs = relevantLogs(input.logs, pack.focus, todayKey);
+  const focusLines = focusLogs
+    .map((e) => `  - ${e.dateKey ?? todayKey} ${e.time} · ${formatLogMeta(e)}${e.voice ? " (voice)" : ""}`)
+    .join("\n");
+
+  const focusBlock =
+    pack.focus === "general"
+      ? isKo
+        ? `[오늘 상세 기록]\n${focusLines || "  (없음)"}`
+        : `[TODAY DETAILS]\n${focusLines || "  (none)"}`
+      : isKo
+        ? `[질문 관련 기록 · focus=${pack.focus}]\n${focusLines || "  (관련 기록 부족 — 판단이 어려울 수 있음)"}`
+        : `[RELEVANT LOGS · focus=${pack.focus}]\n${focusLines || "  (sparse — may be hard to judge)"}`;
 
   const diaryLines = input.diaryEntries
     .slice(0, 3)
     .map((d) => `  - ${d.date}: ${d.comment}`)
     .join("\n");
-
-  const base = `You are Darin AI, a friendly childcare advisor in the Darin CareLog app.
-You help parents understand their baby's daily care logs and give practical, reassuring advice.
-Keep responses concise (2-4 sentences). ${langInstruction}
-Do not invent medical diagnoses. Distinguish profile/setup context from today's actual care events.`;
-
-  const prefsBlock = isKo
-    ? `\n[돌봄 선호 — 프로필 설정]
-기본 수유 방식: ${feedingMethodLabel(input.careSetup.preferences.defaultFeedingMethod, "ko")}`
-    : `\n[CARE PREFERENCES — profile setup]
-Default feeding method: ${feedingMethodLabel(input.careSetup.preferences.defaultFeedingMethod, "en")}`;
-
-  const todayBlock = isKo
-    ? `\n[오늘의 실제 기록 요약]
-- 수유/식사: ${input.feedCount}회
-- 기저귀: ${input.diaperCount}회
-- 수면: ${sleepStr}`
-    : `\n[TODAY'S ACTUAL CARE EVENTS SUMMARY]
-- Feeds/meals: ${input.feedCount}
-- Diapers: ${input.diaperCount}
-- Sleep: ${sleepStr}`;
-
-  const logsBlock = logLines
-    ? isKo
-      ? `\n오늘의 상세 기록 (시간순, 실제 이벤트):\n${logLines}`
-      : `\nToday's detailed log (chronological, actual events):\n${logLines}`
-    : isKo
-      ? "\n오늘의 상세 기록이 아직 없습니다."
-      : "\nNo detailed logs recorded today yet.";
-
   const diaryBlock = diaryLines
     ? isKo
-      ? `\n최근 일기 메모:\n${diaryLines}`
-      : `\nRecent diary notes:\n${diaryLines}`
-    : "";
+      ? `[최근 일기 3개]\n${diaryLines}`
+      : `[RECENT DIARIES]\n${diaryLines}`
+    : isKo
+      ? "[최근 일기] 없음"
+      : "[DIARIES] none";
 
-  return `${base}\n\n${profileBlock}\nBaby display: ${display.babyName} · ${display.babyBirthMeta}${prefsBlock}${todayBlock}${logsBlock}${diaryBlock}`;
+  const sparseNote =
+    s.totalCount === 0 || pack.weekLogCount < 3
+      ? isKo
+        ? "\n기록이 부족하면 확정적으로 말하지 말고 '판단하기 어려워요'라고 하세요."
+        : "\nIf logs are sparse, say it is hard to judge confidently."
+      : "";
+
+  const base = `You are Darin AI, a childcare advisor in Darin CareLog.
+Keep answers concise (2-4 sentences). ${langInstruction}
+Use ONLY the context pack below — do not invent events.${sparseNote}`;
+
+  return `${base}
+${safety}
+
+${profileBlock}
+Display: ${pack.babyName} · ${pack.babyBirthMeta}
+${prefs}
+
+${todayBlock}
+
+${weekBlock}
+
+${focusBlock}
+
+${diaryBlock}`;
 }

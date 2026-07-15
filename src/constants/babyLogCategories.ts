@@ -60,6 +60,7 @@ export function getCategory(id: BabyLogCategoryId): BabyLogCategory {
   return cat;
 }
 
+/** Demo-only historical stubs — report UI no longer reads these. */
 export const CAT_HISTORY: Record<BabyLogCategoryId, number[]> = {
   breast: [3, 4, 3, 4, 4, 3],
   formula: [3, 3, 4, 3, 4, 4],
@@ -77,6 +78,7 @@ export const CAT_HISTORY: Record<BabyLogCategoryId, number[]> = {
   memo: [1, 0, 1, 1, 0, 1],
 };
 
+/** @deprecated use weekdayLabelKo / weeklyTrend dateKeys */
 export const HISTORY_DAYS = ["월", "화", "수", "목", "금", "토"];
 
 // Re-export formatting helpers for backward compatibility.
