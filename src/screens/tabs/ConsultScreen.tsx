@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,6 +15,7 @@ import { AppHeader } from "../../components/babylog/AppHeader";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { useLanguage } from "../../LanguageContext";
 import { buildBabyLogConsultPrompt, buildCareContextPack } from "../../utils/babyLogAIContext";
+import { EmptyState, ErrorState, LoadingState } from "../../components/states/FeedbackStates";
 import { colors } from "../../theme";
 
 const QUICK_CHIPS = [
@@ -36,9 +36,6 @@ export function ConsultScreen({ onOpenProfile }: Props) {
     careSetup,
     logs,
     diaryEntries,
-    feedCount,
-    diaperCount,
-    sleepMinutes,
     chatHistory,
     pushChat,
     babyName,
@@ -47,6 +44,7 @@ export function ConsultScreen({ onOpenProfile }: Props) {
   const { locale, t } = useLanguage();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [bannerOpen, setBannerOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const historyRef = useRef<OpenAIMessage[]>([]);
@@ -88,15 +86,13 @@ export function ConsultScreen({ onOpenProfile }: Props) {
     historyRef.current = [...historyRef.current, { role: "user", content: trimmed }];
     setInput("");
     setIsTyping(true);
+    setAiError(null);
     scrollRef.current?.scrollToEnd({ animated: true });
 
     const prompt = buildBabyLogConsultPrompt({
       careSetup,
       logs,
       diaryEntries,
-      feedCount,
-      diaperCount,
-      sleepMinutes,
       locale,
       question: trimmed,
     });
@@ -110,6 +106,7 @@ export function ConsultScreen({ onOpenProfile }: Props) {
         error instanceof OpenAIChatError && error.code === "missing_api_key"
           ? t("aiChat.noApiKey")
           : t("aiChat.error");
+      setAiError(message);
       pushChat("ai", message);
     } finally {
       setIsTyping(false);
@@ -122,8 +119,7 @@ export function ConsultScreen({ onOpenProfile }: Props) {
       <View style={styles.root}>
         <AppHeader onOpenProfile={onOpenProfile} />
         <View style={styles.loadingBox}>
-          <ActivityIndicator color={colors.amber} />
-          <Text style={styles.loadingText}>상담 기록을 불러오는 중…</Text>
+          <LoadingState label="상담 기록을 불러오는 중…" />
         </View>
       </View>
     );
@@ -176,6 +172,12 @@ export function ConsultScreen({ onOpenProfile }: Props) {
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
         keyboardShouldPersistTaps="handled"
       >
+        {chatHistory.length <= 1 ? (
+          <EmptyState
+            title="아직 상담 기록이 없어요."
+            body="아래 퀵질문으로 첫 상담을 시작해 보세요."
+          />
+        ) : null}
         {chatHistory.map((m) =>
           m.role === "user" ? (
             <View key={m.id} style={[styles.bubble, styles.userBubble]}>
@@ -192,12 +194,22 @@ export function ConsultScreen({ onOpenProfile }: Props) {
         )}
         {isTyping && (
           <View style={styles.aiBlock}>
-            <View style={[styles.bubble, styles.aiBubble, styles.typingBubble]}>
-              <ActivityIndicator size="small" color={colors.amber} />
-              <Text style={styles.typingText}>답변 작성 중...</Text>
-            </View>
+            <LoadingState label="AI 분석 중…" />
           </View>
         )}
+        {aiError && !isTyping ? (
+          <View style={{ marginTop: 8 }}>
+            <ErrorState
+              title="잠시 문제가 생겼어요."
+              body={aiError}
+              onRetry={() => {
+                const lastUser = [...chatHistory].reverse().find((m) => m.role === "user");
+                if (lastUser) void send(lastUser.text);
+              }}
+              busy={isTyping}
+            />
+          </View>
+        ) : null}
       </ScrollView>
 
       <ScrollView
@@ -266,7 +278,6 @@ function EvidenceRow({ label, detail }: { label: string; detail: string }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   loadingBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  loadingText: { fontSize: 13, color: colors.muted },
   banner: {
     marginHorizontal: 18,
     marginTop: 4,
@@ -335,8 +346,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginLeft: 4,
   },
-  typingBubble: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 0 },
-  typingText: { fontSize: 13, color: colors.muted },
   chipsScroll: { flexGrow: 0 },
   chips: { paddingHorizontal: 18, paddingVertical: 8, gap: 8, alignItems: "center" },
   chip: {

@@ -51,6 +51,7 @@ const ERROR_KEYS: Record<string, MessageKey> = {
 };
 
 const LOW_CONFIDENCE = 0.55;
+const DEMO_PHRASES = ["분유 120 먹었어", "응가했어 노란색", "낮잠 40분 잤어"] as const;
 
 function formatDuration(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -200,6 +201,17 @@ export function BabyLogVoiceOverlay({
     void retryTranscribe();
   };
 
+  const runDemoPhrase = (phrase: string) => {
+    void cancelRecording();
+    clearSavedNote();
+    clearRecordingError();
+    const session = buildVoiceSession(phrase);
+    setRawTranscript(session.rawTranscript);
+    setEvents(session.events);
+    setTranscriptOpen(true);
+    setStage("result");
+  };
+
   const handleRemove = (id: string) => {
     setEvents((prev) => prev.filter((e) => e.id !== id));
   };
@@ -239,6 +251,14 @@ export function BabyLogVoiceOverlay({
               <Pressable style={[styles.btn, styles.btnPrimary, styles.stopBtn]} onPress={() => void stopAndSave()}>
                 <Text style={styles.btnPrimaryText}>{t("voice.stop")}</Text>
               </Pressable>
+              <Text style={styles.demoTitle}>AI 연동 전 데모 문장</Text>
+              <View style={styles.demoPhrases}>
+                {DEMO_PHRASES.map((phrase) => (
+                  <Pressable key={phrase} style={styles.demoPhrase} onPress={() => runDemoPhrase(phrase)}>
+                    <Text style={styles.demoPhraseText}>“{phrase}”</Text>
+                  </Pressable>
+                ))}
+              </View>
             </>
           )}
 
@@ -448,6 +468,23 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   hint: { fontSize: 13, color: "#A39E96", textAlign: "center", marginBottom: 20 },
+  demoTitle: {
+    marginTop: 18,
+    marginBottom: 9,
+    color: "#A39E96",
+    fontSize: 11.5,
+    fontWeight: "700",
+  },
+  demoPhrases: { width: "100%", gap: 7 },
+  demoPhrase: {
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  demoPhraseText: { color: "#FEF7F2", fontSize: 13, textAlign: "center", fontWeight: "600" },
   analyzingText: { color: "#D8D2CB", fontSize: 14, textAlign: "center", lineHeight: 22, paddingHorizontal: 8 },
   errorText: { fontSize: 14, color: "#D8D2CB", textAlign: "center", lineHeight: 22, marginBottom: 10 },
   errorHint: { fontSize: 12.5, color: "#A39E96", textAlign: "center", lineHeight: 20, marginBottom: 18 },

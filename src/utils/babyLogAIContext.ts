@@ -113,17 +113,20 @@ function relevantLogs(logs: BabyLogEntry[], focus: QuestionFocus, todayKey: stri
   const pool =
     focus === "general"
       ? getLogsForDay(logs, todayKey, todayKey)
-      : logs.filter((l) => cats.includes(l.cat)).slice(-12);
-  return pool.sort((a, b) => a.time.localeCompare(b.time)).slice(-10);
+      : logs.filter((l) => cats.includes(l.cat));
+  return [...pool]
+    .sort((a, b) =>
+      `${a.dateKey ?? todayKey}T${a.time}`.localeCompare(
+        `${b.dateKey ?? todayKey}T${b.time}`,
+      ),
+    )
+    .slice(-10);
 }
 
 export function buildBabyLogConsultPrompt(input: {
   careSetup: CareSetup;
   logs: BabyLogEntry[];
   diaryEntries: DiaryEntry[];
-  feedCount: number;
-  diaperCount: number;
-  sleepMinutes: number;
   locale: Locale;
   question?: string;
 }): string {
@@ -190,7 +193,12 @@ You may note answers are based on recent logs.`;
 
   const diaryLines = input.diaryEntries
     .slice(0, 3)
-    .map((d) => `  - ${d.date}: ${d.comment}`)
+    .map((d) => {
+      const snapshot = d.careLogSummarySnapshot
+        ? ` [${isKo ? "육아 기록" : "Care Log"}: ${d.careLogSummarySnapshot}]`
+        : "";
+      return `  - ${d.date}: ${d.comment}${snapshot}`;
+    })
     .join("\n");
   const diaryBlock = diaryLines
     ? isKo

@@ -14,13 +14,21 @@ function isMember(item: unknown): item is FamilyMember {
   return typeof m.id === "string" && typeof m.name === "string" && typeof m.role === "string";
 }
 
+function normalizeMembers(raw: unknown): FamilyMember[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isMember).map((m) => ({
+    ...m,
+    status: m.status === "pending" || m.status === "inactive" ? m.status : "active",
+  }));
+}
+
 export async function hydrateFamilyMembers(): Promise<void> {
   if (hydrated) return;
   if (!hydratePromise) {
     hydratePromise = (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        memory = raw ? (JSON.parse(raw) as unknown[]).filter(isMember) : null;
+        memory = raw ? normalizeMembers(JSON.parse(raw)) : null;
       } catch {
         memory = null;
       }

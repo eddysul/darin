@@ -1,0 +1,95 @@
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, radius } from "../../theme";
+
+type EmptyProps = {
+  title: string;
+  body?: string;
+  ctaLabel?: string;
+  onPressCta?: () => void;
+};
+
+export function EmptyState({ title, body, ctaLabel, onPressCta }: EmptyProps) {
+  return (
+    <View style={styles.box}>
+      <Text style={styles.title}>{title}</Text>
+      {body ? <Text style={styles.body}>{body}</Text> : null}
+      {ctaLabel && onPressCta ? (
+        <Pressable style={styles.cta} onPress={onPressCta}>
+          <Text style={styles.ctaText}>{ctaLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+type ErrorProps = {
+  title?: string;
+  body?: string;
+  retryLabel?: string;
+  onRetry?: () => void;
+  busy?: boolean;
+};
+
+export function ErrorState({
+  title = "잠시 문제가 생겼어요.",
+  body = "다시 시도해주세요.",
+  retryLabel = "다시 시도",
+  onRetry,
+  busy,
+}: ErrorProps) {
+  return (
+    <View style={[styles.box, styles.errorBox]}>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.body}>{body}</Text>
+      {onRetry ? (
+        <Pressable style={[styles.cta, busy && styles.disabled]} onPress={onRetry} disabled={busy}>
+          <Text style={styles.ctaText}>{busy ? "처리 중…" : retryLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+type LoadingProps = {
+  label?: string;
+};
+
+export function LoadingState({ label = "불러오는 중…" }: LoadingProps) {
+  return (
+    <View style={styles.box}>
+      <ActivityIndicator color={colors.amber} />
+      <Text style={[styles.body, { marginTop: 10 }]}>{label}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  box: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 28,
+    paddingHorizontal: 18,
+    borderRadius: radius.lg,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  errorBox: { backgroundColor: "#FFF8F3", borderColor: "rgba(232,145,138,0.35)" },
+  title: { fontSize: 14, fontWeight: "800", color: colors.text, textAlign: "center" },
+  body: {
+    marginTop: 8,
+    fontSize: 13,
+    color: colors.faint,
+    textAlign: "center",
+    lineHeight: 19,
+  },
+  cta: {
+    marginTop: 14,
+    backgroundColor: colors.amber,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  ctaText: { color: colors.amberDark, fontWeight: "700", fontSize: 13 },
+  disabled: { opacity: 0.5 },
+});

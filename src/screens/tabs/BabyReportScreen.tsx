@@ -14,7 +14,8 @@ import {
   toBarPercent,
   weeklyTrend,
 } from "../../utils/reportAggregates";
-import { colors, radius } from "../../theme";
+import { EmptyState } from "../../components/states/FeedbackStates";
+import { colors } from "../../theme";
 
 type Props = {
   onOpenProfile: () => void;
@@ -64,7 +65,7 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
         {reportCat === "all" ? (
           <View style={styles.pad}>
             <SummaryCard
-              tag="AI 오늘의 요약"
+              tag="기록 요약"
               text={cards.overview}
               icon={<BabyLogIcon kind="sparkles" size={12} color={colors.amber} strokeWidth={2.2} />}
             />
@@ -72,10 +73,10 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
             <SummaryCard tag="다음에 체크할 것" text={cards.checklist} />
 
             {summary.totalCount === 0 && (
-              <View style={styles.emptyBox}>
-                <Text style={styles.emptyTitle}>아직 오늘 기록이 없어요</Text>
-                <Text style={styles.empty}>수유, 수면, 배변을 기록하면 한눈에 요약해드릴게요.</Text>
-              </View>
+              <EmptyState
+                title="아직 오늘 기록이 없어요."
+                body="수유, 수면, 배변을 기록하면 한눈에 요약해드릴게요."
+              />
             )}
 
             <View style={styles.insightGrid}>
@@ -98,7 +99,10 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
 
             <Text style={styles.chartTitle}>이번 주 한눈에 보기</Text>
             {!weekHasData ? (
-              <Text style={styles.empty}>최근 7일 기록이 없어요. 기록을 남기면 추세가 보여요.</Text>
+              <EmptyState
+                title="최근 7일 기록이 없어요."
+                body="기록을 남기면 주간 트렌드가 보여요."
+              />
             ) : (
               <>
                 {week.map((d) => (
@@ -370,21 +374,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     paddingVertical: 8,
     lineHeight: 18,
-  },
-  emptyBox: {
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: radius.md,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  emptyTitle: {
-    textAlign: "center",
-    fontSize: 13.5,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 4,
   },
   insightGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20, marginTop: 8 },
   insightCard: {

@@ -1,30 +1,22 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { CustomCategoryTemplate } from "../constants/customCategoryTemplates";
 import type { CustomCategory } from "../types/logCategory";
-import type { FrequentShortcutId } from "../constants/frequentShortcuts";
 import { useApp } from "./AppContext";
-import type { BabyLogActor, BabyLogEntry, CaregiverMember, ChatMessage, DiaryEntry } from "../types/babyLog";
+import type { BabyLogActor, BabyLogEntry, ChatMessage, DiaryEntry } from "../types/babyLog";
 import type { CareSetup, DefaultFeedingMethod } from "../types/careSetup";
 import type { FamilyMember, FamilyRole } from "../types/family";
-import { FAMILY_ROLE_LABELS } from "../types/family";
+import type { QuickRecord } from "../types/quickRecord";
 import { buildBabyDisplay } from "../utils/childDisplay";
 import {
   getCustomCategories,
   hydrateCustomCategories,
-  saveCustomCategories,
 } from "../utils/customCategoriesStore";
-import {
-  getFrequentShortcuts,
-  hydrateFrequentShortcuts,
-  saveFrequentShortcuts,
-} from "../utils/frequentShortcutsStore";
+import { getQuickRecords, hydrateQuickRecords, saveQuickRecords } from "../utils/quickRecordsStore";
 import { getBabyLogs, hydrateBabyLogs, saveBabyLogs } from "../utils/babyLogsStore";
 import { getDiaryEntries, hydrateDiaryEntries, saveDiaryEntries } from "../utils/diaryStore";
 import { getChatHistory, hydrateChatHistory, saveChatHistory } from "../utils/chatHistoryStore";
 import { getFamilyMembers, hydrateFamilyMembers, saveFamilyMembers } from "../utils/familyMembersStore";
 import { createId } from "../utils/id";
 import { formatDateKey, shiftDateKey } from "../utils/dateKey";
-import { getLogsForDay } from "../utils/reportAggregates";
 import { actorFromFamily } from "../utils/logProvenance";
 import type { BabyLogSource } from "../types/babyLog";
 
@@ -37,6 +29,82 @@ function migrateActorRole(role: string): FamilyRole {
   }
   return "editor";
 }
+
+function isoDaysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString();
+}
+
+function displayDateDaysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${weekdays[d.getDay()]})`;
+}
+
+const SEED_DIARY: DiaryEntry[] = [
+  {
+    id: "d1",
+    babyId: "baby-1",
+    date: displayDateDaysAgo(12),
+    dateKey: shiftDateKey(12),
+    photos: [],
+    comment: "오늘 처음으로 욕조 목욕을 했는데 물을 튀기면서 엄청 좋아했어요. 목욕 후에 바로 잠들었네요.",
+    weatherStamp: "sun",
+    moodStamp: "love",
+    careLogSummarySnapshot: "오늘은 수유 6회, 수면 4시간 20분, 기저귀 5회가 기록되었어요. 추가로 목욕도 했어요.",
+    momentSuggestionsUsed: [],
+    milestoneTag: "첫 목욕",
+    customMilestoneTag: null,
+    includedInGrowthBook: false,
+    createdAt: isoDaysAgo(12),
+    updatedAt: isoDaysAgo(12),
+    source: "manual",
+    draftStatus: "saved",
+    createdBy: { userId: "m1", name: "김민지", role: "owner" },
+  },
+  {
+    id: "d2",
+    babyId: "baby-1",
+    date: displayDateDaysAgo(14),
+    dateKey: shiftDateKey(14),
+    photos: [],
+    comment: '낮에 옹알이가 부쩍 늘었어요. "아부부" 소리를 계속 내면서 웃는 모습이 너무 사랑스러웠던 하루.',
+    weatherStamp: "cloud",
+    moodStamp: "calm",
+    careLogSummarySnapshot: "오늘은 수유 5회, 수면 3시간 10분, 기저귀 4회가 기록되었어요.",
+    momentSuggestionsUsed: [],
+    milestoneTag: null,
+    customMilestoneTag: null,
+    includedInGrowthBook: true,
+    createdAt: isoDaysAgo(14),
+    updatedAt: isoDaysAgo(14),
+    source: "manual",
+    draftStatus: "saved",
+    createdBy: { userId: "m1", name: "김민지", role: "owner" },
+  },
+  {
+    id: "d3",
+    babyId: "baby-1",
+    date: displayDateDaysAgo(16),
+    dateKey: shiftDateKey(16),
+    photos: [],
+    comment: "낮잠이 짧아서 저녁에 보챔이 있었어요. 수유 간격은 괜찮은 편이었습니다. 뒤집기를 처음 성공한 날!",
+    weatherStamp: "rain",
+    moodStamp: "tired",
+    careLogSummarySnapshot: "오늘은 수유 4회, 수면 2시간 40분, 기저귀 3회가 기록되었어요. 추가로 터미타임도 했어요.",
+    momentSuggestionsUsed: [],
+    milestoneTag: "처음 뒤집은 날",
+    customMilestoneTag: null,
+    includedInGrowthBook: true,
+    createdAt: isoDaysAgo(16),
+    updatedAt: isoDaysAgo(16),
+    source: "manual",
+    draftStatus: "saved",
+    createdBy: { userId: "m2", name: "이준호", role: "admin" },
+  },
+];
 
 function seedLogs(): Omit<BabyLogEntry, "id">[] {
   const d = (ago: number) => shiftDateKey(ago);
@@ -74,27 +142,6 @@ function seedLogs(): Omit<BabyLogEntry, "id">[] {
   ];
 }
 
-const SEED_DIARY: DiaryEntry[] = [
-  {
-    id: "d1",
-    date: "7월 5일 (일)",
-    emoji: "🛁",
-    comment: "오늘 처음으로 욕조 목욕을 했는데 물을 튀기면서 엄청 좋아했어요. 목욕 후에 바로 잠들었네요.",
-  },
-  {
-    id: "d2",
-    date: "7월 3일 (금)",
-    emoji: "😊",
-    comment: '낮에 옹알이가 부쩍 늘었어요. "아부부" 소리를 계속 내면서 웃는 모습이 너무 사랑스러웠던 하루.',
-  },
-  {
-    id: "d3",
-    date: "7월 1일 (수)",
-    emoji: "😴",
-    comment: "낮잠이 짧아서 저녁에 보챔이 있었어요. 수유 간격은 괜찮은 편이었습니다.",
-  },
-];
-
 const SEED_FAMILY: FamilyMember[] = [
   { id: "m1", emoji: "👩", name: "김민지", role: "owner", status: "active", isMe: true },
   { id: "m2", emoji: "👨", name: "이준호", role: "admin", status: "active", contact: "junho@example.com" },
@@ -107,17 +154,6 @@ const DEFAULT_GREETING: ChatMessage = {
   text: "안녕하세요! 기록을 참고해 답할게요. 무엇이든 편하게 물어보세요.",
 };
 
-function toCaregiverMember(m: FamilyMember): CaregiverMember {
-  return {
-    id: m.id,
-    emoji: m.emoji ?? "👤",
-    name: m.name,
-    role: FAMILY_ROLE_LABELS[m.role],
-    badge: m.isMe ? "나" : m.status === "pending" ? "초대중" : "공유중",
-    isMe: m.isMe,
-  };
-}
-
 type BabyLogContextValue = {
   careSetup: CareSetup;
   babyName: string;
@@ -126,31 +162,30 @@ type BabyLogContextValue = {
   babyBirthMeta: string;
   defaultFeedingMethod: DefaultFeedingMethod;
   customCategories: CustomCategory[];
-  upsertCustomCategory: (category: CustomCategory) => CustomCategory;
-  addCustomFromTemplate: (template: CustomCategoryTemplate) => CustomCategory;
-  addCustomByLabel: (label: string) => CustomCategory;
-  frequentShortcuts: FrequentShortcutId[];
-  setFrequentShortcuts: (shortcuts: FrequentShortcutId[]) => void;
+  quickRecords: QuickRecord[];
+  setQuickRecords: (records: QuickRecord[]) => void;
   logs: BabyLogEntry[];
   diaryEntries: DiaryEntry[];
-  caregivers: CaregiverMember[];
   familyMembers: FamilyMember[];
   myFamilyRole: FamilyRole;
   inviteFamilyMember: (draft: { name: string; role: FamilyRole; contact: string }) => FamilyMember;
   updateFamilyMemberRole: (id: string, role: FamilyRole) => void;
+  acceptFamilyInvite: (id: string) => void;
+  setFamilyMemberStatus: (id: string, status: FamilyMember["status"]) => void;
+  removeFamilyMember: (id: string) => void;
   chatHistory: ChatMessage[];
   profileOpen: boolean;
   setProfileOpen: (open: boolean) => void;
-  addLog: (entry: Omit<BabyLogEntry, "id">) => void;
+  addLog: (entry: Omit<BabyLogEntry, "id">) => BabyLogEntry;
   addLogs: (entries: Omit<BabyLogEntry, "id">[]) => void;
   updateLog: (id: string, entry: Omit<BabyLogEntry, "id">) => void;
   deleteLog: (id: string) => void;
   logAuthor: BabyLogActor;
-  addDiary: (entry: Omit<DiaryEntry, "id">) => void;
+  addDiary: (entry: Omit<DiaryEntry, "id" | "createdAt" | "updatedAt"> & { createdAt?: string; updatedAt?: string }) => void;
+  updateDiary: (id: string, patch: Partial<Omit<DiaryEntry, "id">>) => void;
+  deleteDiary: (id: string) => void;
+  toggleDiaryInGrowthBook: (id: string) => void;
   pushChat: (role: "user" | "ai", text: string) => void;
-  feedCount: number;
-  diaperCount: number;
-  sleepMinutes: number;
   /** True after AsyncStorage hydrate finishes (2.7). */
   storageReady: boolean;
 };
@@ -169,22 +204,22 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const [chatHydrated, setChatHydrated] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [frequentShortcuts, setFrequentShortcutsState] = useState<FrequentShortcutId[]>(getFrequentShortcuts);
   const [customCategories, setCustomCategoriesState] = useState<CustomCategory[]>(getCustomCategories);
+  const [quickRecords, setQuickRecordsState] = useState<QuickRecord[]>(getQuickRecords);
 
   useEffect(() => {
     void Promise.all([
-      hydrateFrequentShortcuts(),
       hydrateCustomCategories(),
+      hydrateQuickRecords(),
       hydrateBabyLogs(),
       hydrateDiaryEntries(),
       hydrateChatHistory(),
       hydrateFamilyMembers(),
     ]).then(() => {
-      setFrequentShortcutsState(getFrequentShortcuts());
       setCustomCategoriesState(getCustomCategories());
+      setQuickRecordsState(getQuickRecords());
       const storedLogs = getBabyLogs();
-      if (storedLogs && storedLogs.length > 0) {
+      if (storedLogs !== null) {
         const today = formatDateKey();
         setLogs(
           storedLogs.map((l) => ({
@@ -202,13 +237,15 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       }
       setLogsHydrated(true);
       const storedDiary = getDiaryEntries();
-      if (storedDiary && storedDiary.length > 0) setDiaryEntries(storedDiary);
+      if (storedDiary !== null) {
+        setDiaryEntries(storedDiary);
+      }
       setDiaryHydrated(true);
       const storedChat = getChatHistory();
-      if (storedChat && storedChat.length > 0) setChatHistory(storedChat);
+      if (storedChat !== null) setChatHistory(storedChat);
       setChatHydrated(true);
       const storedFamily = getFamilyMembers();
-      if (storedFamily && storedFamily.length > 0) setFamilyMembers(storedFamily);
+      if (storedFamily !== null) setFamilyMembers(storedFamily);
       setFamilyHydrated(true);
       setStorageReady(true);
     });
@@ -243,53 +280,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     return { userId: "local-me", name, role: "owner" };
   }, [careSetup.parent.parentName, me]);
 
-  const caregivers = useMemo(() => familyMembers.map(toCaregiverMember), [familyMembers]);
-
-  const setFrequentShortcuts = useCallback((shortcuts: FrequentShortcutId[]) => {
-    setFrequentShortcutsState(shortcuts);
-    void saveFrequentShortcuts(shortcuts);
+  const setQuickRecords = useCallback((records: QuickRecord[]) => {
+    setQuickRecordsState(records);
+    void saveQuickRecords(records);
   }, []);
-
-  const upsertCustomCategory = useCallback((category: CustomCategory) => {
-    setCustomCategoriesState((prev) => {
-      const exists = prev.some((c) => c.id === category.id);
-      const next = exists ? prev.map((c) => (c.id === category.id ? category : c)) : [...prev, category];
-      void saveCustomCategories(next);
-      return next;
-    });
-    return category;
-  }, []);
-
-  const addCustomFromTemplate = useCallback(
-    (template: CustomCategoryTemplate): CustomCategory => {
-      const existing = customCategories.find((c) => c.templateId === template.templateId);
-      if (existing) return existing;
-      const category: CustomCategory = {
-        id: createId(),
-        label: template.label,
-        color: template.color,
-        templateId: template.templateId,
-        chips: template.chips,
-        duration: template.duration,
-        amount: template.amount,
-      };
-      upsertCustomCategory(category);
-      return category;
-    },
-    [customCategories, upsertCustomCategory],
-  );
-
-  const addCustomByLabel = useCallback(
-    (label: string): CustomCategory => {
-      const trimmed = label.trim();
-      const existing = customCategories.find((c) => c.label === trimmed && !c.templateId);
-      if (existing) return existing;
-      const category: CustomCategory = { id: createId(), label: trimmed, color: "#9096a6" };
-      upsertCustomCategory(category);
-      return category;
-    },
-    [customCategories, upsertCustomCategory],
-  );
 
   const locale = careSetup.parent.preferredLanguage;
   const display = useMemo(() => buildBabyDisplay(careSetup.child, locale), [careSetup.child, locale]);
@@ -312,7 +306,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   const addLog = useCallback(
     (entry: Omit<BabyLogEntry, "id">) => {
-      setLogs((prev) => [...prev, normalizeEntry(entry)]);
+      const next = normalizeEntry(entry);
+      setLogs((prev) => [...prev, next]);
+      return next;
     },
     [normalizeEntry],
   );
@@ -345,8 +341,53 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setLogs((prev) => prev.filter((l) => l.id !== id));
   }, []);
 
-  const addDiary = useCallback((entry: Omit<DiaryEntry, "id">) => {
-    setDiaryEntries((prev) => [{ ...entry, id: createId() }, ...prev]);
+  const addDiary = useCallback(
+    (entry: Omit<DiaryEntry, "id" | "createdAt" | "updatedAt"> & { createdAt?: string; updatedAt?: string }) => {
+      const now = new Date().toISOString();
+      setDiaryEntries((prev) => [
+        {
+          ...entry,
+          id: createId(),
+          babyId: entry.babyId || "baby-1",
+          dateKey: entry.dateKey || formatDateKey(),
+          photos: entry.photos ?? [],
+          includedInGrowthBook: entry.includedInGrowthBook ?? false,
+          momentSuggestionsUsed: entry.momentSuggestionsUsed ?? [],
+          weatherStamp: entry.weatherStamp ?? null,
+          moodStamp: entry.moodStamp ?? null,
+          milestoneTag: entry.milestoneTag ?? null,
+          customMilestoneTag: entry.customMilestoneTag ?? null,
+          careLogSummarySnapshot: entry.careLogSummarySnapshot ?? "",
+          source: entry.source ?? "manual",
+          draftStatus: "saved",
+          createdAt: entry.createdAt ?? now,
+          updatedAt: entry.updatedAt ?? now,
+        },
+        ...prev,
+      ]);
+    },
+    [],
+  );
+
+  const updateDiary = useCallback((id: string, patch: Partial<Omit<DiaryEntry, "id">>) => {
+    const now = new Date().toISOString();
+    setDiaryEntries((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, ...patch, updatedAt: patch.updatedAt ?? now } : d)),
+    );
+  }, []);
+
+  const deleteDiary = useCallback((id: string) => {
+    setDiaryEntries((prev) => prev.filter((d) => d.id !== id));
+  }, []);
+
+  const toggleDiaryInGrowthBook = useCallback((id: string) => {
+    setDiaryEntries((prev) =>
+      prev.map((d) =>
+        d.id === id
+          ? { ...d, includedInGrowthBook: !d.includedInGrowthBook, updatedAt: new Date().toISOString() }
+          : d,
+      ),
+    );
   }, []);
 
   const pushChat = useCallback((role: "user" | "ai", text: string) => {
@@ -355,13 +396,15 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   const inviteFamilyMember = useCallback(
     (draft: { name: string; role: FamilyRole; contact: string }) => {
+      const code = createId().slice(0, 6).toUpperCase();
       const member: FamilyMember = {
         id: createId(),
         name: draft.name.trim(),
         role: draft.role,
         contact: draft.contact.trim(),
         status: "pending",
-        inviteLink: `https://darin.app/invite/${createId().slice(0, 8)}`,
+        inviteCode: code,
+        inviteLink: `https://darin.app/invite/${code}`,
         emoji: draft.role === "caregiver" ? "🧑‍🍼" : "👤",
       };
       setFamilyMembers((prev) => [...prev, member]);
@@ -374,18 +417,19 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setFamilyMembers((prev) => prev.map((m) => (m.id === id && !m.isMe ? { ...m, role } : m)));
   }, []);
 
-  const todayKey = formatDateKey();
-  const todayLogs = useMemo(() => getLogsForDay(logs, todayKey, todayKey), [logs, todayKey]);
+  const acceptFamilyInvite = useCallback((id: string) => {
+    setFamilyMembers((prev) =>
+      prev.map((m) => (m.id === id && !m.isMe ? { ...m, status: "active" as const } : m)),
+    );
+  }, []);
 
-  const feedCount = useMemo(
-    () => todayLogs.filter((l) => ["breast", "formula", "food", "snack", "pump"].includes(l.cat)).length,
-    [todayLogs],
-  );
-  const diaperCount = useMemo(() => todayLogs.filter((l) => l.cat === "diaper").length, [todayLogs]);
-  const sleepMinutes = useMemo(
-    () => todayLogs.filter((l) => l.cat === "sleep").reduce((sum, l) => sum + (parseInt(l.duration ?? "0", 10) || 0), 0),
-    [todayLogs],
-  );
+  const setFamilyMemberStatus = useCallback((id: string, status: FamilyMember["status"]) => {
+    setFamilyMembers((prev) => prev.map((m) => (m.id === id && !m.isMe ? { ...m, status } : m)));
+  }, []);
+
+  const removeFamilyMember = useCallback((id: string) => {
+    setFamilyMembers((prev) => prev.filter((m) => m.id !== id || m.isMe));
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -396,18 +440,17 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       babyBirthMeta: display.babyBirthMeta,
       defaultFeedingMethod: careSetup.preferences.defaultFeedingMethod,
       customCategories,
-      upsertCustomCategory,
-      addCustomFromTemplate,
-      addCustomByLabel,
-      frequentShortcuts,
-      setFrequentShortcuts,
+      quickRecords,
+      setQuickRecords,
       logs,
       diaryEntries,
-      caregivers,
       familyMembers,
       myFamilyRole,
       inviteFamilyMember,
       updateFamilyMemberRole,
+      acceptFamilyInvite,
+      setFamilyMemberStatus,
+      removeFamilyMember,
       chatHistory,
       profileOpen,
       setProfileOpen,
@@ -417,28 +460,27 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       deleteLog,
       logAuthor,
       addDiary,
+      updateDiary,
+      deleteDiary,
+      toggleDiaryInGrowthBook,
       pushChat,
-      feedCount,
-      diaperCount,
-      sleepMinutes,
       storageReady,
     }),
     [
       careSetup,
       display,
       customCategories,
-      upsertCustomCategory,
-      addCustomFromTemplate,
-      addCustomByLabel,
-      frequentShortcuts,
-      setFrequentShortcuts,
+      quickRecords,
+      setQuickRecords,
       logs,
       diaryEntries,
-      caregivers,
       familyMembers,
       myFamilyRole,
       inviteFamilyMember,
       updateFamilyMemberRole,
+      acceptFamilyInvite,
+      setFamilyMemberStatus,
+      removeFamilyMember,
       chatHistory,
       profileOpen,
       addLog,
@@ -447,10 +489,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       deleteLog,
       logAuthor,
       addDiary,
+      updateDiary,
+      deleteDiary,
+      toggleDiaryInGrowthBook,
       pushChat,
-      feedCount,
-      diaperCount,
-      sleepMinutes,
       storageReady,
     ],
   );

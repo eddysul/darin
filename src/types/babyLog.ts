@@ -1,4 +1,5 @@
 import type { FamilyRole } from "./family";
+import type { DiaryMoodId, DiarySkyId } from "../constants/diaryCompose";
 
 export type BabyLogFlag = "spit_up" | "burp" | "fever" | "fussy" | "low_confidence" | "time_ambiguous";
 
@@ -20,6 +21,8 @@ export type BabyLogEntry = {
   dateKey?: string;
   chip?: string;
   chip2?: string;
+  /** Stool consistency/state, kept separate from stool color. */
+  stoolState?: string;
   amount?: string;
   duration?: string;
   notes?: string;
@@ -32,27 +35,44 @@ export type BabyLogEntry = {
   createdBy?: BabyLogActor;
 };
 
+/** How the diary was opened / created */
+export type DiarySource = "manual" | "notification";
+
+export type DiaryDraftStatus = "draft" | "saved";
+
+/**
+ * Canonical Diary model (육아일기).
+ * careLogSummarySnapshot is frozen at save time and must not change when Care Logs are edited later.
+ */
 export type DiaryEntry = {
   id: string;
+  babyId: string;
+  /** Display label e.g. "7월 17일 (금)" */
   date: string;
-  photoUri?: string | null;
-  emoji: string;
+  /** YYYY-MM-DD local */
+  dateKey: string;
+  photos: string[];
   comment: string;
+  weatherStamp: DiarySkyId | null;
+  moodStamp: DiaryMoodId | null;
+  /** Frozen Care Log summary at save time */
+  careLogSummarySnapshot: string;
+  /** Moment suggestion ids the parent tapped while composing */
+  momentSuggestionsUsed: string[];
+  /** Preset milestone e.g. "첫 목욕" */
+  milestoneTag: string | null;
+  /** Free-text milestone when not a preset */
+  customMilestoneTag: string | null;
+  includedInGrowthBook: boolean;
   createdBy?: BabyLogActor;
-  source?: "diary" | "manual";
+  createdAt: string;
+  updatedAt: string;
+  source: DiarySource;
+  draftStatus: DiaryDraftStatus;
 };
 
 export type ChatMessage = {
   id: string;
   role: "user" | "ai";
   text: string;
-};
-
-export type CaregiverMember = {
-  id: string;
-  emoji: string;
-  name: string;
-  role: string;
-  badge: string;
-  isMe?: boolean;
 };

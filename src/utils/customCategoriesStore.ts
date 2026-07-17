@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { CustomCategory } from "../types/logCategory";
+import { STORAGE_KEYS } from "./storageKeys";
 
-const STORAGE_KEY = "darin:custom-log-categories";
+const STORAGE_KEY = STORAGE_KEYS.customCategories;
 
 let memoryCategories: CustomCategory[] | null = null;
 let hydrated = false;

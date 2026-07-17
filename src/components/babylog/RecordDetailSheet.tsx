@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -9,7 +9,6 @@ import {
   View,
 } from "react-native";
 import {
-  getCategory,
   nowTime,
   type BabyLogCategoryId,
 } from "../../constants/babyLogCategories";
@@ -18,84 +17,141 @@ import type { BabyLogEntry } from "../../types/babyLog";
 import type { CustomCategory, LogCategoryKey } from "../../types/logCategory";
 import { isCustomCategoryKey } from "../../types/logCategory";
 import { resolveLogCategory } from "../../utils/resolveLogCategory";
-import type { DefaultFeedingMethod } from "../../types/careSetup";
-import { isFeedingCategory } from "../../constants/logCategoryGroups";
 import { colors } from "../../theme";
+import { toMinutes } from "../../utils/formatLog";
 
 export type RecordSheetPrefill = Partial<BabyLogEntry> & { editId?: string };
-
-function feedingHint(method: DefaultFeedingMethod | undefined, catId: BabyLogCategoryId): string | null {
-  if (!method || method === "not_sure" || !isFeedingCategory(catId)) return null;
-  if (method === "breastfeeding" && catId === "breast") return "기본: 모유 — 측면·시간을 기록해 주세요";
-  if (method === "formula" && (catId === "formula" || catId === "food")) return "기본: 분유 — 용량(ml)을 먼저 입력해 주세요";
-  if (method === "pumped_milk" && catId === "pump") return "기본: 유축 — 용량(ml)을 입력해 주세요";
-  if (method === "mixed") return "혼합 수유 — 모유·분유·유축 중 실제로 한 방식을 기록해 주세요";
-  return null;
-}
 
 type Props = {
   visible: boolean;
   catKey: LogCategoryKey | null;
   customCategories: CustomCategory[];
   prefill?: RecordSheetPrefill | null;
-  defaultFeedingMethod?: DefaultFeedingMethod;
   onClose: () => void;
   onSave: (entry: Omit<BabyLogEntry, "id">, editId?: string) => void;
   onDelete?: (id: string) => void;
 };
+
+function minutesToHhMm(start: string, minutes: number): string {
+  const total = (toMinutes(start) + Math.max(0, minutes)) % (24 * 60);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function ChipRow({
+  options,
+  value,
+  onChange,
+}: {
+  options: string[];
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <View style={styles.chipRow}>
+      {options.map((ch) => (
+        <Pressable
+          key={ch}
+          style={[styles.chip, value === ch && styles.chipSel]}
+          onPress={() => onChange(value === ch ? "" : ch)}
+        >
+          <Text style={[styles.chipText, value === ch && styles.chipTextSel]}>{ch}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
 
 export function RecordDetailSheet({
   visible,
   catKey,
   customCategories,
   prefill,
-  defaultFeedingMethod,
   onClose,
   onSave,
   onDelete,
 }: Props) {
   const [time, setTime] = useState(nowTime());
+  const [endTime, setEndTime] = useState("");
+  const [selectedCat, setSelectedCat] = useState<LogCategoryKey | null>(catKey);
   const [chip, setChip] = useState("");
   const [chip2, setChip2] = useState("");
+  const [stoolState, setStoolState] = useState("");
   const [amount, setAmount] = useState("");
   const [duration, setDuration] = useState("");
   const [notes, setNotes] = useState("");
+  const [foodName, setFoodName] = useState("");
+  const [medName, setMedName] = useState("");
   const [voice, setVoice] = useState(false);
 
   useEffect(() => {
     if (!visible || !catKey) return;
+    const nextCat = prefill?.cat ?? catKey;
+    setSelectedCat(nextCat);
     setTime(prefill?.time ?? nowTime());
     setChip(prefill?.chip ?? "");
     setChip2(prefill?.chip2 ?? "");
+    setStoolState(prefill?.stoolState ?? "");
     setAmount(prefill?.amount ?? "");
     setDuration(prefill?.duration ?? "");
-    setNotes(prefill?.notes ?? "");
     setVoice(prefill?.voice ?? false);
+    const note = prefill?.notes ?? "";
+    if (nextCat === "food") {
+      const [namePart, ...rest] = note.split(" · ");
+      setFoodName(namePart ?? "");
+      setNotes(rest.join(" · "));
+      setMedName("");
+    } else if (nextCat === "med") {
+      const [namePart, ...rest] = note.split(" · ");
+      setMedName(namePart ?? "");
+      setNotes(rest.join(" · "));
+      setFoodName("");
+    } else {
+      setFoodName("");
+      setMedName("");
+      setNotes(note);
+    }
+    if (nextCat === "sleep" && prefill?.time && prefill?.duration) {
+      setEndTime(minutesToHhMm(prefill.time, Number.parseInt(prefill.duration, 10) || 0));
+    } else {
+      setEndTime("");
+    }
   }, [visible, catKey, prefill]);
 
   if (!catKey) return null;
-  const c = resolveLogCategory(catKey, customCategories);
-  const builtinId = isCustomCategoryKey(catKey) ? null : (catKey as BabyLogCategoryId);
+  const effectiveCat = selectedCat ?? catKey;
+  const c = resolveLogCategory(effectiveCat, customCategories);
+  const builtinId = isCustomCategoryKey(effectiveCat) ? null : (effectiveCat as BabyLogCategoryId);
   const isEdit = Boolean(prefill?.editId);
-  const hint = builtinId ? feedingHint(defaultFeedingMethod, builtinId) : null;
-  const emphasizeAmount =
-    builtinId &&
-    isFeedingCategory(builtinId) &&
-    (defaultFeedingMethod === "formula" || defaultFeedingMethod === "pumped_milk") &&
-    Boolean(c.amount);
-  const emphasizeDuration =
-    builtinId && isFeedingCategory(builtinId) && defaultFeedingMethod === "breastfeeding" && Boolean(c.duration);
+
+  const computedDuration = useMemo(() => {
+    if (!endTime || !time) return duration;
+    const diff = toMinutes(endTime) - toMinutes(time);
+    return String(diff >= 0 ? diff : diff + 24 * 60);
+  }, [endTime, time, duration]);
 
   const handleSave = () => {
+    const isFood = builtinId === "food";
+    const isMed = builtinId === "med";
+    const sleepDuration = builtinId === "sleep" ? computedDuration || duration : duration;
+    const composedNotes = [
+      isFood ? foodName.trim() : null,
+      isMed ? medName.trim() : null,
+      notes.trim() || null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
     onSave(
       {
-        cat: catKey,
+        cat: effectiveCat,
         time,
         chip: chip || undefined,
         chip2: chip2 || undefined,
+        stoolState: stoolState || undefined,
         amount: amount || undefined,
-        duration: duration || undefined,
-        notes: notes.trim() || undefined,
+        duration: sleepDuration || undefined,
+        notes: composedNotes || undefined,
         voice,
         source: prefill?.source ?? (voice ? "voice" : "manual"),
         rawTranscript: prefill?.rawTranscript,
@@ -116,131 +172,252 @@ export function RecordDetailSheet({
           <View style={styles.handle} />
           <View style={styles.titleRow}>
             <View style={[styles.dot, { backgroundColor: c.color }]} />
-            <LogCategoryIcon categoryKey={catKey} customCategories={customCategories} size={18} />
+            <LogCategoryIcon categoryKey={effectiveCat} customCategories={customCategories} size={18} />
             <Text style={styles.title}>
               {c.label} 기록{isEdit ? " 수정" : ""}
             </Text>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {hint ? (
-              <View style={styles.hintBox}>
-                <Text style={styles.hintText}>{hint}</Text>
-              </View>
-            ) : null}
-
-            <Text style={styles.fieldLabel}>시간</Text>
-            <TextInput
-              style={styles.input}
-              value={time}
-              onChangeText={setTime}
-              placeholder="HH:MM"
-              placeholderTextColor={colors.faint}
-            />
-
-            {emphasizeAmount && c.amount && (
+            {(builtinId === "breast" || builtinId === "formula") && (
               <>
-                <Text style={[styles.fieldLabel, styles.fieldHighlight]}>양 ({c.amount})</Text>
-                <TextInput
-                  style={[styles.input, styles.inputHighlight]}
-                  value={amount}
-                  onChangeText={setAmount}
-                  keyboardType="numeric"
-                  placeholder="예: 150"
-                  placeholderTextColor={colors.faint}
-                />
-              </>
-            )}
-
-            {c.chips && (
-              <>
-                <Text style={styles.fieldLabel}>{builtinId === "diaper" ? "구분" : "상태"}</Text>
+                <Text style={styles.fieldLabel}>수유 방식</Text>
                 <View style={styles.chipRow}>
-                  {c.chips.map((ch) => (
+                  {(
+                    [
+                      { id: "breast" as const, label: "모유" },
+                      { id: "formula" as const, label: "분유" },
+                    ] as const
+                  ).map((option) => (
                     <Pressable
-                      key={ch}
-                      style={[styles.chip, chip === ch && styles.chipSel]}
-                      onPress={() => setChip(chip === ch ? "" : ch)}
+                      key={option.id}
+                      style={[styles.chip, effectiveCat === option.id && styles.chipSel]}
+                      onPress={() => {
+                        setSelectedCat(option.id);
+                        if (option.id === "formula") setChip("");
+                      }}
                     >
-                      <Text style={[styles.chipText, chip === ch && styles.chipTextSel]}>{ch}</Text>
+                      <Text
+                        style={[styles.chipText, effectiveCat === option.id && styles.chipTextSel]}
+                      >
+                        {option.label}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
-              </>
-            )}
-
-            {c.chips2 && (
-              <>
-                <Text style={styles.fieldLabel}>색깔/특이사항</Text>
-                <View style={styles.chipRow}>
-                  {c.chips2.map((ch) => (
-                    <Pressable
-                      key={ch}
-                      style={[styles.chip, chip2 === ch && styles.chipSel]}
-                      onPress={() => setChip2(chip2 === ch ? "" : ch)}
-                    >
-                      <Text style={[styles.chipText, chip2 === ch && styles.chipTextSel]}>{ch}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            )}
-
-            {c.amount && !emphasizeAmount && (
-              <>
-                <Text style={styles.fieldLabel}>양 ({c.amount})</Text>
+                {builtinId === "breast" ? (
+                  <>
+                    <Text style={styles.fieldLabel}>좌/우/양쪽</Text>
+                    <ChipRow options={["좌측", "우측", "양쪽"]} value={chip} onChange={setChip} />
+                  </>
+                ) : null}
+                <Text style={styles.fieldLabel}>양 (ml)</Text>
                 <TextInput
                   style={styles.input}
                   value={amount}
                   onChangeText={setAmount}
                   keyboardType="numeric"
-                  placeholder="예: 150"
+                  placeholder="예: 120"
                   placeholderTextColor={colors.faint}
                 />
               </>
             )}
 
-            {emphasizeDuration && c.duration && (
+            {builtinId === "sleep" && (
               <>
-                <Text style={[styles.fieldLabel, styles.fieldHighlight]}>지속 시간 (분)</Text>
-                <TextInput
-                  style={[styles.input, styles.inputHighlight]}
-                  value={duration}
-                  onChangeText={setDuration}
-                  keyboardType="numeric"
-                  placeholder="예: 30"
-                  placeholderTextColor={colors.faint}
-                />
-              </>
-            )}
-
-            {c.duration && !emphasizeDuration && (
-              <>
-                <Text style={styles.fieldLabel}>지속 시간 (분)</Text>
+                <Text style={styles.fieldLabel}>낮잠 / 밤잠</Text>
+                <ChipRow options={["낮잠", "밤잠"]} value={chip} onChange={setChip} />
+                <Text style={styles.fieldLabel}>시작 시간</Text>
                 <TextInput
                   style={styles.input}
-                  value={duration}
-                  onChangeText={setDuration}
+                  value={time}
+                  onChangeText={setTime}
+                  placeholder="HH:MM"
+                  placeholderTextColor={colors.faint}
+                />
+                <Text style={styles.fieldLabel}>종료 시간</Text>
+                <TextInput
+                  style={styles.input}
+                  value={endTime}
+                  onChangeText={(v) => {
+                    setEndTime(v);
+                    if (/^\d{1,2}:\d{2}$/.test(v)) {
+                      const diff = toMinutes(v) - toMinutes(time);
+                      setDuration(String(diff >= 0 ? diff : diff + 24 * 60));
+                    }
+                  }}
+                  placeholder="HH:MM"
+                  placeholderTextColor={colors.faint}
+                />
+                <Text style={styles.fieldLabel}>총 시간 (분)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={computedDuration}
+                  onChangeText={(v) => {
+                    setDuration(v);
+                    const mins = Number.parseInt(v, 10);
+                    if (!Number.isNaN(mins) && time) setEndTime(minutesToHhMm(time, mins));
+                  }}
                   keyboardType="numeric"
-                  placeholder="예: 30"
+                  placeholder="예: 40"
                   placeholderTextColor={colors.faint}
                 />
               </>
             )}
 
-            <Text style={styles.fieldLabel}>메모</Text>
+            {builtinId === "diaper" && (
+              <>
+                <Text style={styles.fieldLabel}>구분</Text>
+                <ChipRow options={["소변", "대변", "둘다"]} value={chip} onChange={setChip} />
+                {chip !== "소변" ? (
+                  <>
+                    <Text style={styles.fieldLabel}>색깔</Text>
+                    <ChipRow
+                      options={["노란색", "황금색", "녹색", "갈색", "검정"]}
+                      value={chip2}
+                      onChange={setChip2}
+                    />
+                    <Text style={styles.fieldLabel}>상태</Text>
+                    <ChipRow
+                      options={["보통", "묽음", "딱딱함", "설사", "변비"]}
+                      value={stoolState}
+                      onChange={setStoolState}
+                    />
+                  </>
+                ) : null}
+              </>
+            )}
+
+            {builtinId === "food" && (
+              <>
+                <Text style={styles.fieldLabel}>음식명</Text>
+                <TextInput
+                  style={styles.input}
+                  value={foodName}
+                  onChangeText={setFoodName}
+                  placeholder="예: 고구마 이유식"
+                  placeholderTextColor={colors.faint}
+                />
+                <Text style={styles.fieldLabel}>양 (g)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={amount}
+                  onChangeText={setAmount}
+                  keyboardType="numeric"
+                  placeholder="예: 80"
+                  placeholderTextColor={colors.faint}
+                />
+                <Text style={styles.fieldLabel}>반응</Text>
+                <ChipRow options={["잘 먹음", "보통", "거부"]} value={chip} onChange={setChip} />
+                <Text style={styles.fieldLabel}>알러지 여부</Text>
+                <ChipRow options={["없음", "의심", "있음"]} value={chip2} onChange={setChip2} />
+              </>
+            )}
+
+            {builtinId === "med" && (
+              <>
+                <Text style={styles.fieldLabel}>약 이름</Text>
+                <TextInput
+                  style={styles.input}
+                  value={medName}
+                  onChangeText={setMedName}
+                  placeholder="예: 비타민D"
+                  placeholderTextColor={colors.faint}
+                />
+                <Text style={styles.fieldLabel}>용량</Text>
+                <TextInput
+                  style={styles.input}
+                  value={amount}
+                  onChangeText={setAmount}
+                  placeholder="예: 1 drop"
+                  placeholderTextColor={colors.faint}
+                />
+              </>
+            )}
+
+            {builtinId === "temp" && (
+              <>
+                <Text style={styles.fieldLabel}>체온 (℃)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={amount}
+                  onChangeText={setAmount}
+                  keyboardType="decimal-pad"
+                  placeholder="예: 36.5"
+                  placeholderTextColor={colors.faint}
+                />
+              </>
+            )}
+
+            {builtinId !== "sleep" && (
+              <>
+                <Text style={styles.fieldLabel}>시간</Text>
+                <TextInput
+                  style={styles.input}
+                  value={time}
+                  onChangeText={setTime}
+                  placeholder="HH:MM"
+                  placeholderTextColor={colors.faint}
+                />
+              </>
+            )}
+
+            {(!builtinId || isCustomCategoryKey(effectiveCat)) && (
+              <>
+                {c.chips ? (
+                  <>
+                    <Text style={styles.fieldLabel}>상태</Text>
+                    <ChipRow options={c.chips} value={chip} onChange={setChip} />
+                  </>
+                ) : null}
+                {c.amount ? (
+                  <>
+                    <Text style={styles.fieldLabel}>양 ({c.amount})</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={amount}
+                      onChangeText={setAmount}
+                      keyboardType="numeric"
+                      placeholder="예: 150"
+                      placeholderTextColor={colors.faint}
+                    />
+                  </>
+                ) : null}
+                {c.duration ? (
+                  <>
+                    <Text style={styles.fieldLabel}>지속 시간 (분)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={duration}
+                      onChangeText={setDuration}
+                      keyboardType="numeric"
+                      placeholder="예: 30"
+                      placeholderTextColor={colors.faint}
+                    />
+                  </>
+                ) : null}
+              </>
+            )}
+
+            <Text style={styles.fieldLabel}>{builtinId === "memo" ? "내용" : "메모"}</Text>
             <TextInput
               style={[styles.input, styles.notes]}
               value={notes}
               onChangeText={setNotes}
               multiline
-              placeholder="자유롭게 메모하세요"
+              placeholder={
+                builtinId === "memo"
+                  ? "오늘 남기고 싶은 메모"
+                  : builtinId === "food"
+                    ? "추가 메모"
+                    : "자유롭게 메모하세요"
+              }
               placeholderTextColor={colors.faint}
             />
 
             {isEdit && prefill?.editId && onDelete && (
               <Pressable style={styles.deleteBtn} onPress={() => onDelete(prefill.editId!)}>
-                <Text style={styles.deleteText}>🗑️ 이 기록 삭제하기</Text>
+                <Text style={styles.deleteText}>이 기록 삭제하기</Text>
               </Pressable>
             )}
 
@@ -289,16 +466,6 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  fieldHighlight: { color: colors.amber },
-  hintBox: {
-    backgroundColor: colors.amberSoft,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 4,
-  },
-  hintText: { fontSize: 12.5, color: colors.text, lineHeight: 18 },
-  inputHighlight: { borderColor: colors.amber },
   input: {
     backgroundColor: colors.card,
     borderWidth: 1,

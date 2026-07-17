@@ -2,8 +2,15 @@ import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
 import { InviteFamilyModal } from "../components/babylog/InviteFamilyModal";
+import { EmptyState } from "../components/states/FeedbackStates";
 import { useBabyLog } from "../context/BabyLogContext";
-import { canInvite, FAMILY_ROLE_LABELS, type FamilyRole } from "../types/family";
+import {
+  canInvite,
+  canManageMembers,
+  FAMILY_ROLE_LABELS,
+  FAMILY_STATUS_LABELS,
+  type FamilyRole,
+} from "../types/family";
 import { colors, radius } from "../theme";
 
 type Props = {
@@ -21,9 +28,13 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
     myFamilyRole,
     inviteFamilyMember,
     updateFamilyMemberRole,
+    acceptFamilyInvite,
+    setFamilyMemberStatus,
+    removeFamilyMember,
   } = useBabyLog();
   const [inviteOpen, setInviteOpen] = useState(false);
   const allowInvite = canInvite(myFamilyRole);
+  const allowManage = canManageMembers(myFamilyRole);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -47,39 +58,72 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
           </View>
 
           <Text style={styles.sectionTitle}>함께 보는 가족</Text>
-          {familyMembers.map((m, i) => (
-            <View key={m.id} style={styles.memberRow}>
-              <View style={styles.avatar}>
-                <BabyLogIcon kind="profile" size={18} color={MEMBER_COLORS[i % MEMBER_COLORS.length]} />
-              </View>
-              <View style={styles.memberInfo}>
-                <Text style={styles.memberName}>
-                  {m.name}
-                  {m.isMe ? " (나)" : ""}
-                </Text>
-                <Text style={styles.memberRole}>
-                  {FAMILY_ROLE_LABELS[m.role]}
-                  {m.contact ? ` · ${m.contact}` : ""}
-                </Text>
-                {!m.isMe && allowInvite && (
-                  <View style={styles.miniRoles}>
-                    {(["admin", "editor", "viewer", "caregiver"] as FamilyRole[]).map((r) => (
-                      <Pressable
-                        key={r}
-                        style={[styles.miniChip, m.role === r && styles.miniChipActive]}
-                        onPress={() => updateFamilyMemberRole(m.id, r)}
-                      >
-                        <Text style={[styles.miniChipText, m.role === r && styles.miniChipTextActive]}>
-                          {FAMILY_ROLE_LABELS[r]}
-                        </Text>
+          {familyMembers.length === 0 ? (
+            <EmptyState title="아직 공유 멤버가 없어요." body="가족이나 시터를 초대해 보세요." />
+          ) : (
+            familyMembers.map((m, i) => (
+              <View key={m.id} style={[styles.memberRow, m.status === "inactive" && styles.inactiveRow]}>
+                <View style={styles.avatar}>
+                  <BabyLogIcon kind="profile" size={18} color={MEMBER_COLORS[i % MEMBER_COLORS.length]} />
+                </View>
+                <View style={styles.memberInfo}>
+                  <Text style={styles.memberName}>
+                    {m.name}
+                    {m.isMe ? " (나)" : ""}
+                  </Text>
+                  <Text style={styles.memberRole}>
+                    {FAMILY_ROLE_LABELS[m.role]}
+                    {m.contact ? ` · ${m.contact}` : ""}
+                  </Text>
+                  {!m.isMe && allowManage && m.status !== "inactive" && (
+                    <View style={styles.miniRoles}>
+                      {(["admin", "editor", "caregiver", "viewer"] as FamilyRole[]).map((r) => (
+                        <Pressable
+                          key={r}
+                          style={[styles.miniChip, m.role === r && styles.miniChipActive]}
+                          onPress={() => updateFamilyMemberRole(m.id, r)}
+                        >
+                          <Text style={[styles.miniChipText, m.role === r && styles.miniChipTextActive]}>
+                            {FAMILY_ROLE_LABELS[r]}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                  {!m.isMe && allowManage && (
+                    <View style={styles.actions}>
+                      {m.status === "pending" ? (
+                        <Pressable style={styles.actionBtn} onPress={() => acceptFamilyInvite(m.id)}>
+                          <Text style={styles.actionText}>수락 시뮬레이션</Text>
+                        </Pressable>
+                      ) : null}
+                      {m.status !== "inactive" ? (
+                        <Pressable
+                          style={styles.actionBtn}
+                          onPress={() => setFamilyMemberStatus(m.id, "inactive")}
+                        >
+                          <Text style={styles.actionText}>비활성화</Text>
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          style={styles.actionBtn}
+                          onPress={() => setFamilyMemberStatus(m.id, "active")}
+                        >
+                          <Text style={styles.actionText}>다시 활성화</Text>
+                        </Pressable>
+                      )}
+                      <Pressable style={styles.actionBtn} onPress={() => removeFamilyMember(m.id)}>
+                        <Text style={[styles.actionText, styles.danger]}>삭제</Text>
                       </Pressable>
-                    ))}
-                  </View>
-                )}
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.memberStatus}>
+                  {m.isMe ? "나" : FAMILY_STATUS_LABELS[m.status]}
+                </Text>
               </View>
-              <Text style={styles.memberStatus}>{m.status === "pending" ? "초대중" : m.isMe ? "나" : "공유중"}</Text>
-            </View>
-          ))}
+            ))
+          )}
 
           {allowInvite ? (
             <Pressable style={styles.inviteBtn} onPress={() => setInviteOpen(true)}>
@@ -151,6 +195,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
   },
+  inactiveRow: { opacity: 0.55 },
   avatar: {
     width: 40,
     height: 40,
@@ -174,6 +219,17 @@ const styles = StyleSheet.create({
   miniChipActive: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
   miniChipText: { fontSize: 10, color: colors.faint, fontWeight: "600" },
   miniChipTextActive: { color: colors.text },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  actionBtn: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    backgroundColor: colors.card,
+  },
+  actionText: { fontSize: 11, fontWeight: "700", color: colors.muted },
+  danger: { color: "#B45309" },
   inviteBtn: {
     marginTop: 12,
     borderWidth: 1,

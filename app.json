@@ -2,6 +2,7 @@
   "expo": {
     "name": "Darin",
     "slug": "darin-childcare",
+    "scheme": "knanny",
     "version": "0.0.1",
     "orientation": "portrait",
     "icon": "./assets/darin-logo.png",

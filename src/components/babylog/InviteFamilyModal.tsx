@@ -2,36 +2,39 @@ import { useMemo, useState } from "react";
 import {
   Modal,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import type { FamilyRole } from "../../types/family";
+import type { FamilyMember, FamilyRole } from "../../types/family";
 import { FAMILY_ROLE_LABELS } from "../../types/family";
 import { colors, radius } from "../../theme";
 
-const INVITE_ROLES: FamilyRole[] = ["admin", "editor", "viewer", "caregiver"];
+const INVITE_ROLES: FamilyRole[] = ["admin", "editor", "caregiver", "viewer"];
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onInvite: (draft: { name: string; role: FamilyRole; contact: string }) => { inviteLink?: string };
+  onInvite: (draft: { name: string; role: FamilyRole; contact: string }) => FamilyMember;
 };
 
 export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
-  const [role, setRole] = useState<FamilyRole>("caregiver");
-  const [createdLink, setCreatedLink] = useState<string | null>(null);
+  const [role, setRole] = useState<FamilyRole>("editor");
+  const [created, setCreated] = useState<FamilyMember | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const canSubmit = useMemo(() => name.trim().length > 0 && contact.trim().length > 0, [name, contact]);
 
   const reset = () => {
     setName("");
     setContact("");
-    setRole("caregiver");
-    setCreatedLink(null);
+    setRole("editor");
+    setCreated(null);
+    setCopied(false);
   };
 
   const handleClose = () => {
@@ -42,7 +45,18 @@ export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
   const handleInvite = () => {
     if (!canSubmit) return;
     const member = onInvite({ name: name.trim(), role, contact: contact.trim() });
-    setCreatedLink(member.inviteLink ?? "초대 링크가 생성됐어요");
+    setCreated(member);
+  };
+
+  const copyInvite = async () => {
+    if (!created) return;
+    const payload = `초대 코드: ${created.inviteCode ?? ""}\n링크: ${created.inviteLink ?? ""}`;
+    try {
+      await Share.share({ message: payload });
+      setCopied(true);
+    } catch {
+      setCopied(true);
+    }
   };
 
   return (
@@ -50,18 +64,29 @@ export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
       <Pressable style={styles.backdrop} onPress={handleClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.handle} />
-          <Text style={styles.title}>보호자 초대하기</Text>
-          <Text style={styles.hint}>실제 문자/메일은 보내지 않아요. 로컬에 멤버와 초대 링크만 만들어요. (mock)</Text>
+          <Text style={styles.title}>가족 · 시터 초대</Text>
+          <Text style={styles.hint}>
+            실제 전송은 아직 없어요. 초대 코드·링크를 만들고 pending 상태로 로컬에 저장합니다.
+          </Text>
 
-          {createdLink ? (
+          {created ? (
             <>
-              <Text style={styles.success}>초대 링크가 생성됐어요 (mock)</Text>
+              <Text style={styles.success}>초대가 준비됐어요 (목업)</Text>
               <View style={styles.linkBox}>
-                <Text style={styles.linkText}>{createdLink}</Text>
+                <Text style={styles.linkLabel}>초대 코드</Text>
+                <Text style={styles.linkText}>{created.inviteCode}</Text>
+                <Text style={[styles.linkLabel, { marginTop: 10 }]}>초대 링크</Text>
+                <Text style={styles.linkText}>{created.inviteLink}</Text>
               </View>
-              <Text style={styles.hint}>상대에게 실제로 전송되지 않았어요. 데모용 상태입니다.</Text>
-              <Pressable style={styles.primaryBtn} onPress={handleClose}>
-                <Text style={styles.primaryText}>완료</Text>
+              <Text style={styles.hint}>
+                상태: 초대 대기 · 권한: {FAMILY_ROLE_LABELS[created.role]}
+                {copied ? " · 공유됨" : ""}
+              </Text>
+              <Pressable style={styles.primaryBtn} onPress={copyInvite}>
+                <Text style={styles.primaryText}>초대 코드 · 링크 공유</Text>
+              </Pressable>
+              <Pressable style={styles.ghostBtn} onPress={handleClose}>
+                <Text style={styles.ghostText}>완료</Text>
               </Pressable>
             </>
           ) : (
@@ -71,7 +96,7 @@ export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
                 style={styles.input}
                 value={name}
                 onChangeText={setName}
-                placeholder="예: 지연 시터"
+                placeholder="예: 박시터"
                 placeholderTextColor={colors.faint}
               />
               <Text style={styles.label}>전화번호 / 이메일</Text>
@@ -83,7 +108,7 @@ export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
                 placeholderTextColor={colors.faint}
                 autoCapitalize="none"
               />
-              <Text style={styles.label}>권한</Text>
+              <Text style={styles.label}>역할</Text>
               <View style={styles.roleRow}>
                 {INVITE_ROLES.map((r) => (
                   <Pressable
@@ -97,12 +122,15 @@ export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
                   </Pressable>
                 ))}
               </View>
+              <Text style={styles.policy}>
+                관리자: 초대/삭제/수정 · 편집 가능: 기록 작성/수정 · 보기만 가능: 조회만
+              </Text>
               <Pressable
                 style={[styles.primaryBtn, !canSubmit && styles.disabled]}
                 onPress={handleInvite}
                 disabled={!canSubmit}
               >
-                <Text style={styles.primaryText}>초대 링크 생성</Text>
+                <Text style={styles.primaryText}>초대 코드 생성</Text>
               </Pressable>
             </>
           )}
@@ -132,6 +160,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 17, fontWeight: "700", color: colors.text, marginBottom: 6 },
   hint: { fontSize: 12.5, color: colors.faint, lineHeight: 18, marginBottom: 16 },
+  policy: { fontSize: 11.5, color: colors.muted, lineHeight: 17, marginBottom: 12 },
   label: { fontSize: 12, fontWeight: "700", color: colors.muted, marginBottom: 6, marginTop: 8 },
   input: {
     borderWidth: 1,
@@ -143,7 +172,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
   },
-  roleRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
+  roleRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
   roleChip: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -163,13 +192,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primaryText: { fontWeight: "700", color: colors.amberDark, fontSize: 14.5 },
+  ghostBtn: { marginTop: 10, paddingVertical: 12, alignItems: "center" },
+  ghostText: { color: colors.muted, fontWeight: "700" },
   disabled: { opacity: 0.45 },
   success: { fontSize: 14, fontWeight: "700", color: colors.text, marginBottom: 10 },
   linkBox: {
     backgroundColor: colors.backgroundSecondary,
     borderRadius: 12,
     padding: 12,
-    marginBottom: 16,
+    marginBottom: 12,
   },
+  linkLabel: { fontSize: 11, fontWeight: "700", color: colors.faint, marginBottom: 4 },
   linkText: { fontSize: 13, color: colors.muted },
 });

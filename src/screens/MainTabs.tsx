@@ -24,6 +24,7 @@ import type { BabyLogCategoryId } from "../constants/babyLogCategories";
 import type { MessageKey } from "../i18n";
 import { colors, gradients } from "../theme";
 import { isCustomCategoryKey } from "../types/logCategory";
+import { canAddLog, canDeleteLog, canEditLog } from "../types/family";
 
 const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
   Record: "tabs.record",
@@ -35,7 +36,11 @@ const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
 
 export type MainTabParamList = {
   Record: undefined;
-  Diary: undefined;
+  Diary: {
+    openCompose?: boolean;
+    date?: string;
+    source?: string;
+  } | undefined;
   Mic: undefined;
   Report: undefined;
   Consult: undefined;
@@ -57,8 +62,19 @@ function MicPlaceholder() {
 function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
-  const { addLog, addLogs, updateLog, deleteLog, defaultFeedingMethod, customCategories, logAuthor } =
-    useBabyLog();
+  const {
+    logs,
+    addLog,
+    addLogs,
+    updateLog,
+    deleteLog,
+    customCategories,
+    logAuthor,
+    myFamilyRole,
+    familyMembers,
+  } = useBabyLog();
+  const me = familyMembers.find((member) => member.isMe);
+  const allowAdd = canAddLog(myFamilyRole);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceSheetCat, setVoiceSheetCat] = useState<LogCategoryKey | null>(null);
   const [voicePrefill, setVoicePrefill] = useState<RecordSheetPrefill | null>(null);
@@ -83,7 +99,13 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
           if (center) {
             return (
-              <Pressable key={name} style={styles.tabItem} onPress={() => setVoiceOpen(true)}>
+              <Pressable
+                key={name}
+                style={[styles.tabItem, !allowAdd && styles.disabled]}
+                disabled={!allowAdd}
+                accessibilityState={{ disabled: !allowAdd }}
+                onPress={() => setVoiceOpen(true)}
+              >
                 <View style={styles.centerBtnWrap}>
                   <LinearGradient colors={[...gradients.mic]} style={styles.centerBtn}>
                     <BabyLogIcon kind="tab" tab="mic" size={24} color="#FFFFFF" strokeWidth={2.2} />
@@ -119,6 +141,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           setVoiceEventPatch(null);
         }}
         onConfirmAll={({ rawTranscript, events }) => {
+          if (!allowAdd) return;
           addLogs(events.map((event) => voiceResultToLog(event, rawTranscript, logAuthor)));
           setVoiceOpen(false);
           setEditingVoiceId(null);
@@ -140,6 +163,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           // Keep voice overlay open so other cards aren't lost
         }}
         onManualEntry={() => {
+          if (!allowAdd) return;
           setVoiceOpen(false);
           setEditingVoiceId(null);
           setVoicePrefill(null);
@@ -155,13 +179,18 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         catKey={voiceSheetCat}
         customCategories={customCategories}
         prefill={voicePrefill}
-        defaultFeedingMethod={defaultFeedingMethod}
         onClose={() => {
           setVoiceSheetCat(null);
           setVoicePrefill(null);
           setEditingVoiceId(null);
         }}
         onSave={(entry, editId) => {
+          if (editId) {
+            const existing = logs.find((log) => log.id === editId);
+            if (!existing || !canEditLog(myFamilyRole, existing.createdBy, me)) return;
+          } else if (!allowAdd) {
+            return;
+          }
           if (voiceOpen && editingVoiceId && !isCustomCategoryKey(entry.cat)) {
             const cat = entry.cat as BabyLogCategoryId;
             const meta = formatLogMeta(entry, customCategories);
@@ -193,6 +222,8 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           setEditingVoiceId(null);
         }}
         onDelete={(id) => {
+          const existing = logs.find((log) => log.id === id);
+          if (!existing || !canDeleteLog(myFamilyRole, existing.createdBy, me)) return;
           deleteLog(id);
           setVoiceSheetCat(null);
           setVoicePrefill(null);
@@ -269,4 +300,5 @@ const styles = StyleSheet.create({
   tabLabel: { fontSize: 10.5, fontWeight: "600", color: colors.faint },
   tabLabelActive: { color: colors.amber },
   centerLabel: { marginTop: 2 },
+  disabled: { opacity: 0.45 },
 });

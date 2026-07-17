@@ -55,8 +55,6 @@ export const CATEGORY_ICONS: Record<BabyLogCategoryId, IconComponent> = {
   memo: FileText,
 };
 
-export type QuickStatusIconKey = "feed" | "sleep" | "diaper";
-export type FrequentIconKey = "feeding" | "sleep" | "diaper" | "temp";
 export type TabIconKey = "record" | "diary" | "report" | "consult" | "mic";
 export type MiscIconKey =
   | "new"
@@ -73,19 +71,6 @@ export type MiscIconKey =
   | "sparkles"
   | "voice"
   | "trash";
-
-export const QUICK_STATUS_ICONS: Record<QuickStatusIconKey, IconComponent> = {
-  feed: BabyBottleIcon,
-  sleep: Moon,
-  diaper: DiaperIcon,
-};
-
-export const FREQUENT_ICONS: Record<FrequentIconKey, IconComponent> = {
-  feeding: BabyBottleIcon,
-  sleep: Moon,
-  diaper: DiaperIcon,
-  temp: Thermometer,
-};
 
 export const TAB_ICONS: Record<TabIconKey, IconComponent> = {
   record: ClipboardList,

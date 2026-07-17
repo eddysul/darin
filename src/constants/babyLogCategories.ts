@@ -37,7 +37,7 @@ export const BABY_LOG_CATEGORIES: BabyLogCategory[] = [
     emoji: "🧷",
     color: categoryColors.diaper,
     chips: ["소변", "대변", "둘다"],
-    chips2: ["황금색", "녹색", "갈색", "검정", "설사", "변비"],
+    chips2: ["노란색", "황금색", "녹색", "갈색", "검정"],
   },
   { id: "sleep", label: "수면", emoji: "😴", color: categoryColors.sleep, duration: true },
   { id: "pump", label: "유축", emoji: "🍼", color: categoryColors.pump, amount: "ml" },
@@ -77,9 +77,6 @@ export const CAT_HISTORY: Record<BabyLogCategoryId, number[]> = {
   play: [2, 2, 3, 2, 3, 2],
   memo: [1, 0, 1, 1, 0, 1],
 };
-
-/** @deprecated use weekdayLabelKo / weeklyTrend dateKeys */
-export const HISTORY_DAYS = ["월", "화", "수", "목", "금", "토"];
 
 // Re-export formatting helpers for backward compatibility.
 export { formatLogMeta, nowTime, toMinutes } from "../utils/formatLog";

@@ -8,15 +8,13 @@ export function resolveLogSource(entry: Pick<BabyLogEntry, "source" | "voice" | 
   return "manual";
 }
 
-/** e.g. "엄마가 음성으로 기록" */
+/** e.g. "작성자: 박시터" */
 export function formatLogProvenance(entry: Pick<BabyLogEntry, "source" | "voice" | "createdBy">): string | null {
   const name = entry.createdBy?.name;
   if (!name) return null;
   const source = resolveLogSource(entry);
-  if (source === "voice") return `${name}가 음성으로 기록`;
-  if (source === "caregiver") return `${name}가 기록`;
-  if (source === "diary") return `${name}가 일기로 기록`;
-  return `${name}가 기록`;
+  if (source === "voice") return `작성자: ${name} · 음성`;
+  return `작성자: ${name}`;
 }
 
 export function actorFromFamily(member: {

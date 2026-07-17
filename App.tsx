@@ -54,8 +54,28 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
     if (onboardingProfile) setProfile(onboardingProfile);
   }, [onboardingProfile, setProfile]);
 
+  const linking = {
+    prefixes: ["knanny://", "exp://"],
+    config: {
+      screens: {
+        Diary: {
+          path: "diary/compose",
+          parse: {
+            date: (value: string) => value,
+            source: (value: string) => value,
+            openCompose: (value: string) => value === "1" || value === "true",
+          },
+        },
+        Record: "record",
+        Report: "report",
+        Consult: "consult",
+        Mic: "mic",
+      },
+    },
+  };
+
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <MainTabs />
     </NavigationContainer>
   );

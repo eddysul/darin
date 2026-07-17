@@ -80,7 +80,7 @@ function diaperChip(event: CareEvent): string | undefined {
 
 function diaperChip2(event: CareEvent): string | undefined {
   const color = String(event.color ?? "");
-  const allowed = ["황금색", "녹색", "갈색", "검정", "설사", "변비"];
+  const allowed = ["노란색", "황금색", "녹색", "갈색", "검정"];
   return allowed.find((c) => color.includes(c)) ?? (color || undefined);
 }
 
@@ -269,14 +269,17 @@ function inferSegment(segment: string, now = new Date()): VoiceEventDraft | null
   }
 
   if (/응가|대변|똥|변\s*봤|묽은\s*변/.test(text)) {
-    const chip2 = ["황금색", "녹색", "갈색", "검정", "설사", "변비"].find((c) => text.includes(c));
+    const chip2 = ["노란색", "황금색", "녹색", "갈색", "검정"].find((c) => text.includes(c));
+    const stoolState = ["보통", "묽음", "딱딱함", "설사", "변비"].find((c) => text.includes(c));
     return draft({
       cat: "diaper",
       time: parsedTime.time,
       dateKey: parsedTime.dateKey,
       chip: "대변",
       chip2,
-      notes: relativeNote,
+      notes: [relativeNote, stoolState ? `상태: ${stoolState}` : undefined]
+        .filter(Boolean)
+        .join(" · ") || undefined,
       flags,
       confidence: 0.86,
       timeAmbiguous: parsedTime.ambiguous,

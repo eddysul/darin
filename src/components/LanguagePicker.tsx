@@ -1,5 +1,5 @@
 import { Check } from "lucide-react-native";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text } from "react-native";
 import { useLanguage } from "../LanguageContext";
 import type { Locale } from "../i18n";
 import { colors, radius } from "../theme";

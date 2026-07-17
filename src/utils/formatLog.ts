@@ -6,6 +6,7 @@ export function formatLogMeta(
     cat: LogCategoryKey;
     chip?: string;
     chip2?: string;
+    stoolState?: string;
     amount?: string;
     duration?: string;
     notes?: string;
@@ -16,6 +17,7 @@ export function formatLogMeta(
   const parts: string[] = [];
   if (entry.chip) parts.push(entry.chip);
   if (entry.chip2) parts.push(entry.chip2);
+  if (entry.stoolState) parts.push(entry.stoolState);
   if (entry.amount) parts.push(`${entry.amount}${c.amount ?? ""}`);
   if (entry.duration) parts.push(`${entry.duration}분`);
   if (entry.notes) parts.push(entry.notes.length > 16 ? `${entry.notes.slice(0, 16)}…` : entry.notes);
