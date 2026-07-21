@@ -1,5 +1,6 @@
 import type { BabyLogCategoryId } from "../constants/babyLogCategories";
-import { formatLogMeta, getCategory } from "../constants/babyLogCategories";
+import { getCategory } from "../constants/babyLogCategories";
+import { formatLogMeta } from "./formatLog";
 import type { BabyLogFlag } from "../types/babyLog";
 import type { CareEvent } from "../types/transcribe";
 import { createId } from "./id";

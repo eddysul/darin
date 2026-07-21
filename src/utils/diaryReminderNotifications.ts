@@ -1,0 +1,106 @@
+import * as Notifications from "expo-notifications";
+import { Linking, Platform } from "react-native";
+import type { DiaryReminderSettings } from "../types/diaryReminder";
+
+const DIARY_REMINDER_ID = "darin-diary-daily-reminder";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+export type ReminderPermissionStatus = "granted" | "denied" | "undetermined";
+
+export async function getReminderPermissionStatus(): Promise<ReminderPermissionStatus> {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status === "granted") return "granted";
+    if (status === "denied") return "denied";
+    return "undetermined";
+  } catch {
+    return "undetermined";
+  }
+}
+
+export async function requestReminderPermission(): Promise<ReminderPermissionStatus> {
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (current.status === "granted") return "granted";
+    const asked = await Notifications.requestPermissionsAsync();
+    if (asked.status === "granted") return "granted";
+    return asked.status === "denied" ? "denied" : "undetermined";
+  } catch {
+    return "denied";
+  }
+}
+
+export async function openDeviceNotificationSettings(): Promise<void> {
+  try {
+    if (Platform.OS === "ios") {
+      await Linking.openURL("app-settings:");
+      return;
+    }
+    await Linking.openSettings();
+  } catch {
+    await Linking.openSettings();
+  }
+}
+
+/** Cancel scheduled diary reminder notifications. */
+export async function cancelDiaryReminderNotifications(): Promise<void> {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(DIARY_REMINDER_ID);
+  } catch {
+    // ignore — id may not exist
+  }
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    await Promise.all(
+      scheduled
+        .filter((item) => item.identifier.startsWith("darin-diary"))
+        .map((item) => Notifications.cancelScheduledNotificationAsync(item.identifier)),
+    );
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Schedule a daily local reminder. Deep-link data keeps Diary openCompose flow intact.
+ * If OS permission is missing, this is a no-op (in-app toast still works).
+ */
+export async function syncDiaryReminderNotifications(
+  settings: DiaryReminderSettings,
+  copy: { title: string; body: string },
+): Promise<void> {
+  await cancelDiaryReminderNotifications();
+  if (!settings.enabled) return;
+
+  const permission = await getReminderPermissionStatus();
+  if (permission !== "granted") return;
+
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: DIARY_REMINDER_ID,
+      content: {
+        title: copy.title,
+        body: copy.body,
+        data: {
+          source: "notification",
+          date: "today",
+          openCompose: true,
+        },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: settings.hour,
+        minute: settings.minute,
+      },
+    });
+  } catch {
+    // Expo Go / simulator quirks — keep settings saved either way
+  }
+}

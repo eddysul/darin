@@ -124,6 +124,7 @@ export const DIARY_GROWTH_MOMENTS = [
 export type DiaryComposeDraft = {
   comment: string;
   photos: string[];
+  stickerIds: string[];
   weatherStamp: DiarySkyId | null;
   moodStamp: DiaryMoodId | null;
   milestoneTag: string | null;

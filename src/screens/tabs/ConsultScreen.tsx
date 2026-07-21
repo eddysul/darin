@@ -16,7 +16,10 @@ import { useBabyLog } from "../../context/BabyLogContext";
 import { useLanguage } from "../../LanguageContext";
 import { buildBabyLogConsultPrompt, buildCareContextPack } from "../../utils/babyLogAIContext";
 import { EmptyState, ErrorState, LoadingState } from "../../components/states/FeedbackStates";
+import { BabyStickerFromModel } from "../../components/babylog/BabyStickerView";
+import { BabyStickerVaultModal } from "../../components/babylog/BabyStickerVaultModal";
 import { colors } from "../../theme";
+import { consumeQaFaultOnce } from "../../utils/qaDebug";
 
 const QUICK_CHIPS = [
   "오늘 수면 괜찮아?",
@@ -40,15 +43,22 @@ export function ConsultScreen({ onOpenProfile }: Props) {
     pushChat,
     babyName,
     storageReady,
+    babyStickers,
+    addBabySticker,
+    deleteBabySticker,
+    logAuthor,
   } = useBabyLog();
   const { locale, t } = useLanguage();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [failedQuestion, setFailedQuestion] = useState<string | null>(null);
   const [bannerOpen, setBannerOpen] = useState(false);
+  const [stickerOpen, setStickerOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const historyRef = useRef<OpenAIMessage[]>([]);
   const historySeeded = useRef(false);
+  const requestInFlightRef = useRef(false);
 
   const pack = useMemo(
     () => buildCareContextPack({ careSetup, logs, diaryEntries, locale }),
@@ -69,9 +79,9 @@ export function ConsultScreen({ onOpenProfile }: Props) {
       }));
   }, [storageReady, chatHistory]);
 
-  const send = async (text: string) => {
+  const send = async (text: string, retry = false) => {
     const trimmed = text.trim();
-    if (!trimmed || isTyping) return;
+    if (!trimmed || requestInFlightRef.current) return;
 
     if (sparse && /진단|약|병원|괜찮은지|심각한|응급/.test(trimmed) && pack.todayLogCount === 0) {
       pushChat("user", trimmed);
@@ -82,11 +92,13 @@ export function ConsultScreen({ onOpenProfile }: Props) {
       return;
     }
 
-    pushChat("user", trimmed);
-    historyRef.current = [...historyRef.current, { role: "user", content: trimmed }];
+    if (!retry) {
+      pushChat("user", trimmed);
+      historyRef.current = [...historyRef.current, { role: "user", content: trimmed }];
+    }
     setInput("");
+    requestInFlightRef.current = true;
     setIsTyping(true);
-    setAiError(null);
     scrollRef.current?.scrollToEnd({ animated: true });
 
     const prompt = buildBabyLogConsultPrompt({
@@ -98,17 +110,23 @@ export function ConsultScreen({ onOpenProfile }: Props) {
     });
 
     try {
+      if (await consumeQaFaultOnce("ai")) {
+        throw new OpenAIChatError("QA injected one-shot AI failure", "api_error");
+      }
       const reply = await callOpenAI(historyRef.current, prompt);
       historyRef.current = [...historyRef.current, { role: "assistant", content: reply }];
       pushChat("ai", reply);
+      setAiError(null);
+      setFailedQuestion(null);
     } catch (error) {
       const message =
         error instanceof OpenAIChatError && error.code === "missing_api_key"
           ? t("aiChat.noApiKey")
           : t("aiChat.error");
       setAiError(message);
-      pushChat("ai", message);
+      setFailedQuestion(trimmed);
     } finally {
+      requestInFlightRef.current = false;
       setIsTyping(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
     }
@@ -178,10 +196,12 @@ export function ConsultScreen({ onOpenProfile }: Props) {
             body="아래 퀵질문으로 첫 상담을 시작해 보세요."
           />
         ) : null}
-        {chatHistory.map((m) =>
-          m.role === "user" ? (
+        {chatHistory.map((m) => {
+          const sticker = m.stickerId ? babyStickers.find((item) => item.id === m.stickerId) : null;
+          return m.role === "user" ? (
             <View key={m.id} style={[styles.bubble, styles.userBubble]}>
-              <Text style={[styles.bubbleText, styles.userText]}>{m.text}</Text>
+              {sticker ? <BabyStickerFromModel sticker={sticker} size={72} /> : null}
+              {m.text ? <Text style={[styles.bubbleText, styles.userText]}>{m.text}</Text> : null}
             </View>
           ) : (
             <View key={m.id} style={styles.aiBlock}>
@@ -190,8 +210,8 @@ export function ConsultScreen({ onOpenProfile }: Props) {
               </View>
               <Text style={styles.answerFootnote}>최근 기록 기준입니다.</Text>
             </View>
-          ),
-        )}
+          );
+        })}
         {isTyping && (
           <View style={styles.aiBlock}>
             <LoadingState label="AI 분석 중…" />
@@ -203,8 +223,7 @@ export function ConsultScreen({ onOpenProfile }: Props) {
               title="잠시 문제가 생겼어요."
               body={aiError}
               onRetry={() => {
-                const lastUser = [...chatHistory].reverse().find((m) => m.role === "user");
-                if (lastUser) void send(lastUser.text);
+                if (failedQuestion) void send(failedQuestion, true);
               }}
               busy={isTyping}
             />
@@ -226,6 +245,14 @@ export function ConsultScreen({ onOpenProfile }: Props) {
       </ScrollView>
 
       <View style={styles.inputRow}>
+        <Pressable
+          style={styles.stickerBtn}
+          onPress={() => setStickerOpen(true)}
+          disabled={isTyping}
+          accessibilityLabel="스티커 보내기"
+        >
+          <Text style={styles.stickerBtnText}>스티커</Text>
+        </Pressable>
         <TextInput
           style={styles.input}
           placeholder={`${babyName}에 대해 물어보세요...`}
@@ -244,6 +271,21 @@ export function ConsultScreen({ onOpenProfile }: Props) {
           <Text style={styles.sendIcon}>➤</Text>
         </Pressable>
       </View>
+
+      <BabyStickerVaultModal
+        visible={stickerOpen}
+        babyName={babyName}
+        stickers={babyStickers}
+        createdBy={logAuthor.userId}
+        pickMode
+        onClose={() => setStickerOpen(false)}
+        onSaveSticker={addBabySticker}
+        onDeleteSticker={deleteBabySticker}
+        onPickSticker={(sticker) => {
+          pushChat("user", sticker.text || sticker.label, sticker.id);
+          setStickerOpen(false);
+        }}
+      />
 
       <Modal visible={bannerOpen} transparent animationType="fade" onRequestClose={() => setBannerOpen(false)}>
         <Pressable style={styles.modalBg} onPress={() => setBannerOpen(false)}>
@@ -379,6 +421,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
   },
+  stickerBtn: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.amber,
+    backgroundColor: colors.amberSoft,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  stickerBtnText: { fontSize: 11.5, fontWeight: "800", color: colors.amber },
   sendBtn: {
     width: 40,
     height: 40,

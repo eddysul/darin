@@ -63,6 +63,31 @@ export function LoadingState({ label = "불러오는 중…" }: LoadingProps) {
   );
 }
 
+type ErrorBannerProps = {
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  onDismiss?: () => void;
+};
+
+export function ErrorBanner({ message, actionLabel, onAction, onDismiss }: ErrorBannerProps) {
+  return (
+    <View style={styles.banner} accessibilityRole="alert">
+      <Text style={styles.bannerText}>{message}</Text>
+      {actionLabel && onAction ? (
+        <Pressable style={styles.bannerAction} onPress={onAction}>
+          <Text style={styles.bannerActionText}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
+      {onDismiss ? (
+        <Pressable hitSlop={10} onPress={onDismiss} accessibilityLabel="오류 배너 닫기">
+          <Text style={styles.bannerClose}>✕</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   box: {
     alignItems: "center",
@@ -92,4 +117,19 @@ const styles = StyleSheet.create({
   },
   ctaText: { color: colors.amberDark, fontWeight: "700", fontSize: 13 },
   disabled: { opacity: 0.5 },
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FFF1ED",
+    borderWidth: 1,
+    borderColor: "rgba(190,70,55,0.28)",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  bannerText: { flex: 1, color: "#8A3429", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  bannerAction: { paddingHorizontal: 8, paddingVertical: 5 },
+  bannerActionText: { color: "#8A3429", fontSize: 12, fontWeight: "800" },
+  bannerClose: { color: "#9B625B", fontSize: 14, fontWeight: "700" },
 });

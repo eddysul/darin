@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Image } from "expo-image";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { DiaryEntry } from "../../types/babyLog";
+import type { GrowthBookEdit } from "../../types/growthBook";
 import {
   diaryDisplayComment,
   diaryMilestoneLabel,
@@ -11,136 +12,180 @@ import {
   sortGrowthBookEntries,
 } from "../../utils/diaryModel";
 import { estimateGrowthBookPageCount } from "../../utils/growthBookPages";
+import { createGrowthBookPdf } from "../../utils/growthBookPdf";
 import { colors, radius } from "../../theme";
 import { EmptyState } from "../states/FeedbackStates";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { DiaryMoodStamp, DiaryStampPair } from "./DiaryStamp";
 import { GrowthBookPreviewModal } from "./GrowthBookPreviewModal";
+import { useBabyLog } from "../../context/BabyLogContext";
 
 type Props = {
   visible: boolean;
   babyName: string;
   entries: DiaryEntry[];
+  edit?: GrowthBookEdit | null;
   onClose: () => void;
   onRemove: (id: string) => void;
   onOpenEntry?: (entry: DiaryEntry) => void;
+  onOpenEditor?: () => void;
 };
 
 export function GrowthBookVaultModal({
   visible,
   babyName,
   entries,
+  edit,
   onClose,
   onRemove,
   onOpenEntry,
+  onOpenEditor,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { babyStickers } = useBabyLog();
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const sorted = useMemo(
     () => sortGrowthBookEntries(entries.filter((e) => e.includedInGrowthBook)),
     [entries],
   );
   const photoCount = useMemo(() => diaryPhotoCount(sorted), [sorted]);
   const pageEstimate = estimateGrowthBookPageCount(sorted.length);
+  const canPreview = sorted.length > 0;
+
+  useEffect(() => {
+    if (!visible) setPreviewOpen(false);
+  }, [visible]);
+
+  const runPdfCreate = async () => {
+    setPdfBusy(true);
+    try {
+      await createGrowthBookPdf({ babyName, entries: sorted, edit, stickers: babyStickers });
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   return (
-    <>
-      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-        <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) }]}>
-          <View style={styles.header}>
-            <Pressable onPress={onClose} hitSlop={10}>
-              <Text style={styles.headerBtn}>닫기</Text>
-            </Pressable>
-            <Text style={styles.headerTitle}>성장책 보관함</Text>
-            <View style={styles.headerSpacer} />
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) }]}>
+        <View style={styles.header}>
+          <Pressable onPress={onClose} hitSlop={10}>
+            <Text style={styles.headerBtn}>닫기</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>성장책 보관함</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.hero}>
+            <Text style={styles.heroTitle}>📖 {babyName}의 성장책</Text>
+            <Text style={styles.heroStats}>
+              담은 기록 {sorted.length}개 · 사진 {photoCount}장 · 예상 {pageEstimate}쪽
+            </Text>
+            <Text style={styles.heroHint}>
+              가족이 함께 꾸민 편집본을 미리보고 PDF로 완성해 보세요.
+            </Text>
           </View>
 
-          <ScrollView
-            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
-            showsVerticalScrollIndicator={false}
+          <Pressable
+            style={[styles.editBtn, !canPreview && styles.btnDisabled]}
+            disabled={!canPreview}
+            accessibilityRole="button"
+            onPress={() => {
+              if (!canPreview) return;
+              onOpenEditor?.();
+            }}
           >
-            <View style={styles.hero}>
-              <Text style={styles.heroTitle}>📖 {babyName}의 성장책</Text>
-              <Text style={styles.heroStats}>
-                담은 기록 {sorted.length}개 · 사진 {photoCount}장 · 예상 {pageEstimate}쪽
-              </Text>
-              <Text style={styles.heroHint}>시간순으로 모아두었어요. 미리보기로 책처럼 넘겨보세요.</Text>
-            </View>
+            <Text style={styles.editBtnText}>성장책 편집하기</Text>
+            <BabyLogIcon kind="edit" size={15} color={colors.amberDark} />
+          </Pressable>
 
-            <Pressable
-              style={[styles.previewBtn, sorted.length === 0 && styles.previewBtnDisabled]}
-              disabled={sorted.length === 0}
-              onPress={() => setPreviewOpen(true)}
-            >
-              <Text style={styles.previewBtnText}>성장책 미리보기</Text>
-              <BabyLogIcon kind="chevron" size={14} color={colors.amber} />
-            </Pressable>
+          <Pressable
+            style={[styles.previewBtn, !canPreview && styles.btnDisabled]}
+            disabled={!canPreview}
+            accessibilityRole="button"
+            onPress={() => {
+              if (!canPreview) return;
+              setPreviewOpen(true);
+            }}
+          >
+            <Text style={styles.previewBtnText}>성장책 미리보기</Text>
+            <BabyLogIcon kind="chevron" size={14} color={colors.amber} />
+          </Pressable>
 
-            <Pressable style={styles.pdfBtn} disabled>
-              <Text style={styles.pdfBtnText}>PDF 만들기</Text>
-              <View style={styles.comingSoon}>
-                <Text style={styles.comingSoonText}>Coming soon</Text>
-              </View>
-            </Pressable>
+          <Pressable
+            style={[styles.pdfBtn, (!canPreview || pdfBusy) && styles.btnDisabled]}
+            disabled={!canPreview || pdfBusy}
+            onPress={() => void runPdfCreate()}
+          >
+            <Text style={styles.pdfBtnText}>PDF 만들기</Text>
+          </Pressable>
 
-            {sorted.length === 0 ? (
-              <EmptyState
-                title="아직 성장책에 담은 순간이 없어요."
-                body="소중한 일기에서 📖 담기를 눌러보세요."
-              />
-            ) : (
-              sorted.map((entry, index) => {
-                const photo = diaryPrimaryPhoto(entry);
-                const milestone = diaryMilestoneLabel(entry);
-                return (
-                  <Pressable key={entry.id} style={styles.card} onPress={() => onOpenEntry?.(entry)}>
-                    <Text style={styles.index}>{index + 1}</Text>
-                    {photo ? (
-                      <Image source={{ uri: photo }} style={styles.thumb} contentFit="cover" />
-                    ) : (
-                      <View style={styles.thumbPlaceholder}>
-                        {entry.moodStamp ? (
-                          <DiaryMoodStamp id={entry.moodStamp} selected size="sm" />
-                        ) : (
-                          <Text style={styles.thumbFallback}>📔</Text>
-                        )}
-                      </View>
-                    )}
-                    <View style={styles.body}>
-                      <View style={styles.dateRow}>
-                        <Text style={styles.date} numberOfLines={1}>
-                          {entry.date}
-                        </Text>
-                        <DiaryStampPair skyId={entry.weatherStamp} moodId={entry.moodStamp} size="sm" />
-                      </View>
-                      <Text style={styles.comment} numberOfLines={2}>
-                        {milestone ? milestone : diaryDisplayComment(entry)}
-                      </Text>
-                      {milestone ? <Text style={styles.tag}>🌱 {milestone}</Text> : null}
+          {sorted.length === 0 ? (
+            <EmptyState
+              title="아직 성장책에 담은 순간이 없어요."
+              body="소중한 일기에서 📖 담기를 눌러보세요."
+            />
+          ) : (
+            sorted.map((entry, index) => {
+              const photo = diaryPrimaryPhoto(entry);
+              const milestone = diaryMilestoneLabel(entry);
+              return (
+                <Pressable key={entry.id} style={styles.card} onPress={() => onOpenEntry?.(entry)}>
+                  <Text style={styles.index}>{index + 1}</Text>
+                  {photo ? (
+                    <Image source={{ uri: photo }} style={styles.thumb} contentFit="cover" />
+                  ) : (
+                    <View style={styles.thumbPlaceholder}>
+                      {entry.moodStamp ? (
+                        <DiaryMoodStamp id={entry.moodStamp} selected size="sm" />
+                      ) : (
+                        <Text style={styles.thumbFallback}>📔</Text>
+                      )}
                     </View>
-                    <Pressable
-                      style={styles.removeBtn}
-                      onPress={() => onRemove(entry.id)}
-                      hitSlop={8}
-                      accessibilityLabel="성장책에서 빼기"
-                    >
-                      <BabyLogIcon kind="trash" size={15} color={colors.muted} />
-                    </Pressable>
+                  )}
+                  <View style={styles.body}>
+                    <View style={styles.dateRow}>
+                      <Text style={styles.date} numberOfLines={1}>
+                        {entry.date}
+                      </Text>
+                      <DiaryStampPair skyId={entry.weatherStamp} moodId={entry.moodStamp} size="sm" />
+                    </View>
+                    <Text style={styles.comment} numberOfLines={2}>
+                      {milestone ? milestone : diaryDisplayComment(entry)}
+                    </Text>
+                    {milestone ? <Text style={styles.tag}>🌱 {milestone}</Text> : null}
+                  </View>
+                  <Pressable
+                    style={styles.removeBtn}
+                    onPress={() => onRemove(entry.id)}
+                    hitSlop={8}
+                    accessibilityLabel="성장책에서 빼기"
+                  >
+                    <BabyLogIcon kind="trash" size={15} color={colors.muted} />
                   </Pressable>
-                );
-              })
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
 
-      <GrowthBookPreviewModal
-        visible={previewOpen}
-        babyName={babyName}
-        entries={sorted}
-        onClose={() => setPreviewOpen(false)}
-      />
-    </>
+        <GrowthBookPreviewModal
+          embedded
+          visible={previewOpen}
+          babyName={babyName}
+          entries={sorted}
+          edit={edit}
+          onClose={() => setPreviewOpen(false)}
+          onPdfCreate={() => void runPdfCreate()}
+        />
+      </View>
+    </Modal>
   );
 }
 
@@ -170,39 +215,42 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 17, fontWeight: "800", color: colors.text },
   heroStats: { fontSize: 13.5, fontWeight: "700", color: colors.amber, marginTop: 8 },
   heroHint: { fontSize: 12, color: colors.faint, marginTop: 6, lineHeight: 18 },
+  editBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.amber,
+    borderRadius: 14,
+    paddingVertical: 15,
+    marginBottom: 8,
+  },
+  editBtnText: { fontSize: 15, fontWeight: "800", color: colors.amberDark },
   previewBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.amber,
     borderRadius: 14,
-    paddingVertical: 14,
+    paddingVertical: 13,
     marginBottom: 8,
   },
-  previewBtnDisabled: { opacity: 0.45 },
-  previewBtnText: { fontSize: 14.5, fontWeight: "800", color: colors.amberDark },
+  previewBtnText: { fontSize: 14, fontWeight: "800", color: colors.amber },
   pdfBtn: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
     backgroundColor: colors.cardHi,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 14,
     paddingVertical: 12,
     marginBottom: 16,
-    opacity: 0.75,
   },
-  pdfBtnText: { fontSize: 13, fontWeight: "700", color: colors.muted },
-  comingSoon: {
-    backgroundColor: colors.amberSoft,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  comingSoonText: { fontSize: 10.5, fontWeight: "800", color: colors.amber },
+  pdfBtnText: { fontSize: 13.5, fontWeight: "700", color: colors.text },
+  btnDisabled: { opacity: 0.45 },
   card: {
     flexDirection: "row",
     alignItems: "flex-start",

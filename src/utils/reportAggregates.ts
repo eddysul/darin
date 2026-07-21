@@ -10,7 +10,8 @@ import {
 } from "./dateKey";
 import { toMinutes } from "./formatLog";
 
-export const FEEDING_CATS: BabyLogCategoryId[] = ["breast", "formula", "food", "snack", "pump"];
+/** Intake events shown as feeding; pumping and solid food are tracked separately. */
+export const FEEDING_CATS: BabyLogCategoryId[] = ["breast", "formula", "storedMilk", "milk"];
 
 export type DayAggregate = {
   dateKey: string;
@@ -237,7 +238,7 @@ export function buildSummaryCards(summary: TodaySummary, babyName: string): Summ
     };
   }
 
-  const overview = `오늘 ${babyName}는 수유 ${summary.feedCount}회, 수면 ${summary.sleepCount}회(${formatSleepDuration(summary.totalSleepMinutes)}), 배변 ${summary.diaperCount}회를 기록했어요.`;
+  const overview = `오늘 ${babyName}는 수유 ${summary.feedCount}회, 수면 ${summary.sleepCount}회(${formatSleepDuration(summary.totalSleepMinutes)}), 기저귀 ${summary.diaperCount}회를 기록했어요.`;
 
   const changeBits: string[] = [];
   const sleepDiff = summary.totalSleepMinutes - summary.yesterdaySleepMinutes;

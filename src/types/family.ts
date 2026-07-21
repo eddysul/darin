@@ -1,4 +1,5 @@
 import type { BabyLogActor } from "./babyLog";
+import type { RelationshipLabel } from "./growthBook";
 
 export type FamilyRole = "owner" | "admin" | "editor" | "viewer" | "caregiver";
 
@@ -8,7 +9,10 @@ export type FamilyMember = {
   id: string;
   name: string;
   emoji?: string;
+  /** App permission (관리자 / 편집 가능 / 보기만 가능). */
   role: FamilyRole;
+  /** User-facing relationship (엄마 / 아빠 / 시터…). Independent of `role`. */
+  relationshipLabel?: RelationshipLabel;
   /** Phone or email for invite prototype */
   contact?: string;
   inviteLink?: string;
@@ -31,6 +35,10 @@ export const FAMILY_STATUS_LABELS: Record<FamilyMemberStatus, string> = {
   active: "공유 중",
   inactive: "비활성",
 };
+
+export function memberRelationshipLabel(member: FamilyMember): RelationshipLabel {
+  return member.relationshipLabel ?? "가족";
+}
 
 export function canInvite(role: FamilyRole): boolean {
   return role === "owner" || role === "admin";
@@ -56,4 +64,28 @@ export function canDeleteLog(role: FamilyRole, entryCreatedBy?: BabyLogActor, me
 
 export function canManageMembers(role: FamilyRole): boolean {
   return role === "owner" || role === "admin";
+}
+
+/** Growth book rolling comments / letters — write access. */
+export function canWriteGrowthBookNote(role: FamilyRole): boolean {
+  return role === "owner" || role === "admin" || role === "editor" || role === "caregiver";
+}
+
+export function canEditOwnGrowthBookNote(
+  role: FamilyRole,
+  authorId: string,
+  me?: FamilyMember,
+): boolean {
+  if (!me) return false;
+  if (authorId === me.id) return canWriteGrowthBookNote(role);
+  return false;
+}
+
+export function canDeleteGrowthBookNote(
+  role: FamilyRole,
+  authorId: string,
+  me?: FamilyMember,
+): boolean {
+  if (role === "owner" || role === "admin") return true;
+  return canEditOwnGrowthBookNote(role, authorId, me);
 }

@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 import { Alert, Animated, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
-import { ExpandableSectionHeader } from "./ExpandableSectionHeader";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
@@ -17,6 +16,7 @@ type Props = {
   onDelete?: (entry: BabyLogEntry) => void;
   highlightId?: string | null;
   limit?: number;
+  title?: string;
 };
 
 export function TodayTimeline({
@@ -26,6 +26,7 @@ export function TodayTimeline({
   onDelete,
   highlightId,
   limit = 3,
+  title = "오늘의 기록",
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const sorted = sortLogsNewest(logs);
@@ -33,12 +34,14 @@ export function TodayTimeline({
 
   return (
     <View style={styles.section}>
-      <ExpandableSectionHeader
-        title="오늘 기록"
-        expanded={expanded}
-        canExpand={sorted.length > limit}
-        onToggle={() => setExpanded((v) => !v)}
-      />
+      <View style={styles.header}>
+        <Text style={styles.title}>{title}</Text>
+        {sorted.length > limit ? (
+          <Pressable onPress={() => setExpanded((value) => !value)} hitSlop={8}>
+            <Text style={styles.viewAll}>{expanded ? "접기" : "더 많은 기록 보기 ›"}</Text>
+          </Pressable>
+        ) : null}
+      </View>
 
       {visible.length === 0 ? (
         <Text style={styles.empty}>아직 기록이 없어요. 위에서 빠르게 기록해 보세요.</Text>
@@ -142,7 +145,9 @@ function SwipeableTimelineRow({
               <Text style={styles.actor}>{formatLogProvenance(entry)}</Text>
             ) : null}
           </View>
-          <BabyLogIcon kind="chevron" size={16} color={colors.faint} strokeWidth={2} />
+          <View style={[styles.editChip, { borderColor: `${category.color}66` }]}>
+            <Text style={[styles.editText, { color: category.color }]}>수정</Text>
+          </View>
         </Pressable>
       </Animated.View>
     </View>
@@ -151,13 +156,21 @@ function SwipeableTimelineRow({
 
 const styles = StyleSheet.create({
   section: { marginBottom: 24 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  title: { fontSize: 19, fontWeight: "800", color: colors.text, letterSpacing: -0.3 },
+  viewAll: { fontSize: 12.5, fontWeight: "800", color: colors.amber },
   empty: {
     textAlign: "center",
     color: colors.faint,
     fontSize: 13,
     paddingVertical: 20,
     backgroundColor: colors.card,
-    borderRadius: radius.lg,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -166,16 +179,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingVertical: 6,
+    paddingVertical: 5,
     overflow: "hidden",
     shadowColor: "#2E2A26",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   swipeWrap: { position: "relative" },
-  rowSurface: { backgroundColor: colors.card, paddingHorizontal: 14 },
+  rowSurface: { backgroundColor: colors.card, paddingHorizontal: 12 },
   rowHighlight: { backgroundColor: "rgba(232,145,138,0.14)" },
   deleteUnderlay: {
     ...StyleSheet.absoluteFillObject,
@@ -188,8 +201,9 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 12,
+    gap: 9,
+    minHeight: 52,
+    paddingVertical: 9,
   },
   rail: { width: 14, alignItems: "center", alignSelf: "stretch" },
   dot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
@@ -202,14 +216,22 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   time: {
-    width: 62,
-    fontSize: 12,
-    color: colors.faint,
+    width: 66,
+    fontSize: 12.5,
+    color: colors.text,
     fontWeight: "600",
     fontVariant: ["tabular-nums"],
   },
   body: { flex: 1 },
   entryRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  entryText: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.text },
+  entryText: { flex: 1, fontSize: 14.5, fontWeight: "700", color: colors.text },
   actor: { fontSize: 11, color: colors.faint, marginTop: 3 },
+  editChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    backgroundColor: "rgba(255,255,255,0.9)",
+  },
+  editText: { fontSize: 11, fontWeight: "800" },
 });

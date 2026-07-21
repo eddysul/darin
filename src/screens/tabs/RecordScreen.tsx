@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActiveTimerSheet } from "../../components/babylog/ActiveTimerSheet";
 import {
   OneTouchRecordGrid,
   type OneTouchAction,
 } from "../../components/babylog/OneTouchRecordGrid";
 import { QuickRecordsBar } from "../../components/babylog/QuickRecordsBar";
+import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { RecordCreatedToast } from "../../components/babylog/RecordCreatedToast";
 import { RecordDetailSheet, type RecordSheetPrefill } from "../../components/babylog/RecordDetailSheet";
 import { RecordHomeHeader } from "../../components/babylog/RecordHomeHeader";
@@ -12,38 +14,78 @@ import { TodayLogSummaryCard } from "../../components/babylog/TodayLogSummaryCar
 import { TodayTimeline } from "../../components/babylog/TodayTimeline";
 import { EmptyState } from "../../components/states/FeedbackStates";
 import { useBabyLog } from "../../context/BabyLogContext";
-import { nowTime, type BabyLogCategoryId } from "../../constants/babyLogCategories";
+import type { ActiveTimer, TimerSide } from "../../types/activeTimer";
+import { formatElapsedClock, elapsedMsNow, isTimerAction } from "../../types/activeTimer";
 import type { BabyLogEntry } from "../../types/babyLog";
 import type { LogCategoryKey } from "../../types/logCategory";
 import type { QuickRecord } from "../../types/quickRecord";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
-import { formatDateKey } from "../../utils/dateKey";
-import { toMinutes } from "../../utils/formatLog";
+import {
+  dayNavLabel,
+  formatDateKey,
+  offsetDateKey,
+  shortDateLabel,
+  yesterdayDateKey,
+} from "../../utils/dateKey";
+import {
+  buildTimerStopResult,
+  changeTimerSide,
+  createActiveTimer,
+  pauseTimer,
+  resumeTimer,
+  timerFromOpenSleep,
+} from "../../utils/activeTimerOps";
+import { getActiveTimers, hydrateActiveTimers, saveActiveTimers } from "../../utils/activeTimersStore";
+import { elapsedClockMinutes, nowTime } from "../../utils/formatLog";
+import {
+  actionToCategory,
+  longPressModeFor,
+  longPressSheetPrefill,
+} from "../../utils/longPressActions";
 import { getLogsForDay } from "../../utils/reportAggregates";
 import { colors } from "../../theme";
 
 type Props = {
   onOpenProfile: () => void;
+  onOpenConsult: () => void;
 };
 
 const ACTION_TOAST: Record<OneTouchAction, string> = {
-  feeding: "🍼 수유 기록 완료",
-  sleep: "😴 수면 기록 완료",
-  diaper: "🧷 기저귀 기록 완료",
-  bowel: "🧷 배변 기록 완료",
-  food: "🥣 이유식 기록 완료",
-  med: "💊 약 기록 완료",
-  temp: "🌡️ 체온 기록 완료",
-  memo: "📝 메모 기록 완료",
+  breastfeeding: "모유수유 기록 완료",
+  formula: "분유 기록 완료",
+  bowel: "대변 기록 완료",
+  urine: "소변 기록 완료",
+  sleep: "수면 기록 완료",
+  pump: "유축 기록 완료",
+  storedMilk: "저장 모유 수유 기록 완료",
+  food: "이유식 기록 완료",
+  water: "물 기록 완료",
+  snack: "간식 기록 완료",
+  milk: "우유 기록 완료",
+  tummy: "터미타임 기록 완료",
+  bath: "목욕 기록 완료",
+  play: "놀이 기록 완료",
+  temp: "체온 기록 완료",
+  med: "약 기록 완료",
+  doctor: "진료 기록 완료",
+  memo: "빠른 메모 생성 완료",
+  other: "기타 기록 생성 완료",
 };
 
-export function RecordScreen({ onOpenProfile }: Props) {
+const TIMER_LABEL: Record<ActiveTimer["kind"], string> = {
+  breastfeeding: "모유수유",
+  sleep: "수면",
+  pump: "유축",
+  tummy: "터미타임",
+  play: "놀이",
+};
+
+export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
   const {
     logs,
     addLog,
     updateLog,
     deleteLog,
-    defaultFeedingMethod,
     customCategories,
     quickRecords,
     setQuickRecords,
@@ -55,15 +97,80 @@ export function RecordScreen({ onOpenProfile }: Props) {
   const [prefill, setPrefill] = useState<RecordSheetPrefill | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ id: string; title: string } | null>(null);
+  const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey());
+  const [activeTimers, setActiveTimers] = useState<ActiveTimer[]>([]);
+  const [timerSheetId, setTimerSheetId] = useState<string | null>(null);
+  const [timerTick, setTimerTick] = useState(0);
 
   const me = familyMembers.find((m) => m.isMe);
   const allowAdd = canAddLog(myFamilyRole);
   const todayKey = formatDateKey();
-  const todayLogs = useMemo(() => getLogsForDay(logs, todayKey, todayKey), [logs, todayKey]);
-  const activeSleep = useMemo(
-    () => todayLogs.find((entry) => entry.cat === "sleep" && !entry.duration),
-    [todayLogs],
+  const dayLogs = useMemo(
+    () => getLogsForDay(logs, selectedDateKey, todayKey),
+    [logs, selectedDateKey, todayKey],
   );
+  const isViewingToday = selectedDateKey === todayKey;
+  const canGoNext = selectedDateKey < todayKey;
+  const canGoPrev = selectedDateKey > offsetDateKey(todayKey, -365);
+  const timelineTitle = isViewingToday
+    ? "오늘의 기록"
+    : selectedDateKey === yesterdayDateKey()
+      ? "어제 기록"
+      : `${shortDateLabel(selectedDateKey).replace("/", ".")} 기록`;
+  const activeSleep = useMemo(() => {
+    const yesterdayKey = yesterdayDateKey();
+    return [...logs]
+      .filter(
+        (entry) =>
+          entry.cat === "sleep" &&
+          !entry.duration &&
+          (entry.dateKey === todayKey || entry.dateKey === yesterdayKey),
+      )
+      .sort((a, b) => `${b.dateKey ?? todayKey}T${b.time}`.localeCompare(`${a.dateKey ?? todayKey}T${a.time}`))[0];
+  }, [logs, todayKey]);
+
+  useEffect(() => {
+    void (async () => {
+      await hydrateActiveTimers();
+      setActiveTimers(getActiveTimers() ?? []);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    void saveActiveTimers(activeTimers);
+  }, [activeTimers, storageReady]);
+
+  // Keep sleep timer in sync with open sleep log (short-tap start / restore).
+  useEffect(() => {
+    if (!storageReady) return;
+    setActiveTimers((prev) => {
+      const sleepTimer = prev.find((t) => t.kind === "sleep");
+      if (activeSleep) {
+        if (sleepTimer && sleepTimer.linkedLogId === activeSleep.id) return prev;
+        const next = prev.filter((t) => t.kind !== "sleep");
+        return [...next, timerFromOpenSleep(activeSleep)];
+      }
+      if (sleepTimer?.linkedLogId) {
+        const linkedStillOpen = logs.some(
+          (entry) =>
+            entry.id === sleepTimer.linkedLogId &&
+            entry.cat === "sleep" &&
+            !entry.duration,
+        );
+        if (!linkedStillOpen) {
+          return prev.filter((t) => t.kind !== "sleep");
+        }
+      }
+      return prev;
+    });
+  }, [activeSleep, logs, storageReady]);
+
+  useEffect(() => {
+    if (!activeTimers.some((t) => t.status === "running")) return;
+    const id = setInterval(() => setTimerTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [activeTimers]);
 
   const openSheet = (catKey: LogCategoryKey, nextPrefill?: RecordSheetPrefill) => {
     if (!nextPrefill?.editId && !allowAdd) return;
@@ -91,6 +198,9 @@ export function RecordScreen({ onOpenProfile }: Props) {
         dateKey: entry.dateKey,
         flags: entry.flags,
         confidence: entry.confidence,
+        title: entry.title,
+        details: entry.details,
+        nextAt: entry.nextAt,
       });
     },
     [allowAdd, me, myFamilyRole],
@@ -113,31 +223,140 @@ export function RecordScreen({ onOpenProfile }: Props) {
     }
   };
 
-  const feedingCategory: BabyLogCategoryId =
-    defaultFeedingMethod === "breastfeeding" ? "breast" : "formula";
-
   const handleOneTouch = (action: OneTouchAction) => {
     if (!allowAdd) return;
     const time = nowTime();
     if (action === "sleep" && activeSleep) {
-      const elapsed = Math.max(1, toMinutes(time) - toMinutes(activeSleep.time));
+      const elapsed = Math.max(1, elapsedClockMinutes(activeSleep.time, time));
       const { id, ...entry } = activeSleep;
       updateLog(id, { ...entry, duration: String(elapsed) });
-      announceCreated({ ...entry, id, duration: String(elapsed) }, "😴 수면 종료 완료");
+      announceCreated({ ...entry, id, duration: String(elapsed) }, "수면 종료 완료");
+      setActiveTimers((prev) => prev.filter((t) => t.kind !== "sleep"));
+      setTimerSheetId((cur) => {
+        const sleep = activeTimers.find((t) => t.kind === "sleep");
+        return sleep && cur === sleep.id ? null : cur;
+      });
       return;
     }
 
     const base = { time, dateKey: todayKey, source: "manual" as const };
     let created: BabyLogEntry | null = null;
-    if (action === "feeding") created = addLog({ ...base, cat: feedingCategory });
+    if (action === "breastfeeding") created = addLog({ ...base, cat: "breast" });
+    if (action === "formula") created = addLog({ ...base, cat: "formula" });
     if (action === "sleep") created = addLog({ ...base, cat: "sleep", chip: "낮잠" });
-    if (action === "diaper") created = addLog({ ...base, cat: "diaper", chip: "소변" });
+    if (action === "urine") created = addLog({ ...base, cat: "diaper", chip: "소변" });
     if (action === "bowel") created = addLog({ ...base, cat: "diaper", chip: "대변" });
+    if (action === "pump") created = addLog({ ...base, cat: "pump" });
+    if (action === "storedMilk") created = addLog({ ...base, cat: "storedMilk" });
     if (action === "food") created = addLog({ ...base, cat: "food" });
+    if (action === "water") created = addLog({ ...base, cat: "water" });
+    if (action === "snack") created = addLog({ ...base, cat: "snack" });
+    if (action === "milk") created = addLog({ ...base, cat: "milk" });
+    if (action === "tummy") created = addLog({ ...base, cat: "tummy" });
+    if (action === "bath") created = addLog({ ...base, cat: "bath" });
+    if (action === "play") created = addLog({ ...base, cat: "play" });
     if (action === "med") created = addLog({ ...base, cat: "med" });
     if (action === "temp") created = addLog({ ...base, cat: "temp" });
+    if (action === "doctor") created = addLog({ ...base, cat: "doctor" });
     if (action === "memo") created = addLog({ ...base, cat: "memo" });
+    if (action === "other") created = addLog({ ...base, cat: "other", title: "기타" });
     if (created) announceCreated(created, ACTION_TOAST[action]);
+  };
+
+  const startOrOpenTimer = (action: OneTouchAction) => {
+    if (!allowAdd || !isTimerAction(action)) return;
+    const existing = activeTimers.find((t) => t.action === action);
+    if (existing) {
+      setTimerSheetId(existing.id);
+      return;
+    }
+
+    if (action === "sleep") {
+      if (activeSleep) {
+        const linked = activeTimers.find((t) => t.kind === "sleep") ?? timerFromOpenSleep(activeSleep);
+        setActiveTimers((prev) => {
+          if (prev.some((t) => t.kind === "sleep")) return prev;
+          return [...prev, linked];
+        });
+        setTimerSheetId(linked.id);
+        return;
+      }
+      const created = addLog({
+        time: nowTime(),
+        dateKey: todayKey,
+        source: "manual",
+        cat: "sleep",
+        chip: "낮잠",
+      });
+      const timer = timerFromOpenSleep(created);
+      setActiveTimers((prev) => [...prev.filter((t) => t.kind !== "sleep"), timer]);
+      setTimerSheetId(timer.id);
+      announceCreated(created, "수면 시작");
+      return;
+    }
+
+    const timer = createActiveTimer(action, action);
+    setActiveTimers((prev) => [...prev.filter((t) => t.action !== action), timer]);
+    setTimerSheetId(timer.id);
+  };
+
+  const handleLongPress = (action: OneTouchAction) => {
+    if (!allowAdd) return;
+    if (longPressModeFor(action) === "timer") {
+      startOrOpenTimer(action);
+      return;
+    }
+    const next = longPressSheetPrefill(action);
+    openSheet(next.cat ?? actionToCategory(action), next);
+  };
+
+  const patchTimer = (id: string, updater: (t: ActiveTimer) => ActiveTimer) => {
+    setActiveTimers((prev) => prev.map((t) => (t.id === id ? updater(t) : t)));
+  };
+
+  const handleStopTimer = (opts?: { amount?: string }) => {
+    const timer = activeTimers.find((t) => t.id === timerSheetId);
+    if (!timer) return;
+    const result = buildTimerStopResult(timer, opts);
+    const base = {
+      time: result.startTime,
+      dateKey: result.dateKey,
+      source: "manual" as const,
+      duration: String(result.durationMinutes),
+      chip: result.chip,
+      notes: result.notes,
+      amount: result.amount,
+    };
+
+    if (timer.kind === "sleep" && timer.linkedLogId) {
+      const existing = logs.find((l) => l.id === timer.linkedLogId);
+      if (existing) {
+        const { id, ...entry } = existing;
+        updateLog(id, {
+          ...entry,
+          duration: String(result.durationMinutes),
+        });
+        announceCreated(
+          { ...entry, id, duration: String(result.durationMinutes) },
+          "수면 종료 완료",
+        );
+      }
+    } else if (timer.kind === "breastfeeding") {
+      const created = addLog({ ...base, cat: "breast" });
+      announceCreated(created, "모유수유 타이머 저장");
+    } else if (timer.kind === "pump") {
+      const created = addLog({ ...base, cat: "pump" });
+      announceCreated(created, "유축 타이머 저장");
+    } else if (timer.kind === "tummy") {
+      const created = addLog({ ...base, cat: "tummy" });
+      announceCreated(created, "터미타임 타이머 저장");
+    } else if (timer.kind === "play") {
+      const created = addLog({ ...base, cat: "play" });
+      announceCreated(created, "놀이 타이머 저장");
+    }
+
+    setActiveTimers((prev) => prev.filter((t) => t.id !== timer.id));
+    setTimerSheetId(null);
   };
 
   const handleQuickRecord = (record: QuickRecord) => {
@@ -147,18 +366,17 @@ export function RecordScreen({ onOpenProfile }: Props) {
 
     if (defaults.cat === "sleep" && (defaults.sleepAction === "start" || !defaults.duration)) {
       if (activeSleep && defaults.sleepAction !== "start") {
-        const elapsed = Math.max(1, toMinutes(time) - toMinutes(activeSleep.time));
+        const elapsed = Math.max(1, elapsedClockMinutes(activeSleep.time, time));
         const { id, ...entry } = activeSleep;
         updateLog(id, { ...entry, duration: String(elapsed) });
-        announceCreated({ ...entry, id, duration: String(elapsed) }, `${record.icon} ${record.label} 완료`);
+        announceCreated({ ...entry, id, duration: String(elapsed) }, `${record.label} 완료`);
         return;
       }
       if (activeSleep && defaults.sleepAction === "start") {
-        // already sleeping — treat as end
-        const elapsed = Math.max(1, toMinutes(time) - toMinutes(activeSleep.time));
+        const elapsed = Math.max(1, elapsedClockMinutes(activeSleep.time, time));
         const { id, ...entry } = activeSleep;
         updateLog(id, { ...entry, duration: String(elapsed) });
-        announceCreated({ ...entry, id, duration: String(elapsed) }, "😴 수면 종료 완료");
+        announceCreated({ ...entry, id, duration: String(elapsed) }, "수면 종료 완료");
         return;
       }
     }
@@ -175,7 +393,7 @@ export function RecordScreen({ onOpenProfile }: Props) {
       duration: defaults.duration,
       notes: defaults.notes,
     });
-    announceCreated(created, `${record.icon} ${record.label} 기록 완료`);
+    announceCreated(created, `${record.label} 기록 완료`);
   };
 
   const editingEntry = prefill?.editId ? logs.find((l) => l.id === prefill.editId) : null;
@@ -184,6 +402,10 @@ export function RecordScreen({ onOpenProfile }: Props) {
     : false;
 
   const toastEntry = toast ? logs.find((l) => l.id === toast.id) : null;
+  const sheetTimer = activeTimers.find((t) => t.id === timerSheetId) ?? null;
+  const activeTimerActions = activeTimers.map((t) => t.action);
+  const primaryTimer = activeTimers[0];
+  void timerTick;
 
   return (
     <View style={styles.root}>
@@ -192,38 +414,84 @@ export function RecordScreen({ onOpenProfile }: Props) {
         {!allowAdd && (
           <Text style={styles.viewerBanner}>보기 전용 계정이에요. 기록 추가·수정은 제한돼요.</Text>
         )}
+        {primaryTimer ? (
+          <Pressable
+            style={({ pressed }) => [styles.timerBanner, pressed && styles.timerBannerPressed]}
+            onPress={() => setTimerSheetId(primaryTimer.id)}
+          >
+            <View style={styles.timerBannerDot} />
+            <View style={styles.timerBannerCopy}>
+              <Text style={styles.timerBannerTitle}>
+                {TIMER_LABEL[primaryTimer.kind]} 진행 중
+                {activeTimers.length > 1 ? ` · +${activeTimers.length - 1}` : ""}
+              </Text>
+              <Text style={styles.timerBannerMeta}>
+                {formatElapsedClock(elapsedMsNow(primaryTimer))} · 탭해서 이어서
+              </Text>
+            </View>
+            <Text style={styles.timerBannerCta}>열기</Text>
+          </Pressable>
+        ) : null}
+        <TodayLogSummaryCard
+          logs={dayLogs}
+          dateKey={selectedDateKey}
+          canGoPrev={canGoPrev}
+          canGoNext={canGoNext}
+          onPrevDay={() => setSelectedDateKey((key) => offsetDateKey(key, -1))}
+          onNextDay={() => setSelectedDateKey((key) => offsetDateKey(key, 1))}
+        />
+        <OneTouchRecordGrid
+          sleepActive={Boolean(activeSleep)}
+          activeTimerActions={activeTimerActions}
+          disabled={!allowAdd}
+          onSelect={handleOneTouch}
+          onLongPress={handleLongPress}
+          onOpenActiveTimer={(action) => {
+            const found = activeTimers.find((t) => t.action === action);
+            if (found) setTimerSheetId(found.id);
+          }}
+        />
         <QuickRecordsBar
           records={quickRecords}
           disabled={!allowAdd}
           onTap={handleQuickRecord}
           onSaveRecords={setQuickRecords}
         />
-        <OneTouchRecordGrid
-          sleepActive={Boolean(activeSleep)}
-          disabled={!allowAdd}
-          onSelect={handleOneTouch}
-        />
-        <TodayLogSummaryCard logs={todayLogs} />
-        {!storageReady ? null : todayLogs.length === 0 ? (
+        {!storageReady ? null : dayLogs.length === 0 ? (
           <EmptyState
-            title="아직 기록이 없어요."
-            body="첫 기록을 남겨보세요."
-            ctaLabel={allowAdd ? "기록 추가하기" : undefined}
-            onPressCta={allowAdd ? () => handleOneTouch("feeding") : undefined}
+            title={isViewingToday ? "아직 기록이 없어요." : "이 날의 기록이 없어요."}
+            body={
+              isViewingToday
+                ? "첫 기록을 남겨보세요."
+                : `${dayNavLabel(selectedDateKey)}에 남긴 기록이 없습니다.`
+            }
+            ctaLabel={allowAdd && isViewingToday ? "기록 추가하기" : undefined}
+            onPressCta={allowAdd && isViewingToday ? () => handleOneTouch("formula") : undefined}
           />
         ) : (
           <TodayTimeline
-            logs={todayLogs}
+            logs={dayLogs}
+            title={timelineTitle}
             customCategories={customCategories}
             highlightId={highlightId}
             onPress={openEdit}
-            limit={100}
+            limit={6}
             onDelete={(entry) => {
               if (canDeleteLog(myFamilyRole, entry.createdBy, me)) deleteLog(entry.id);
             }}
           />
         )}
       </ScrollView>
+
+      <Pressable
+        style={({ pressed }) => [styles.aiFab, pressed && styles.aiFabPressed]}
+        onPress={onOpenConsult}
+        accessibilityRole="button"
+        accessibilityLabel="AI 상담 열기"
+      >
+        <BabyLogIcon kind="bot" size={25} color="#FFFFFF" strokeWidth={1.9} />
+        <Text style={styles.aiFabText}>AI 상담</Text>
+      </Pressable>
 
       <RecordCreatedToast
         visible={Boolean(toast)}
@@ -258,13 +526,32 @@ export function RecordScreen({ onOpenProfile }: Props) {
             : undefined
         }
       />
+
+      <ActiveTimerSheet
+        visible={Boolean(sheetTimer)}
+        timer={sheetTimer}
+        onClose={() => setTimerSheetId(null)}
+        onChangeSide={(side: TimerSide) => {
+          if (!sheetTimer) return;
+          patchTimer(sheetTimer.id, (t) => changeTimerSide(t, side));
+        }}
+        onPause={() => {
+          if (!sheetTimer) return;
+          patchTimer(sheetTimer.id, pauseTimer);
+        }}
+        onResume={() => {
+          if (!sheetTimer) return;
+          patchTimer(sheetTimer.id, resumeTimer);
+        }}
+        onStop={handleStopTimer}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  content: { paddingHorizontal: 20, paddingBottom: 32 },
+  content: { paddingHorizontal: 20, paddingBottom: 112 },
   viewerBanner: {
     backgroundColor: colors.amberSoft,
     color: colors.amberDark,
@@ -276,4 +563,48 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     overflow: "hidden",
   },
+  timerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.amber,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  timerBannerPressed: { opacity: 0.85 },
+  timerBannerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.amber,
+  },
+  timerBannerCopy: { flex: 1 },
+  timerBannerTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
+  timerBannerMeta: { fontSize: 12, color: colors.muted, marginTop: 2, fontWeight: "600" },
+  timerBannerCta: { fontSize: 13, fontWeight: "800", color: colors.amber },
+  aiFab: {
+    position: "absolute",
+    right: 16,
+    bottom: 18,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.amber,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.8)",
+    shadowColor: "#A84F48",
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 8,
+  },
+  aiFabPressed: { transform: [{ scale: 0.97 }], opacity: 0.9 },
+  aiFabText: { color: "#FFFFFF", fontSize: 11.5, fontWeight: "800", letterSpacing: -0.2 },
 });

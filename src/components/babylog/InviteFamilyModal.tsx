@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import type { FamilyMember, FamilyRole } from "../../types/family";
 import { FAMILY_ROLE_LABELS } from "../../types/family";
+import type { RelationshipLabel } from "../../types/growthBook";
+import { RELATIONSHIP_LABELS } from "../../types/growthBook";
 import { colors, radius } from "../../theme";
 
 const INVITE_ROLES: FamilyRole[] = ["admin", "editor", "caregiver", "viewer"];
@@ -17,13 +19,19 @@ const INVITE_ROLES: FamilyRole[] = ["admin", "editor", "caregiver", "viewer"];
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onInvite: (draft: { name: string; role: FamilyRole; contact: string }) => FamilyMember;
+  onInvite: (draft: {
+    name: string;
+    role: FamilyRole;
+    contact: string;
+    relationshipLabel?: RelationshipLabel;
+  }) => FamilyMember;
 };
 
 export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
   const [role, setRole] = useState<FamilyRole>("editor");
+  const [relationshipLabel, setRelationshipLabel] = useState<RelationshipLabel>("가족");
   const [created, setCreated] = useState<FamilyMember | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -33,6 +41,7 @@ export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
     setName("");
     setContact("");
     setRole("editor");
+    setRelationshipLabel("가족");
     setCreated(null);
     setCopied(false);
   };
@@ -44,7 +53,12 @@ export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
 
   const handleInvite = () => {
     if (!canSubmit) return;
-    const member = onInvite({ name: name.trim(), role, contact: contact.trim() });
+    const member = onInvite({
+      name: name.trim(),
+      role,
+      contact: contact.trim(),
+      relationshipLabel,
+    });
     setCreated(member);
   };
 
@@ -61,8 +75,8 @@ export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={styles.backdrop} onPress={handleClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
+      <Pressable style={styles.backdrop} onPress={handleClose} accessible={false}>
+        <Pressable style={styles.sheet} onPress={() => {}} accessible={false}>
           <View style={styles.handle} />
           <Text style={styles.title}>가족 · 시터 초대</Text>
           <Text style={styles.hint}>
@@ -108,7 +122,23 @@ export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
                 placeholderTextColor={colors.faint}
                 autoCapitalize="none"
               />
-              <Text style={styles.label}>역할</Text>
+              <Text style={styles.label}>관계 (화면에 보이는 이름)</Text>
+              <View style={styles.roleRow}>
+                {RELATIONSHIP_LABELS.map((label) => (
+                  <Pressable
+                    key={label}
+                    style={[styles.roleChip, relationshipLabel === label && styles.roleChipActive]}
+                    onPress={() => setRelationshipLabel(label)}
+                  >
+                    <Text
+                      style={[styles.roleChipText, relationshipLabel === label && styles.roleChipTextActive]}
+                    >
+                      {label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.label}>앱 권한</Text>
               <View style={styles.roleRow}>
                 {INVITE_ROLES.map((r) => (
                   <Pressable
@@ -123,7 +153,7 @@ export function InviteFamilyModal({ visible, onClose, onInvite }: Props) {
                 ))}
               </View>
               <Text style={styles.policy}>
-                관리자: 초대/삭제/수정 · 편집 가능: 기록 작성/수정 · 보기만 가능: 조회만
+                관계는 롤링페이퍼·편지에 표시되고, 권한은 편집/보기 가능 여부를 정해요.
               </Text>
               <Pressable
                 style={[styles.primaryBtn, !canSubmit && styles.disabled]}

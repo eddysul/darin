@@ -2,16 +2,16 @@ import type { BabyLogCategoryId } from "./babyLogCategories";
 import type { DefaultFeedingMethod, LogCategoryGroup } from "../types/careSetup";
 
 export const LOG_GROUP_CATEGORIES: Record<LogCategoryGroup, BabyLogCategoryId[]> = {
-  feeding: ["breast", "formula", "food", "snack", "pump"],
+  feeding: ["breast", "formula", "storedMilk", "milk", "food", "snack", "pump", "water"],
   sleep: ["sleep"],
   diaper: ["diaper"],
   medication: ["med"],
   health: ["temp", "doctor", "bath"],
   mood: ["tummy", "play"],
-  note: ["memo"],
+  note: ["memo", "other"],
 };
 
-const FEEDING_IDS: BabyLogCategoryId[] = ["breast", "formula", "pump", "food", "snack"];
+const FEEDING_IDS: BabyLogCategoryId[] = ["breast", "formula", "storedMilk", "milk", "pump", "food", "snack", "water"];
 
 export function resolveEnabledCategoryIds(groups: LogCategoryGroup[]): BabyLogCategoryId[] {
   const ids = new Set<BabyLogCategoryId>();
@@ -27,11 +27,11 @@ export function sortCategoriesForFeeding(
 ): BabyLogCategoryId[] {
   const priority: BabyLogCategoryId[] =
     method === "breastfeeding"
-      ? ["breast", "formula", "pump", "food", "snack"]
+      ? ["breast", "formula", "storedMilk", "pump", "milk", "food", "snack", "water"]
       : method === "formula"
-        ? ["formula", "breast", "pump", "food", "snack"]
+        ? ["formula", "breast", "storedMilk", "pump", "milk", "food", "snack", "water"]
         : method === "pumped_milk"
-          ? ["pump", "formula", "breast", "food", "snack"]
+          ? ["storedMilk", "pump", "formula", "breast", "milk", "food", "snack", "water"]
           : method === "mixed"
             ? FEEDING_IDS
             : [];

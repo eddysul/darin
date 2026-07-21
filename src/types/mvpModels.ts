@@ -22,8 +22,16 @@ export type CareLog = BabyLogEntry;
 export type Diary = DiaryEntry;
 
 /**
- * Growth book is a curated projection of Diary in MVP.
- * No separate store exists: Diary.includedInGrowthBook is the source of truth.
+ * Growth book edit copy is persisted separately from Diary.
+ * Diary.includedInGrowthBook still decides which diaries appear in the book.
+ */
+export type GrowthBookDocument = import("./growthBook").GrowthBookEdit;
+export type GrowthBookPageEdit = import("./growthBook").GrowthBookPageEdit;
+export type GrowthBookComment = import("./growthBook").GrowthBookComment;
+export type GrowthBookLetter = import("./growthBook").GrowthBookLetter;
+
+/**
+ * Growth book item projection from an included diary.
  */
 export type GrowthBookItem = {
   diaryId: Diary["id"];

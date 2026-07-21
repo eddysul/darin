@@ -36,7 +36,10 @@ export const categoryColors = {
   sleep: "#7c83fd",
   breast: "#e8607a",
   formula: "#f0a93c",
+  storedMilk: "#E8918A",
   food: "#4ec9b0",
+  water: "#55AEE6",
+  milk: "#89A9D9",
   pump: "#ec7fb8",
   bath: "#4fa8e0",
   doctor: "#6fcf7a",
@@ -46,6 +49,7 @@ export const categoryColors = {
   tummy: "#5b8dee",
   play: "#9b7fe8",
   memo: "#9096a6",
+  other: "#C59AD8",
 } as const;
 
 export const gradients = {

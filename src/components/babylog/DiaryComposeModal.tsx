@@ -37,6 +37,8 @@ import { buildTodaySummary, getLogsForDay } from "../../utils/reportAggregates";
 import { colors, radius } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { DiaryMoodPicker, DiaryMoodStamp, DiarySkyPicker } from "./DiaryStamp";
+import { BabyStickerFromModel } from "./BabyStickerView";
+import { BabyStickerVaultModal } from "./BabyStickerVaultModal";
 
 type Props = {
   visible: boolean;
@@ -66,11 +68,13 @@ export function DiaryComposeModal({
   onDelete,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const { logs, babyName } = useBabyLog();
+  const { logs, babyName, babyStickers, addBabySticker, deleteBabySticker, logAuthor } = useBabyLog();
   const isEdit = !!editingEntry;
 
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [stickerIds, setStickerIds] = useState<string[]>([]);
+  const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
   const [weather, setWeather] = useState<DiarySkyId | null>(DEFAULT_DIARY_SKY);
   const [mood, setMood] = useState<DiaryMoodId | null>(DEFAULT_DIARY_MOOD);
   const [milestoneTag, setMilestoneTag] = useState<string | null>(null);
@@ -100,11 +104,12 @@ export function DiaryComposeModal({
   const resolvedCustom = customMode ? customMilestoneTag.trim() || null : null;
   const resolvedPreset = customMode ? null : milestoneTag;
 
-  const canSave = notes.trim().length > 0 || photos.length > 0;
+  const canSave = notes.trim().length > 0 || photos.length > 0 || stickerIds.length > 0;
 
   const buildDraft = (): DiaryComposeDraft => ({
-    comment: notes.trim() || (photos.length ? DIARY_PHOTO_ONLY_COMMENT : notes),
+    comment: notes.trim() || (photos.length || stickerIds.length ? DIARY_PHOTO_ONLY_COMMENT : notes),
     photos,
+    stickerIds,
     weatherStamp: weather,
     moodStamp: mood,
     milestoneTag: resolvedPreset,
@@ -123,6 +128,7 @@ export function DiaryComposeModal({
       const d = entryToComposeDraft(editingEntry);
       setNotes(d.comment);
       setPhotos(d.photos);
+      setStickerIds(d.stickerIds ?? []);
       setWeather(d.weatherStamp);
       setMood(d.moodStamp);
       setMilestoneTag(d.milestoneTag);
@@ -135,6 +141,7 @@ export function DiaryComposeModal({
     } else if (initialDraft) {
       setNotes(initialDraft.comment === DIARY_PHOTO_ONLY_COMMENT ? "" : initialDraft.comment);
       setPhotos(initialDraft.photos);
+      setStickerIds(initialDraft.stickerIds ?? []);
       setWeather(initialDraft.weatherStamp);
       setMood(initialDraft.moodStamp);
       setMilestoneTag(initialDraft.milestoneTag);
@@ -147,6 +154,7 @@ export function DiaryComposeModal({
     } else {
       setNotes("");
       setPhotos([]);
+      setStickerIds([]);
       setWeather(DEFAULT_DIARY_SKY);
       setMood(DEFAULT_DIARY_MOOD);
       setMilestoneTag(null);
@@ -172,6 +180,7 @@ export function DiaryComposeModal({
     onDraftChange,
     notes,
     photos,
+    stickerIds,
     weather,
     mood,
     milestoneTag,
@@ -304,6 +313,14 @@ export function DiaryComposeModal({
             ) : null}
 
             <Text style={styles.fieldLabel}>사진</Text>
+            <View style={styles.mediaActions}>
+              <Pressable style={styles.mediaBtn} onPress={() => void pickPhoto()}>
+                <Text style={styles.mediaBtnText}>사진 추가</Text>
+              </Pressable>
+              <Pressable style={styles.mediaBtnSecondary} onPress={() => setStickerPickerOpen(true)}>
+                <Text style={styles.mediaBtnSecondaryText}>스티커 추가</Text>
+              </Pressable>
+            </View>
             <Pressable style={styles.photoBox} onPress={() => void pickPhoto()}>
               {photos[0] ? (
                 <>
@@ -320,6 +337,27 @@ export function DiaryComposeModal({
                 </View>
               )}
             </Pressable>
+
+            {stickerIds.length > 0 ? (
+              <>
+                <Text style={styles.fieldLabel}>오늘의 스티커</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stickerRow}>
+                  {stickerIds.map((id) => {
+                    const sticker = babyStickers.find((item) => item.id === id);
+                    if (!sticker) return null;
+                    return (
+                      <Pressable
+                        key={id}
+                        onLongPress={() => setStickerIds((prev) => prev.filter((x) => x !== id))}
+                      >
+                        <BabyStickerFromModel sticker={sticker} size={72} />
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+                <Text style={styles.sectionHint}>길게 누르면 스티커를 빼요</Text>
+              </>
+            ) : null}
 
             <Text style={styles.fieldLabel}>코멘트</Text>
             <TextInput
@@ -425,6 +463,22 @@ export function DiaryComposeModal({
           </ScrollView>
         </KeyboardAvoidingView>
       </View>
+
+      <BabyStickerVaultModal
+        embedded
+        visible={stickerPickerOpen}
+        babyName={babyName}
+        stickers={babyStickers}
+        createdBy={logAuthor.userId}
+        pickMode
+        onClose={() => setStickerPickerOpen(false)}
+        onSaveSticker={addBabySticker}
+        onDeleteSticker={deleteBabySticker}
+        onPickSticker={(sticker) => {
+          setStickerIds((prev) => (prev.includes(sticker.id) ? prev : [...prev, sticker.id]));
+          setStickerPickerOpen(false);
+        }}
+      />
     </Modal>
   );
 }
@@ -528,6 +582,26 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   photoClearText: { color: "#fff", fontSize: 11.5, fontWeight: "700" },
+  mediaActions: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  mediaBtn: {
+    flex: 1,
+    backgroundColor: colors.amber,
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: "center",
+  },
+  mediaBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 },
+  mediaBtnSecondary: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.amber,
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: "center",
+  },
+  mediaBtnSecondaryText: { color: colors.amber, fontWeight: "800", fontSize: 13 },
+  stickerRow: { gap: 10, paddingVertical: 4 },
   notes: {
     backgroundColor: colors.card,
     borderWidth: 1,

@@ -14,31 +14,50 @@ import { getCategory, type BabyLogCategoryId } from "../../constants/babyLogCate
 import type { QuickRecord } from "../../types/quickRecord";
 import { createId } from "../../utils/id";
 import { colors, radius } from "../../theme";
+import { LogCategoryIcon } from "./LogCategoryIcon";
 
 const LINK_CATS: BabyLogCategoryId[] = [
   "formula",
   "breast",
+  "storedMilk",
   "sleep",
   "diaper",
   "food",
+  "water",
+  "milk",
+  "snack",
+  "pump",
+  "tummy",
+  "bath",
+  "play",
   "med",
   "temp",
+  "doctor",
   "memo",
+  "other",
 ];
 
 type Props = {
   visible: boolean;
   records: QuickRecord[];
   editing: QuickRecord | null;
+  /** Open directly on the create/edit form instead of the manage list. */
+  startInForm?: boolean;
   onClose: () => void;
-  onSave: (next: QuickRecord[]) => void;
+  onSave: (next: QuickRecord[] | ((prev: QuickRecord[]) => QuickRecord[])) => void;
 };
 
-export function QuickRecordEditorSheet({ visible, records, editing, onClose, onSave }: Props) {
+export function QuickRecordEditorSheet({
+  visible,
+  records,
+  editing,
+  startInForm = false,
+  onClose,
+  onSave,
+}: Props) {
   const [label, setLabel] = useState("");
-  const [icon, setIcon] = useState("💊");
   const [color, setColor] = useState(QUICK_RECORD_COLORS[0]);
-  const [cat, setCat] = useState<BabyLogCategoryId>("med");
+  const [cat, setCat] = useState<BabyLogCategoryId>("formula");
   const [amount, setAmount] = useState("");
   const [chip, setChip] = useState("");
   const [notes, setNotes] = useState("");
@@ -49,7 +68,6 @@ export function QuickRecordEditorSheet({ visible, records, editing, onClose, onS
   const loadRecord = (r: QuickRecord) => {
     setEditId(r.id);
     setLabel(r.label);
-    setIcon(r.icon);
     setColor(r.color);
     setCat(r.defaults.cat);
     setAmount(r.defaults.amount ?? "");
@@ -59,27 +77,26 @@ export function QuickRecordEditorSheet({ visible, records, editing, onClose, onS
     setMode("form");
   };
 
-  useEffect(() => {
-    if (!visible) return;
-    if (editing) {
-      loadRecord(editing);
-    } else {
-      resetForm();
-      setEditId(null);
-      setMode("list");
-    }
-  }, [visible, editing]);
-
   const resetForm = () => {
     setLabel("");
-    setIcon("💊");
     setColor(QUICK_RECORD_COLORS[0]);
-    setCat("med");
+    setCat("formula");
     setAmount("");
     setChip("");
     setNotes("");
     setPinned(true);
   };
+
+  useEffect(() => {
+    if (!visible) return;
+    if (editing) {
+      loadRecord(editing);
+      return;
+    }
+    resetForm();
+    setEditId(null);
+    setMode(startInForm ? "form" : "list");
+  }, [visible, editing, startInForm]);
 
   const canSave = useMemo(() => label.trim().length > 0, [label]);
 
@@ -88,7 +105,7 @@ export function QuickRecordEditorSheet({ visible, records, editing, onClose, onS
     const nextRecord: QuickRecord = {
       id: editId ?? createId(),
       label: label.trim(),
-      icon: icon.trim() || "✨",
+      icon: editId ? (records.find((record) => record.id === editId)?.icon ?? "") : "",
       color,
       pinned,
       isCustom: editId ? (records.find((r) => r.id === editId)?.isCustom ?? true) : true,
@@ -100,20 +117,26 @@ export function QuickRecordEditorSheet({ visible, records, editing, onClose, onS
         sleepAction: cat === "sleep" && !amount ? "start" : undefined,
       },
     };
-    if (editId) {
-      onSave(records.map((r) => (r.id === editId ? nextRecord : r)));
-    } else {
-      onSave([...records, nextRecord]);
-    }
+    onSave((prev) => {
+      if (editId) return prev.map((r) => (r.id === editId ? nextRecord : r));
+      if (prev.some((r) => r.id === nextRecord.id)) return prev;
+      return [...prev, nextRecord];
+    });
     onClose();
   };
 
   const remove = (id: string) => {
-    onSave(records.filter((r) => r.id !== id));
+    onSave((prev) => prev.filter((r) => r.id !== id));
   };
 
   const togglePin = (id: string) => {
-    onSave(records.map((r) => (r.id === id ? { ...r, pinned: !r.pinned } : r)));
+    onSave((prev) => prev.map((r) => (r.id === id ? { ...r, pinned: !r.pinned } : r)));
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setEditId(null);
+    setMode("form");
   };
 
   return (
@@ -126,13 +149,7 @@ export function QuickRecordEditorSheet({ visible, records, editing, onClose, onS
               {mode === "form" ? (editId ? "빠른 기록 수정" : "빠른 기록 추가") : "자주 쓰는 기록"}
             </Text>
             {mode === "list" ? (
-              <Pressable
-                onPress={() => {
-                  resetForm();
-                  setEditId(null);
-                  setMode("form");
-                }}
-              >
+              <Pressable onPress={openCreateForm}>
                 <Text style={styles.link}>추가</Text>
               </Pressable>
             ) : (
@@ -151,7 +168,14 @@ export function QuickRecordEditorSheet({ visible, records, editing, onClose, onS
             <ScrollView showsVerticalScrollIndicator={false}>
               {records.map((r) => (
                 <View key={r.id} style={styles.listRow}>
-                  <Text style={styles.listIcon}>{r.icon}</Text>
+                  <View style={[styles.listIcon, { backgroundColor: `${r.color}16` }]}>
+                    <LogCategoryIcon
+                      categoryKey={r.defaults.cat}
+                      customCategories={[]}
+                      size={18}
+                      color={r.color}
+                    />
+                  </View>
                   <View style={styles.listBody}>
                     <Text style={styles.listLabel}>{r.label}</Text>
                     <Text style={styles.listMeta}>
@@ -173,14 +197,7 @@ export function QuickRecordEditorSheet({ visible, records, editing, onClose, onS
                   ) : null}
                 </View>
               ))}
-              <Pressable
-                style={styles.primary}
-                onPress={() => {
-                  resetForm();
-                  setEditId(null);
-                  setMode("form");
-                }}
-              >
+              <Pressable style={styles.primary} onPress={openCreateForm}>
                 <Text style={styles.primaryText}>새 빠른 기록 만들기</Text>
               </Pressable>
             </ScrollView>
@@ -193,16 +210,11 @@ export function QuickRecordEditorSheet({ visible, records, editing, onClose, onS
                 onChangeText={setLabel}
                 placeholder="예: 비타민D"
                 placeholderTextColor={colors.faint}
+                autoFocus={startInForm && !editing}
               />
-
-              <Text style={styles.label}>아이콘</Text>
-              <TextInput
-                style={styles.input}
-                value={icon}
-                onChangeText={setIcon}
-                placeholder="💊"
-                placeholderTextColor={colors.faint}
-              />
+              {!canSave ? (
+                <Text style={styles.hint}>이름을 입력해야 저장할 수 있어요.</Text>
+              ) : null}
 
               <Text style={styles.label}>색상</Text>
               <View style={styles.colorRow}>
@@ -311,7 +323,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  listIcon: { fontSize: 18 },
+  listIcon: { width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   listBody: { flex: 1 },
   listLabel: { fontSize: 14, fontWeight: "700", color: colors.text },
   listMeta: { fontSize: 11.5, color: colors.faint, marginTop: 2 },
@@ -367,4 +379,5 @@ const styles = StyleSheet.create({
   },
   primaryText: { fontWeight: "700", color: colors.amberDark, fontSize: 14.5 },
   disabled: { opacity: 0.45 },
+  hint: { fontSize: 12, color: colors.faint, marginTop: 6 },
 });

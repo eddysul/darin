@@ -9,16 +9,46 @@ import { buildBabyDisplay } from "../utils/childDisplay";
 import {
   getCustomCategories,
   hydrateCustomCategories,
+  saveCustomCategories,
 } from "../utils/customCategoriesStore";
 import { getQuickRecords, hydrateQuickRecords, saveQuickRecords } from "../utils/quickRecordsStore";
 import { getBabyLogs, hydrateBabyLogs, saveBabyLogs } from "../utils/babyLogsStore";
 import { getDiaryEntries, hydrateDiaryEntries, saveDiaryEntries } from "../utils/diaryStore";
 import { getChatHistory, hydrateChatHistory, saveChatHistory } from "../utils/chatHistoryStore";
 import { getFamilyMembers, hydrateFamilyMembers, saveFamilyMembers } from "../utils/familyMembersStore";
+import {
+  ensureGrowthBookEdit,
+  getGrowthBookEdit,
+  hydrateGrowthBookEdit,
+  saveGrowthBookEdit,
+} from "../utils/growthBookStore";
+import {
+  getBabyStickers,
+  hydrateBabyStickers,
+  saveBabyStickers,
+} from "../utils/babyStickersStore";
+import type { GrowthBookEdit } from "../types/growthBook";
+import type { BabySticker } from "../types/babySticker";
+import { createEmptyGrowthBookEdit } from "../types/growthBook";
 import { createId } from "../utils/id";
 import { formatDateKey, shiftDateKey } from "../utils/dateKey";
 import { actorFromFamily } from "../utils/logProvenance";
 import type { BabyLogSource } from "../types/babyLog";
+import { getDiaryDraft, saveDiaryDraft } from "../utils/diaryDraftStore";
+import { getDiaryReminder, saveDiaryReminder } from "../utils/diaryReminderStore";
+import { saveCareSetup } from "../utils/careSetupStore";
+import {
+  clearStorageIssue,
+  getStorageIssue,
+  subscribeStorageIssues,
+  type StorageIssue,
+} from "../utils/storageIssues";
+import {
+  backupQaData,
+  hasQaBackup,
+  restoreQaBackup,
+  switchToQaEmptyData,
+} from "../utils/qaDebug";
 
 const TODAY = formatDateKey();
 
@@ -143,9 +173,33 @@ function seedLogs(): Omit<BabyLogEntry, "id">[] {
 }
 
 const SEED_FAMILY: FamilyMember[] = [
-  { id: "m1", emoji: "👩", name: "김민지", role: "owner", status: "active", isMe: true },
-  { id: "m2", emoji: "👨", name: "이준호", role: "admin", status: "active", contact: "junho@example.com" },
-  { id: "m3", emoji: "🧑‍🍼", name: "박시터", role: "caregiver", status: "active", contact: "010-1234-5678" },
+  {
+    id: "m1",
+    emoji: "👩",
+    name: "김민지",
+    role: "owner",
+    relationshipLabel: "엄마",
+    status: "active",
+    isMe: true,
+  },
+  {
+    id: "m2",
+    emoji: "👨",
+    name: "이준호",
+    role: "admin",
+    relationshipLabel: "아빠",
+    status: "active",
+    contact: "junho@example.com",
+  },
+  {
+    id: "m3",
+    emoji: "🧑‍🍼",
+    name: "박시터",
+    role: "caregiver",
+    relationshipLabel: "시터",
+    status: "active",
+    contact: "010-1234-5678",
+  },
 ];
 
 const DEFAULT_GREETING: ChatMessage = {
@@ -163,12 +217,22 @@ type BabyLogContextValue = {
   defaultFeedingMethod: DefaultFeedingMethod;
   customCategories: CustomCategory[];
   quickRecords: QuickRecord[];
-  setQuickRecords: (records: QuickRecord[]) => void;
+  setQuickRecords: (records: QuickRecord[] | ((prev: QuickRecord[]) => QuickRecord[])) => void;
   logs: BabyLogEntry[];
   diaryEntries: DiaryEntry[];
   familyMembers: FamilyMember[];
+  growthBookEdit: GrowthBookEdit;
+  setGrowthBookEdit: (edit: GrowthBookEdit | ((prev: GrowthBookEdit) => GrowthBookEdit)) => void;
+  babyStickers: BabySticker[];
+  addBabySticker: (sticker: BabySticker) => void;
+  deleteBabySticker: (id: string) => void;
   myFamilyRole: FamilyRole;
-  inviteFamilyMember: (draft: { name: string; role: FamilyRole; contact: string }) => FamilyMember;
+  inviteFamilyMember: (draft: {
+    name: string;
+    role: FamilyRole;
+    contact: string;
+    relationshipLabel?: FamilyMember["relationshipLabel"];
+  }) => FamilyMember;
   updateFamilyMemberRole: (id: string, role: FamilyRole) => void;
   acceptFamilyInvite: (id: string) => void;
   setFamilyMemberStatus: (id: string, status: FamilyMember["status"]) => void;
@@ -185,9 +249,19 @@ type BabyLogContextValue = {
   updateDiary: (id: string, patch: Partial<Omit<DiaryEntry, "id">>) => void;
   deleteDiary: (id: string) => void;
   toggleDiaryInGrowthBook: (id: string) => void;
-  pushChat: (role: "user" | "ai", text: string) => void;
+  pushChat: (role: "user" | "ai", text: string, stickerId?: string) => void;
   /** True after AsyncStorage hydrate finishes (2.7). */
   storageReady: boolean;
+  storageIssue: StorageIssue | null;
+  retryPersistence: () => Promise<void>;
+  dismissStorageIssue: () => void;
+  qaDebug: {
+    backupCurrentData: () => Promise<void>;
+    useEmptyData: () => Promise<void>;
+    restoreSampleData: () => Promise<void>;
+    restoreBackupData: () => Promise<void>;
+    removeQaChatTurns: () => Promise<void>;
+  } | null;
 };
 
 const BabyLogContext = createContext<BabyLogContextValue | null>(null);
@@ -200,24 +274,38 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const [diaryHydrated, setDiaryHydrated] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(SEED_FAMILY);
   const [familyHydrated, setFamilyHydrated] = useState(false);
+  const [growthBookEdit, setGrowthBookEditState] = useState<GrowthBookEdit>(() =>
+    createEmptyGrowthBookEdit({ babyId: "baby-1", babyName: "콩" }),
+  );
+  const [growthBookHydrated, setGrowthBookHydrated] = useState(false);
+  const [babyStickers, setBabyStickers] = useState<BabySticker[]>([]);
+  const [stickersHydrated, setStickersHydrated] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([DEFAULT_GREETING]);
   const [chatHydrated, setChatHydrated] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
+  const [storageIssue, setStorageIssue] = useState<StorageIssue | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [customCategories, setCustomCategoriesState] = useState<CustomCategory[]>(getCustomCategories);
   const [quickRecords, setQuickRecordsState] = useState<QuickRecord[]>(getQuickRecords);
 
-  useEffect(() => {
-    void Promise.all([
-      hydrateCustomCategories(),
-      hydrateQuickRecords(),
-      hydrateBabyLogs(),
-      hydrateDiaryEntries(),
-      hydrateChatHistory(),
-      hydrateFamilyMembers(),
-    ]).then(() => {
-      setCustomCategoriesState(getCustomCategories());
-      setQuickRecordsState(getQuickRecords());
+  useEffect(() => subscribeStorageIssues(setStorageIssue), []);
+
+  const hydrateStorageState = useCallback(async (force = false) => {
+    const [customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk] =
+      await Promise.all([
+      hydrateCustomCategories(force),
+      hydrateQuickRecords(force),
+      hydrateBabyLogs(force),
+      hydrateDiaryEntries(force),
+      hydrateChatHistory(force),
+      hydrateFamilyMembers(force),
+      hydrateGrowthBookEdit(force),
+      hydrateBabyStickers(force),
+    ]);
+
+    if (customOk) setCustomCategoriesState(getCustomCategories());
+    if (quickOk) setQuickRecordsState(getQuickRecords());
+    if (logsOk) {
       const storedLogs = getBabyLogs();
       if (storedLogs !== null) {
         const today = formatDateKey();
@@ -236,20 +324,53 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         );
       }
       setLogsHydrated(true);
+    }
+    if (diaryOk) {
       const storedDiary = getDiaryEntries();
       if (storedDiary !== null) {
         setDiaryEntries(storedDiary);
       }
       setDiaryHydrated(true);
+    }
+    if (chatOk) {
       const storedChat = getChatHistory();
       if (storedChat !== null) setChatHistory(storedChat);
       setChatHydrated(true);
+    }
+    if (familyOk) {
       const storedFamily = getFamilyMembers();
       if (storedFamily !== null) setFamilyMembers(storedFamily);
       setFamilyHydrated(true);
-      setStorageReady(true);
-    });
+    }
+    if (growthOk) {
+      const storedEdit = getGrowthBookEdit();
+      setGrowthBookEditState(
+        ensureGrowthBookEdit({
+          babyId: "baby-1",
+          babyName: "콩",
+          existing: storedEdit,
+        }),
+      );
+      setGrowthBookHydrated(true);
+    }
+    if (stickersOk) {
+      const storedStickers = getBabyStickers();
+      if (storedStickers !== null) setBabyStickers(storedStickers);
+      setStickersHydrated(true);
+    }
+    const allLoaded =
+      customOk && quickOk && logsOk && diaryOk && chatOk && familyOk && growthOk && stickersOk;
+    if (!allLoaded) {
+      const issue = getStorageIssue();
+      if (issue) setStorageIssue(issue);
+    }
+    setStorageReady(true);
+    return allLoaded;
   }, []);
+
+  useEffect(() => {
+    void hydrateStorageState();
+  }, [hydrateStorageState]);
 
   useEffect(() => {
     if (!logsHydrated) return;
@@ -271,6 +392,31 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     void saveFamilyMembers(familyMembers);
   }, [familyMembers, familyHydrated]);
 
+  useEffect(() => {
+    if (!growthBookHydrated) return;
+    void saveGrowthBookEdit(growthBookEdit);
+  }, [growthBookEdit, growthBookHydrated]);
+
+  useEffect(() => {
+    if (!stickersHydrated) return;
+    void saveBabyStickers(babyStickers);
+  }, [babyStickers, stickersHydrated]);
+
+  const setGrowthBookEdit = useCallback(
+    (edit: GrowthBookEdit | ((prev: GrowthBookEdit) => GrowthBookEdit)) => {
+      setGrowthBookEditState((prev) => (typeof edit === "function" ? edit(prev) : edit));
+    },
+    [],
+  );
+
+  const addBabySticker = useCallback((sticker: BabySticker) => {
+    setBabyStickers((prev) => [sticker, ...prev.filter((item) => item.id !== sticker.id)]);
+  }, []);
+
+  const deleteBabySticker = useCallback((id: string) => {
+    setBabyStickers((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
   const me = useMemo(() => familyMembers.find((m) => m.isMe) ?? familyMembers[0], [familyMembers]);
   const myFamilyRole: FamilyRole = me?.role ?? "owner";
 
@@ -280,10 +426,16 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     return { userId: "local-me", name, role: "owner" };
   }, [careSetup.parent.parentName, me]);
 
-  const setQuickRecords = useCallback((records: QuickRecord[]) => {
-    setQuickRecordsState(records);
-    void saveQuickRecords(records);
-  }, []);
+  const setQuickRecords = useCallback(
+    (records: QuickRecord[] | ((prev: QuickRecord[]) => QuickRecord[])) => {
+      setQuickRecordsState((prev) => {
+        const next = typeof records === "function" ? records(prev) : records;
+        void saveQuickRecords(next);
+        return next;
+      });
+    },
+    [],
+  );
 
   const locale = careSetup.parent.preferredLanguage;
   const display = useMemo(() => buildBabyDisplay(careSetup.child, locale), [careSetup.child, locale]);
@@ -352,6 +504,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
           dateKey: entry.dateKey || formatDateKey(),
           photos: entry.photos ?? [],
           includedInGrowthBook: entry.includedInGrowthBook ?? false,
+          stickerIds: entry.stickerIds ?? [],
           momentSuggestionsUsed: entry.momentSuggestionsUsed ?? [],
           weatherStamp: entry.weatherStamp ?? null,
           moodStamp: entry.moodStamp ?? null,
@@ -390,17 +543,26 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const pushChat = useCallback((role: "user" | "ai", text: string) => {
-    setChatHistory((prev) => [...prev, { id: createId(), role, text }]);
+  const pushChat = useCallback((role: "user" | "ai", text: string, stickerId?: string) => {
+    setChatHistory((prev) => [...prev, { id: createId(), role, text, stickerId }]);
   }, []);
 
   const inviteFamilyMember = useCallback(
-    (draft: { name: string; role: FamilyRole; contact: string }) => {
+    (draft: {
+      name: string;
+      role: FamilyRole;
+      contact: string;
+      relationshipLabel?: FamilyMember["relationshipLabel"];
+    }) => {
       const code = createId().slice(0, 6).toUpperCase();
+      const relationshipLabel =
+        draft.relationshipLabel ??
+        (draft.role === "caregiver" ? "시터" : "가족");
       const member: FamilyMember = {
         id: createId(),
         name: draft.name.trim(),
         role: draft.role,
+        relationshipLabel,
         contact: draft.contact.trim(),
         status: "pending",
         inviteCode: code,
@@ -431,6 +593,89 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setFamilyMembers((prev) => prev.filter((m) => m.id !== id || m.isMe));
   }, []);
 
+  const retryPersistence = useCallback(async () => {
+    const issue = storageIssue;
+    clearStorageIssue();
+    if (issue?.operation === "load") {
+      await hydrateStorageState(true);
+      return;
+    }
+    const draft = getDiaryDraft();
+    const reminder = getDiaryReminder();
+    await Promise.all([
+      saveCareSetup(careSetup),
+      saveBabyLogs(logs),
+      saveDiaryEntries(diaryEntries),
+      saveChatHistory(chatHistory),
+      saveFamilyMembers(familyMembers),
+      saveGrowthBookEdit(growthBookEdit),
+      saveBabyStickers(babyStickers),
+      saveQuickRecords(quickRecords),
+      saveCustomCategories(customCategories),
+      saveDiaryReminder(reminder),
+      ...(draft ? [saveDiaryDraft(draft)] : []),
+    ]);
+  }, [
+    careSetup,
+    chatHistory,
+    customCategories,
+    diaryEntries,
+    familyMembers,
+    growthBookEdit,
+    hydrateStorageState,
+    logs,
+    babyStickers,
+    quickRecords,
+    storageIssue,
+  ]);
+
+  const qaDebug = useMemo<BabyLogContextValue["qaDebug"]>(() => {
+    if (!__DEV__) return null;
+
+    const persistSamples = async () => {
+      if (!(await hasQaBackup())) await backupQaData();
+      const sampleLogs = seedLogs().map((log) => ({ ...log, id: createId() }));
+      setLogs(sampleLogs);
+      setDiaryEntries(SEED_DIARY);
+      setChatHistory([DEFAULT_GREETING]);
+      setFamilyMembers(SEED_FAMILY);
+      setLogsHydrated(true);
+      setDiaryHydrated(true);
+      setChatHydrated(true);
+      setFamilyHydrated(true);
+      await Promise.all([
+        saveBabyLogs(sampleLogs),
+        saveDiaryEntries(SEED_DIARY),
+        saveChatHistory([DEFAULT_GREETING]),
+        saveFamilyMembers(SEED_FAMILY),
+      ]);
+    };
+
+    return {
+      backupCurrentData: async () => {
+        await backupQaData();
+      },
+      useEmptyData: async () => {
+        await switchToQaEmptyData();
+        await hydrateStorageState(true);
+      },
+      restoreSampleData: persistSamples,
+      restoreBackupData: async () => {
+        await restoreQaBackup();
+        await hydrateStorageState(true);
+      },
+      removeQaChatTurns: async () => {
+        const next = chatHistory.filter((message, index, messages) => {
+          if (message.role === "user" && message.text.startsWith("QA ")) return false;
+          const previous = messages[index - 1];
+          return !(message.role === "ai" && previous?.role === "user" && previous.text.startsWith("QA "));
+        });
+        setChatHistory(next);
+        await saveChatHistory(next);
+      },
+    };
+  }, [chatHistory, hydrateStorageState]);
+
   const value = useMemo(
     () => ({
       careSetup,
@@ -445,6 +690,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       logs,
       diaryEntries,
       familyMembers,
+      growthBookEdit,
+      setGrowthBookEdit,
+      babyStickers,
+      addBabySticker,
+      deleteBabySticker,
       myFamilyRole,
       inviteFamilyMember,
       updateFamilyMemberRole,
@@ -465,6 +715,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       toggleDiaryInGrowthBook,
       pushChat,
       storageReady,
+      storageIssue,
+      retryPersistence,
+      dismissStorageIssue: clearStorageIssue,
+      qaDebug,
     }),
     [
       careSetup,
@@ -475,6 +729,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       logs,
       diaryEntries,
       familyMembers,
+      growthBookEdit,
+      setGrowthBookEdit,
+      babyStickers,
+      addBabySticker,
+      deleteBabySticker,
       myFamilyRole,
       inviteFamilyMember,
       updateFamilyMemberRole,
@@ -494,6 +753,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       toggleDiaryInGrowthBook,
       pushChat,
       storageReady,
+      storageIssue,
+      retryPersistence,
+      qaDebug,
     ],
   );
 

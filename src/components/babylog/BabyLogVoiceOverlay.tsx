@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -40,6 +40,8 @@ type Props = {
   /** When set, replaces the matching card in the open review session. */
   eventPatch?: VoiceResult | null;
   onEventPatchConsumed?: () => void;
+  /** Nested overlays (e.g. edit sheet) must render inside this Modal on iOS. */
+  children?: ReactNode;
 };
 
 const ERROR_KEYS: Record<string, MessageKey> = {
@@ -101,6 +103,7 @@ export function BabyLogVoiceOverlay({
   onManualEntry,
   eventPatch = null,
   onEventPatchConsumed,
+  children,
 }: Props) {
   const { t } = useLanguage();
   const {
@@ -240,8 +243,8 @@ export function BabyLogVoiceOverlay({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <Pressable style={styles.overlay} onPress={handleClose}>
-        <Pressable style={styles.stage} onPress={() => {}}>
+      <Pressable style={styles.overlay} onPress={handleClose} accessible={false}>
+        <Pressable style={styles.stage} onPress={() => {}} accessible={false}>
           {stage === "listening" && (
             <>
               <Text style={styles.state}>{isRecording ? t("voice.listening") : t("voice.preparing")}</Text>
@@ -359,6 +362,7 @@ export function BabyLogVoiceOverlay({
           )}
         </Pressable>
       </Pressable>
+      {children}
     </Modal>
   );
 }

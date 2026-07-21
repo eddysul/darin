@@ -34,6 +34,7 @@ type AppContextValue = {
   careSetup: CareSetup;
   setCareSetup: (setup: CareSetup) => void;
   careSetupReady: boolean;
+  hasSavedCareSetup: boolean;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -42,22 +43,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PARENT_PROFILE);
   const [careSetup, setCareSetupState] = useState<CareSetup>(getEffectiveCareSetup);
   const [careSetupReady, setCareSetupReady] = useState(false);
+  const [hasSavedCareSetup, setHasSavedCareSetup] = useState(false);
 
   useEffect(() => {
     void hydrateCareSetup().then(() => {
       const saved = loadCareSetup();
-      if (saved) setCareSetupState(saved);
+      if (saved) {
+        setCareSetupState(saved);
+        setHasSavedCareSetup(true);
+      }
       setCareSetupReady(true);
     });
   }, []);
 
   const setCareSetup = useCallback((setup: CareSetup) => {
     setCareSetupState(setup);
+    setHasSavedCareSetup(true);
     void saveCareSetup(setup);
   }, []);
 
   return (
-    <AppContext.Provider value={{ profile, setProfile, careSetup, setCareSetup, careSetupReady }}>
+    <AppContext.Provider
+      value={{ profile, setProfile, careSetup, setCareSetup, careSetupReady, hasSavedCareSetup }}
+    >
       {children}
     </AppContext.Provider>
   );

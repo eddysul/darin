@@ -1,13 +1,14 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DEFAULT_QUICK_RECORDS } from "../constants/defaultQuickRecords";
 import type { QuickRecord } from "../types/quickRecord";
 import { STORAGE_KEYS } from "./storageKeys";
+import { reportStorageIssue } from "./storageIssues";
+import { qaStorage } from "./qaStorage";
 
 const STORAGE_KEY = STORAGE_KEYS.quickRecords;
 
 let memory: QuickRecord[] | null = null;
 let hydrated = false;
-let hydratePromise: Promise<void> | null = null;
+let hydratePromise: Promise<boolean> | null = null;
 
 function isQuickRecord(item: unknown): item is QuickRecord {
   if (typeof item !== "object" || item === null) return false;
@@ -31,20 +32,26 @@ function normalize(raw: unknown): QuickRecord[] {
   return parsed.length ? parsed : [...DEFAULT_QUICK_RECORDS];
 }
 
-export async function hydrateQuickRecords(): Promise<void> {
-  if (hydrated) return;
+export async function hydrateQuickRecords(force = false): Promise<boolean> {
+  if (force) {
+    hydrated = false;
+    hydratePromise = null;
+  }
+  if (hydrated) return true;
   if (!hydratePromise) {
     hydratePromise = (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const raw = await qaStorage.getItem(STORAGE_KEY);
         memory = raw ? normalize(JSON.parse(raw)) : null;
+        hydrated = true;
+        return true;
       } catch {
-        memory = null;
+        reportStorageIssue("load", STORAGE_KEY);
+        return false;
       }
-      hydrated = true;
     })();
   }
-  await hydratePromise;
+  return hydratePromise;
 }
 
 export function getQuickRecords(): QuickRecord[] {
@@ -55,8 +62,8 @@ export async function saveQuickRecords(records: QuickRecord[]): Promise<void> {
   memory = records;
   hydrated = true;
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    await qaStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   } catch {
-    // ignore
+    reportStorageIssue("save", STORAGE_KEY);
   }
 }

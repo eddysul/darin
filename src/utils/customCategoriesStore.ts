@@ -1,12 +1,13 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { CustomCategory } from "../types/logCategory";
+import { qaStorage } from "./qaStorage";
 import { STORAGE_KEYS } from "./storageKeys";
+import { reportStorageIssue } from "./storageIssues";
 
 const STORAGE_KEY = STORAGE_KEYS.customCategories;
 
 let memoryCategories: CustomCategory[] | null = null;
 let hydrated = false;
-let hydratePromise: Promise<void> | null = null;
+let hydratePromise: Promise<boolean> | null = null;
 
 function normalizeCategories(raw: unknown): CustomCategory[] {
   if (!Array.isArray(raw)) return [];
@@ -20,20 +21,26 @@ function normalizeCategories(raw: unknown): CustomCategory[] {
   );
 }
 
-export async function hydrateCustomCategories(): Promise<void> {
-  if (hydrated) return;
+export async function hydrateCustomCategories(force = false): Promise<boolean> {
+  if (force) {
+    hydrated = false;
+    hydratePromise = null;
+  }
+  if (hydrated) return true;
   if (!hydratePromise) {
     hydratePromise = (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const raw = await qaStorage.getItem(STORAGE_KEY);
         memoryCategories = raw ? normalizeCategories(JSON.parse(raw)) : [];
+        hydrated = true;
+        return true;
       } catch {
-        memoryCategories = [];
+        reportStorageIssue("load", STORAGE_KEY);
+        return false;
       }
-      hydrated = true;
     })();
   }
-  await hydratePromise;
+  return hydratePromise;
 }
 
 export function getCustomCategories(): CustomCategory[] {
@@ -44,8 +51,8 @@ export async function saveCustomCategories(categories: CustomCategory[]): Promis
   memoryCategories = categories;
   hydrated = true;
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(categories));
+    await qaStorage.setItem(STORAGE_KEY, JSON.stringify(categories));
   } catch {
-    // ignore persistence errors
+    reportStorageIssue("save", STORAGE_KEY);
   }
 }

@@ -73,6 +73,7 @@ export function entryToComposeDraft(entry: DiaryEntry): DiaryComposeDraft {
   return {
     comment: entry.comment === DIARY_PHOTO_ONLY_COMMENT ? "" : entry.comment,
     photos: [...entry.photos],
+    stickerIds: [...(entry.stickerIds ?? [])],
     weatherStamp: entry.weatherStamp,
     moodStamp: entry.moodStamp,
     milestoneTag: entry.milestoneTag,

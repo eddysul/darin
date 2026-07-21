@@ -3,7 +3,10 @@ import { categoryColors } from "../theme";
 export type BabyLogCategoryId =
   | "breast"
   | "formula"
+  | "storedMilk"
   | "food"
+  | "water"
+  | "milk"
   | "diaper"
   | "sleep"
   | "pump"
@@ -14,7 +17,8 @@ export type BabyLogCategoryId =
   | "snack"
   | "tummy"
   | "play"
-  | "memo";
+  | "memo"
+  | "other";
 
 export type BabyLogCategory = {
   id: BabyLogCategoryId;
@@ -30,7 +34,10 @@ export type BabyLogCategory = {
 export const BABY_LOG_CATEGORIES: BabyLogCategory[] = [
   { id: "breast", label: "모유수유", emoji: "🤱", color: categoryColors.breast, chips: ["좌측", "우측", "양쪽"], duration: true },
   { id: "formula", label: "분유", emoji: "🍼", color: categoryColors.formula, amount: "ml" },
+  { id: "storedMilk", label: "저장 모유 수유", emoji: "", color: categoryColors.storedMilk, amount: "ml" },
   { id: "food", label: "이유식", emoji: "🥣", color: categoryColors.food, chips: ["잘 먹음", "보통", "거부"], amount: "g" },
+  { id: "water", label: "물", emoji: "", color: categoryColors.water, amount: "ml" },
+  { id: "milk", label: "우유", emoji: "", color: categoryColors.milk, amount: "ml" },
   {
     id: "diaper",
     label: "배변",
@@ -49,6 +56,7 @@ export const BABY_LOG_CATEGORIES: BabyLogCategory[] = [
   { id: "tummy", label: "터미타임", emoji: "🧸", color: categoryColors.tummy, duration: true },
   { id: "play", label: "놀이", emoji: "🎈", color: categoryColors.play, duration: true },
   { id: "memo", label: "메모", emoji: "📝", color: categoryColors.memo },
+  { id: "other", label: "기타", emoji: "", color: categoryColors.other },
 ];
 
 /** Fixed main record grid categories (same order as BABY_LOG_CATEGORIES). */
@@ -64,7 +72,10 @@ export function getCategory(id: BabyLogCategoryId): BabyLogCategory {
 export const CAT_HISTORY: Record<BabyLogCategoryId, number[]> = {
   breast: [3, 4, 3, 4, 4, 3],
   formula: [3, 3, 4, 3, 4, 4],
+  storedMilk: [1, 1, 0, 1, 1, 0],
   food: [2, 2, 3, 2, 2, 3],
+  water: [2, 3, 2, 3, 3, 2],
+  milk: [0, 1, 1, 0, 1, 1],
   diaper: [6, 7, 6, 8, 6, 7],
   sleep: [5, 5, 4, 5, 4, 5],
   pump: [2, 3, 2, 3, 2, 2],
@@ -76,7 +87,5 @@ export const CAT_HISTORY: Record<BabyLogCategoryId, number[]> = {
   tummy: [2, 3, 2, 3, 2, 2],
   play: [2, 2, 3, 2, 3, 2],
   memo: [1, 0, 1, 1, 0, 1],
+  other: [0, 1, 0, 0, 1, 0],
 };
-
-// Re-export formatting helpers for backward compatibility.
-export { formatLogMeta, nowTime, toMinutes } from "../utils/formatLog";

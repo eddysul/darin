@@ -120,6 +120,9 @@ export function migrateDiaryEntry(raw: unknown, fallbackBabyId = "baby-1"): Diar
     milestoneTag,
     customMilestoneTag,
     includedInGrowthBook: !!(d.includedInGrowthBook ?? d.inGrowthBook),
+    stickerIds: Array.isArray(d.stickerIds)
+      ? (d.stickerIds as unknown[]).filter((x): x is string => typeof x === "string")
+      : [],
     createdBy: d.createdBy as DiaryEntry["createdBy"],
     createdAt: typeof d.createdAt === "string" ? d.createdAt : now,
     updatedAt: typeof d.updatedAt === "string" ? d.updatedAt : now,

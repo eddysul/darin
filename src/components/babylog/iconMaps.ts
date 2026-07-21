@@ -6,6 +6,7 @@ import {
   Baby,
   Bath,
   Bell,
+  Bot,
   BookOpen,
   Check,
   ChevronRight,
@@ -13,13 +14,17 @@ import {
   Clock,
   FileText,
   FolderOpen,
+  GlassWater,
+  Menu,
   MessageCircle,
   Mic,
+  Milk,
   Moon,
   Pencil,
   Pill,
   Plus,
   Sparkles,
+  Star,
   Stethoscope,
   Thermometer,
   Trash2,
@@ -35,13 +40,17 @@ import { BreastPumpIcon } from "./icons/BreastPumpIcon";
 import { DiaperIcon } from "./icons/DiaperIcon";
 import { RattleIcon } from "./icons/RattleIcon";
 import { TummyTimeIcon } from "./icons/TummyTimeIcon";
+import { StoredMilkIcon } from "./icons/StoredMilkIcon";
 
 type IconComponent = ComponentType<LucideProps>;
 
 export const CATEGORY_ICONS: Record<BabyLogCategoryId, IconComponent> = {
   breast: BreastfeedingIcon,
   formula: BabyBottleIcon,
+  storedMilk: StoredMilkIcon,
   food: Utensils,
+  water: GlassWater,
+  milk: Milk,
   diaper: DiaperIcon,
   sleep: Moon,
   pump: BreastPumpIcon,
@@ -53,9 +62,10 @@ export const CATEGORY_ICONS: Record<BabyLogCategoryId, IconComponent> = {
   tummy: TummyTimeIcon,
   play: RattleIcon,
   memo: FileText,
+  other: Star,
 };
 
-export type TabIconKey = "record" | "diary" | "report" | "consult" | "mic";
+export type TabIconKey = "record" | "diary" | "report" | "consult" | "mic" | "menu";
 export type MiscIconKey =
   | "new"
   | "baby"
@@ -70,7 +80,8 @@ export type MiscIconKey =
   | "bell"
   | "sparkles"
   | "voice"
-  | "trash";
+  | "trash"
+  | "bot";
 
 export const TAB_ICONS: Record<TabIconKey, IconComponent> = {
   record: ClipboardList,
@@ -78,6 +89,7 @@ export const TAB_ICONS: Record<TabIconKey, IconComponent> = {
   report: Activity,
   consult: MessageCircle,
   mic: Mic,
+  menu: Menu,
 };
 
 export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
@@ -95,4 +107,5 @@ export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
   sparkles: Sparkles,
   voice: Mic,
   trash: Trash2,
+  bot: Bot,
 };

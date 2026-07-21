@@ -17,6 +17,8 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { DiaryEntry } from "../../types/babyLog";
+import type { GrowthBookEdit } from "../../types/growthBook";
+import { formatGrowthAuthorLabel } from "../../types/growthBook";
 import {
   buildGrowthBookPages,
   type GrowthBookPage,
@@ -24,25 +26,39 @@ import {
 import { colors } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { DiaryStampPair } from "./DiaryStamp";
+import { BabyStickerFromModel } from "./BabyStickerView";
+import { useBabyLog } from "../../context/BabyLogContext";
 
 type Props = {
   visible: boolean;
   babyName: string;
   entries: DiaryEntry[];
+  edit?: GrowthBookEdit | null;
   onClose: () => void;
+  /** Render as an overlay inside a parent Modal (avoids iOS nested-Modal failures). */
+  embedded?: boolean;
+  onPdfCreate?: () => void;
 };
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
-export function GrowthBookPreviewModal({ visible, babyName, entries, onClose }: Props) {
+export function GrowthBookPreviewModal({
+  visible,
+  babyName,
+  entries,
+  edit,
+  onClose,
+  embedded = false,
+  onPdfCreate,
+}: Props) {
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList<GrowthBookPage>>(null);
   const [index, setIndex] = useState(0);
   const turnAnim = useRef(new Animated.Value(0)).current;
 
   const pages = useMemo(
-    () => buildGrowthBookPages({ babyName, entries }),
-    [babyName, entries],
+    () => buildGrowthBookPages({ babyName, entries, edit }),
+    [babyName, entries, edit],
   );
 
   useEffect(() => {
@@ -112,63 +128,76 @@ export function GrowthBookPreviewModal({ visible, babyName, entries, onClose }: 
     </View>
   );
 
-  return (
-    <Modal visible={visible} animationType="fade" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <View style={[styles.root, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <LinearGradient colors={["#3D342C", "#2A241F", "#1E1A16"]} style={StyleSheet.absoluteFill} />
+  if (!visible) return null;
 
-        <View style={styles.topBar}>
-          <Pressable onPress={onClose} hitSlop={10} style={styles.topBtn}>
-            <Text style={styles.topBtnText}>닫기</Text>
-          </Pressable>
-          <Text style={styles.topTitle}>성장책 미리보기</Text>
-          <View style={styles.topBtn} />
-        </View>
+  const body = (
+    <View
+      style={[
+        styles.root,
+        embedded && styles.embeddedRoot,
+        { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) },
+      ]}
+    >
+      <LinearGradient colors={["#3D342C", "#2A241F", "#1E1A16"]} style={StyleSheet.absoluteFill} />
 
-        <FlatList
-          ref={listRef}
-          data={pages}
-          keyExtractor={(p) => p.id}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          renderItem={renderItem}
-          onMomentumScrollEnd={onMomentumEnd}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={viewabilityConfig}
-          getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
-          decelerationRate="fast"
-        />
+      <View style={styles.topBar}>
+        <Pressable onPress={onClose} hitSlop={10} style={styles.topBtn}>
+          <Text style={styles.topBtnText}>닫기</Text>
+        </Pressable>
+        <Text style={styles.topTitle}>성장책 미리보기</Text>
+        <View style={styles.topBtn} />
+      </View>
 
-        <View style={styles.navRow}>
-          <Pressable
-            style={[styles.arrowBtn, index === 0 && styles.arrowDisabled]}
-            onPress={() => goTo(index - 1)}
-            disabled={index === 0}
-          >
-            <Text style={styles.arrowText}>‹</Text>
-          </Pressable>
+      <FlatList
+        ref={listRef}
+        data={pages}
+        keyExtractor={(p) => p.id}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        renderItem={renderItem}
+        onMomentumScrollEnd={onMomentumEnd}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
+        decelerationRate="fast"
+      />
 
-          <Text style={styles.pageNum}>
-            {index + 1} / {pages.length}
-          </Text>
+      <View style={styles.navRow}>
+        <Pressable
+          style={[styles.arrowBtn, index === 0 && styles.arrowDisabled]}
+          onPress={() => goTo(index - 1)}
+          disabled={index === 0}
+        >
+          <Text style={styles.arrowText}>‹</Text>
+        </Pressable>
 
-          <Pressable
-            style={[styles.arrowBtn, index >= pages.length - 1 && styles.arrowDisabled]}
-            onPress={() => goTo(index + 1)}
-            disabled={index >= pages.length - 1}
-          >
-            <Text style={styles.arrowText}>›</Text>
-          </Pressable>
-        </View>
+        <Text style={styles.pageNum}>
+          {index + 1} / {pages.length}
+        </Text>
 
-        <Pressable style={styles.pdfBtn} disabled>
-          <Text style={styles.pdfBtnText}>PDF 만들기</Text>
-          <View style={styles.comingSoon}>
-            <Text style={styles.comingSoonText}>Coming soon</Text>
-          </View>
+        <Pressable
+          style={[styles.arrowBtn, index >= pages.length - 1 && styles.arrowDisabled]}
+          onPress={() => goTo(index + 1)}
+          disabled={index >= pages.length - 1}
+        >
+          <Text style={styles.arrowText}>›</Text>
         </Pressable>
       </View>
+
+      {onPdfCreate ? (
+        <Pressable style={styles.pdfBtn} onPress={onPdfCreate}>
+          <Text style={styles.pdfBtnText}>PDF 만들기</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <Modal visible={visible} animationType="fade" presentationStyle="fullScreen" onRequestClose={onClose}>
+      {body}
     </Modal>
   );
 }
@@ -209,7 +238,15 @@ function CoverContent({ page }: { page: GrowthBookPage }) {
 }
 
 function MomentContent({ page }: { page: GrowthBookPage }) {
-  const photoHeavy = page.kind === "photo" || !!page.photoUri;
+  const { babyStickers } = useBabyLog();
+  const uris = page.photoUris ?? (page.photoUri ? [page.photoUri] : []);
+  const layout = page.layout ?? Math.min(4, Math.max(1, uris.length || 1));
+  const shown = uris.slice(0, layout);
+  const photoHeavy = shown.length > 0;
+  const stickers = (page.stickerIds ?? [])
+    .map((id) => babyStickers.find((item) => item.id === id))
+    .filter(Boolean);
+
   return (
     <View style={styles.momentInner}>
       <View style={styles.momentHeader}>
@@ -219,16 +256,50 @@ function MomentContent({ page }: { page: GrowthBookPage }) {
       <Text style={styles.momentTitle}>{page.title}</Text>
       {page.dateLabel ? <Text style={styles.momentDate}>{page.dateLabel}</Text> : null}
 
-      {page.photoUri ? (
-        <View style={[styles.momentPhotoFrame, photoHeavy && styles.momentPhotoLarge]}>
-          <Image source={{ uri: page.photoUri }} style={styles.momentPhoto} contentFit="cover" />
+      {shown.length > 0 ? (
+        <View style={[styles.photoGrid, layoutStyles[layout as 1 | 2 | 3 | 4]]}>
+          {shown.map((uri, i) => (
+            <View
+              key={`${uri}-${i}`}
+              style={[
+                styles.photoCell,
+                layout === 1 && styles.photoCellLarge,
+                layout === 3 && i === 0 && styles.photoCellWide,
+              ]}
+            >
+              <Image source={{ uri }} style={styles.momentPhoto} contentFit="cover" />
+            </View>
+          ))}
         </View>
       ) : null}
 
       {page.body ? (
-        <Text style={styles.momentBody} numberOfLines={photoHeavy ? 5 : 10}>
+        <Text style={styles.momentBody} numberOfLines={photoHeavy ? 4 : 8}>
           {page.body}
         </Text>
+      ) : null}
+
+      {(page.rollingComments ?? []).length > 0 ? (
+        <View style={styles.rollingWrap}>
+          {(page.rollingComments ?? []).slice(0, 3).map((comment) => (
+            <View key={comment.id} style={styles.rollingItem}>
+              <Text style={styles.rollingAuthor}>
+                {formatGrowthAuthorLabel(comment.authorRelationshipLabel, comment.authorName)}
+              </Text>
+              <Text style={styles.rollingText} numberOfLines={2}>
+                “{comment.text}”
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {stickers.length > 0 ? (
+        <View style={styles.stickerFooter}>
+          {stickers.slice(0, 3).map((sticker) =>
+            sticker ? <BabyStickerFromModel key={sticker.id} sticker={sticker} size={56} /> : null,
+          )}
+        </View>
       ) : null}
     </View>
   );
@@ -252,6 +323,10 @@ const PAPER_H = Math.min(SCREEN_H * 0.62, 560);
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  embeddedRoot: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+  },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -385,6 +460,10 @@ const styles = StyleSheet.create({
     lineHeight: 30,
   },
   momentDate: { marginTop: 4, fontSize: 12.5, fontWeight: "600", color: "#8A735A" },
+  photoGrid: { marginTop: 12, gap: 6 },
+  photoCell: { borderRadius: 10, overflow: "hidden", borderWidth: 3, borderColor: "#FFF", flex: 1 },
+  photoCellLarge: { height: 200, width: "100%" },
+  photoCellWide: { width: "100%" },
   momentPhotoFrame: {
     marginTop: 14,
     borderRadius: 12,
@@ -401,6 +480,21 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     color: "#4A4038",
     fontWeight: "500",
+  },
+  rollingWrap: { marginTop: 12, gap: 8 },
+  rollingItem: {
+    backgroundColor: "rgba(255,255,255,0.55)",
+    borderRadius: 10,
+    padding: 8,
+  },
+  rollingAuthor: { fontSize: 11, fontWeight: "800", color: colors.amber },
+  rollingText: { fontSize: 12, color: "#4A4038", marginTop: 3, lineHeight: 17 },
+  stickerFooter: {
+    marginTop: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "center",
   },
   letterInner: {
     flex: 1,
@@ -461,25 +555,20 @@ const styles = StyleSheet.create({
   arrowText: { color: "#FFF8F0", fontSize: 28, fontWeight: "300", marginTop: -2 },
   pageNum: { color: "rgba(255,248,240,0.8)", fontWeight: "700", fontSize: 14, minWidth: 64, textAlign: "center" },
   pdfBtn: {
-    marginTop: 14,
+    marginTop: 12,
     marginHorizontal: 24,
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
     paddingVertical: 12,
     borderRadius: 14,
-    backgroundColor: "rgba(255,248,240,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,248,240,0.12)",
-    opacity: 0.7,
+    backgroundColor: colors.amber,
   },
-  pdfBtnText: { color: "rgba(255,248,240,0.65)", fontWeight: "700", fontSize: 13.5 },
-  comingSoon: {
-    backgroundColor: "rgba(232,145,138,0.25)",
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  comingSoonText: { fontSize: 10.5, fontWeight: "800", color: colors.amber },
+  pdfBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 },
+});
+
+const layoutStyles = StyleSheet.create({
+  1: { flexDirection: "column" },
+  2: { flexDirection: "row", height: 140 },
+  3: { flexDirection: "row", flexWrap: "wrap", height: 180 },
+  4: { flexDirection: "row", flexWrap: "wrap", height: 180 },
 });

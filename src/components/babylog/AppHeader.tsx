@@ -29,7 +29,12 @@ export function AppHeader({ onOpenProfile, onOpenShared }: Props) {
             <SharedCaregiversRow onPress={onOpenShared ?? onOpenProfile} />
           </View>
         </View>
-        <Pressable style={styles.profileBtn} onPress={onOpenProfile}>
+        <Pressable
+          style={styles.profileBtn}
+          onPress={onOpenProfile}
+          accessibilityRole="button"
+          accessibilityLabel="아기 프로필 및 가족 관리"
+        >
           <BabyLogIcon kind="profile" size={16} color={colors.muted} />
         </Pressable>
       </View>

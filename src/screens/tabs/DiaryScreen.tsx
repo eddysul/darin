@@ -8,6 +8,8 @@ import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { DiaryComposeModal } from "../../components/babylog/DiaryComposeModal";
 import { DiaryReminderSettingsModal } from "../../components/babylog/DiaryReminderSettingsModal";
 import { GrowthBookVaultModal } from "../../components/babylog/GrowthBookVaultModal";
+import { GrowthBookEditorModal } from "../../components/babylog/GrowthBookEditorModal";
+import { GrowthBookPreviewModal } from "../../components/babylog/GrowthBookPreviewModal";
 import { DiaryMoodStamp, DiaryStampPair } from "../../components/babylog/DiaryStamp";
 import { PushToast } from "../../components/babylog/PushToast";
 import type { DiaryComposeDraft } from "../../constants/diaryCompose";
@@ -36,6 +38,7 @@ import {
   diaryPrimaryPhoto,
 } from "../../utils/diaryModel";
 import { buildTodaySummary } from "../../utils/reportAggregates";
+import { createGrowthBookPdf } from "../../utils/growthBookPdf";
 import {
   buildDiaryNotificationCopy,
   draftToComposePrefill,
@@ -68,6 +71,9 @@ export function DiaryScreen({ onOpenProfile }: Props) {
     logAuthor,
     myFamilyRole,
     familyMembers,
+    growthBookEdit,
+    setGrowthBookEdit,
+    babyStickers,
   } = useBabyLog();
   const me = familyMembers.find((member) => member.isMe);
   const allowAdd = canAddLog(myFamilyRole);
@@ -78,8 +84,10 @@ export function DiaryScreen({ onOpenProfile }: Props) {
   const [initialDraft, setInitialDraft] = useState<DiaryComposeDraft | null>(null);
   const [pushVisible, setPushVisible] = useState(false);
   const [filter, setFilter] = useState<DiaryFilter>("all");
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [bookPreviewOpen, setBookPreviewOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [reminder, setReminder] = useState<DiaryReminderSettings>({ ...DEFAULT_DIARY_REMINDER });
   const [draftMemory, setDraftMemory] = useState<DiaryDraft | null>(null);
   const diaryEntriesRef = useRef(diaryEntries);
@@ -187,6 +195,26 @@ export function DiaryScreen({ onOpenProfile }: Props) {
     return () => clearInterval(id);
   }, [reminder]);
 
+  useEffect(() => {
+    let sub: { remove: () => void } | undefined;
+    void (async () => {
+      try {
+        const Notifications = await import("expo-notifications");
+        sub = Notifications.addNotificationResponseReceivedListener((response) => {
+          const payload = response.notification.request.content.data as
+            | { source?: string; date?: string; openCompose?: boolean }
+            | undefined;
+          if (payload?.source === "notification" || payload?.openCompose) {
+            openFromNotification(typeof payload.date === "string" ? payload.date : "today");
+          }
+        });
+      } catch {
+        // Expo Go / missing native module — in-app toast path still works
+      }
+    })();
+    return () => sub?.remove();
+  }, [openFromNotification]);
+
   const bookEntries = useMemo(
     () => diaryEntries.filter((d) => d.includedInGrowthBook),
     [diaryEntries],
@@ -223,6 +251,7 @@ export function DiaryScreen({ onOpenProfile }: Props) {
     if (editingEntry) {
       updateDiary(editingEntry.id, {
         photos: draft.photos,
+        stickerIds: draft.stickerIds ?? [],
         comment: draft.comment,
         weatherStamp: draft.weatherStamp,
         moodStamp: draft.moodStamp,
@@ -241,6 +270,7 @@ export function DiaryScreen({ onOpenProfile }: Props) {
     if (existingToday) {
       updateDiary(existingToday.id, {
         photos: draft.photos,
+        stickerIds: draft.stickerIds ?? [],
         comment: draft.comment,
         weatherStamp: draft.weatherStamp,
         moodStamp: draft.moodStamp,
@@ -259,6 +289,7 @@ export function DiaryScreen({ onOpenProfile }: Props) {
       date: dateLabel,
       dateKey: todayKey,
       photos: draft.photos,
+      stickerIds: draft.stickerIds ?? [],
       comment: draft.comment,
       weatherStamp: draft.weatherStamp,
       moodStamp: draft.moodStamp,
@@ -433,7 +464,12 @@ export function DiaryScreen({ onOpenProfile }: Props) {
         visible={vaultOpen}
         babyName={babyName}
         entries={diaryEntries}
+        edit={growthBookEdit}
         onClose={() => setVaultOpen(false)}
+        onOpenEditor={() => {
+          setVaultOpen(false);
+          setEditorOpen(true);
+        }}
         onRemove={(id) => {
           const entry = diaryEntries.find((diary) => diary.id === id);
           if (entry && canEditLog(myFamilyRole, entry.createdBy, me)) {
@@ -446,9 +482,42 @@ export function DiaryScreen({ onOpenProfile }: Props) {
         }}
       />
 
+      <GrowthBookEditorModal
+        visible={editorOpen}
+        babyName={babyName}
+        babyId="baby-1"
+        entries={diaryEntries}
+        edit={growthBookEdit}
+        me={me}
+        myRole={myFamilyRole}
+        onChange={setGrowthBookEdit}
+        onClose={() => setEditorOpen(false)}
+        onOpenBookPreview={() => {
+          setEditorOpen(false);
+          setBookPreviewOpen(true);
+        }}
+      />
+
+      <GrowthBookPreviewModal
+        visible={bookPreviewOpen}
+        babyName={babyName}
+        entries={diaryEntries.filter((d) => d.includedInGrowthBook)}
+        edit={growthBookEdit}
+        onClose={() => setBookPreviewOpen(false)}
+        onPdfCreate={() =>
+          void createGrowthBookPdf({
+            babyName,
+            entries: diaryEntries.filter((d) => d.includedInGrowthBook),
+            edit: growthBookEdit,
+            stickers: babyStickers,
+          })
+        }
+      />
+
       <DiaryReminderSettingsModal
         visible={settingsOpen}
         value={reminder}
+        babyName={babyName}
         onClose={() => setSettingsOpen(false)}
         onSave={(next) => {
           setReminder(next);

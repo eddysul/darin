@@ -8,3 +8,4 @@ http:/
 .env
 .env.*
 !.env.example
+outputs/

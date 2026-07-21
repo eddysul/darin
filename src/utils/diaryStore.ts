@@ -1,20 +1,25 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { DiaryEntry } from "../types/babyLog";
 import { migrateDiaryEntry } from "./diaryModel";
 import { STORAGE_KEYS } from "./storageKeys";
+import { reportStorageIssue } from "./storageIssues";
+import { qaStorage } from "./qaStorage";
 
 const STORAGE_KEY = STORAGE_KEYS.diary;
 
 let memory: DiaryEntry[] | null = null;
 let hydrated = false;
-let hydratePromise: Promise<void> | null = null;
+let hydratePromise: Promise<boolean> | null = null;
 
-export async function hydrateDiaryEntries(): Promise<void> {
-  if (hydrated) return;
+export async function hydrateDiaryEntries(force = false): Promise<boolean> {
+  if (force) {
+    hydrated = false;
+    hydratePromise = null;
+  }
+  if (hydrated) return true;
   if (!hydratePromise) {
     hydratePromise = (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const raw = await qaStorage.getItem(STORAGE_KEY);
         if (!raw) {
           memory = null;
         } else {
@@ -23,13 +28,15 @@ export async function hydrateDiaryEntries(): Promise<void> {
             ? parsed.map((item) => migrateDiaryEntry(item)).filter((d): d is DiaryEntry => !!d)
             : null;
         }
+        hydrated = true;
+        return true;
       } catch {
-        memory = null;
+        reportStorageIssue("load", STORAGE_KEY);
+        return false;
       }
-      hydrated = true;
     })();
   }
-  await hydratePromise;
+  return hydratePromise;
 }
 
 export function getDiaryEntries(): DiaryEntry[] | null {
@@ -40,8 +47,8 @@ export async function saveDiaryEntries(entries: DiaryEntry[]): Promise<void> {
   memory = entries;
   hydrated = true;
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    await qaStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   } catch {
-    // ignore
+    reportStorageIssue("save", STORAGE_KEY);
   }
 }

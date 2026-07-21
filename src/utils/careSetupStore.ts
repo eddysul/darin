@@ -1,8 +1,10 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { CareSetup } from "../types/careSetup";
 import { DEMO_CARE_SETUP } from "../types/careSetup";
+import { STORAGE_KEYS } from "./storageKeys";
+import { reportStorageIssue } from "./storageIssues";
+import { qaStorage } from "./qaStorage";
 
-const STORAGE_KEY = "darin:care-setup";
+const STORAGE_KEY = STORAGE_KEYS.careSetup;
 
 let memorySetup: CareSetup | null = null;
 let hydrated = false;
@@ -13,10 +15,11 @@ export async function hydrateCareSetup(): Promise<void> {
   if (!hydratePromise) {
     hydratePromise = (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const raw = await qaStorage.getItem(STORAGE_KEY);
         memorySetup = raw ? (JSON.parse(raw) as CareSetup) : null;
       } catch {
         memorySetup = null;
+        reportStorageIssue("load", STORAGE_KEY);
       }
       hydrated = true;
     })();
@@ -36,8 +39,8 @@ export async function saveCareSetup(setup: CareSetup): Promise<void> {
   memorySetup = setup;
   hydrated = true;
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(setup));
+    await qaStorage.setItem(STORAGE_KEY, JSON.stringify(setup));
   } catch {
-    // ignore persistence errors
+    reportStorageIssue("save", STORAGE_KEY);
   }
 }

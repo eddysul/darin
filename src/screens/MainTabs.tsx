@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import type { BottomTabBarProps, BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "../LanguageContext";
@@ -13,18 +14,21 @@ import {
 import { BabyLogIcon, type TabIconKey } from "../components/babylog/BabyLogIcon";
 import { RecordDetailSheet, type RecordSheetPrefill } from "../components/babylog/RecordDetailSheet";
 import { useBabyLog } from "../context/BabyLogContext";
-import { getCategory, formatLogMeta } from "../constants/babyLogCategories";
+import { getCategory } from "../constants/babyLogCategories";
 import { BabyProfileScreen } from "./BabyProfileScreen";
 import { BabyReportScreen } from "./tabs/BabyReportScreen";
 import { ConsultScreen } from "./tabs/ConsultScreen";
 import { DiaryScreen } from "./tabs/DiaryScreen";
 import { RecordScreen } from "./tabs/RecordScreen";
+import { MenuScreen } from "./tabs/MenuScreen";
 import type { LogCategoryKey } from "../types/logCategory";
 import type { BabyLogCategoryId } from "../constants/babyLogCategories";
 import type { MessageKey } from "../i18n";
 import { colors, gradients } from "../theme";
 import { isCustomCategoryKey } from "../types/logCategory";
 import { canAddLog, canDeleteLog, canEditLog } from "../types/family";
+import { ErrorBanner } from "../components/states/FeedbackStates";
+import { formatLogMeta } from "../utils/formatLog";
 
 const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
   Record: "tabs.record",
@@ -32,6 +36,7 @@ const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
   Mic: "tabs.voice",
   Report: "tabs.overview",
   Consult: "tabs.consult",
+  Menu: "tabs.menu",
 };
 
 export type MainTabParamList = {
@@ -44,6 +49,7 @@ export type MainTabParamList = {
   Mic: undefined;
   Report: undefined;
   Consult: undefined;
+  Menu: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -53,6 +59,7 @@ const TAB_ICONS: Record<Exclude<keyof MainTabParamList, "Mic">, TabIconKey> = {
   Diary: "diary",
   Report: "report",
   Consult: "consult",
+  Menu: "menu",
 };
 
 function MicPlaceholder() {
@@ -86,14 +93,14 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     { name: "Diary" },
     { name: "Mic", center: true },
     { name: "Report" },
-    { name: "Consult" },
+    { name: "Menu" },
   ];
 
   return (
     <>
       <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-        {tabs.map(({ name, center }, index) => {
-          const active = state.index === index;
+        {tabs.map(({ name, center }) => {
+          const active = state.routes[state.index]?.name === name;
           const labelKey = TAB_LABEL_KEYS[name];
           const label = labelKey ? t(labelKey) : "";
 
@@ -139,6 +146,8 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           setVoiceOpen(false);
           setEditingVoiceId(null);
           setVoiceEventPatch(null);
+          setVoiceSheetCat(null);
+          setVoicePrefill(null);
         }}
         onConfirmAll={({ rawTranscript, events }) => {
           if (!allowAdd) return;
@@ -160,7 +169,6 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
             voice: true,
           });
           setVoiceSheetCat(event.cat);
-          // Keep voice overlay open so other cards aren't lost
         }}
         onManualEntry={() => {
           if (!allowAdd) return;
@@ -172,71 +180,78 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         }}
         eventPatch={voiceEventPatch}
         onEventPatchConsumed={() => setVoiceEventPatch(null)}
-      />
-
-      <RecordDetailSheet
-        visible={voiceSheetCat !== null}
-        catKey={voiceSheetCat}
-        customCategories={customCategories}
-        prefill={voicePrefill}
-        onClose={() => {
-          setVoiceSheetCat(null);
-          setVoicePrefill(null);
-          setEditingVoiceId(null);
-        }}
-        onSave={(entry, editId) => {
-          if (editId) {
-            const existing = logs.find((log) => log.id === editId);
-            if (!existing || !canEditLog(myFamilyRole, existing.createdBy, me)) return;
-          } else if (!allowAdd) {
-            return;
-          }
-          if (voiceOpen && editingVoiceId && !isCustomCategoryKey(entry.cat)) {
-            const cat = entry.cat as BabyLogCategoryId;
-            const meta = formatLogMeta(entry, customCategories);
-            const label = getCategory(cat).label;
-            setVoiceEventPatch({
-              id: editingVoiceId,
-              cat,
-              time: entry.time,
-              dateKey: entry.dateKey,
-              chip: entry.chip,
-              chip2: entry.chip2,
-              amount: entry.amount,
-              duration: entry.duration,
-              notes: entry.notes,
-              flags: entry.flags ?? voicePrefill?.flags,
-              confidence: entry.confidence ?? voicePrefill?.confidence ?? 0.9,
-              timeAmbiguous: false,
-              extraLabel: meta === "기록됨" ? label : `${label} · ${meta}`,
-            });
+      >
+        <RecordDetailSheet
+          embedded
+          visible={voiceSheetCat !== null}
+          catKey={voiceSheetCat}
+          customCategories={customCategories}
+          prefill={voicePrefill}
+          onClose={() => {
             setVoiceSheetCat(null);
             setVoicePrefill(null);
             setEditingVoiceId(null);
-            return;
-          }
-          if (editId) updateLog(editId, entry);
-          else addLog(entry);
-          setVoiceSheetCat(null);
-          setVoicePrefill(null);
-          setEditingVoiceId(null);
-        }}
-        onDelete={(id) => {
-          const existing = logs.find((log) => log.id === id);
-          if (!existing || !canDeleteLog(myFamilyRole, existing.createdBy, me)) return;
-          deleteLog(id);
-          setVoiceSheetCat(null);
-          setVoicePrefill(null);
-          setEditingVoiceId(null);
-        }}
-      />
+          }}
+          onSave={(entry, editId) => {
+            if (editId) {
+              const existing = logs.find((log) => log.id === editId);
+              if (!existing || !canEditLog(myFamilyRole, existing.createdBy, me)) return;
+            } else if (!allowAdd) {
+              return;
+            }
+            if (voiceOpen && editingVoiceId && !isCustomCategoryKey(entry.cat)) {
+              const cat = entry.cat as BabyLogCategoryId;
+              const meta = formatLogMeta(entry, customCategories);
+              const label = getCategory(cat).label;
+              setVoiceEventPatch({
+                id: editingVoiceId,
+                cat,
+                time: entry.time,
+                dateKey: entry.dateKey,
+                chip: entry.chip,
+                chip2: entry.chip2,
+                amount: entry.amount,
+                duration: entry.duration,
+                notes: entry.notes,
+                flags: entry.flags ?? voicePrefill?.flags,
+                confidence: entry.confidence ?? voicePrefill?.confidence ?? 0.9,
+                timeAmbiguous: false,
+                extraLabel: meta === "기록됨" ? label : `${label} · ${meta}`,
+              });
+              setVoiceSheetCat(null);
+              setVoicePrefill(null);
+              setEditingVoiceId(null);
+              return;
+            }
+            if (editId) updateLog(editId, entry);
+            else addLog(entry);
+            setVoiceSheetCat(null);
+            setVoicePrefill(null);
+            setEditingVoiceId(null);
+          }}
+          onDelete={(id) => {
+            const existing = logs.find((log) => log.id === id);
+            if (!existing || !canDeleteLog(myFamilyRole, existing.createdBy, me)) return;
+            deleteLog(id);
+            setVoiceSheetCat(null);
+            setVoicePrefill(null);
+            setEditingVoiceId(null);
+          }}
+        />
+      </BabyLogVoiceOverlay>
     </>
   );
 }
 
 function RecordTab() {
   const { setProfileOpen } = useBabyLog();
-  return <RecordScreen onOpenProfile={() => setProfileOpen(true)} />;
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  return (
+    <RecordScreen
+      onOpenProfile={() => setProfileOpen(true)}
+      onOpenConsult={() => navigation.navigate("Consult")}
+    />
+  );
 }
 
 function DiaryTab() {
@@ -254,8 +269,20 @@ function ConsultTab() {
   return <ConsultScreen onOpenProfile={() => setProfileOpen(true)} />;
 }
 
+function MenuTab() {
+  const { setProfileOpen } = useBabyLog();
+  return <MenuScreen onOpenProfile={() => setProfileOpen(true)} />;
+}
+
 export function MainTabs() {
-  const { profileOpen, setProfileOpen } = useBabyLog();
+  const {
+    profileOpen,
+    setProfileOpen,
+    storageIssue,
+    retryPersistence,
+    dismissStorageIssue,
+  } = useBabyLog();
+  const insets = useSafeAreaInsets();
 
   return (
     <>
@@ -267,9 +294,24 @@ export function MainTabs() {
         <Tab.Screen name="Diary" component={DiaryTab} />
         <Tab.Screen name="Mic" component={MicPlaceholder} />
         <Tab.Screen name="Report" component={ReportTab} />
+        <Tab.Screen name="Menu" component={MenuTab} />
         <Tab.Screen name="Consult" component={ConsultTab} />
       </Tab.Navigator>
       <BabyProfileScreen visible={profileOpen} onClose={() => setProfileOpen(false)} />
+      {storageIssue ? (
+        <View style={[styles.storageBanner, { top: insets.top + 8 }]}>
+          <ErrorBanner
+            message={
+              storageIssue.operation === "load"
+                ? "저장된 데이터를 불러오지 못했어요. 다시 시도해 주세요."
+                : "변경사항을 기기에 저장하지 못했어요. 앱을 닫기 전에 다시 시도해 주세요."
+            }
+            actionLabel="재시도"
+            onAction={() => void retryPersistence()}
+            onDismiss={dismissStorageIssue}
+          />
+        </View>
+      ) : null}
     </>
   );
 }
@@ -277,18 +319,25 @@ export function MainTabs() {
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: colors.card,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingTop: 6,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingTop: 9,
     paddingHorizontal: 4,
+    shadowColor: "#4A3428",
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -3 },
+    elevation: 10,
   },
-  tabItem: { flex: 1, alignItems: "center", gap: 3 },
-  centerBtnWrap: { marginTop: -22 },
+  tabItem: { flex: 1, alignItems: "center", gap: 4 },
+  centerBtnWrap: { marginTop: -28 },
   centerBtn: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: colors.amber,
@@ -301,4 +350,11 @@ const styles = StyleSheet.create({
   tabLabelActive: { color: colors.amber },
   centerLabel: { marginTop: 2 },
   disabled: { opacity: 0.45 },
+  storageBanner: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    zIndex: 100,
+    elevation: 12,
+  },
 });

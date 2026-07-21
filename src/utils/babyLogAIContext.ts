@@ -1,4 +1,4 @@
-import { formatLogMeta } from "../constants/babyLogCategories";
+import { formatLogMeta } from "./formatLog";
 import type { Locale } from "../i18n";
 import type { BabyLogEntry, DiaryEntry } from "../types/babyLog";
 import type { CareSetup, DefaultFeedingMethod } from "../types/careSetup";
@@ -51,10 +51,10 @@ export function detectQuestionFocus(question: string): QuestionFocus {
 
 const FOCUS_CATS: Record<QuestionFocus, string[]> = {
   sleep: ["sleep"],
-  feeding: ["breast", "formula", "food", "snack", "pump"],
+  feeding: ["breast", "formula", "storedMilk", "milk", "food", "snack", "pump", "water"],
   diaper: ["diaper"],
-  health: ["temp", "med", "doctor", "memo"],
-  growth: ["food", "formula", "breast", "memo"],
+  health: ["temp", "med", "doctor", "memo", "other"],
+  growth: ["food", "formula", "storedMilk", "milk", "breast", "memo"],
   general: [],
 };
 

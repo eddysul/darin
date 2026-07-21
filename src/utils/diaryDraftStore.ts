@@ -1,8 +1,9 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { DiaryComposeDraft } from "../constants/diaryCompose";
 import { normalizeDiaryMoodOptional, normalizeDiarySkyOptional } from "../constants/diaryCompose";
 import type { DiaryDraft } from "../types/diaryReminder";
 import { STORAGE_KEYS } from "./storageKeys";
+import { reportStorageIssue } from "./storageIssues";
+import { qaStorage } from "./qaStorage";
 
 const KEY = STORAGE_KEYS.diaryDraft;
 
@@ -25,6 +26,9 @@ function migrateDraft(raw: unknown): DiaryDraft | null {
   const draft: DiaryComposeDraft = {
     comment,
     photos,
+    stickerIds: Array.isArray(d.stickerIds)
+      ? (d.stickerIds as unknown[]).filter((x): x is string => typeof x === "string")
+      : [],
     weatherStamp: normalizeDiarySkyOptional(
       (typeof d.weatherStamp === "string" ? d.weatherStamp : null) ??
         (typeof d.weatherEmoji === "string" ? d.weatherEmoji : null),
@@ -59,10 +63,11 @@ export async function hydrateDiaryDraft(): Promise<void> {
   if (!hydratePromise) {
     hydratePromise = (async () => {
       try {
-        const raw = await AsyncStorage.getItem(KEY);
+        const raw = await qaStorage.getItem(KEY);
         memory = raw ? migrateDraft(JSON.parse(raw) as unknown) : null;
       } catch {
         memory = null;
+        reportStorageIssue("load", KEY);
       }
       hydrated = true;
     })();
@@ -78,9 +83,9 @@ export async function saveDiaryDraft(draft: DiaryDraft): Promise<void> {
   memory = draft;
   hydrated = true;
   try {
-    await AsyncStorage.setItem(KEY, JSON.stringify(draft));
+    await qaStorage.setItem(KEY, JSON.stringify(draft));
   } catch {
-    // ignore
+    reportStorageIssue("save", KEY);
   }
 }
 
@@ -88,8 +93,8 @@ export async function clearDiaryDraft(dateKey?: string): Promise<void> {
   if (dateKey && memory && memory.dateKey !== dateKey) return;
   memory = null;
   try {
-    await AsyncStorage.removeItem(KEY);
+    await qaStorage.removeItem(KEY);
   } catch {
-    // ignore
+    reportStorageIssue("delete", KEY);
   }
 }

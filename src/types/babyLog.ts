@@ -26,6 +26,12 @@ export type BabyLogEntry = {
   amount?: string;
   duration?: string;
   notes?: string;
+  /** User-editable short label, used by other/doctor/custom-like records. */
+  title?: string;
+  /** Structured detail kept separate from the free-form memo. */
+  details?: string;
+  /** Optional next appointment or follow-up date/time. */
+  nextAt?: string;
   voice?: boolean;
   source?: BabyLogSource;
   /** Original STT text for the session this entry came from */
@@ -64,6 +70,8 @@ export type DiaryEntry = {
   /** Free-text milestone when not a preset */
   customMilestoneTag: string | null;
   includedInGrowthBook: boolean;
+  /** Baby sticker ids attached to this diary (not free-layout). */
+  stickerIds?: string[];
   createdBy?: BabyLogActor;
   createdAt: string;
   updatedAt: string;
@@ -75,4 +83,6 @@ export type ChatMessage = {
   id: string;
   role: "user" | "ai";
   text: string;
+  /** Optional baby sticker attached to a chat bubble. */
+  stickerId?: string;
 };

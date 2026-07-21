@@ -43,6 +43,13 @@
         {
           "microphonePermission": "Allow Darin to record voice notes for daily care logs."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/darin-logo.png",
+          "color": "#E8918A"
+        }
       ]
     ]
   }
