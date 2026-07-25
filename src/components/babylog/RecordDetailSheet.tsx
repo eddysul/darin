@@ -16,6 +16,13 @@ import { isCustomCategoryKey } from "../../types/logCategory";
 import { resolveLogCategory } from "../../utils/resolveLogCategory";
 import { colors } from "../../theme";
 import { elapsedClockMinutes, nowTime, toMinutes } from "../../utils/formatLog";
+import { useAppSettings } from "../../context/AppSettingsContext";
+import {
+  temperatureFromCelsius,
+  temperatureToCelsius,
+  volumeFromMl,
+  volumeToMl,
+} from "../../utils/measurementFormat";
 
 export type RecordSheetPrefill = Partial<BabyLogEntry> & { editId?: string };
 
@@ -72,6 +79,7 @@ export function RecordDetailSheet({
   onDelete,
   embedded = false,
 }: Props) {
+  const { settings } = useAppSettings();
   const [time, setTime] = useState(nowTime());
   const [endTime, setEndTime] = useState("");
   const [selectedCat, setSelectedCat] = useState<LogCategoryKey | null>(catKey);
@@ -96,7 +104,18 @@ export function RecordDetailSheet({
     setChip(prefill?.chip ?? "");
     setChip2(prefill?.chip2 ?? "");
     setStoolState(prefill?.stoolState ?? "");
-    setAmount(prefill?.amount ?? "");
+    const storedAmount = prefill?.amount ?? "";
+    if (["formula", "storedMilk", "pump", "water", "milk"].includes(nextCat)) {
+      setAmount(storedAmount ? volumeFromMl(storedAmount, settings.units.volume) : "");
+    } else if (nextCat === "temp") {
+      setAmount(
+        storedAmount
+          ? temperatureFromCelsius(storedAmount, settings.units.temperature)
+          : "",
+      );
+    } else {
+      setAmount(storedAmount);
+    }
     setDuration(prefill?.duration ?? "");
     setVoice(prefill?.voice ?? false);
     setRecordTitle(prefill?.title ?? "");
@@ -123,7 +142,7 @@ export function RecordDetailSheet({
     } else {
       setEndTime("");
     }
-  }, [visible, catKey, prefill]);
+  }, [visible, catKey, prefill, settings.units.temperature, settings.units.volume]);
 
   const computedDuration = useMemo(() => {
     if (!endTime || !time) return duration;
@@ -151,6 +170,12 @@ export function RecordDetailSheet({
     ]
       .filter(Boolean)
       .join(" · ");
+    const canonicalAmount =
+      ["formula", "storedMilk", "pump", "water", "milk"].includes(effectiveCat)
+        ? volumeToMl(amount, settings.units.volume)
+        : effectiveCat === "temp"
+          ? temperatureToCelsius(amount, settings.units.temperature)
+          : amount;
     onSave(
       {
         cat: effectiveCat,
@@ -158,7 +183,7 @@ export function RecordDetailSheet({
         chip: chip || undefined,
         chip2: chip2 || undefined,
         stoolState: stoolState || undefined,
-        amount: amount || undefined,
+        amount: canonicalAmount || undefined,
         duration: timedDuration || undefined,
         notes: composedNotes || undefined,
         title: recordTitle.trim() || undefined,
@@ -229,19 +254,22 @@ export function RecordDetailSheet({
               ) : null}
               {builtinId !== "breast" ? (
                 <>
-                  <Text style={styles.fieldLabel}>양 (ml)</Text>
+                  <Text style={styles.fieldLabel}>양 ({settings.units.volume})</Text>
                   <View style={styles.chipRow}>
-                    {["60", "80", "100", "120", "150", "180"].map((ml) => (
+                    {["60", "80", "100", "120", "150", "180"].map((ml) => {
+                      const displayAmount = volumeFromMl(ml, settings.units.volume);
+                      return (
                       <Pressable
                         key={ml}
-                        style={[styles.chip, amount === ml && styles.chipSel]}
-                        onPress={() => setAmount(ml)}
+                        style={[styles.chip, amount === displayAmount && styles.chipSel]}
+                        onPress={() => setAmount(displayAmount)}
                       >
-                        <Text style={[styles.chipText, amount === ml && styles.chipTextSel]}>
-                          {ml}
+                        <Text style={[styles.chipText, amount === displayAmount && styles.chipTextSel]}>
+                          {displayAmount}
                         </Text>
                       </Pressable>
-                    ))}
+                      );
+                    })}
                   </View>
                   <TextInput
                     style={[styles.input, { marginTop: 8 }]}
@@ -377,7 +405,7 @@ export function RecordDetailSheet({
             <>
               <Text style={styles.fieldLabel}>좌/우/양쪽</Text>
               <ChipRow options={["좌측", "우측", "양쪽"]} value={chip} onChange={setChip} />
-              <Text style={styles.fieldLabel}>양 (ml)</Text>
+              <Text style={styles.fieldLabel}>양 ({settings.units.volume})</Text>
               <TextInput
                 style={styles.input}
                 value={amount}
@@ -391,19 +419,22 @@ export function RecordDetailSheet({
 
           {(builtinId === "water" || builtinId === "milk") && (
             <>
-              <Text style={styles.fieldLabel}>양 (ml)</Text>
+              <Text style={styles.fieldLabel}>양 ({settings.units.volume})</Text>
               <View style={styles.chipRow}>
-                {["30", "60", "80", "100", "120"].map((ml) => (
+                {["30", "60", "80", "100", "120"].map((ml) => {
+                  const displayAmount = volumeFromMl(ml, settings.units.volume);
+                  return (
                   <Pressable
                     key={ml}
-                    style={[styles.chip, amount === ml && styles.chipSel]}
-                    onPress={() => setAmount(ml)}
+                    style={[styles.chip, amount === displayAmount && styles.chipSel]}
+                    onPress={() => setAmount(displayAmount)}
                   >
-                    <Text style={[styles.chipText, amount === ml && styles.chipTextSel]}>
-                      {ml}
+                    <Text style={[styles.chipText, amount === displayAmount && styles.chipTextSel]}>
+                      {displayAmount}
                     </Text>
                   </Pressable>
-                ))}
+                  );
+                })}
               </View>
               <TextInput
                 style={[styles.input, { marginTop: 8 }]}
@@ -465,7 +496,9 @@ export function RecordDetailSheet({
 
           {builtinId === "temp" && (
             <>
-              <Text style={styles.fieldLabel}>체온 (℃)</Text>
+              <Text style={styles.fieldLabel}>
+                체온 (°{settings.units.temperature === "c" ? "C" : "F"})
+              </Text>
               <TextInput
                 style={styles.input}
                 value={amount}

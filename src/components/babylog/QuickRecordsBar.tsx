@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { QuickRecord } from "../../types/quickRecord";
+import type { OneTouchAction } from "../../constants/quickRecordActions";
+import { QUICK_RECORD_ACTIONS } from "../../constants/quickRecordActions";
 import { colors } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { LogCategoryIcon } from "./LogCategoryIcon";
@@ -8,17 +10,39 @@ import { QuickRecordEditorSheet } from "./QuickRecordEditorSheet";
 
 type Props = {
   records: QuickRecord[];
+  visibleActions?: OneTouchAction[];
   disabled?: boolean;
   onTap: (record: QuickRecord) => void;
   onSaveRecords: (next: QuickRecord[] | ((prev: QuickRecord[]) => QuickRecord[])) => void;
 };
 
-export function QuickRecordsBar({ records, disabled, onTap, onSaveRecords }: Props) {
+export function QuickRecordsBar({
+  records,
+  visibleActions,
+  disabled,
+  onTap,
+  onSaveRecords,
+}: Props) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<QuickRecord | null>(null);
   const [startInForm, setStartInForm] = useState(false);
 
-  const pinned = useMemo(() => records.filter((r) => r.pinned), [records]);
+  const pinned = useMemo(
+    () =>
+      records.filter((record) => {
+        if (!record.pinned) return false;
+        if (!visibleActions) return true;
+        return QUICK_RECORD_ACTIONS.some(
+          (action) =>
+            visibleActions.includes(action.id) &&
+            action.cat === record.defaults.cat &&
+            (action.cat !== "diaper" ||
+              !record.defaults.chip ||
+              action.chip === record.defaults.chip),
+        );
+      }),
+    [records, visibleActions],
+  );
 
   const openManage = () => {
     setEditing(null);

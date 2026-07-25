@@ -17,6 +17,7 @@ import { FEEDING_CATS } from "../../utils/reportAggregates";
 import { isCustomCategoryKey } from "../../types/logCategory";
 import { colors, radius } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
+import { formatTemperature, formatVolume } from "../../utils/measurementFormat";
 
 type Props = {
   logs: BabyLogEntry[];
@@ -97,7 +98,7 @@ export function TodayLogSummaryCard({
         key: "feeding",
         label: "수유",
         value: `${feedingCount}회`,
-        detail: feedingAmount > 0 ? `${Math.round(feedingAmount)}ml` : undefined,
+        detail: feedingAmount > 0 ? formatVolume(Math.round(feedingAmount)) : undefined,
         cat: "formula",
       },
       {
@@ -130,7 +131,7 @@ export function TodayLogSummaryCard({
         cat: "pump",
         detail: () => {
           const ml = sumAmount(logs, ["pump"]);
-          return ml > 0 ? `${Math.round(ml)}ml` : undefined;
+          return ml > 0 ? formatVolume(Math.round(ml)) : undefined;
         },
       },
       { key: "med", label: "약", cats: ["med"], cat: "med" },
@@ -143,7 +144,7 @@ export function TodayLogSummaryCard({
           const temps = logs
             .filter((e) => e.cat === "temp" && e.amount)
             .map((e) => e.amount!);
-          return temps[0] ? `${temps[0]}℃` : undefined;
+          return temps[0] ? formatTemperature(temps[0]) : undefined;
         },
       },
       { key: "food", label: "이유식", cats: ["food", "snack"], cat: "food" },

@@ -4,6 +4,9 @@ import { BabyLogIcon } from "./BabyLogIcon";
 import { SharedCaregiversRow } from "./SharedCaregiversRow";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { colors } from "../../theme";
+import { useAppSettings } from "../../context/AppSettingsContext";
+import { formatWeight } from "../../utils/measurementFormat";
+import { formatBabyAge } from "../../utils/childDisplay";
 
 type Props = {
   onOpenProfile: () => void;
@@ -12,8 +15,10 @@ type Props = {
 export function RecordHomeHeader({ onOpenProfile }: Props) {
   const insets = useSafeAreaInsets();
   const { babyName, babyBadge, babyBirthMeta, careSetup } = useBabyLog();
+  const { settings } = useAppSettings();
   const dDay = babyBadge.match(/D\+\d+/)?.[0];
   const birthWeight = careSetup.child.birthWeight?.trim();
+  const configuredAge = formatBabyAge(careSetup.child, settings.time.babyAge);
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 12) }]}>
@@ -27,7 +32,10 @@ export function RecordHomeHeader({ onOpenProfile }: Props) {
             <Text style={styles.name}>{babyName}</Text>
             {dDay ? <Text style={styles.dayBadge}>{dDay}</Text> : null}
           </View>
-          <Text style={styles.age}>{babyBirthMeta}{birthWeight ? ` · ${birthWeight}kg` : ""}</Text>
+          <Text style={styles.age}>
+            {configuredAge ?? babyBirthMeta}
+            {birthWeight ? ` · ${formatWeight(birthWeight, settings.units.weight)}` : ""}
+          </Text>
           <View style={styles.sharedWrap}>
             <SharedCaregiversRow onPress={onOpenProfile} size="sm" />
           </View>

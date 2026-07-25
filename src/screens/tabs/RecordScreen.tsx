@@ -1,6 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Keyboard,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { ActiveTimerSheet } from "../../components/babylog/ActiveTimerSheet";
+import { ConsultFab } from "../../components/babylog/ConsultFab";
+import { ConsultPromptSheet } from "../../components/babylog/ConsultPromptSheet";
 import {
   OneTouchRecordGrid,
   type OneTouchAction,
@@ -14,6 +26,7 @@ import { TodayLogSummaryCard } from "../../components/babylog/TodayLogSummaryCar
 import { TodayTimeline } from "../../components/babylog/TodayTimeline";
 import { EmptyState } from "../../components/states/FeedbackStates";
 import { useBabyLog } from "../../context/BabyLogContext";
+import { useAppSettings } from "../../context/AppSettingsContext";
 import type { ActiveTimer, TimerSide } from "../../types/activeTimer";
 import { formatElapsedClock, elapsedMsNow, isTimerAction } from "../../types/activeTimer";
 import type { BabyLogEntry } from "../../types/babyLog";
@@ -47,7 +60,7 @@ import { colors } from "../../theme";
 
 type Props = {
   onOpenProfile: () => void;
-  onOpenConsult: () => void;
+  onOpenConsult: (initialQuestion?: string) => void;
 };
 
 const ACTION_TOAST: Record<OneTouchAction, string> = {
@@ -81,6 +94,7 @@ const TIMER_LABEL: Record<ActiveTimer["kind"], string> = {
 };
 
 export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
+  const { settings, ready: settingsReady } = useAppSettings();
   const {
     logs,
     addLog,
@@ -101,6 +115,18 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
   const [activeTimers, setActiveTimers] = useState<ActiveTimer[]>([]);
   const [timerSheetId, setTimerSheetId] = useState<string | null>(null);
   const [timerTick, setTimerTick] = useState(0);
+  const [consultPromptOpen, setConsultPromptOpen] = useState(false);
+  const [scrolling, setScrolling] = useState(false);
+  const [categoryPressing, setCategoryPressing] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const scrollHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRestoreInitialized = useRef(false);
+  const activeSleepRef = useRef<BabyLogEntry | undefined>(undefined);
+  const suppressedRestoredSleepId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (settingsReady) setSelectedDateKey(formatDateKey());
+  }, [settingsReady, settings.time.dayStart]);
 
   const me = familyMembers.find((m) => m.isMe);
   const allowAdd = canAddLog(myFamilyRole);
@@ -128,13 +154,21 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
       )
       .sort((a, b) => `${b.dateKey ?? todayKey}T${b.time}`.localeCompare(`${a.dateKey ?? todayKey}T${a.time}`))[0];
   }, [logs, todayKey]);
+  activeSleepRef.current = activeSleep;
 
   useEffect(() => {
+    if (!settingsReady) return;
     void (async () => {
       await hydrateActiveTimers();
-      setActiveTimers(getActiveTimers() ?? []);
+      const restored = settings.timers.restoreAfterRestart ? getActiveTimers() ?? [] : [];
+      suppressedRestoredSleepId.current = settings.timers.restoreAfterRestart
+        ? null
+        : activeSleepRef.current?.id ?? null;
+      setActiveTimers(restored);
+      if (!settings.timers.restoreAfterRestart) await saveActiveTimers([]);
+      timerRestoreInitialized.current = true;
     })();
-  }, []);
+  }, [settingsReady, settings.timers.restoreAfterRestart]);
 
   useEffect(() => {
     if (!storageReady) return;
@@ -143,14 +177,16 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
 
   // Keep sleep timer in sync with open sleep log (short-tap start / restore).
   useEffect(() => {
-    if (!storageReady) return;
+    if (!storageReady || !timerRestoreInitialized.current) return;
     setActiveTimers((prev) => {
       const sleepTimer = prev.find((t) => t.kind === "sleep");
       if (activeSleep) {
+        if (activeSleep.id === suppressedRestoredSleepId.current) return prev;
         if (sleepTimer && sleepTimer.linkedLogId === activeSleep.id) return prev;
         const next = prev.filter((t) => t.kind !== "sleep");
         return [...next, timerFromOpenSleep(activeSleep)];
       }
+      suppressedRestoredSleepId.current = null;
       if (sleepTimer?.linkedLogId) {
         const linkedStillOpen = logs.some(
           (entry) =>
@@ -171,6 +207,18 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
     const id = setInterval(() => setTimerTick((n) => n + 1), 1000);
     return () => clearInterval(id);
   }, [activeTimers]);
+
+  useEffect(() => {
+    const tag = "k-nanny-active-timer";
+    const shouldStayAwake =
+      settings.timers.keepScreenAwake &&
+      activeTimers.some((timer) => timer.status === "running");
+    if (shouldStayAwake) void activateKeepAwakeAsync(tag);
+    else void deactivateKeepAwake(tag);
+    return () => {
+      void deactivateKeepAwake(tag);
+    };
+  }, [activeTimers, settings.timers.keepScreenAwake]);
 
   const openSheet = (catKey: LogCategoryKey, nextPrefill?: RecordSheetPrefill) => {
     if (!nextPrefill?.editId && !allowAdd) return;
@@ -295,7 +343,13 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
       return;
     }
 
-    const timer = createActiveTimer(action, action);
+    const timer = createActiveTimer(action, action, {
+      side:
+        (action === "breastfeeding" || action === "pump") &&
+        !settings.timers.switchBreastSide
+          ? "both"
+          : undefined,
+    });
     setActiveTimers((prev) => [...prev.filter((t) => t.action !== action), timer]);
     setTimerSheetId(timer.id);
   };
@@ -303,7 +357,22 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
   const handleLongPress = (action: OneTouchAction) => {
     if (!allowAdd) return;
     if (longPressModeFor(action) === "timer") {
-      startOrOpenTimer(action);
+      const timerEnabled =
+        action === "breastfeeding"
+          ? settings.timers.breastfeeding
+          : action === "sleep"
+            ? settings.timers.sleep
+            : action === "pump"
+              ? settings.timers.pump
+              : action === "tummy"
+                ? settings.timers.tummy
+                : true;
+      if (timerEnabled) {
+        startOrOpenTimer(action);
+        return;
+      }
+      const next = longPressSheetPrefill(action);
+      openSheet(next.cat ?? actionToCategory(action), next);
       return;
     }
     const next = longPressSheetPrefill(action);
@@ -407,10 +476,59 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
   const primaryTimer = activeTimers[0];
   void timerTick;
 
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (scrollHideTimer.current) clearTimeout(scrollHideTimer.current);
+    };
+  }, []);
+
+  const scheduleScrollReveal = useCallback(() => {
+    if (scrollHideTimer.current) clearTimeout(scrollHideTimer.current);
+    scrollHideTimer.current = setTimeout(() => setScrolling(false), 500);
+  }, []);
+
+  const handleScrollBegin = useCallback(() => {
+    if (scrollHideTimer.current) clearTimeout(scrollHideTimer.current);
+    setScrolling(true);
+  }, []);
+
+  const handleScrollEnd = useCallback(
+    (_e?: NativeSyntheticEvent<NativeScrollEvent>) => {
+      scheduleScrollReveal();
+    },
+    [scheduleScrollReveal],
+  );
+
+  const fabHidden =
+    scrolling ||
+    categoryPressing ||
+    Boolean(toast) ||
+    Boolean(sheetTimer) ||
+    sheetCat !== null ||
+    consultPromptOpen ||
+    keyboardOpen;
+
   return (
     <View style={styles.root}>
       <RecordHomeHeader onOpenProfile={onOpenProfile} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        onScrollBeginDrag={handleScrollBegin}
+        onScrollEndDrag={handleScrollEnd}
+        onMomentumScrollBegin={handleScrollBegin}
+        onMomentumScrollEnd={handleScrollEnd}
+        scrollEventThrottle={16}
+      >
         {!allowAdd && (
           <Text style={styles.viewerBanner}>보기 전용 계정이에요. 기록 추가·수정은 제한돼요.</Text>
         )}
@@ -443,9 +561,14 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
         <OneTouchRecordGrid
           sleepActive={Boolean(activeSleep)}
           activeTimerActions={activeTimerActions}
+          visibleActions={settings.categories.order.filter((action) =>
+            settings.categories.visible.includes(action),
+          )}
+          coreActions={settings.categories.core}
           disabled={!allowAdd}
           onSelect={handleOneTouch}
           onLongPress={handleLongPress}
+          onInteractionChange={setCategoryPressing}
           onOpenActiveTimer={(action) => {
             const found = activeTimers.find((t) => t.action === action);
             if (found) setTimerSheetId(found.id);
@@ -453,6 +576,7 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
         />
         <QuickRecordsBar
           records={quickRecords}
+          visibleActions={settings.categories.visible}
           disabled={!allowAdd}
           onTap={handleQuickRecord}
           onSaveRecords={setQuickRecords}
@@ -483,15 +607,20 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
         )}
       </ScrollView>
 
-      <Pressable
-        style={({ pressed }) => [styles.aiFab, pressed && styles.aiFabPressed]}
-        onPress={onOpenConsult}
-        accessibilityRole="button"
-        accessibilityLabel="AI 상담 열기"
-      >
-        <BabyLogIcon kind="bot" size={25} color="#FFFFFF" strokeWidth={1.9} />
-        <Text style={styles.aiFabText}>AI 상담</Text>
-      </Pressable>
+      <ConsultFab
+        hidden={fabHidden}
+        onPress={() => setConsultPromptOpen(true)}
+      />
+
+      <ConsultPromptSheet
+        visible={consultPromptOpen}
+        todayLogCount={isViewingToday ? dayLogs.length : 0}
+        onClose={() => setConsultPromptOpen(false)}
+        onSelectQuestion={(question) => {
+          setConsultPromptOpen(false);
+          onOpenConsult(question);
+        }}
+      />
 
       <RecordCreatedToast
         visible={Boolean(toast)}
@@ -530,6 +659,7 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
       <ActiveTimerSheet
         visible={Boolean(sheetTimer)}
         timer={sheetTimer}
+        allowSideSwitch={settings.timers.switchBreastSide}
         onClose={() => setTimerSheetId(null)}
         onChangeSide={(side: TimerSide) => {
           if (!sheetTimer) return;
@@ -586,25 +716,4 @@ const styles = StyleSheet.create({
   timerBannerTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
   timerBannerMeta: { fontSize: 12, color: colors.muted, marginTop: 2, fontWeight: "600" },
   timerBannerCta: { fontSize: 13, fontWeight: "800", color: colors.amber },
-  aiFab: {
-    position: "absolute",
-    right: 16,
-    bottom: 18,
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.amber,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.8)",
-    shadowColor: "#A84F48",
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 7 },
-    elevation: 8,
-  },
-  aiFabPressed: { transform: [{ scale: 0.97 }], opacity: 0.9 },
-  aiFabText: { color: "#FFFFFF", fontSize: 11.5, fontWeight: "800", letterSpacing: -0.2 },
 });

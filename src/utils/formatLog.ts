@@ -1,5 +1,6 @@
 import type { CustomCategory, LogCategoryKey } from "../types/logCategory";
 import { resolveLogCategory } from "./resolveLogCategory";
+import { formatTemperature, formatVolume } from "./measurementFormat";
 
 export function formatLogMeta(
   entry: {
@@ -22,7 +23,15 @@ export function formatLogMeta(
   if (entry.chip) parts.push(entry.chip);
   if (entry.chip2) parts.push(entry.chip2);
   if (entry.stoolState) parts.push(entry.stoolState);
-  if (entry.amount) parts.push(`${entry.amount}${c.amount ?? ""}`);
+  if (entry.amount) {
+    if (["formula", "storedMilk", "pump", "water", "milk"].includes(entry.cat)) {
+      parts.push(formatVolume(entry.amount));
+    } else if (entry.cat === "temp") {
+      parts.push(formatTemperature(entry.amount));
+    } else {
+      parts.push(`${entry.amount}${c.amount ?? ""}`);
+    }
+  }
   if (entry.duration) parts.push(`${entry.duration}분`);
   if (entry.details) parts.push(entry.details.length > 16 ? `${entry.details.slice(0, 16)}…` : entry.details);
   if (entry.nextAt) parts.push(`다음 ${entry.nextAt}`);

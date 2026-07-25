@@ -12,8 +12,11 @@ import { GrowthBookEditorModal } from "../../components/babylog/GrowthBookEditor
 import { GrowthBookPreviewModal } from "../../components/babylog/GrowthBookPreviewModal";
 import { DiaryMoodStamp, DiaryStampPair } from "../../components/babylog/DiaryStamp";
 import { PushToast } from "../../components/babylog/PushToast";
+import { ConsultFab } from "../../components/babylog/ConsultFab";
+import { ConsultPromptSheet } from "../../components/babylog/ConsultPromptSheet";
 import type { DiaryComposeDraft } from "../../constants/diaryCompose";
 import { useBabyLog } from "../../context/BabyLogContext";
+import { useConsultFabBehavior } from "../../hooks/useConsultFabBehavior";
 import type { DiaryEntry } from "../../types/babyLog";
 import type { DiaryDraft, DiaryReminderSettings } from "../../types/diaryReminder";
 import { DEFAULT_DIARY_REMINDER } from "../../types/diaryReminder";
@@ -53,11 +56,12 @@ import type { MainTabParamList } from "../MainTabs";
 
 type Props = {
   onOpenProfile: () => void;
+  onOpenConsult: (initialQuestion?: string) => void;
 };
 
 type DiaryFilter = "all" | "growth" | "book";
 
-export function DiaryScreen({ onOpenProfile }: Props) {
+export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
   const route = useRoute<RouteProp<MainTabParamList, "Diary">>();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList, "Diary">>();
   const {
@@ -88,8 +92,13 @@ export function DiaryScreen({ onOpenProfile }: Props) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [bookPreviewOpen, setBookPreviewOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [chipPressing, setChipPressing] = useState(false);
   const [reminder, setReminder] = useState<DiaryReminderSettings>({ ...DEFAULT_DIARY_REMINDER });
   const [draftMemory, setDraftMemory] = useState<DiaryDraft | null>(null);
+  const sheetOpen = composeOpen || vaultOpen || editorOpen || bookPreviewOpen || settingsOpen;
+  const { fabHidden, promptOpen, setPromptOpen, scrollProps } = useConsultFabBehavior(
+    pushVisible || sheetOpen || chipPressing,
+  );
   const diaryEntriesRef = useRef(diaryEntries);
   diaryEntriesRef.current = diaryEntries;
   const draftRef = useRef(draftMemory);
@@ -317,7 +326,11 @@ export function DiaryScreen({ onOpenProfile }: Props) {
         }}
       />
       <AppHeader onOpenProfile={onOpenProfile} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        {...scrollProps}
+      >
         {!allowAdd && (
           <Text style={styles.viewerBanner}>보기 전용 계정이에요. 일기 추가·수정은 제한돼요.</Text>
         )}
@@ -381,6 +394,8 @@ export function DiaryScreen({ onOpenProfile }: Props) {
               <Pressable
                 key={f.key}
                 style={[styles.filterChip, active && styles.filterChipActive]}
+                onPressIn={() => setChipPressing(true)}
+                onPressOut={() => setChipPressing(false)}
                 onPress={() => setFilter(f.key)}
               >
                 <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
@@ -524,6 +539,17 @@ export function DiaryScreen({ onOpenProfile }: Props) {
           void saveDiaryReminder(next);
         }}
         onTestNotification={() => setPushVisible(true)}
+      />
+
+      <ConsultFab hidden={fabHidden} onPress={() => setPromptOpen(true)} />
+      <ConsultPromptSheet
+        visible={promptOpen}
+        todayLogCount={summary.totalCount}
+        onClose={() => setPromptOpen(false)}
+        onSelectQuestion={(question) => {
+          setPromptOpen(false);
+          onOpenConsult(question);
+        }}
       />
     </View>
   );

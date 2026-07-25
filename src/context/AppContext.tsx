@@ -1,7 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { CareSetup } from "../types/careSetup";
 import type { UserProfile } from "../types/profile";
-import { getEffectiveCareSetup, hydrateCareSetup, loadCareSetup, saveCareSetup } from "../utils/careSetupStore";
+import { getEffectiveCareSetup, hydrateCareSetup, loadCareSetup, saveCareSetup, clearCareSetup } from "../utils/careSetupStore";
+import { DEMO_CARE_SETUP } from "../types/careSetup";
+import { clearSupabaseSync } from "../utils/supabaseSyncStore";
+import { AuthRepository } from "../repositories/AuthRepository";
+import { isSupabaseConfigured } from "../lib/supabase";
 
 export const DEFAULT_PARENT_PROFILE: UserProfile = {
   name: "Jisoo Kim",
@@ -35,6 +39,8 @@ type AppContextValue = {
   setCareSetup: (setup: CareSetup) => void;
   careSetupReady: boolean;
   hasSavedCareSetup: boolean;
+  /** Clear saved setup and return session to a logged-out baseline. */
+  clearSession: () => Promise<void>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -62,9 +68,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void saveCareSetup(setup);
   }, []);
 
+  const clearSession = useCallback(async () => {
+    await clearCareSetup();
+    await clearSupabaseSync();
+    if (isSupabaseConfigured()) {
+      try {
+        await AuthRepository.signOut();
+      } catch {
+        /* local logout still proceeds */
+      }
+    }
+    setHasSavedCareSetup(false);
+    setCareSetupState(DEMO_CARE_SETUP);
+    setProfile(DEFAULT_PARENT_PROFILE);
+  }, []);
+
   return (
     <AppContext.Provider
-      value={{ profile, setProfile, careSetup, setCareSetup, careSetupReady, hasSavedCareSetup }}
+      value={{
+        profile,
+        setProfile,
+        careSetup,
+        setCareSetup,
+        careSetupReady,
+        hasSavedCareSetup,
+        clearSession,
+      }}
     >
       {children}
     </AppContext.Provider>

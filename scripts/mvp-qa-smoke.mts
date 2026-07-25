@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { formatDateKey, lastNDateKeys, parseDateKey, shiftDateKey } from "../src/utils/dateKey";
 import {
   buildTodaySummary,
+  currentWeekTrend,
   FEEDING_CATS,
   getLogsForDay,
   weeklyTrend,
@@ -33,6 +34,19 @@ import {
   armQaFault,
   consumeQaFault,
 } from "../src/utils/qaFaults";
+import {
+  DEFAULT_APP_SETTINGS,
+  DEFAULT_CORE_ACTIONS,
+  normalizeAppSettings,
+} from "../src/types/appSettings";
+import {
+  temperatureFromCelsius,
+  temperatureToCelsius,
+  volumeFromMl,
+  volumeToMl,
+} from "../src/utils/measurementFormat";
+import { familyRoleToPermission, recordedAtFromDateKeyTime } from "../src/utils/supabaseMappers";
+import { detectLocalCareLogMigrationCandidates } from "../src/utils/careLogsMigration";
 
 const today = formatDateKey();
 const me = { id: "me", name: "Me", role: "editor" as const, status: "active" as const, isMe: true };
@@ -56,21 +70,95 @@ function log(
   assert.deepEqual(lastNDateKeys(3, jan1), ["2025-12-30", "2025-12-31", "2026-01-01"]);
   assert.equal(elapsedClockMinutes("23:50", "00:20"), 30);
   assert.equal(elapsedClockMinutes("09:10", "10:00"), 50);
+  assert.equal(formatDateKey(new Date(2026, 6, 20, 3, 30), "04:00"), "2026-07-19");
+  assert.equal(formatDateKey(new Date(2026, 6, 20, 4, 0), "04:00"), "2026-07-20");
+  assert.deepEqual(
+    currentWeekTrend([], new Date(2026, 6, 22, 12), "monday").map((day) => day.dateKey),
+    ["2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-25", "2026-07-26"],
+  );
+}
+
+// --- Persistent app settings normalize safely and canonical units round-trip ---
+{
+  const settings = normalizeAppSettings({
+    ...DEFAULT_APP_SETTINGS,
+    categories: {
+      order: ["formula", "sleep"],
+      visible: ["formula", "sleep"],
+      core: ["formula", "sleep"],
+    },
+    units: { ...DEFAULT_APP_SETTINGS.units, volume: "oz", temperature: "f" },
+  });
+  assert.deepEqual(settings.categories.order.slice(0, 2), ["formula", "sleep"]);
+  assert.equal(settings.categories.visible.length, 6);
+  assert.deepEqual(settings.categories.visible.slice(0, 2), ["formula", "sleep"]);
+  assert.equal(settings.categories.core.length, 6);
+  assert.ok(settings.categories.core.every((action) => settings.categories.visible.includes(action)));
+  const invalidCategories = normalizeAppSettings({
+    ...DEFAULT_APP_SETTINGS,
+    categories: {
+      order: ["formula"],
+      visible: [],
+      core: [...DEFAULT_CORE_ACTIONS, "tummy"],
+    },
+  });
+  assert.equal(invalidCategories.categories.visible.length, QUICK_RECORD_ACTIONS.length);
+  assert.equal(invalidCategories.categories.core.length, 6);
+  assert.deepEqual(DEFAULT_CORE_ACTIONS, [
+    "breastfeeding",
+    "formula",
+    "bowel",
+    "urine",
+    "sleep",
+    "pump",
+  ]);
+  assert.equal(volumeFromMl("120", "oz"), "4.1");
+  assert.equal(volumeToMl(volumeFromMl("120", "oz"), "oz"), "121");
+  assert.equal(temperatureFromCelsius("36.5", "f"), "97.7");
+  assert.equal(temperatureToCelsius("97.7", "f"), "36.5");
 }
 
 // --- App restart routing waits for storage and resumes a configured user ---
 {
   assert.equal(
-    resolvePostSplashPhase({ splashFinished: true, careSetupReady: false, hasSavedCareSetup: true }),
+    resolvePostSplashPhase({
+      splashFinished: true,
+      careSetupReady: false,
+      termsReady: true,
+      hasSavedCareSetup: true,
+      termsAccepted: true,
+    }),
     null,
   );
   assert.equal(
-    resolvePostSplashPhase({ splashFinished: true, careSetupReady: true, hasSavedCareSetup: true }),
+    resolvePostSplashPhase({
+      splashFinished: true,
+      careSetupReady: true,
+      termsReady: true,
+      hasSavedCareSetup: true,
+      termsAccepted: true,
+    }),
     "main",
   );
   assert.equal(
-    resolvePostSplashPhase({ splashFinished: true, careSetupReady: true, hasSavedCareSetup: false }),
-    "login",
+    resolvePostSplashPhase({
+      splashFinished: true,
+      careSetupReady: true,
+      termsReady: true,
+      hasSavedCareSetup: false,
+      termsAccepted: false,
+    }),
+    "terms",
+  );
+  assert.equal(
+    resolvePostSplashPhase({
+      splashFinished: true,
+      careSetupReady: true,
+      termsReady: true,
+      hasSavedCareSetup: false,
+      termsAccepted: true,
+    }),
+    "auth",
   );
 }
 
@@ -419,6 +507,17 @@ function log(
   const idxOld = prompt.indexOf(shiftDateKey(1));
   const idxNew = prompt.indexOf(today);
   assert.ok(idxOld >= 0 && idxNew >= 0 && idxOld < idxNew, "relevant logs chronological");
+}
+
+{
+  assert.equal(familyRoleToPermission("owner"), "admin");
+  assert.equal(familyRoleToPermission("caregiver"), "editor");
+  assert.equal(familyRoleToPermission("viewer"), "viewer");
+  const local = [log({ id: "local-1", cat: "sleep", time: "10:00" })];
+  const server = [log({ id: "server-1", cat: "sleep", time: "10:00" })];
+  assert.equal(detectLocalCareLogMigrationCandidates(local, server).length, 1);
+  assert.equal(detectLocalCareLogMigrationCandidates(local, local).length, 0);
+  assert.match(recordedAtFromDateKeyTime("2026-07-20", "09:30"), /2026-07-2/);
 }
 
 console.log("mvp-qa-smoke: all checks passed");

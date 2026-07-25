@@ -48,7 +48,7 @@ export type MainTabParamList = {
   } | undefined;
   Mic: undefined;
   Report: undefined;
-  Consult: undefined;
+  Consult: { initialQuestion?: string } | undefined;
   Menu: undefined;
 };
 
@@ -249,19 +249,37 @@ function RecordTab() {
   return (
     <RecordScreen
       onOpenProfile={() => setProfileOpen(true)}
-      onOpenConsult={() => navigation.navigate("Consult")}
+      onOpenConsult={(initialQuestion) =>
+        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
+      }
     />
   );
 }
 
 function DiaryTab() {
   const { setProfileOpen } = useBabyLog();
-  return <DiaryScreen onOpenProfile={() => setProfileOpen(true)} />;
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  return (
+    <DiaryScreen
+      onOpenProfile={() => setProfileOpen(true)}
+      onOpenConsult={(initialQuestion) =>
+        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
+      }
+    />
+  );
 }
 
 function ReportTab() {
   const { setProfileOpen } = useBabyLog();
-  return <BabyReportScreen onOpenProfile={() => setProfileOpen(true)} />;
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  return (
+    <BabyReportScreen
+      onOpenProfile={() => setProfileOpen(true)}
+      onOpenConsult={(initialQuestion) =>
+        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
+      }
+    />
+  );
 }
 
 function ConsultTab() {

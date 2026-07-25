@@ -13,6 +13,7 @@ export const PHOTO_LAYOUT_OPTIONS: Array<{ value: PhotoLayout; label: string }> 
 export type RelationshipLabel =
   | "엄마"
   | "아빠"
+  | "보호자"
   | "시터"
   | "할머니"
   | "할아버지"
@@ -22,6 +23,7 @@ export type RelationshipLabel =
 export const RELATIONSHIP_LABELS: RelationshipLabel[] = [
   "엄마",
   "아빠",
+  "보호자",
   "시터",
   "할머니",
   "할아버지",

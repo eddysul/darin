@@ -15,6 +15,7 @@ import {
   FileText,
   FolderOpen,
   GlassWater,
+  LogOut,
   Menu,
   MessageCircle,
   Mic,
@@ -81,7 +82,8 @@ export type MiscIconKey =
   | "sparkles"
   | "voice"
   | "trash"
-  | "bot";
+  | "bot"
+  | "logout";
 
 export const TAB_ICONS: Record<TabIconKey, IconComponent> = {
   record: ClipboardList,
@@ -108,4 +110,5 @@ export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
   voice: Mic,
   trash: Trash2,
   bot: Bot,
+  logout: LogOut,
 };

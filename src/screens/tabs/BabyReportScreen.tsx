@@ -2,37 +2,49 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppHeader } from "../../components/babylog/AppHeader";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
+import { ConsultFab } from "../../components/babylog/ConsultFab";
+import { ConsultPromptSheet } from "../../components/babylog/ConsultPromptSheet";
 import { BABY_LOG_CATEGORIES, getCategory, type BabyLogCategoryId } from "../../constants/babyLogCategories";
 import { formatLogMeta, toMinutes } from "../../utils/formatLog";
 import { useBabyLog } from "../../context/BabyLogContext";
+import { useConsultFabBehavior } from "../../hooks/useConsultFabBehavior";
 import type { BabyLogEntry } from "../../types/babyLog";
 import { formatDateKey } from "../../utils/dateKey";
 import {
   buildSummaryCards,
   buildTodaySummary,
   categoryCountsLast7,
+  currentWeekTrend,
   getLogsForDay,
   toBarPercent,
-  weeklyTrend,
 } from "../../utils/reportAggregates";
 import { EmptyState } from "../../components/states/FeedbackStates";
 import { colors } from "../../theme";
+import { formatDisplayTime } from "../../utils/logSummary";
+import { useAppSettings } from "../../context/AppSettingsContext";
 
 type Props = {
   onOpenProfile: () => void;
+  onOpenConsult: (initialQuestion?: string) => void;
 };
 
 type ReportCat = "all" | BabyLogCategoryId;
 
-export function BabyReportScreen({ onOpenProfile }: Props) {
+export function BabyReportScreen({ onOpenProfile, onOpenConsult }: Props) {
   const { logs, babyName } = useBabyLog();
+  const { settings } = useAppSettings();
   const [reportCat, setReportCat] = useState<ReportCat>("all");
+  const [chipPressing, setChipPressing] = useState(false);
+  const { fabHidden, promptOpen, setPromptOpen, scrollProps } = useConsultFabBehavior(chipPressing);
 
   const todayKey = formatDateKey();
   const todayLogs = useMemo(() => getLogsForDay(logs, todayKey, todayKey), [logs, todayKey]);
   const summary = useMemo(() => buildTodaySummary(logs), [logs]);
   const cards = useMemo(() => buildSummaryCards(summary, babyName), [summary, babyName]);
-  const week = useMemo(() => weeklyTrend(logs), [logs]);
+  const week = useMemo(
+    () => currentWeekTrend(logs, new Date(), settings.time.weekStart),
+    [logs, settings.time.weekStart],
+  );
 
   const maxFeed = Math.max(...week.map((d) => d.feedingCount), 1);
   const maxSleep = Math.max(...week.map((d) => d.sleepMinutes), 1);
@@ -44,12 +56,14 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
   return (
     <View style={styles.root}>
       <AppHeader onOpenProfile={onOpenProfile} />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} {...scrollProps}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           <FilterChip
             label="전체"
             icon={<BabyLogIcon kind="folder" size={14} color={reportCat === "all" ? colors.amberDark : colors.muted} />}
             active={reportCat === "all"}
+            onPressIn={() => setChipPressing(true)}
+            onPressOut={() => setChipPressing(false)}
             onPress={() => setReportCat("all")}
           />
           {BABY_LOG_CATEGORIES.map((c) => (
@@ -58,6 +72,8 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
               label={c.label}
               icon={<BabyLogIcon catId={c.id} size={14} />}
               active={reportCat === c.id}
+              onPressIn={() => setChipPressing(true)}
+              onPressOut={() => setChipPressing(false)}
               onPress={() => setReportCat(c.id)}
             />
           ))}
@@ -84,9 +100,17 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
               {(["breast", "formula", "food", "diaper", "sleep", "tummy"] as BabyLogCategoryId[]).map((id) => {
                 const c = getCategory(id);
                 const todays = todayFor(id);
-                const lastTime = todays.length ? todays[todays.length - 1].time : "-";
+                const lastTime = todays.length
+                  ? formatDisplayTime(todays[todays.length - 1].time)
+                  : "-";
                 return (
-                  <Pressable key={id} style={styles.insightCard} onPress={() => setReportCat(id)}>
+                  <Pressable
+                    key={id}
+                    style={styles.insightCard}
+                    onPressIn={() => setChipPressing(true)}
+                    onPressOut={() => setChipPressing(false)}
+                    onPress={() => setReportCat(id)}
+                  >
                     <View style={styles.insightTop}>
                       <BabyLogIcon catId={id} size={14} />
                       <Text style={styles.insightTopText}>{c.label}</Text>
@@ -125,6 +149,17 @@ export function BabyReportScreen({ onOpenProfile }: Props) {
           <CategoryDetail catId={reportCat} todayLogs={todayFor(reportCat)} allLogs={logs} />
         )}
       </ScrollView>
+
+      <ConsultFab hidden={fabHidden} onPress={() => setPromptOpen(true)} />
+      <ConsultPromptSheet
+        visible={promptOpen}
+        todayLogCount={summary.totalCount}
+        onClose={() => setPromptOpen(false)}
+        onSelectQuestion={(question) => {
+          setPromptOpen(false);
+          onOpenConsult(question);
+        }}
+      />
     </View>
   );
 }
@@ -146,14 +181,23 @@ function FilterChip({
   icon,
   active,
   onPress,
+  onPressIn,
+  onPressOut,
 }: {
   label: string;
   icon?: ReactNode;
   active: boolean;
   onPress: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
 }) {
   return (
-    <Pressable style={[styles.filterChip, active && styles.filterChipActive]} onPress={onPress}>
+    <Pressable
+      style={[styles.filterChip, active && styles.filterChipActive]}
+      onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+    >
       <View style={styles.filterChipInner}>
         {icon}
         <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
@@ -202,7 +246,9 @@ function CategoryDetail({
   allLogs: BabyLogEntry[];
 }) {
   const c = getCategory(catId);
-  const lastTime = todayLogs.length ? todayLogs[todayLogs.length - 1].time : "없음";
+  const lastTime = todayLogs.length
+    ? formatDisplayTime(todayLogs[todayLogs.length - 1].time)
+    : "없음";
   const trend = categoryCountsLast7(allLogs, catId);
   const values = trend.map((t) => (catId === "sleep" ? (t.sleepMinutes ?? 0) : t.count));
   const pastVals = values.slice(0, 6);
@@ -239,7 +285,7 @@ function CategoryDetail({
       {todayLogs.length === 0 ? (
         <Text style={styles.hint}>오늘 {c.label} 기록이 아직 없어요.</Text>
       ) : todayLogs.length === 1 ? (
-        <Text style={styles.hint}>기록이 2건 이상일 때 간격을 보여드려요. (현재 1건: {todayLogs[0].time})</Text>
+        <Text style={styles.hint}>기록이 2건 이상일 때 간격을 보여드려요. (현재 1건: {formatDisplayTime(todayLogs[0].time)})</Text>
       ) : (
         <>
           <IntervalRow entry={todayLogs[0]} c={c} />
@@ -322,7 +368,7 @@ function IntervalRow({ entry, c }: { entry: BabyLogEntry; c: ReturnType<typeof g
   const meta = formatLogMeta(entry);
   return (
     <View style={styles.intervalRow}>
-      <Text style={styles.intervalTime}>{entry.time}</Text>
+      <Text style={styles.intervalTime}>{formatDisplayTime(entry.time)}</Text>
       <View style={[styles.intervalDot, { backgroundColor: c.color }]} />
       <View style={styles.intervalLabelRow}>
         {!entry.cat.startsWith("custom:") && <BabyLogIcon catId={entry.cat as BabyLogCategoryId} size={15} />}

@@ -9,6 +9,9 @@ import {
   yesterdayDateKey,
 } from "./dateKey";
 import { toMinutes } from "./formatLog";
+import { getAppSettings } from "./appSettingsStore";
+import type { WeekStart } from "../types/appSettings";
+import { offsetDateKey, parseDateKey } from "./dateKey";
 
 /** Intake events shown as feeding; pumping and solid food are tracked separately. */
 export const FEEDING_CATS: BabyLogCategoryId[] = ["breast", "formula", "storedMilk", "milk"];
@@ -130,6 +133,20 @@ export function aggregateLogsByDate(
 export function weeklyTrend(logs: BabyLogEntry[], now = new Date()): DayAggregate[] {
   const todayKey = formatDateKey(now);
   return aggregateLogsByDate(logs, lastNDateKeys(7, now), todayKey);
+}
+
+/** Current calendar week, ordered by the user's Sunday/Monday preference. */
+export function currentWeekTrend(
+  logs: BabyLogEntry[],
+  now = new Date(),
+  weekStart: WeekStart = getAppSettings().time.weekStart,
+): DayAggregate[] {
+  const todayKey = formatDateKey(now);
+  const weekday = parseDateKey(todayKey).getDay();
+  const daysSinceStart = weekStart === "monday" ? (weekday + 6) % 7 : weekday;
+  const startKey = offsetDateKey(todayKey, -daysSinceStart);
+  const dateKeys = Array.from({ length: 7 }, (_, index) => offsetDateKey(startKey, index));
+  return aggregateLogsByDate(logs, dateKeys, todayKey);
 }
 
 export function categoryCountsLast7(

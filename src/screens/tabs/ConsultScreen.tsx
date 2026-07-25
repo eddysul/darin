@@ -10,6 +10,8 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { callOpenAI, OpenAIChatError, type OpenAIMessage } from "../../api/openaiChat";
 import { AppHeader } from "../../components/babylog/AppHeader";
 import { useBabyLog } from "../../context/BabyLogContext";
@@ -30,11 +32,22 @@ const QUICK_CHIPS = [
 
 const HAS_OPENAI_KEY = Boolean((process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? "").trim());
 
+type ConsultRouteParams = {
+  initialQuestion?: string;
+};
+
+type ConsultNav = BottomTabNavigationProp<
+  { Consult: ConsultRouteParams; Record: undefined },
+  "Consult"
+>;
+
 type Props = {
   onOpenProfile: () => void;
 };
 
 export function ConsultScreen({ onOpenProfile }: Props) {
+  const route = useRoute<RouteProp<{ Consult: ConsultRouteParams }, "Consult">>();
+  const navigation = useNavigation<ConsultNav>();
   const {
     careSetup,
     logs,
@@ -59,6 +72,7 @@ export function ConsultScreen({ onOpenProfile }: Props) {
   const historyRef = useRef<OpenAIMessage[]>([]);
   const historySeeded = useRef(false);
   const requestInFlightRef = useRef(false);
+  const consumedInitialRef = useRef<string | null>(null);
 
   const pack = useMemo(
     () => buildCareContextPack({ careSetup, logs, diaryEntries, locale }),
@@ -131,6 +145,22 @@ export function ConsultScreen({ onOpenProfile }: Props) {
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
     }
   };
+
+  // Prefill from Record FAB prompt sheet (do not rewrite consult logic).
+  useEffect(() => {
+    if (!storageReady) return;
+    const question = route.params?.initialQuestion?.trim();
+    if (!question) return;
+    if (consumedInitialRef.current === question) return;
+    consumedInitialRef.current = question;
+    void send(question);
+    navigation.setParams({ initialQuestion: undefined });
+    // Allow the same question to be asked again later from the prompt sheet.
+    const clear = setTimeout(() => {
+      consumedInitialRef.current = null;
+    }, 500);
+    return () => clearTimeout(clear);
+  }, [storageReady, route.params?.initialQuestion]);
 
   if (!storageReady) {
     return (

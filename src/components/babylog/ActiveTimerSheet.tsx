@@ -15,6 +15,8 @@ import {
   msToMinutes,
   sideLabel,
 } from "../../types/activeTimer";
+import { useAppSettings } from "../../context/AppSettingsContext";
+import { volumeFromMl, volumeToMl } from "../../utils/measurementFormat";
 type Props = {
   visible: boolean;
   timer: ActiveTimer | null;
@@ -23,6 +25,7 @@ type Props = {
   onPause: () => void;
   onResume: () => void;
   onStop: (opts?: { amount?: string }) => void;
+  allowSideSwitch?: boolean;
 };
 
 const SIDE_OPTIONS: TimerSide[] = ["left", "right", "both"];
@@ -43,7 +46,9 @@ export function ActiveTimerSheet({
   onPause,
   onResume,
   onStop,
+  allowSideSwitch = true,
 }: Props) {
+  const { settings } = useAppSettings();
   const [tick, setTick] = useState(0);
   const [finishingPump, setFinishingPump] = useState(false);
   const [pumpAmount, setPumpAmount] = useState("");
@@ -97,7 +102,15 @@ export function ActiveTimerSheet({
       setFinishingPump(true);
       return;
     }
-    onStop(timer.kind === "pump" ? { amount: pumpAmount.trim() || undefined } : undefined);
+    onStop(
+      timer.kind === "pump"
+        ? {
+            amount: pumpAmount.trim()
+              ? volumeToMl(pumpAmount.trim(), settings.units.volume)
+              : undefined,
+          }
+        : undefined,
+    );
   };
 
   return (
@@ -119,20 +132,24 @@ export function ActiveTimerSheet({
 
           {needsSide ? (
             <>
-              <Text style={styles.fieldLabel}>수유/유축 쪽</Text>
-              <View style={styles.chipRow}>
-                {SIDE_OPTIONS.map((side) => (
-                  <Pressable
-                    key={side}
-                    style={[styles.chip, timer.side === side && styles.chipSel]}
-                    onPress={() => onChangeSide(side)}
-                  >
-                    <Text style={[styles.chipText, timer.side === side && styles.chipTextSel]}>
-                      {sideLabel(side)}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              {allowSideSwitch ? (
+                <>
+                  <Text style={styles.fieldLabel}>수유/유축 쪽</Text>
+                  <View style={styles.chipRow}>
+                    {SIDE_OPTIONS.map((side) => (
+                      <Pressable
+                        key={side}
+                        style={[styles.chip, timer.side === side && styles.chipSel]}
+                        onPress={() => onChangeSide(side)}
+                      >
+                        <Text style={[styles.chipText, timer.side === side && styles.chipTextSel]}>
+                          {sideLabel(side)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              ) : null}
               {timer.kind === "breastfeeding" ? (
                 <Text style={styles.sideSplit}>
                   좌 {formatElapsedClock(leftElapsed)} · 우 {formatElapsedClock(rightElapsed)}
@@ -143,7 +160,7 @@ export function ActiveTimerSheet({
 
           {finishingPump ? (
             <>
-              <Text style={styles.fieldLabel}>유축량 (ml)</Text>
+              <Text style={styles.fieldLabel}>유축량 ({settings.units.volume})</Text>
               <TextInput
                 style={styles.input}
                 value={pumpAmount}
@@ -154,17 +171,20 @@ export function ActiveTimerSheet({
                 autoFocus
               />
               <View style={styles.suggestRow}>
-                {["40", "60", "80", "100", "120"].map((ml) => (
+                {["40", "60", "80", "100", "120"].map((ml) => {
+                  const displayAmount = volumeFromMl(ml, settings.units.volume);
+                  return (
                   <Pressable
                     key={ml}
-                    style={[styles.suggestChip, pumpAmount === ml && styles.chipSel]}
-                    onPress={() => setPumpAmount(ml)}
+                    style={[styles.suggestChip, pumpAmount === displayAmount && styles.chipSel]}
+                    onPress={() => setPumpAmount(displayAmount)}
                   >
                     <Text
-                      style={[styles.chipText, pumpAmount === ml && styles.chipTextSel]}
-                    >{`${ml}ml`}</Text>
+                      style={[styles.chipText, pumpAmount === displayAmount && styles.chipTextSel]}
+                    >{`${displayAmount}${settings.units.volume}`}</Text>
                   </Pressable>
-                ))}
+                  );
+                })}
               </View>
             </>
           ) : null}

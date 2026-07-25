@@ -13,6 +13,12 @@ export const STORAGE_KEYS = {
   growthBookEdit: "darin:growth-book-edit",
   babyStickers: "darin:baby-stickers",
   activeTimers: "darin:active-timers",
+  appSettings: "darin:app-settings",
+  termsAccepted: "darin:terms-accepted",
+  /** Supabase sync pointers (babyId / userId) — not secrets. */
+  supabaseSync: "darin:supabase-sync",
+  /** Local device auth fallback when Anonymous is disabled. */
+  supabaseDeviceAuth: "darin:supabase-device-auth",
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

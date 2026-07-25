@@ -1,11 +1,20 @@
 /** Local calendar day keys (YYYY-MM-DD) — app timezone = device local. */
+import type { DayStart } from "../types/appSettings";
+import { getAppSettings } from "./appSettingsStore";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
-export function formatDateKey(d = new Date()): string {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+export function formatDateKey(
+  d = new Date(),
+  dayStart: DayStart = getAppSettings().time.dayStart,
+): string {
+  const effective = new Date(d);
+  if (dayStart === "04:00" && effective.getHours() < 4) {
+    effective.setDate(effective.getDate() - 1);
+  }
+  return `${effective.getFullYear()}-${pad(effective.getMonth() + 1)}-${pad(effective.getDate())}`;
 }
 
 export function parseDateKey(dateKey: string): Date {
@@ -14,9 +23,7 @@ export function parseDateKey(dateKey: string): Date {
 }
 
 export function shiftDateKey(daysAgo: number, from = new Date()): string {
-  const d = new Date(from);
-  d.setDate(d.getDate() - daysAgo);
-  return formatDateKey(d);
+  return offsetDateKey(formatDateKey(from), -daysAgo);
 }
 
 export function yesterdayDateKey(from = new Date()): string {
@@ -29,7 +36,7 @@ const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
 export function offsetDateKey(dateKey: string, deltaDays: number): string {
   const d = parseDateKey(dateKey);
   d.setDate(d.getDate() + deltaDays);
-  return formatDateKey(d);
+  return formatDateKey(d, "midnight");
 }
 
 /** e.g. "오늘 7.21 (화)" · "어제 7.20 (월)" · "7.19 (일)" */
@@ -38,7 +45,7 @@ export function dayNavLabel(dateKey: string, todayKey = formatDateKey()): string
   const md = `${d.getMonth() + 1}.${d.getDate()}`;
   const wd = WEEKDAY_KO[d.getDay()] ?? "";
   if (dateKey === todayKey) return `오늘 ${md} (${wd})`;
-  if (dateKey === yesterdayDateKey(parseDateKey(todayKey))) return `어제 ${md} (${wd})`;
+  if (dateKey === offsetDateKey(todayKey, -1)) return `어제 ${md} (${wd})`;
   if (dateKey === offsetDateKey(todayKey, 1)) return `내일 ${md} (${wd})`;
   return `${md} (${wd})`;
 }
@@ -54,7 +61,7 @@ export function lastNDateKeys(n: number, from = new Date()): string[] {
 
 export function weekdayLabelKo(dateKey: string, todayKey = formatDateKey()): string {
   if (dateKey === todayKey) return "오늘";
-  if (dateKey === yesterdayDateKey(parseDateKey(todayKey))) return "어제";
+  if (dateKey === offsetDateKey(todayKey, -1)) return "어제";
   if (dateKey === offsetDateKey(todayKey, 1)) return "내일";
   return WEEKDAY_KO[parseDateKey(dateKey).getDay()] ?? dateKey.slice(5);
 }

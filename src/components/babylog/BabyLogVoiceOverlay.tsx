@@ -21,6 +21,8 @@ import {
 } from "../../utils/voiceToBabyLog";
 import { VoiceWaveform } from "../VoiceWaveform";
 import { colors } from "../../theme";
+import { formatTemperature, formatVolume } from "../../utils/measurementFormat";
+import { formatDisplayTime } from "../../utils/logSummary";
 
 export type VoiceResult = VoiceEventDraft;
 
@@ -63,6 +65,8 @@ function formatDuration(ms: number) {
 }
 
 function formatKoClock(hhmm: string): string {
+  const configured = formatDisplayTime(hhmm);
+  if (!configured.endsWith("AM") && !configured.endsWith("PM")) return configured;
   const [hRaw, mRaw] = hhmm.split(":");
   const h = Number(hRaw);
   const m = Number(mRaw);
@@ -76,8 +80,9 @@ function cardSummary(event: VoiceResult): string {
   const c = getCategory(event.cat);
   const bits = [c.label];
   if (event.amount) {
-    const unit = event.cat === "temp" ? "℃" : event.cat === "food" ? "g" : "ml";
-    bits.push(`${event.amount}${unit}`);
+    if (event.cat === "temp") bits.push(formatTemperature(event.amount));
+    else if (event.cat === "food") bits.push(`${event.amount}g`);
+    else bits.push(formatVolume(event.amount));
   }
   if (event.duration) bits.push(`${event.duration}분`);
   if (event.chip) bits.push(event.chip);

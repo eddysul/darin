@@ -4,6 +4,8 @@ import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
 import { InviteFamilyModal } from "../components/babylog/InviteFamilyModal";
 import { EmptyState } from "../components/states/FeedbackStates";
 import { useBabyLog } from "../context/BabyLogContext";
+import { useAppSettings } from "../context/AppSettingsContext";
+import { formatBabyAge } from "../utils/childDisplay";
 import {
   canInvite,
   canManageMembers,
@@ -24,6 +26,7 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
   const {
     babyName,
     babyBirthMeta,
+    careSetup,
     familyMembers,
     myFamilyRole,
     inviteFamilyMember,
@@ -32,6 +35,8 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
     setFamilyMemberStatus,
     removeFamilyMember,
   } = useBabyLog();
+  const { settings } = useAppSettings();
+  const configuredAge = formatBabyAge(careSetup.child, settings.time.babyAge);
   const [inviteOpen, setInviteOpen] = useState(false);
   const allowInvite = canInvite(myFamilyRole);
   const allowManage = canManageMembers(myFamilyRole);
@@ -53,7 +58,7 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
             </View>
             <View>
               <Text style={styles.babyName}>{babyName}</Text>
-              <Text style={styles.babyAge}>{babyBirthMeta}</Text>
+              <Text style={styles.babyAge}>{configuredAge ?? babyBirthMeta}</Text>
             </View>
           </View>
 

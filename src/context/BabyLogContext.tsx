@@ -3,6 +3,7 @@ import type { CustomCategory } from "../types/logCategory";
 import { useApp } from "./AppContext";
 import type { BabyLogActor, BabyLogEntry, ChatMessage, DiaryEntry } from "../types/babyLog";
 import type { CareSetup, DefaultFeedingMethod } from "../types/careSetup";
+import { relationshipToLabel } from "../types/careSetup";
 import type { FamilyMember, FamilyRole } from "../types/family";
 import type { QuickRecord } from "../types/quickRecord";
 import { buildBabyDisplay } from "../utils/childDisplay";
@@ -13,6 +14,15 @@ import {
 } from "../utils/customCategoriesStore";
 import { getQuickRecords, hydrateQuickRecords, saveQuickRecords } from "../utils/quickRecordsStore";
 import { getBabyLogs, hydrateBabyLogs, saveBabyLogs } from "../utils/babyLogsStore";
+import {
+  bootstrapCareLogsFromServer,
+  syncCareLogCreate,
+  syncCareLogDelete,
+  syncCareLogUpdate,
+} from "../utils/careLogServerSync";
+import { clearSupabaseSync, hydrateSupabaseSync } from "../utils/supabaseSyncStore";
+import { AuthRepository } from "../repositories/AuthRepository";
+import { isSupabaseConfigured } from "../lib/supabase";
 import { getDiaryEntries, hydrateDiaryEntries, saveDiaryEntries } from "../utils/diaryStore";
 import { getChatHistory, hydrateChatHistory, saveChatHistory } from "../utils/chatHistoryStore";
 import { getFamilyMembers, hydrateFamilyMembers, saveFamilyMembers } from "../utils/familyMembersStore";
@@ -233,6 +243,16 @@ type BabyLogContextValue = {
     contact: string;
     relationshipLabel?: FamilyMember["relationshipLabel"];
   }) => FamilyMember;
+  /** Sync the local "me" member from completed CareSetup (name + relationship). */
+  applyOwnerFromSetup: (setup: CareSetup) => void;
+  /** Join an existing baby via invite code (MVP mock). */
+  joinWithInvite: (payload: {
+    code: string;
+    myName: string;
+    ownerName: string;
+    relationshipLabel: FamilyMember["relationshipLabel"];
+    role?: FamilyRole;
+  }) => void;
   updateFamilyMemberRole: (id: string, role: FamilyRole) => void;
   acceptFamilyInvite: (id: string) => void;
   setFamilyMemberStatus: (id: string, status: FamilyMember["status"]) => void;
@@ -255,6 +275,7 @@ type BabyLogContextValue = {
   storageIssue: StorageIssue | null;
   retryPersistence: () => Promise<void>;
   dismissStorageIssue: () => void;
+  clearAllUserData: () => Promise<void>;
   qaDebug: {
     backupCurrentData: () => Promise<void>;
     useEmptyData: () => Promise<void>;
@@ -267,7 +288,7 @@ type BabyLogContextValue = {
 const BabyLogContext = createContext<BabyLogContextValue | null>(null);
 
 export function BabyLogProvider({ children }: { children: ReactNode }) {
-  const { careSetup } = useApp();
+  const { careSetup, hasSavedCareSetup } = useApp();
   const [logs, setLogs] = useState<BabyLogEntry[]>(() => seedLogs().map((l) => ({ ...l, id: createId() })));
   const [logsHydrated, setLogsHydrated] = useState(false);
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>(SEED_DIARY);
@@ -291,7 +312,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   useEffect(() => subscribeStorageIssues(setStorageIssue), []);
 
   const hydrateStorageState = useCallback(async (force = false) => {
-    const [customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk] =
+    const [customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, syncOk] =
       await Promise.all([
       hydrateCustomCategories(force),
       hydrateQuickRecords(force),
@@ -301,27 +322,44 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       hydrateFamilyMembers(force),
       hydrateGrowthBookEdit(force),
       hydrateBabyStickers(force),
+      hydrateSupabaseSync(force),
     ]);
+    void syncOk;
 
     if (customOk) setCustomCategoriesState(getCustomCategories());
     if (quickOk) setQuickRecordsState(getQuickRecords());
     if (logsOk) {
       const storedLogs = getBabyLogs();
+      let nextLogs: BabyLogEntry[] | null = null;
       if (storedLogs !== null) {
         const today = formatDateKey();
-        setLogs(
-          storedLogs.map((l) => ({
-            ...l,
-            dateKey: l.dateKey ?? today,
-            createdBy: l.createdBy
-              ? {
-                  ...l.createdBy,
-                  role: migrateActorRole(l.createdBy.role as string),
-                }
-              : l.createdBy,
-            source: l.source ?? (l.voice ? "voice" : "manual"),
-          })),
-        );
+        nextLogs = storedLogs.map((l) => ({
+          ...l,
+          dateKey: l.dateKey ?? today,
+          createdBy: l.createdBy
+            ? {
+                ...l.createdBy,
+                role: migrateActorRole(l.createdBy.role as string),
+              }
+            : l.createdBy,
+          source: l.source ?? (l.voice ? "voice" : "manual"),
+        }));
+      }
+
+      const boot = await bootstrapCareLogsFromServer({
+        careSetup,
+        hasSavedCareSetup,
+        localLogs: nextLogs,
+      });
+
+      if (boot.usedServer && boot.logs !== null) {
+        setLogs(boot.logs);
+        void saveBabyLogs(boot.logs);
+      } else if (boot.usedServer && boot.logs === null && nextLogs !== null) {
+        // Server bound but empty — keep local cache (migration pending).
+        setLogs(nextLogs);
+      } else if (nextLogs !== null) {
+        setLogs(nextLogs);
       }
       setLogsHydrated(true);
     }
@@ -366,7 +404,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     }
     setStorageReady(true);
     return allLoaded;
-  }, []);
+  }, [careSetup, hasSavedCareSetup]);
 
   useEffect(() => {
     void hydrateStorageState();
@@ -374,6 +412,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!logsHydrated) return;
+    // Cache only — server is source of truth when active.
     void saveBabyLogs(logs);
   }, [logs, logsHydrated]);
 
@@ -460,6 +499,12 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     (entry: Omit<BabyLogEntry, "id">) => {
       const next = normalizeEntry(entry);
       setLogs((prev) => [...prev, next]);
+      void syncCareLogCreate(next).then((remote) => {
+        if (!remote) return;
+        if (remote.id !== next.id) {
+          setLogs((prev) => prev.map((l) => (l.id === next.id ? remote : l)));
+        }
+      });
       return next;
     },
     [normalizeEntry],
@@ -468,7 +513,18 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const addLogs = useCallback(
     (entries: Omit<BabyLogEntry, "id">[]) => {
       if (!entries.length) return;
-      setLogs((prev) => [...prev, ...entries.map(normalizeEntry)]);
+      const nextEntries = entries.map(normalizeEntry);
+      setLogs((prev) => [...prev, ...nextEntries]);
+      void Promise.all(nextEntries.map((entry) => syncCareLogCreate(entry))).then((remotes) => {
+        setLogs((prev) =>
+          prev.map((local) => {
+            const idx = nextEntries.findIndex((n) => n.id === local.id);
+            if (idx < 0) return local;
+            const remote = remotes[idx];
+            return remote && remote.id !== local.id ? remote : local;
+          }),
+        );
+      });
     },
     [normalizeEntry],
   );
@@ -487,10 +543,12 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
           : l,
       ),
     );
+    void syncCareLogUpdate(id, entry);
   }, []);
 
   const deleteLog = useCallback((id: string) => {
     setLogs((prev) => prev.filter((l) => l.id !== id));
+    void syncCareLogDelete(id);
   }, []);
 
   const addDiary = useCallback(
@@ -547,6 +605,33 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setChatHistory((prev) => [...prev, { id: createId(), role, text, stickerId }]);
   }, []);
 
+  const clearAllUserData = useCallback(async () => {
+    const emptyGrowthBook = createEmptyGrowthBookEdit({
+      babyId: "baby-1",
+      babyName: display.babyName,
+    });
+    setLogs([]);
+    setDiaryEntries([]);
+    setFamilyMembers([]);
+    setGrowthBookEditState(emptyGrowthBook);
+    setBabyStickers([]);
+    setChatHistory([]);
+    setCustomCategoriesState([]);
+    setQuickRecordsState([]);
+    await Promise.all([
+      saveBabyLogs([]),
+      saveDiaryEntries([]),
+      saveFamilyMembers([]),
+      saveGrowthBookEdit(emptyGrowthBook),
+      saveBabyStickers([]),
+      saveChatHistory([]),
+      saveCustomCategories([]),
+      saveQuickRecords([]),
+      clearSupabaseSync(),
+      isSupabaseConfigured() ? AuthRepository.signOut().catch(() => undefined) : Promise.resolve(),
+    ]);
+  }, [display.babyName]);
+
   const inviteFamilyMember = useCallback(
     (draft: {
       name: string;
@@ -554,7 +639,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       contact: string;
       relationshipLabel?: FamilyMember["relationshipLabel"];
     }) => {
-      const code = createId().slice(0, 6).toUpperCase();
+      const code = Math.random().toString(36).slice(2, 8).toUpperCase();
       const relationshipLabel =
         draft.relationshipLabel ??
         (draft.role === "caregiver" ? "시터" : "가족");
@@ -571,6 +656,74 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       };
       setFamilyMembers((prev) => [...prev, member]);
       return member;
+    },
+    [],
+  );
+
+  const applyOwnerFromSetup = useCallback((setup: CareSetup) => {
+    const name = setup.parent.parentName.trim() || "나";
+    const label = relationshipToLabel(setup.parent.relationshipToChild);
+    setFamilyMembers((prev) => {
+      const hasMe = prev.some((m) => m.isMe);
+      if (hasMe) {
+        return prev.map((m) =>
+          m.isMe
+            ? {
+                ...m,
+                name,
+                relationshipLabel: label,
+                role: "owner",
+                status: "active" as const,
+              }
+            : m,
+        );
+      }
+      return [
+        {
+          id: createId(),
+          name,
+          role: "owner" as const,
+          relationshipLabel: label,
+          status: "active" as const,
+          isMe: true,
+          emoji: "👤",
+        },
+        ...prev,
+      ];
+    });
+  }, []);
+
+  const joinWithInvite = useCallback(
+    (payload: {
+      code: string;
+      myName: string;
+      ownerName: string;
+      relationshipLabel: FamilyMember["relationshipLabel"];
+      role?: FamilyRole;
+    }) => {
+      const role =
+        payload.role ??
+        (payload.relationshipLabel === "시터" ? "caregiver" : "editor");
+      setFamilyMembers([
+        {
+          id: "joined-owner",
+          name: payload.ownerName,
+          role: "owner",
+          relationshipLabel: "엄마",
+          status: "active",
+          emoji: "👩",
+        },
+        {
+          id: createId(),
+          name: payload.myName.trim() || "나",
+          role,
+          relationshipLabel: payload.relationshipLabel,
+          status: "active",
+          isMe: true,
+          inviteCode: payload.code,
+          emoji: role === "caregiver" ? "🧑‍🍼" : "👤",
+        },
+      ]);
     },
     [],
   );
@@ -697,6 +850,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       deleteBabySticker,
       myFamilyRole,
       inviteFamilyMember,
+      applyOwnerFromSetup,
+      joinWithInvite,
       updateFamilyMemberRole,
       acceptFamilyInvite,
       setFamilyMemberStatus,
@@ -718,6 +873,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       storageIssue,
       retryPersistence,
       dismissStorageIssue: clearStorageIssue,
+      clearAllUserData,
       qaDebug,
     }),
     [
@@ -736,6 +892,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       deleteBabySticker,
       myFamilyRole,
       inviteFamilyMember,
+      applyOwnerFromSetup,
+      joinWithInvite,
       updateFamilyMemberRole,
       acceptFamilyInvite,
       setFamilyMemberStatus,
@@ -755,6 +913,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       storageReady,
       storageIssue,
       retryPersistence,
+      clearAllUserData,
       qaDebug,
     ],
   );

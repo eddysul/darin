@@ -15,6 +15,8 @@ import type { QuickRecord } from "../../types/quickRecord";
 import { createId } from "../../utils/id";
 import { colors, radius } from "../../theme";
 import { LogCategoryIcon } from "./LogCategoryIcon";
+import { useAppSettings } from "../../context/AppSettingsContext";
+import { formatVolume, volumeFromMl, volumeToMl } from "../../utils/measurementFormat";
 
 const LINK_CATS: BabyLogCategoryId[] = [
   "formula",
@@ -37,6 +39,14 @@ const LINK_CATS: BabyLogCategoryId[] = [
   "other",
 ];
 
+const VOLUME_CATS: BabyLogCategoryId[] = [
+  "formula",
+  "storedMilk",
+  "pump",
+  "water",
+  "milk",
+];
+
 type Props = {
   visible: boolean;
   records: QuickRecord[];
@@ -55,6 +65,7 @@ export function QuickRecordEditorSheet({
   onClose,
   onSave,
 }: Props) {
+  const { settings } = useAppSettings();
   const [label, setLabel] = useState("");
   const [color, setColor] = useState(QUICK_RECORD_COLORS[0]);
   const [cat, setCat] = useState<BabyLogCategoryId>("formula");
@@ -70,7 +81,11 @@ export function QuickRecordEditorSheet({
     setLabel(r.label);
     setColor(r.color);
     setCat(r.defaults.cat);
-    setAmount(r.defaults.amount ?? "");
+    setAmount(
+      r.defaults.amount && VOLUME_CATS.includes(r.defaults.cat)
+        ? volumeFromMl(r.defaults.amount, settings.units.volume)
+        : r.defaults.amount ?? "",
+    );
     setChip(r.defaults.chip ?? "");
     setNotes(r.defaults.notes ?? "");
     setPinned(r.pinned);
@@ -111,7 +126,10 @@ export function QuickRecordEditorSheet({
       isCustom: editId ? (records.find((r) => r.id === editId)?.isCustom ?? true) : true,
       defaults: {
         cat,
-        amount: amount.trim() || undefined,
+        amount:
+          amount.trim() && VOLUME_CATS.includes(cat)
+            ? volumeToMl(amount.trim(), settings.units.volume)
+            : amount.trim() || undefined,
         chip: chip.trim() || undefined,
         notes: notes.trim() || undefined,
         sleepAction: cat === "sleep" && !amount ? "start" : undefined,
@@ -180,7 +198,13 @@ export function QuickRecordEditorSheet({
                     <Text style={styles.listLabel}>{r.label}</Text>
                     <Text style={styles.listMeta}>
                       {getCategory(r.defaults.cat).label}
-                      {r.defaults.amount ? ` · ${r.defaults.amount}` : ""}
+                      {r.defaults.amount
+                        ? ` · ${
+                            VOLUME_CATS.includes(r.defaults.cat)
+                              ? formatVolume(r.defaults.amount, settings.units.volume)
+                              : r.defaults.amount
+                          }`
+                        : ""}
                       {r.defaults.chip ? ` · ${r.defaults.chip}` : ""}
                     </Text>
                   </View>
@@ -245,7 +269,9 @@ export function QuickRecordEditorSheet({
                 })}
               </View>
 
-              <Text style={styles.label}>기본값 · 양</Text>
+              <Text style={styles.label}>
+                기본값 · 양{VOLUME_CATS.includes(cat) ? ` (${settings.units.volume})` : ""}
+              </Text>
               <TextInput
                 style={styles.input}
                 value={amount}

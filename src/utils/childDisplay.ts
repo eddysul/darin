@@ -1,5 +1,6 @@
 import type { ChildProfile, ParentProfile, PostpartumStatus } from "../types/careSetup";
 import type { Locale } from "../i18n";
+import type { BabyAgeFormat } from "../types/appSettings";
 
 function parseFlexibleDate(value?: string): Date | null {
   if (!value?.trim()) return null;
@@ -21,6 +22,17 @@ export function computeChildAgeDays(child: ChildProfile): number | null {
   const birth = parseFlexibleDate(child.birthDate);
   if (!birth) return null;
   return Math.max(0, Math.floor((Date.now() - birth.getTime()) / 86_400_000));
+}
+
+export function formatBabyAge(child: ChildProfile, format: BabyAgeFormat): string | null {
+  const days = computeChildAgeDays(child);
+  if (days == null) return null;
+  if (format === "weeks") return `${Math.floor(days / 7)}주 ${days % 7}일`;
+  if (format === "monthsDays") {
+    const months = Math.floor(days / 30);
+    return `${months}개월 ${days % 30}일`;
+  }
+  return `D+${days}`;
 }
 
 export function buildBabyDisplay(child: ChildProfile, locale: Locale = "ko") {

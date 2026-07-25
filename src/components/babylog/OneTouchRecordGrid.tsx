@@ -5,20 +5,12 @@ import {
   QUICK_RECORD_ACTIONS,
   type OneTouchAction,
 } from "../../constants/quickRecordActions";
+import { DEFAULT_CORE_ACTIONS } from "../../types/appSettings";
 import { colors } from "../../theme";
 import { BabyLogIcon, CATEGORY_ICONS } from "./BabyLogIcon";
 import { DiaperBowelIcon, DiaperUrineIcon } from "./icons/DiaperActionIcons";
 
 export type { OneTouchAction } from "../../constants/quickRecordActions";
-
-/** Demo compact row: 모유 · 분유 · 수면 · 배변 · 유축 */
-const DEMO_CORE_IDS: OneTouchAction[] = [
-  "breastfeeding",
-  "formula",
-  "sleep",
-  "bowel",
-  "pump",
-];
 
 type Props = {
   sleepActive: boolean;
@@ -28,6 +20,10 @@ type Props = {
   onSelect: (action: OneTouchAction) => void;
   onLongPress?: (action: OneTouchAction) => void;
   onOpenActiveTimer?: (action: OneTouchAction) => void;
+  /** Fired while a category tile is pressed (for FAB auto-hide). */
+  onInteractionChange?: (active: boolean) => void;
+  visibleActions?: OneTouchAction[];
+  coreActions?: OneTouchAction[];
 };
 
 export function OneTouchRecordGrid({
@@ -37,12 +33,21 @@ export function OneTouchRecordGrid({
   onSelect,
   onLongPress,
   onOpenActiveTimer,
+  onInteractionChange,
+  visibleActions,
+  coreActions,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const core = QUICK_RECORD_ACTIONS.filter((action) => DEMO_CORE_IDS.includes(action.id)).sort(
-    (a, b) => DEMO_CORE_IDS.indexOf(a.id) - DEMO_CORE_IDS.indexOf(b.id),
+  const orderedVisible = visibleActions ?? QUICK_RECORD_ACTIONS.map((action) => action.id);
+  const coreIds = coreActions ?? DEFAULT_CORE_ACTIONS;
+  const core = QUICK_RECORD_ACTIONS.filter(
+    (action) => orderedVisible.includes(action.id) && coreIds.includes(action.id),
+  ).sort(
+    (a, b) => orderedVisible.indexOf(a.id) - orderedVisible.indexOf(b.id),
   );
-  const extra = QUICK_RECORD_ACTIONS.filter((action) => !DEMO_CORE_IDS.includes(action.id));
+  const extra = QUICK_RECORD_ACTIONS.filter(
+    (action) => orderedVisible.includes(action.id) && !coreIds.includes(action.id),
+  ).sort((a, b) => orderedVisible.indexOf(a.id) - orderedVisible.indexOf(b.id));
   const visible = expanded ? [...core, ...extra] : core;
 
   return (
@@ -71,6 +76,7 @@ export function OneTouchRecordGrid({
               onSelect={onSelect}
               onLongPress={onLongPress}
               onOpenActiveTimer={onOpenActiveTimer}
+              onInteractionChange={onInteractionChange}
             />
           ))}
         </View>
@@ -90,6 +96,7 @@ export function OneTouchRecordGrid({
               onSelect={onSelect}
               onLongPress={onLongPress}
               onOpenActiveTimer={onOpenActiveTimer}
+              onInteractionChange={onInteractionChange}
             />
           ))}
           <Pressable
@@ -127,6 +134,7 @@ function ActionTile({
   onSelect,
   onLongPress,
   onOpenActiveTimer,
+  onInteractionChange,
 }: {
   action: (typeof QUICK_RECORD_ACTIONS)[number];
   sleepActive: boolean;
@@ -136,6 +144,7 @@ function ActionTile({
   onSelect: (action: OneTouchAction) => void;
   onLongPress?: (action: OneTouchAction) => void;
   onOpenActiveTimer?: (action: OneTouchAction) => void;
+  onInteractionChange?: (active: boolean) => void;
 }) {
   const category = getCategory(action.cat);
   const activeSleep = action.id === "sleep" && sleepActive;
@@ -157,6 +166,8 @@ function ActionTile({
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
       ]}
+      onPressIn={() => onInteractionChange?.(true)}
+      onPressOut={() => onInteractionChange?.(false)}
       onPress={() => onSelect(action.id)}
       onLongPress={() => {
         if (timerActive && onOpenActiveTimer) {

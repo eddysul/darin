@@ -44,3 +44,14 @@ export async function saveCareSetup(setup: CareSetup): Promise<void> {
     reportStorageIssue("save", STORAGE_KEY);
   }
 }
+
+/** Clear persisted parent setup so the next launch returns to login. */
+export async function clearCareSetup(): Promise<void> {
+  memorySetup = null;
+  hydrated = true;
+  try {
+    await qaStorage.removeItem(STORAGE_KEY);
+  } catch {
+    reportStorageIssue("save", STORAGE_KEY);
+  }
+}
