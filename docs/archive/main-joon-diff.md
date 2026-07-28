@@ -1,5 +1,7 @@
-# main vs Joon 브랜치 상세 비교
+# [ARCHIVE] main vs Joon 브랜치 상세 비교
 
+> **보관용.** 브랜치 포트 당시 참고 노트입니다. 현재 제품 문서는 [`docs/README.md`](../README.md).
+>
 > **작성 기준:** 2026-06-20  
 > **비교 대상:** `origin/main` (`66bb029`) vs `origin/Joon` (`fe845d0`)  
 > **로컬 경로:** `/Users/joon/Downloads/Childcare Management App`

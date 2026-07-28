@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getCategory } from "../../constants/babyLogCategories";
 import {
@@ -24,6 +24,7 @@ type Props = {
   onInteractionChange?: (active: boolean) => void;
   visibleActions?: OneTouchAction[];
   coreActions?: OneTouchAction[];
+  onOpenGrowth?: () => void;
 };
 
 export function OneTouchRecordGrid({
@@ -36,6 +37,7 @@ export function OneTouchRecordGrid({
   onInteractionChange,
   visibleActions,
   coreActions,
+  onOpenGrowth,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const orderedVisible = visibleActions ?? QUICK_RECORD_ACTIONS.map((action) => action.id);
@@ -66,19 +68,26 @@ export function OneTouchRecordGrid({
       {expanded ? (
         <View style={styles.gridExpanded}>
           {visible.map((action) => (
-            <ActionTile
-              key={action.id}
-              action={action}
-              sleepActive={sleepActive}
-              timerActive={activeTimerActions.includes(action.id)}
-              disabled={disabled}
-              expanded
-              onSelect={onSelect}
-              onLongPress={onLongPress}
-              onOpenActiveTimer={onOpenActiveTimer}
-              onInteractionChange={onInteractionChange}
-            />
+            <Fragment key={action.id}>
+              <ActionTile
+                action={action}
+                sleepActive={sleepActive}
+                timerActive={activeTimerActions.includes(action.id)}
+                disabled={disabled}
+                expanded
+                onSelect={onSelect}
+                onLongPress={onLongPress}
+                onOpenActiveTimer={onOpenActiveTimer}
+                onInteractionChange={onInteractionChange}
+              />
+              {action.id === "doctor" && onOpenGrowth ? (
+                <GrowthTile disabled={disabled} onPress={onOpenGrowth} />
+              ) : null}
+            </Fragment>
           ))}
+          {!visible.some((action) => action.id === "doctor") && onOpenGrowth ? (
+            <GrowthTile disabled={disabled} onPress={onOpenGrowth} />
+          ) : null}
         </View>
       ) : (
         <ScrollView
@@ -122,6 +131,23 @@ export function OneTouchRecordGrid({
         </Pressable>
       ) : null}
     </View>
+  );
+}
+
+function GrowthTile({ disabled = false, onPress }: { disabled?: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      disabled={disabled}
+      style={({ pressed }) => [styles.button, styles.buttonExpanded, disabled && styles.disabled, pressed && !disabled && styles.pressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="성장 기록 추가"
+    >
+      <View style={[styles.iconWrap, styles.growthIconWrap]}>
+        <BabyLogIcon kind="tab" tab="report" size={24} color="#69AFA0" strokeWidth={1.8} />
+      </View>
+      <Text style={styles.label}>성장</Text>
+    </Pressable>
   );
 }
 
@@ -250,6 +276,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 6,
   },
+  growthIconWrap: { backgroundColor: "#E7F5F0" },
   label: {
     fontSize: 11,
     lineHeight: 14,

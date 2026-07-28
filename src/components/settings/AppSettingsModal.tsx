@@ -178,7 +178,11 @@ export function AppSettingsModal({
                   onChangeText={setEmail}
                   placeholder="name@example.com"
                   keyboardType="email-address"
+                  editable={settings.account.loginMethod !== "email"}
                 />
+                {settings.account.loginMethod === "email" ? (
+                  <Text style={styles.help}>로그인 이메일 변경은 별도 인증 절차가 필요해 현재 화면에서는 수정할 수 없어요.</Text>
+                ) : null}
                 <ChoiceRow
                   label="언어"
                   value={language}
@@ -338,6 +342,7 @@ function Field(props: {
   onChangeText: (value: string) => void;
   placeholder?: string;
   keyboardType?: "default" | "email-address";
+  editable?: boolean;
 }) {
   return (
     <View style={styles.field}>
@@ -348,8 +353,9 @@ function Field(props: {
         placeholder={props.placeholder}
         placeholderTextColor={colors.faint}
         keyboardType={props.keyboardType}
+        editable={props.editable}
         autoCapitalize="none"
-        style={styles.input}
+        style={[styles.input, props.editable === false && { opacity: 0.6 }]}
       />
     </View>
   );

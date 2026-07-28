@@ -15,6 +15,7 @@ const EMPTY_DATA_KEYS: StorageKey[] = [
   STORAGE_KEYS.diary,
   STORAGE_KEYS.consultChat,
   STORAGE_KEYS.familyMembers,
+  STORAGE_KEYS.growthRecords,
 ];
 
 type QaBackup = {

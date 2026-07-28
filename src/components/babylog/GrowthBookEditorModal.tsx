@@ -1,14 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   Alert,
+  Animated,
+  Easing,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,30 +27,46 @@ import {
 } from "../../types/family";
 import type {
   GrowthBookComment,
+  GrowthBookCommentSticker,
   GrowthBookEdit,
   GrowthBookLetter,
   GrowthBookPageEdit,
-  PhotoLayout,
+  GrowthBookPageSticker,
 } from "../../types/growthBook";
+import { formatGrowthAuthorLabel, type PhotoLayout, type PhotoLayoutTuning } from "../../types/growthBook";
 import {
-  PHOTO_LAYOUT_OPTIONS,
-  defaultLayoutForPhotoCount,
-  formatGrowthAuthorLabel,
-} from "../../types/growthBook";
-import {
+  buildGrowthBookPageMeta,
+  buildGrowthBookPaginationItems,
+  buildGrowthBookPages,
   collectGrowthBookPhotoPool,
   resolvePageBody,
   resolvePageEdit,
   resolvePagePhotos,
+  resolveGrowthBookSwipeDirection,
+  type GrowthBookPage,
+  type GrowthBookPageMeta,
 } from "../../utils/growthBookPages";
 import { createGrowthBookPdf } from "../../utils/growthBookPdf";
+import {
+  PHOTO_LAYOUT_OPTIONS,
+  PRIMARY_RATIO_LAYOUTS,
+  SECONDARY_RATIO_LAYOUTS,
+  getPhotoLayoutCount,
+  getPhotoLayoutSlots,
+  photoLayoutLabel,
+  swapPhotoOrder,
+} from "../../utils/growthBookPhotoLayouts";
 import { diaryMilestoneLabel, sortGrowthBookEntries } from "../../utils/diaryModel";
 import { colors, radius } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
-import { BabyStickerFromModel } from "./BabyStickerView";
 import { BabyStickerVaultModal } from "./BabyStickerVaultModal";
+import { BabyStickerFromModel } from "./BabyStickerView";
 import { useBabyLog } from "../../context/BabyLogContext";
-import type { BabySticker } from "../../types/babySticker";
+import {
+  GrowthBookPageCanvas,
+  type GrowthBookCanvasMode,
+} from "./GrowthBookPageCanvas";
+import { GrowthBookReader } from "./GrowthBookReader";
 
 type Props = {
   visible: boolean;
@@ -58,9 +79,8 @@ type Props = {
   onChange: (next: GrowthBookEdit) => void;
   onClose: () => void;
   onOpenBookPreview?: () => void;
+  initialDiaryId?: string | null;
 };
-
-type Section = "hub" | "cover" | "page" | "letter" | "pdf";
 
 function newId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -86,23 +106,48 @@ export function GrowthBookEditorModal({
   myRole,
   onChange,
   onClose,
-  onOpenBookPreview,
+  initialDiaryId,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const [section, setSection] = useState<Section>("hub");
-  const [activeDiaryId, setActiveDiaryId] = useState<string | null>(null);
+  const { babyStickers } = useBabyLog();
+  const [activePageIndex, setActivePageIndex] = useState(0);
+  const [pageMode, setPageMode] = useState<GrowthBookCanvasMode>("edit");
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pageTurnDirection, setPageTurnDirection] = useState<-1 | 1>(-1);
+  const pageTurnProgress = useRef(new Animated.Value(0)).current;
+  const pageTurnAnimating = useRef(false);
+  const wasVisible = useRef(false);
 
   const bookEntries = useMemo(
     () => sortGrowthBookEntries(entries.filter((e) => e.includedInGrowthBook)),
     [entries],
   );
+  const bookPages = useMemo(
+    () => buildGrowthBookPages({ babyName, entries: bookEntries, edit }),
+    [babyName, bookEntries, edit],
+  );
+  const pageMeta = useMemo(() => buildGrowthBookPageMeta(bookPages), [bookPages]);
 
   useEffect(() => {
-    if (!visible) {
-      setSection("hub");
-      setActiveDiaryId(null);
+    if (visible && !wasVisible.current) {
+      const targetIndex = initialDiaryId
+        ? bookPages.findIndex((page) => page.diaryId === initialDiaryId)
+        : 0;
+      setActivePageIndex(targetIndex >= 0 ? targetIndex : 0);
     }
-  }, [visible]);
+    if (!visible) {
+      pageTurnProgress.stopAnimation();
+      pageTurnProgress.setValue(0);
+      pageTurnAnimating.current = false;
+      setActivePageIndex(0);
+      setPageMode("edit");
+    }
+    wasVisible.current = visible;
+  }, [bookPages, initialDiaryId, pageTurnProgress, visible]);
+
+  useEffect(() => {
+    if (activePageIndex >= bookPages.length) setActivePageIndex(Math.max(0, bookPages.length - 1));
+  }, [activePageIndex, bookPages.length]);
 
   const patch = useCallback(
     (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => {
@@ -111,133 +156,365 @@ export function GrowthBookEditorModal({
     [babyId, edit, onChange],
   );
 
-  const activeEntry = bookEntries.find((e) => e.id === activeDiaryId) ?? null;
+  const activePage = bookPages[activePageIndex] ?? bookPages[0];
+  const activeEntry = activePage?.diaryId
+    ? bookEntries.find((entry) => entry.id === activePage.diaryId) ?? null
+    : null;
+  const goToPage = useCallback((next: number) => {
+    const clamped = Math.max(0, Math.min(bookPages.length - 1, next));
+    if (clamped === activePageIndex || pageTurnAnimating.current) return;
+    const direction = clamped > activePageIndex ? -1 : 1;
+    pageTurnAnimating.current = true;
+    setPageTurnDirection(direction);
+    pageTurnProgress.setValue(0);
+    requestAnimationFrame(() => {
+      Animated.timing(pageTurnProgress, {
+        toValue: 1,
+        duration: 105,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) {
+          pageTurnAnimating.current = false;
+          pageTurnProgress.setValue(0);
+          return;
+        }
+        setActivePageIndex(clamped);
+        pageTurnProgress.setValue(-1);
+        requestAnimationFrame(() => {
+          Animated.timing(pageTurnProgress, {
+            toValue: 0,
+            duration: 115,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }).start(() => {
+            pageTurnAnimating.current = false;
+          });
+        });
+      });
+    });
+  }, [activePageIndex, bookPages.length, pageTurnProgress]);
+  const createPdf = async () => {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      await createGrowthBookPdf({ babyName, entries: bookEntries, edit, stickers: babyStickers });
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
-  if (!visible) return null;
+  if (!visible || !activePage) return null;
+
+  const navigation: BookPageNavigationProps = {
+    pages: pageMeta,
+    activeIndex: activePageIndex,
+    onSelect: goToPage,
+    onFirst: () => goToPage(0),
+    onPrevious: () => goToPage(activePageIndex - 1),
+    onNext: () => goToPage(activePageIndex + 1),
+    onLast: () => goToPage(bookPages.length - 1),
+    onPdfCreate: () => void createPdf(),
+    pdfBusy,
+    pageTurnProgress,
+    pageTurnDirection,
+  };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.header}>
-          <Pressable
-            onPress={() => {
-              if (section === "hub") onClose();
-              else {
-                setSection("hub");
-                setActiveDiaryId(null);
-              }
-            }}
-            hitSlop={10}
-          >
-            <Text style={styles.headerBtn}>{section === "hub" ? "닫기" : "뒤로"}</Text>
+          <Pressable onPress={onClose} hitSlop={10}>
+            <Text style={styles.headerBtn}>뒤로</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>
-            {section === "hub"
-              ? "성장책 편집"
-              : section === "cover"
-                ? "표지 편집"
-                : section === "page"
-                  ? "페이지 편집"
-                  : section === "letter"
-                    ? "마지막 편지"
-                    : "PDF"}
-          </Text>
-          <View style={styles.headerSpacer} />
+          <Text style={styles.headerTitle}>성장책 편집</Text>
+          <Pressable
+            onPress={() => setPageMode((current) => current === "edit" ? "preview" : "edit")}
+            hitSlop={10}
+            style={styles.headerModeBtn}
+          >
+            <Text style={styles.headerBtn}>{pageMode === "edit" ? "미리보기" : "편집"}</Text>
+          </Pressable>
         </View>
 
-        {section === "hub" ? (
-          <ScrollView
-            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
-            showsVerticalScrollIndicator={false}
-          >
-            <Text style={styles.hint}>
-              원본 일기는 그대로 두고, 성장책 편집본만 꾸며요. 가족 코멘트와 편지는 등록된 관계가 자동으로
-              붙어요.
-            </Text>
-
-            <SectionCard
-              title="1. 표지 편집"
-              body={`${edit.coverTitle || `${babyName}의 성장책`}${edit.coverPhotoUri ? " · 사진 있음" : ""}`}
-              primary
-              onPress={() => setSection("cover")}
+        {pageMode === "preview" ? (
+          <View style={styles.editorReaderWrap}>
+            <LinearGradient
+              colors={["#3D342C", "#2A241F", "#1E1A16"]}
+              style={StyleSheet.absoluteFill}
             />
-            <SectionCard
-              title="2. 페이지 편집"
-              body={`담은 순간 ${bookEntries.length}개 · 사진·코멘트·롤링페이퍼`}
-              onPress={() => setSection("page")}
+            <GrowthBookReader
+              pages={bookPages}
+              stickers={babyStickers}
+              currentPageIndex={activePageIndex}
+              onPageIndexChange={setActivePageIndex}
+              resetKey={`${visible}-${pageMode}-${bookPages.map((page) => page.id).join("|")}`}
+              style={styles.editorReader}
+              onPdfCreate={() => void createPdf()}
             />
-            <SectionCard
-              title="3. 마지막 편지"
-              body={edit.letters.length ? `${edit.letters.length}통의 편지` : "아직 편지가 없어요"}
-              onPress={() => setSection("letter")}
-            />
-            <SectionCard
-              title="4. PDF 생성"
-              body="고정 템플릿으로 PDF를 만들어요"
-              onPress={() => setSection("pdf")}
-            />
-
-            {onOpenBookPreview ? (
-              <Pressable style={styles.secondaryBtn} onPress={onOpenBookPreview}>
-                <Text style={styles.secondaryBtnText}>성장책 미리보기 열기</Text>
-              </Pressable>
-            ) : null}
-          </ScrollView>
+          </View>
         ) : null}
 
-        {section === "cover" ? (
-          <CoverEditor
+        {pageMode === "edit" && activePage.pageType === "cover" ? (
+          <CoverBookPageEditor
             babyName={babyName}
+            page={activePage}
+            mode={pageMode}
             edit={edit}
             entries={bookEntries}
             bottomPad={insets.bottom}
+            navigation={navigation}
             onPatch={patch}
           />
         ) : null}
 
-        {section === "page" && !activeEntry ? (
-          <PageList
-            entries={bookEntries}
-            edit={edit}
-            bottomPad={insets.bottom}
-            onOpen={(id) => setActiveDiaryId(id)}
-          />
-        ) : null}
-
-        {section === "page" && activeEntry ? (
+        {pageMode === "edit" && activePage.pageType === "diary" && activeEntry ? (
           <PageEditor
+            key={activeEntry.id}
             babyName={babyName}
             entry={activeEntry}
             edit={edit}
             me={me}
             myRole={myRole}
             bottomPad={insets.bottom}
+            mode={pageMode}
+            navigation={navigation}
             onPatch={patch}
           />
         ) : null}
 
-        {section === "letter" ? (
-          <LetterEditor
+        {pageMode === "edit" && activePage.pageType === "final_letter" ? (
+          <FinalLetterBookPageEditor
             babyName={babyName}
+            page={activePage}
+            mode={pageMode}
             edit={edit}
             me={me}
             myRole={myRole}
             bottomPad={insets.bottom}
+            navigation={navigation}
             onPatch={patch}
-          />
-        ) : null}
-
-        {section === "pdf" ? (
-          <PdfActions
-            babyName={babyName}
-            entries={bookEntries}
-            edit={edit}
-            bottomPad={insets.bottom}
-            onOpenBookPreview={onOpenBookPreview}
           />
         ) : null}
       </View>
     </Modal>
+  );
+}
+
+type BookPageNavigationProps = {
+  pages: GrowthBookPageMeta[];
+  activeIndex: number;
+  onSelect: (index: number) => void;
+  onFirst: () => void;
+  onPrevious: () => void;
+  onNext: () => void;
+  onLast: () => void;
+  onPdfCreate: () => void;
+  pdfBusy: boolean;
+  pageTurnProgress: Animated.Value;
+  pageTurnDirection: -1 | 1;
+};
+
+function BookPageNavigation({
+  pages,
+  activeIndex,
+  onSelect,
+  onFirst,
+  onPrevious,
+  onNext,
+  onLast,
+  onPdfCreate,
+  pdfBusy,
+}: BookPageNavigationProps) {
+  const paginationItems = buildGrowthBookPaginationItems(pages.length, activeIndex);
+  return (
+    <View style={styles.bookNavigation}>
+      <View style={styles.pageNavigator}>
+        <Pressable disabled={activeIndex <= 0} onPress={onFirst} style={styles.pageEdgeArrow}>
+          <Text style={[styles.pageEdgeArrowText, activeIndex <= 0 && styles.pageArrowDisabled]}>|‹</Text>
+        </Pressable>
+        <Pressable disabled={activeIndex <= 0} onPress={onPrevious} style={styles.pageArrow}>
+          <Text style={[styles.pageArrowText, activeIndex <= 0 && styles.pageArrowDisabled]}>‹</Text>
+        </Pressable>
+        <Text style={styles.pageCounter}>{activeIndex + 1} / {pages.length}</Text>
+        <Pressable disabled={activeIndex >= pages.length - 1} onPress={onNext} style={styles.pageArrow}>
+          <Text style={[styles.pageArrowText, activeIndex >= pages.length - 1 && styles.pageArrowDisabled]}>›</Text>
+        </Pressable>
+        <Pressable disabled={activeIndex >= pages.length - 1} onPress={onLast} style={styles.pageEdgeArrow}>
+          <Text style={[styles.pageEdgeArrowText, activeIndex >= pages.length - 1 && styles.pageArrowDisabled]}>›|</Text>
+        </Pressable>
+        <Pressable onPress={onPdfCreate} disabled={pdfBusy} style={styles.pdfQuickBtn}>
+          <Text style={styles.pdfQuickBtnText}>{pdfBusy ? "생성 중" : "PDF"}</Text>
+        </Pressable>
+      </View>
+      <View style={styles.pageChipRow}>
+        {paginationItems.map((item) => {
+          if (item.type === "ellipsis") return <Text key={item.key} style={styles.pageEllipsis}>…</Text>;
+          const page = pages[item.index];
+          if (!page) return null;
+          return (
+            <Pressable
+              key={item.key}
+              onPress={() => onSelect(item.index)}
+              style={[styles.pageChip, activeIndex === item.index && styles.pageChipActive]}
+            >
+              <Text style={[styles.pageChipText, activeIndex === item.index && styles.pageChipTextActive]}>
+                {page.title}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function SwipeableCanvasStage({
+  navigation,
+  children,
+  enabled = true,
+}: {
+  navigation: BookPageNavigationProps;
+  children: ReactNode;
+  enabled?: boolean;
+}) {
+  const { width: windowWidth } = useWindowDimensions();
+  const travelDistance = Math.max(320, windowWidth);
+  const translateX = navigation.pageTurnProgress.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: [
+      navigation.pageTurnDirection * -travelDistance,
+      0,
+      navigation.pageTurnDirection * travelDistance,
+    ],
+  });
+  const swipeResponder = useMemo(
+    () => PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        enabled && resolveGrowthBookSwipeDirection(gesture.dx, gesture.dy, 18) !== null,
+      onPanResponderRelease: (_, gesture) => {
+        const direction = resolveGrowthBookSwipeDirection(gesture.dx, gesture.dy);
+        if (direction === "next") navigation.onNext();
+        if (direction === "previous") navigation.onPrevious();
+      },
+      onPanResponderTerminationRequest: () => true,
+    }),
+    [enabled, navigation.onNext, navigation.onPrevious],
+  );
+
+  return (
+    <View {...swipeResponder.panHandlers} style={styles.canvasStage}>
+      <Animated.View style={[styles.pageSlideSurface, { transform: [{ translateX }] }]}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+function CoverBookPageEditor({
+  babyName,
+  page,
+  mode,
+  edit,
+  entries,
+  bottomPad,
+  navigation,
+  onPatch,
+}: {
+  babyName: string;
+  page: GrowthBookPage;
+  mode: GrowthBookCanvasMode;
+  edit: GrowthBookEdit;
+  entries: DiaryEntry[];
+  bottomPad: number;
+  navigation: BookPageNavigationProps;
+  onPatch: (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => void;
+}) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const { babyStickers } = useBabyLog();
+  useEffect(() => {
+    if (mode !== "edit") setSheetOpen(false);
+  }, [mode]);
+  return (
+    <View style={[styles.pageWorkspace, { paddingBottom: mode === "edit" ? bottomPad : Math.max(bottomPad, 10) }]}>
+      <SwipeableCanvasStage navigation={navigation}>
+        <GrowthBookPageCanvas page={page} pageType="cover" mode={mode} stickers={babyStickers} style={styles.editorCanvas} />
+      </SwipeableCanvasStage>
+      <BookPageNavigation {...navigation} />
+      {mode === "edit" ? (
+        <View style={styles.editorToolbarCompact}>
+          <EditorTool label="표지 사진" symbol="▧" onPress={() => setSheetOpen(true)} />
+          <EditorTool label="표지 제목" symbol="✎" onPress={() => setSheetOpen(true)} />
+        </View>
+      ) : null}
+      {sheetOpen ? (
+        <View style={styles.sheetOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSheetOpen(false)} />
+          <View style={[styles.editorSheet, { paddingBottom: bottomPad + 14 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>표지 편집</Text>
+              <Pressable onPress={() => setSheetOpen(false)}><Text style={styles.sheetClose}>닫기</Text></Pressable>
+            </View>
+            <CoverEditor babyName={babyName} edit={edit} entries={entries} bottomPad={0} onPatch={onPatch} />
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function FinalLetterBookPageEditor({
+  babyName,
+  page,
+  mode,
+  edit,
+  me,
+  myRole,
+  bottomPad,
+  navigation,
+  onPatch,
+}: {
+  babyName: string;
+  page: GrowthBookPage;
+  mode: GrowthBookCanvasMode;
+  edit: GrowthBookEdit;
+  me?: FamilyMember;
+  myRole: FamilyRole;
+  bottomPad: number;
+  navigation: BookPageNavigationProps;
+  onPatch: (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => void;
+}) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const { babyStickers } = useBabyLog();
+  useEffect(() => {
+    if (mode !== "edit") setSheetOpen(false);
+  }, [mode]);
+  return (
+    <View style={[styles.pageWorkspace, { paddingBottom: mode === "edit" ? bottomPad : Math.max(bottomPad, 10) }]}>
+      <SwipeableCanvasStage navigation={navigation}>
+        <GrowthBookPageCanvas page={page} pageType="final_letter" mode={mode} stickers={babyStickers} style={styles.editorCanvas} />
+      </SwipeableCanvasStage>
+      <BookPageNavigation {...navigation} />
+      {mode === "edit" ? (
+        <View style={styles.editorToolbarCompact}>
+          <EditorTool label="가족 편지" symbol="✎" onPress={() => setSheetOpen(true)} />
+        </View>
+      ) : null}
+      {sheetOpen ? (
+        <View style={styles.sheetOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSheetOpen(false)} />
+          <View style={[styles.editorSheet, { paddingBottom: bottomPad + 14 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>마지막 편지</Text>
+              <Pressable onPress={() => setSheetOpen(false)}><Text style={styles.sheetClose}>닫기</Text></Pressable>
+            </View>
+            <LetterEditor babyName={babyName} edit={edit} me={me} myRole={myRole} bottomPad={0} onPatch={onPatch} />
+          </View>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -290,6 +567,24 @@ function CoverEditor({
         value={title}
         onChangeText={(text) => onPatch((prev) => ({ ...prev, coverTitle: text }))}
         placeholder={`${babyName}의 성장책`}
+        placeholderTextColor={colors.faint}
+      />
+
+      <Text style={[styles.label, { marginTop: 14 }]}>표지 부제</Text>
+      <TextInput
+        style={styles.input}
+        value={edit.coverSubtitle ?? ""}
+        onChangeText={(text) => onPatch((prev) => ({ ...prev, coverSubtitle: text }))}
+        placeholder="성장책"
+        placeholderTextColor={colors.faint}
+      />
+
+      <Text style={[styles.label, { marginTop: 14 }]}>표지 기간</Text>
+      <TextInput
+        style={styles.input}
+        value={edit.coverDateRange ?? ""}
+        onChangeText={(text) => onPatch((prev) => ({ ...prev, coverDateRange: text }))}
+        placeholder="예: 2026.07 ~ 2026.12"
         placeholderTextColor={colors.faint}
       />
 
@@ -375,7 +670,7 @@ function PageList({
                 {milestone ?? entry.date}
               </Text>
               <Text style={styles.cardBody} numberOfLines={2}>
-                사진 {photos.length}장 · 레이아웃 {pageEdit.layout}장 · 롤링{" "}
+                사진 {photos.length}장 · {photoLayoutLabel(pageEdit.photoLayout)} · 롤링{" "}
                 {pageEdit.rollingComments.length}
               </Text>
             </View>
@@ -394,6 +689,8 @@ function PageEditor({
   me,
   myRole,
   bottomPad,
+  mode,
+  navigation,
   onPatch,
 }: {
   babyName: string;
@@ -402,21 +699,47 @@ function PageEditor({
   me?: FamilyMember;
   myRole: FamilyRole;
   bottomPad: number;
+  mode: GrowthBookCanvasMode;
+  navigation: BookPageNavigationProps;
   onPatch: (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => void;
 }) {
   const pageEdit = resolvePageEdit(entry.id, entry, edit);
   const photos = resolvePagePhotos(entry, pageEdit);
+  const page = useMemo(
+    () => buildGrowthBookPages({ babyName, entries: [entry], edit }).find((item) => item.diaryId === entry.id),
+    [babyName, edit, entry],
+  );
+  const [sheet, setSheet] = useState<"photo" | "layout" | "comment" | "rolling" | null>(null);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+  const [photoSwapSourceIndex, setPhotoSwapSourceIndex] = useState<number | null>(null);
+  const photoLongPressAtRef = useRef(0);
   const [commentDraft, setCommentDraft] = useState(
     pageEdit.pageComment !== undefined ? pageEdit.pageComment : resolvePageBody(entry, pageEdit),
   );
   const [rollingDraft, setRollingDraft] = useState("");
+  const [rollingStickerDraftIds, setRollingStickerDraftIds] = useState<string[]>([]);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  const [stickerPickerTarget, setStickerPickerTarget] = useState<"page" | "comment" | "rolling">("page");
+  const [selectedPageStickerId, setSelectedPageStickerId] = useState<string | null>(null);
+  const [commentStickerDrafts, setCommentStickerDrafts] = useState<GrowthBookCommentSticker[]>(
+    pageEdit.commentStickers ?? [],
+  );
   const { babyStickers, addBabySticker, deleteBabySticker, logAuthor } = useBabyLog();
   const canWrite = canWriteGrowthBookNote(myRole);
-  const pageStickers = (pageEdit.stickerIds ?? [])
-    .map((id) => babyStickers.find((item) => item.id === id))
-    .filter((item): item is BabySticker => !!item);
+
+  useEffect(() => {
+    if (mode !== "edit") {
+      setPhotoSwapSourceIndex(null);
+      setSheet(null);
+      setStickerPickerOpen(false);
+      setSelectedPageStickerId(null);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    setPhotoSwapSourceIndex(null);
+  }, [entry.id]);
 
   const upsertPage = (next: GrowthBookPageEdit) => {
     onPatch((prev) => ({
@@ -426,267 +749,342 @@ function PageEditor({
   };
 
   const setPhotos = (nextPhotos: string[]) => {
-    const maxLayout = Math.min(4, Math.max(1, nextPhotos.length || 1)) as PhotoLayout;
-    const layout = (pageEdit.layout > maxLayout ? maxLayout : pageEdit.layout) as PhotoLayout;
     upsertPage({
       ...pageEdit,
-      photos: nextPhotos,
-      layout,
+      photos: nextPhotos.slice(0, 4),
     });
   };
 
+  const setPageStickers = (pageStickers: GrowthBookPageSticker[]) => {
+    upsertPage({ ...pageEdit, pageStickers, stickerIds: undefined });
+  };
+
+  const updatePageSticker = (next: GrowthBookPageSticker) => {
+    setPageStickers((pageEdit.pageStickers ?? []).map((item) => item.id === next.id ? next : item));
+  };
+
+  const moveStickerLayer = (id: string, direction: "forward" | "backward") => {
+    const ordered = (pageEdit.pageStickers ?? []).slice().sort((a, b) => a.zIndex - b.zIndex);
+    const index = ordered.findIndex((item) => item.id === id);
+    const swapIndex = direction === "forward" ? index + 1 : index - 1;
+    if (index < 0 || swapIndex < 0 || swapIndex >= ordered.length) return;
+    [ordered[index], ordered[swapIndex]] = [ordered[swapIndex], ordered[index]];
+    setPageStickers(ordered.map((item, itemIndex) => ({ ...item, zIndex: itemIndex + 1 })));
+  };
+
+  const openStickerPicker = (target: "page" | "comment" | "rolling") => {
+    setStickerPickerTarget(target);
+    if (target !== "page") setSheet(null);
+    setStickerPickerOpen(true);
+  };
+
+  const pickForSlot = async (index: number) => {
+    const uri = await pickImageUri();
+    if (!uri) return;
+    const next = [...photos];
+    const target = Math.min(index, next.length);
+    if (target < next.length) next[target] = uri;
+    else next.push(uri);
+    setPhotos(next);
+  };
+
+  const handlePhotoPress = (index: number) => {
+    if (Date.now() - photoLongPressAtRef.current < 700) {
+      return;
+    }
+    if (photoSwapSourceIndex !== null && photoSwapSourceIndex !== index && photos[index]) {
+      setPhotos(swapPhotoOrder(photos, photoSwapSourceIndex, index));
+      setPhotoSwapSourceIndex(null);
+      return;
+    }
+    if (photoSwapSourceIndex === index) {
+      setPhotoSwapSourceIndex(null);
+      return;
+    }
+    setPhotoSwapSourceIndex(null);
+    setSelectedPhotoIndex(index);
+    setSheet("photo");
+  };
+
+  const handlePhotoLongPress = (index: number) => {
+    if (!photos[index]) return;
+    photoLongPressAtRef.current = Date.now();
+    setPhotoSwapSourceIndex(index);
+  };
+
+  const saveRollingComment = () => {
+    const text = rollingDraft.trim();
+    if (!text || !me) return;
+    if (editingCommentId) {
+      upsertPage({
+        ...pageEdit,
+        rollingComments: pageEdit.rollingComments.map((comment) =>
+          comment.id === editingCommentId
+            ? { ...comment, text, stickerIds: rollingStickerDraftIds, updatedAt: new Date().toISOString() }
+            : comment,
+        ),
+      });
+    } else {
+      const now = new Date().toISOString();
+      const nextComment: GrowthBookComment = {
+        id: newId("gbc"),
+        pageId: entry.id,
+        authorId: me.id,
+        authorName: me.name,
+        authorRelationshipLabel: memberRelationshipLabel(me),
+        text,
+        stickerIds: rollingStickerDraftIds,
+        createdAt: now,
+        updatedAt: now,
+      };
+      upsertPage({ ...pageEdit, rollingComments: [...pageEdit.rollingComments, nextComment] });
+    }
+    setRollingDraft("");
+    setRollingStickerDraftIds([]);
+    setEditingCommentId(null);
+  };
+
+  if (!page) return null;
+
   return (
-    <ScrollView
-      contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 28 }]}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={styles.sectionTitle}>{diaryMilestoneLabel(entry) ?? entry.date}</Text>
-      <Text style={styles.hint}>사진·코멘트 변경은 성장책 편집본에만 저장되고 원본 일기는 바뀌지 않아요.</Text>
-
-      <Text style={styles.label}>사진 ({photos.length})</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.poolRow}>
-        {photos.map((uri, index) => (
-          <View key={`${uri}-${index}`} style={styles.photoEditWrap}>
-            <Image source={{ uri }} style={styles.poolThumb} contentFit="cover" />
-            <View style={styles.photoActions}>
-              <Pressable
-                disabled={index === 0}
-                onPress={() => {
-                  if (index === 0) return;
-                  const next = [...photos];
-                  [next[index - 1], next[index]] = [next[index], next[index - 1]];
-                  setPhotos(next);
-                }}
-                style={styles.miniChip}
-              >
-                <Text style={styles.miniChipText}>←</Text>
-              </Pressable>
-              <Pressable
-                disabled={index >= photos.length - 1}
-                onPress={() => {
-                  if (index >= photos.length - 1) return;
-                  const next = [...photos];
-                  [next[index], next[index + 1]] = [next[index + 1], next[index]];
-                  setPhotos(next);
-                }}
-                style={styles.miniChip}
-              >
-                <Text style={styles.miniChipText}>→</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setPhotos(photos.filter((_, i) => i !== index))}
-                style={[styles.miniChip, styles.miniChipDanger]}
-              >
-                <Text style={styles.miniChipText}>삭제</Text>
-              </Pressable>
-            </View>
-          </View>
-        ))}
-        <Pressable
-          style={styles.addPhotoTile}
-          onPress={async () => {
-            const uri = await pickImageUri();
-            if (!uri) return;
-            const next = [...photos, uri];
-            upsertPage({
-              ...pageEdit,
-              photos: next,
-              layout: defaultLayoutForPhotoCount(next.length),
-            });
+    <View style={[styles.pageWorkspace, { paddingBottom: mode === "edit" ? bottomPad : Math.max(bottomPad, 10) }]}>
+      <SwipeableCanvasStage navigation={navigation} enabled={photoSwapSourceIndex === null}>
+        <GrowthBookPageCanvas
+          page={page}
+          mode={mode}
+          stickers={babyStickers}
+          selectedPageStickerId={selectedPageStickerId}
+          photoSwapSourceIndex={photoSwapSourceIndex}
+          style={styles.editorCanvas}
+          onPhotoPress={handlePhotoPress}
+          onPhotoLongPress={handlePhotoLongPress}
+          onCommentPress={() => setSheet("comment")}
+          onRollingPress={() => setSheet("rolling")}
+          onPageStickerPress={setSelectedPageStickerId}
+          onPageStickerChange={updatePageSticker}
+          onPageStickerDelete={(pageStickerId) => {
+            setPageStickers((pageEdit.pageStickers ?? []).filter((item) => item.id !== pageStickerId));
+            setSelectedPageStickerId(null);
           }}
-        >
-          <Text style={styles.addPhotoText}>+ 추가</Text>
-        </Pressable>
-      </ScrollView>
+          onPageStickerDuplicate={(pageStickerId) => {
+            const source = (pageEdit.pageStickers ?? []).find((item) => item.id === pageStickerId);
+            if (!source) return;
+            const copy: GrowthBookPageSticker = {
+              ...source,
+              id: newId("gbps"),
+              xRatio: Math.min(0.82, source.xRatio + 0.04),
+              yRatio: Math.min(0.86, source.yRatio + 0.04),
+              zIndex: Math.max(0, ...(pageEdit.pageStickers ?? []).map((item) => item.zIndex)) + 1,
+              createdBy: logAuthor.userId,
+              createdAt: new Date().toISOString(),
+            };
+            setPageStickers([...(pageEdit.pageStickers ?? []), copy]);
+            setSelectedPageStickerId(copy.id);
+          }}
+          onPageStickerBringForward={(id) => moveStickerLayer(id, "forward")}
+          onPageStickerSendBackward={(id) => moveStickerLayer(id, "backward")}
+        />
+      </SwipeableCanvasStage>
 
-      <Text style={[styles.label, { marginTop: 16 }]}>사진 레이아웃</Text>
-      <View style={styles.layoutRow}>
-        {PHOTO_LAYOUT_OPTIONS.map((option) => {
-          const selected = pageEdit.layout === option.value;
-          const disabled = photos.length > 0 && option.value > Math.max(photos.length, 1);
-          return (
-            <Pressable
-              key={option.value}
-              disabled={disabled}
-              style={[
-                styles.layoutChip,
-                selected && styles.layoutChipSelected,
-                disabled && styles.layoutChipDisabled,
-              ]}
-              onPress={() => upsertPage({ ...pageEdit, layout: option.value })}
-            >
-              <Text style={[styles.layoutChipText, selected && styles.layoutChipTextSelected]}>
-                {option.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <BookPageNavigation {...navigation} />
 
-      <Text style={[styles.label, { marginTop: 16 }]}>페이지 코멘트</Text>
-      <TextInput
-        style={[styles.input, styles.textArea]}
-        multiline
-        value={commentDraft}
-        onChangeText={setCommentDraft}
-        onBlur={() => upsertPage({ ...pageEdit, pageComment: commentDraft })}
-        placeholder="성장책에만 남길 코멘트를 적어 주세요"
-        placeholderTextColor={colors.faint}
-      />
-      <Pressable
-        style={styles.secondaryBtn}
-        onPress={() => {
-          upsertPage({ ...pageEdit, pageComment: commentDraft });
-          Alert.alert("저장됨", "페이지 코멘트가 성장책 편집본에 저장되었어요.");
-        }}
-      >
-        <Text style={styles.secondaryBtnText}>코멘트 저장</Text>
-      </Pressable>
-
-      <Text style={[styles.label, { marginTop: 16 }]}>페이지 스티커</Text>
-      <Pressable style={styles.secondaryBtn} onPress={() => setStickerPickerOpen(true)}>
-        <Text style={styles.secondaryBtnText}>스티커 추가</Text>
-      </Pressable>
-      {pageStickers.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.poolRow}>
-          {pageStickers.map((sticker) => (
-            <Pressable
-              key={sticker.id}
-              onLongPress={() =>
-                upsertPage({
-                  ...pageEdit,
-                  stickerIds: (pageEdit.stickerIds ?? []).filter((id) => id !== sticker.id),
-                })
-              }
-            >
-              <BabyStickerFromModel sticker={sticker} size={72} />
-            </Pressable>
-          ))}
-        </ScrollView>
-      ) : null}
-      <Text style={styles.hintMuted}>길게 누르면 페이지에서 스티커를 빼요</Text>
-
-      <Text style={[styles.sectionTitle, { marginTop: 22 }]}>가족 롤링페이퍼</Text>
-      {(pageEdit.rollingComments ?? []).map((comment) => (
-        <View key={comment.id} style={styles.commentCard}>
-          <Text style={styles.commentAuthor}>
-            {formatGrowthAuthorLabel(comment.authorRelationshipLabel, comment.authorName)}
-          </Text>
-          {editingCommentId === comment.id ? (
-            <>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                multiline
-                value={rollingDraft}
-                onChangeText={setRollingDraft}
-                autoFocus
-              />
-              <View style={styles.commentActions}>
-                <Pressable
-                  onPress={() => {
-                    const text = rollingDraft.trim();
-                    if (!text) return;
-                    upsertPage({
-                      ...pageEdit,
-                      rollingComments: pageEdit.rollingComments.map((c) =>
-                        c.id === comment.id
-                          ? { ...c, text, updatedAt: new Date().toISOString() }
-                          : c,
-                      ),
-                    });
-                    setEditingCommentId(null);
-                    setRollingDraft("");
-                  }}
-                >
-                  <Text style={styles.commentAction}>저장</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setEditingCommentId(null);
-                    setRollingDraft("");
-                  }}
-                >
-                  <Text style={styles.commentAction}>취소</Text>
-                </Pressable>
-              </View>
-            </>
-          ) : (
-            <>
-              <Text style={styles.commentText}>“{comment.text}”</Text>
-              <View style={styles.commentActions}>
-                {canEditOwnGrowthBookNote(myRole, comment.authorId, me) ? (
-                  <Pressable
-                    onPress={() => {
-                      setEditingCommentId(comment.id);
-                      setRollingDraft(comment.text);
-                    }}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.commentAction}>수정</Text>
-                  </Pressable>
-                ) : null}
-                {canDeleteGrowthBookNote(myRole, comment.authorId, me) ? (
-                  <Pressable
-                    onPress={() =>
-                      upsertPage({
-                        ...pageEdit,
-                        rollingComments: pageEdit.rollingComments.filter((c) => c.id !== comment.id),
-                      })
-                    }
-                    hitSlop={8}
-                  >
-                    <Text style={[styles.commentAction, styles.commentDanger]}>삭제</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </>
-          )}
+      {mode === "edit" ? (
+        <View style={styles.editorToolbar}>
+          <EditorTool label="사진" symbol="▧" onPress={() => { setSelectedPhotoIndex(Math.min(photos.length, getPhotoLayoutCount(pageEdit.photoLayout) - 1)); setSheet("photo"); }} />
+          <EditorTool label="레이아웃" symbol="▦" onPress={() => setSheet("layout")} />
+          <EditorTool label="코멘트" symbol="✎" onPress={() => setSheet("comment")} />
+          <EditorTool label="스티커" symbol="✦" onPress={() => openStickerPicker("page")} />
+          <EditorTool label="롤링페이퍼" symbol="♡" onPress={() => setSheet("rolling")} />
         </View>
-      ))}
+      ) : null}
 
-      {canWrite && me ? (
-        <>
-          <Text style={styles.autoAuthor}>
-            {formatGrowthAuthorLabel(memberRelationshipLabel(me), me.name)}으로 남기기
-          </Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            multiline
-            value={rollingDraft}
-            onChangeText={setRollingDraft}
-            placeholder="가족에게 남길 한마디"
-            placeholderTextColor={colors.faint}
-          />
-          <Pressable
-            style={styles.primaryBtn}
-            onPress={() => {
-              const text = rollingDraft.trim();
-              if (!text) return;
-              const now = new Date().toISOString();
-              const nextComment: GrowthBookComment = {
-                id: newId("gbc"),
-                pageId: entry.id,
-                authorId: me.id,
-                authorName: me.name,
-                authorRelationshipLabel: memberRelationshipLabel(me),
-                text,
-                createdAt: now,
-                updatedAt: now,
-              };
-              upsertPage({
-                ...pageEdit,
-                rollingComments: [...pageEdit.rollingComments, nextComment],
-              });
-              setRollingDraft("");
-            }}
-          >
-            <Text style={styles.primaryBtnText}>롤링페이퍼 남기기</Text>
-          </Pressable>
-        </>
-      ) : (
-        <Text style={styles.hint}>보기만 가능 계정은 롤링페이퍼를 작성할 수 없어요.</Text>
-      )}
-      <Text style={styles.hintMuted}>{babyName}의 이 순간을 함께 남겨 보세요.</Text>
+      {sheet ? (
+        <View style={styles.sheetOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSheet(null)} />
+          <View style={[styles.editorSheet, { paddingBottom: bottomPad + 14 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>
+                {sheet === "photo" ? "사진 편집" : sheet === "layout" ? "사진 레이아웃" : sheet === "comment" ? "페이지 코멘트" : "가족 롤링페이퍼"}
+              </Text>
+              <Pressable onPress={() => setSheet(null)} hitSlop={10}><Text style={styles.sheetClose}>닫기</Text></Pressable>
+            </View>
+
+            {sheet === "photo" ? (
+              <ScrollView style={styles.sheetScroll} keyboardShouldPersistTaps="handled">
+                <Text style={styles.sheetHint}>캔버스의 사진 칸을 탭해도 같은 메뉴가 열려요.</Text>
+                <Text style={styles.sheetHint}>사진을 길게 누른 뒤 다른 사진 슬롯을 탭하면 두 사진의 위치가 바뀝니다.</Text>
+                {Array.from({ length: Math.max(getPhotoLayoutCount(pageEdit.photoLayout), photos.length) }, (_, index) => {
+                  const uri = photos[index];
+                  return (
+                    <View key={index} style={[styles.photoSheetRow, selectedPhotoIndex === index && styles.photoSheetRowSelected]}>
+                      {uri ? <Image source={{ uri }} style={styles.photoSheetThumb} contentFit="cover" /> : <View style={styles.photoSheetEmpty}><Text>＋</Text></View>}
+                      <Text style={styles.photoSheetLabel}>사진 {index + 1}</Text>
+                      <Pressable onPress={() => void pickForSlot(index)}><Text style={styles.sheetAction}>{uri ? "교체" : "추가"}</Text></Pressable>
+                      {uri ? (
+                        <Pressable onPress={() => setPhotos(photos.filter((_, photoIndex) => photoIndex !== index))}>
+                          <Text style={[styles.sheetAction, styles.sheetDanger]}>삭제</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+
+            {sheet === "layout" ? (
+              <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetOptionGrid}>
+                {PHOTO_LAYOUT_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => {
+                      upsertPage({ ...pageEdit, photoLayout: option.value, photoLayoutTuning: undefined });
+                      setPhotoSwapSourceIndex(null);
+                    }}
+                    style={[styles.sheetOption, pageEdit.photoLayout === option.value && styles.sheetOptionSelected]}
+                  >
+                    <PhotoLayoutThumbnail
+                      layout={option.value}
+                      selected={pageEdit.photoLayout === option.value}
+                      tuning={pageEdit.photoLayout === option.value ? pageEdit.photoLayoutTuning : undefined}
+                    />
+                    <Text style={[styles.sheetOptionText, pageEdit.photoLayout === option.value && styles.sheetOptionTextSelected]}>{option.label}</Text>
+                  </Pressable>
+                ))}
+                {PRIMARY_RATIO_LAYOUTS.has(pageEdit.photoLayout) ? (
+                  <RatioOptionRow
+                    title={pageEdit.photoLayout.includes("top_large") ? "큰 사진 높이" : "큰 사진 너비"}
+                    values={[0.55, 0.6, 0.65, 0.7]}
+                    value={pageEdit.photoLayoutTuning?.primaryRatio}
+                    onChange={(primaryRatio) => upsertPage({
+                      ...pageEdit,
+                      photoLayoutTuning: {
+                        ...pageEdit.photoLayoutTuning,
+                        primaryRatio: primaryRatio as 0.55 | 0.6 | 0.65 | 0.7 | undefined,
+                      },
+                    })}
+                  />
+                ) : null}
+                {SECONDARY_RATIO_LAYOUTS.has(pageEdit.photoLayout) ? (
+                  <RatioOptionRow
+                    title="오른쪽 위 사진 높이"
+                    values={[0.55, 0.6, 0.65]}
+                    value={pageEdit.photoLayoutTuning?.secondaryTopRatio}
+                    onChange={(secondaryTopRatio) => upsertPage({
+                      ...pageEdit,
+                      photoLayoutTuning: {
+                        ...pageEdit.photoLayoutTuning,
+                        secondaryTopRatio: secondaryTopRatio as 0.55 | 0.6 | 0.65 | undefined,
+                      },
+                    })}
+                  />
+                ) : null}
+              </ScrollView>
+            ) : null}
+
+            {sheet === "comment" ? (
+              <>
+                <Text style={styles.sheetHint}>원본 일기와 별개인 성장책 편집본에만 저장됩니다.</Text>
+                <TextInput
+                  style={[styles.input, styles.sheetTextArea]}
+                  multiline
+                  value={commentDraft}
+                  onChangeText={setCommentDraft}
+                  placeholder="성장책에 남길 코멘트"
+                  placeholderTextColor={colors.faint}
+                />
+                <View style={styles.commentStickerHeader}>
+                  <Text style={styles.commentStickerTitle}>코멘트 스티커</Text>
+                  <Pressable onPress={() => openStickerPicker("comment")} style={styles.commentStickerAdd}>
+                    <Text style={styles.commentStickerAddText}>＋ 스티커 추가</Text>
+                  </Pressable>
+                </View>
+                {commentStickerDrafts.length > 0 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.commentStickerList}>
+                    {commentStickerDrafts.slice().sort((a, b) => a.order - b.order).map((item) => {
+                      const sticker = babyStickers.find((candidate) => candidate.id === item.stickerId);
+                      if (!sticker) return null;
+                      return (
+                        <View key={item.id} style={styles.commentStickerChip}>
+                          <BabyStickerFromModel sticker={sticker} size={44} />
+                          <Pressable
+                            style={styles.commentStickerRemove}
+                            onPress={() => setCommentStickerDrafts((prev) => prev.filter((candidate) => candidate.id !== item.id))}
+                          >
+                            <Text style={styles.commentStickerRemoveText}>×</Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+                ) : <Text style={styles.commentStickerEmpty}>코멘트 아래에 카카오톡 임티처럼 표시됩니다.</Text>}
+                <Pressable style={styles.sheetPrimary} onPress={() => { upsertPage({ ...pageEdit, pageComment: commentDraft, commentStickers: commentStickerDrafts }); setSheet(null); }}>
+                  <Text style={styles.sheetPrimaryText}>적용</Text>
+                </Pressable>
+              </>
+            ) : null}
+
+            {sheet === "rolling" ? (
+              <ScrollView style={styles.sheetScroll} keyboardShouldPersistTaps="handled">
+                {pageEdit.rollingComments.map((comment) => (
+                  <View key={comment.id} style={styles.rollingSheetCard}>
+                    <Text style={styles.commentAuthor}>{formatGrowthAuthorLabel(comment.authorRelationshipLabel, comment.authorName)}</Text>
+                    <Text style={styles.commentText}>“{comment.text}”</Text>
+                    {(comment.stickerIds ?? []).length > 0 ? (
+                      <View style={styles.rollingStickerPreviewRow}>
+                        {(comment.stickerIds ?? []).map((stickerId, index) => {
+                          const sticker = babyStickers.find((item) => item.id === stickerId);
+                          return sticker ? <BabyStickerFromModel key={`${stickerId}-${index}`} sticker={sticker} size={30} /> : null;
+                        })}
+                      </View>
+                    ) : null}
+                    <View style={styles.commentActions}>
+                      {canEditOwnGrowthBookNote(myRole, comment.authorId, me) ? (
+                        <Pressable onPress={() => { setEditingCommentId(comment.id); setRollingDraft(comment.text); setRollingStickerDraftIds(comment.stickerIds ?? []); }}><Text style={styles.commentAction}>수정</Text></Pressable>
+                      ) : null}
+                      {canDeleteGrowthBookNote(myRole, comment.authorId, me) ? (
+                        <Pressable onPress={() => upsertPage({ ...pageEdit, rollingComments: pageEdit.rollingComments.filter((item) => item.id !== comment.id) })}><Text style={[styles.commentAction, styles.commentDanger]}>삭제</Text></Pressable>
+                      ) : null}
+                    </View>
+                  </View>
+                ))}
+                {canWrite && me ? (
+                  <>
+                    <Text style={styles.autoAuthor}>{formatGrowthAuthorLabel(memberRelationshipLabel(me), me.name)}으로 남기기</Text>
+                    <TextInput style={[styles.input, styles.sheetTextArea]} multiline value={rollingDraft} onChangeText={setRollingDraft} placeholder="가족에게 남길 한마디" placeholderTextColor={colors.faint} />
+                    <View style={styles.commentStickerHeader}>
+                      <Text style={styles.commentStickerTitle}>가족 코멘트 스티커</Text>
+                      <Pressable onPress={() => openStickerPicker("rolling")} style={styles.commentStickerAdd}>
+                        <Text style={styles.commentStickerAddText}>＋ 스티커 추가</Text>
+                      </Pressable>
+                    </View>
+                    {rollingStickerDraftIds.length > 0 ? (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.commentStickerList}>
+                        {rollingStickerDraftIds.map((stickerId, index) => {
+                          const sticker = babyStickers.find((item) => item.id === stickerId);
+                          if (!sticker) return null;
+                          return (
+                            <View key={`${stickerId}-${index}`} style={styles.commentStickerChip}>
+                              <BabyStickerFromModel sticker={sticker} size={36} />
+                              <Pressable
+                                style={styles.commentStickerRemove}
+                                onPress={() => setRollingStickerDraftIds((prev) => prev.filter((_, itemIndex) => itemIndex !== index))}
+                              >
+                                <Text style={styles.commentStickerRemoveText}>×</Text>
+                              </Pressable>
+                            </View>
+                          );
+                        })}
+                      </ScrollView>
+                    ) : <Text style={styles.commentStickerEmpty}>관계 라벨과 함께 작은 임티로 표시됩니다.</Text>}
+                    <Pressable style={styles.sheetPrimary} onPress={saveRollingComment}><Text style={styles.sheetPrimaryText}>{editingCommentId ? "수정 적용" : "롤링페이퍼 추가"}</Text></Pressable>
+                  </>
+                ) : <Text style={styles.sheetHint}>보기만 가능 계정은 작성할 수 없어요.</Text>}
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
 
       <BabyStickerVaultModal
         embedded
@@ -695,19 +1093,131 @@ function PageEditor({
         stickers={babyStickers}
         createdBy={logAuthor.userId}
         pickMode
-        onClose={() => setStickerPickerOpen(false)}
+        onClose={() => {
+          setStickerPickerOpen(false);
+          if (stickerPickerTarget === "comment") setSheet("comment");
+          if (stickerPickerTarget === "rolling") setSheet("rolling");
+        }}
         onSaveSticker={addBabySticker}
         onDeleteSticker={deleteBabySticker}
         onPickSticker={(sticker) => {
-          const ids = pageEdit.stickerIds ?? [];
-          upsertPage({
-            ...pageEdit,
-            stickerIds: ids.includes(sticker.id) ? ids : [...ids, sticker.id],
-          });
+          const now = new Date().toISOString();
+          if (stickerPickerTarget === "comment") {
+            setCommentStickerDrafts((prev) => [
+              ...prev,
+              {
+                id: newId("gbcs"),
+                pageId: entry.id,
+                stickerId: sticker.id,
+                order: prev.length,
+                createdBy: logAuthor.userId,
+                createdAt: now,
+              },
+            ].slice(0, 6));
+            setSheet("comment");
+          } else if (stickerPickerTarget === "rolling") {
+            setRollingStickerDraftIds((prev) => [...prev, sticker.id].slice(0, 6));
+            setSheet("rolling");
+          } else {
+            const current = pageEdit.pageStickers ?? [];
+            const instance: GrowthBookPageSticker = {
+              id: newId("gbps"),
+              pageId: entry.id,
+              stickerId: sticker.id,
+              xRatio: Math.min(0.7, 0.32 + current.length * 0.04),
+              yRatio: Math.min(0.75, 0.52 + current.length * 0.04),
+              widthRatio: 0.2,
+              zIndex: Math.max(0, ...current.map((item) => item.zIndex)) + 1,
+              createdBy: logAuthor.userId,
+              createdAt: now,
+            };
+            setPageStickers([...current, instance]);
+            setSelectedPageStickerId(instance.id);
+          }
           setStickerPickerOpen(false);
         }}
       />
-    </ScrollView>
+    </View>
+  );
+}
+
+function EditorTool({ label, symbol, onPress }: { label: string; symbol: string; onPress: () => void }) {
+  return (
+    <Pressable style={styles.editorTool} onPress={onPress}>
+      <Text style={styles.editorToolSymbol}>{symbol}</Text>
+      <Text style={styles.editorToolLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function PhotoLayoutThumbnail({
+  layout,
+  selected,
+  tuning,
+}: {
+  layout: PhotoLayout;
+  selected: boolean;
+  tuning?: PhotoLayoutTuning;
+}) {
+  return (
+    <View style={styles.layoutThumbnail}>
+      {getPhotoLayoutSlots(layout, tuning).map((slot) => (
+        <View
+          key={slot.slotId}
+          style={[
+            styles.layoutThumbnailSlot,
+            selected && styles.layoutThumbnailSlotSelected,
+            {
+              left: `${slot.xRatio * 100}%`,
+              top: `${slot.yRatio * 100}%`,
+              width: `${slot.widthRatio * 100}%`,
+              height: `${slot.heightRatio * 100}%`,
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+function RatioOptionRow({
+  title,
+  values,
+  value,
+  onChange,
+}: {
+  title: string;
+  values: number[];
+  value?: number;
+  onChange: (value?: number) => void;
+}) {
+  return (
+    <View style={styles.ratioOptionSection}>
+      <View style={styles.ratioOptionHeader}>
+        <Text style={styles.ratioOptionTitle}>{title}</Text>
+        <Text style={styles.ratioOptionValue}>{value ? `${Math.round(value * 100)}%` : "기본"}</Text>
+      </View>
+      <View style={styles.ratioOptionRow}>
+        <Pressable
+          onPress={() => onChange(undefined)}
+          style={[styles.ratioChip, value === undefined && styles.ratioChipSelected]}
+        >
+          <Text style={[styles.ratioChipText, value === undefined && styles.ratioChipTextSelected]}>기본</Text>
+        </Pressable>
+        {values.map((ratio) => (
+          <Pressable
+            key={ratio}
+            onPress={() => onChange(ratio)}
+            style={[styles.ratioChip, value === ratio && styles.ratioChipSelected]}
+          >
+            <Text style={[styles.ratioChipText, value === ratio && styles.ratioChipTextSelected]}>
+              {Math.round(ratio * 100)}%
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={styles.ratioOptionHint}>프리셋 안에서만 조절되며 사진 박스는 자유 이동하지 않아요.</Text>
+    </View>
   );
 }
 
@@ -831,11 +1341,20 @@ function PdfActions({
 }) {
   const [busy, setBusy] = useState(false);
   const { babyStickers } = useBabyLog();
+  const pdfPreviewPage = useMemo(
+    () => buildGrowthBookPages({ babyName, entries, edit }).find((page) => page.diaryId) ?? null,
+    [babyName, edit, entries],
+  );
   return (
     <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 28 }]}>
       <Text style={styles.hint}>
         PDF에는 표지, 페이지 사진·레이아웃·코멘트, 롤링페이퍼, 스티커, 마지막 편지가 모두 포함됩니다.
       </Text>
+      {pdfPreviewPage ? (
+        <View style={styles.pdfCanvasWrap}>
+          <GrowthBookPageCanvas page={pdfPreviewPage} mode="pdf" stickers={babyStickers} style={styles.pdfCanvasPreview} />
+        </View>
+      ) : null}
       <Pressable
         style={styles.primaryBtn}
         disabled={busy}
@@ -908,6 +1427,7 @@ const styles = StyleSheet.create({
   headerBtn: { fontSize: 15, fontWeight: "600", color: colors.muted, minWidth: 48 },
   headerTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
   headerSpacer: { minWidth: 48 },
+  headerModeBtn: { minWidth: 64, alignItems: "flex-end" },
   content: { paddingHorizontal: 18, paddingTop: 16 },
   hint: { fontSize: 13, color: colors.muted, lineHeight: 19, marginBottom: 14 },
   hintMuted: { fontSize: 12, color: colors.faint, marginTop: 10 },
@@ -1023,6 +1543,103 @@ const styles = StyleSheet.create({
   layoutChipDisabled: { opacity: 0.35 },
   layoutChipText: { fontSize: 12.5, fontWeight: "700", color: colors.muted },
   layoutChipTextSelected: { color: colors.amber },
+  pageWorkspace: { flex: 1, backgroundColor: "#E9E2DA" },
+  editorReaderWrap: { flex: 1, paddingTop: 12, paddingBottom: 8 },
+  editorReader: { flex: 1 },
+  canvasStage: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, paddingTop: 4, overflow: "hidden" },
+  pageSlideSurface: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editorCanvas: {
+    width: "96%",
+    maxWidth: 430,
+    shadowColor: "#4A3428",
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  bookNavigation: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: "rgba(255,249,242,0.96)", paddingBottom: 5 },
+  pageNavigator: { height: 30, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingRight: 46 },
+  pageArrow: { width: 34, alignItems: "center", justifyContent: "center" },
+  pageArrowText: { fontSize: 25, color: colors.text, fontWeight: "300", lineHeight: 27 },
+  pageEdgeArrow: { width: 26, alignItems: "center", justifyContent: "center" },
+  pageEdgeArrowText: { fontSize: 15, color: colors.text, fontWeight: "700" },
+  pageArrowDisabled: { color: colors.faint, opacity: 0.4 },
+  pageCounter: { minWidth: 56, textAlign: "center", fontSize: 12, fontWeight: "800", color: colors.muted },
+  pageChipRow: { minHeight: 34, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 8, paddingVertical: 3 },
+  pageChip: { minWidth: 38, height: 28, paddingHorizontal: 10, borderRadius: 14, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  pageChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  pageChipText: { fontSize: 11, fontWeight: "700", color: colors.muted },
+  pageChipTextActive: { color: colors.amberDark },
+  pageEllipsis: { width: 16, textAlign: "center", color: colors.faint, fontSize: 14, fontWeight: "800" },
+  pdfQuickBtn: { position: "absolute", right: 12, minWidth: 42, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.amber },
+  pdfQuickBtnText: { color: colors.amberDark, fontSize: 10, fontWeight: "800" },
+  editorToolbar: {
+    minHeight: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    paddingHorizontal: 6,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  editorToolbarCompact: { minHeight: 56, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: "24%", borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
+  editorTool: { flex: 1, alignItems: "center", justifyContent: "center", gap: 3, paddingVertical: 7 },
+  editorToolSymbol: { fontSize: 21, color: colors.amber, fontWeight: "700" },
+  editorToolLabel: { fontSize: 10.5, color: colors.text, fontWeight: "700" },
+  sheetOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 30, justifyContent: "flex-end", backgroundColor: "rgba(42,36,31,0.42)" },
+  editorSheet: { maxHeight: "72%", borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: colors.background, paddingHorizontal: 18, paddingTop: 10 },
+  sheetHandle: { width: 44, height: 5, borderRadius: 3, alignSelf: "center", backgroundColor: colors.border, marginBottom: 10 },
+  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  sheetTitle: { fontSize: 18, fontWeight: "800", color: colors.text },
+  sheetClose: { fontSize: 13, fontWeight: "700", color: colors.muted },
+  sheetHint: { fontSize: 12, lineHeight: 18, color: colors.muted, marginBottom: 10 },
+  sheetScroll: { maxHeight: 390 },
+  photoSheetRow: { minHeight: 68, flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 8, marginBottom: 8, backgroundColor: colors.card },
+  photoSheetRowSelected: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  photoSheetThumb: { width: 50, height: 50, borderRadius: 9 },
+  photoSheetEmpty: { width: 50, height: 50, borderRadius: 9, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  photoSheetLabel: { flex: 1, fontSize: 13, fontWeight: "700", color: colors.text },
+  sheetAction: { fontSize: 12, color: colors.amber, fontWeight: "800", paddingVertical: 8 },
+  sheetDanger: { color: colors.dangerText },
+  sheetOptionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingBottom: 8 },
+  sheetOption: { width: "48%", minHeight: 118, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 8, padding: 10 },
+  sheetOptionSelected: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  layoutThumbnail: { position: "relative", width: 72, height: 48 },
+  layoutThumbnailSlot: { position: "absolute", borderRadius: 3, borderWidth: 1, borderColor: colors.border, backgroundColor: "#F3E8DA" },
+  layoutThumbnailSlotSelected: { borderColor: colors.amber, backgroundColor: "rgba(232,145,138,0.28)" },
+  sheetOptionText: { fontSize: 11.5, lineHeight: 15, fontWeight: "700", color: colors.muted, textAlign: "center" },
+  sheetOptionTextSelected: { color: colors.amberDark },
+  ratioOptionSection: { width: "100%", borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: colors.card, padding: 12, marginTop: 2 },
+  ratioOptionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  ratioOptionTitle: { fontSize: 12.5, fontWeight: "800", color: colors.text },
+  ratioOptionValue: { fontSize: 11, fontWeight: "800", color: colors.amberDark },
+  ratioOptionRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  ratioChip: { minWidth: 46, height: 30, paddingHorizontal: 8, borderRadius: 15, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi },
+  ratioChipSelected: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  ratioChipText: { fontSize: 11, fontWeight: "700", color: colors.muted },
+  ratioChipTextSelected: { color: colors.amberDark },
+  ratioOptionHint: { marginTop: 7, fontSize: 10.5, lineHeight: 15, color: colors.faint },
+  sheetTextArea: { minHeight: 112, textAlignVertical: "top" },
+  commentStickerHeader: { marginTop: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  commentStickerTitle: { fontSize: 13, fontWeight: "800", color: colors.text },
+  commentStickerAdd: { borderWidth: 1, borderColor: colors.amber, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: colors.amberSoft },
+  commentStickerAddText: { fontSize: 11, fontWeight: "800", color: colors.amberDark },
+  commentStickerList: { paddingTop: 8, paddingRight: 8, gap: 8 },
+  commentStickerChip: { width: 74, minHeight: 70, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.card },
+  commentStickerRemove: { position: "absolute", top: 3, right: 3, zIndex: 5, elevation: 5, width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerText },
+  commentStickerRemoveText: { color: "#FFF", fontSize: 14, fontWeight: "900", lineHeight: 17 },
+  commentStickerEmpty: { marginTop: 8, fontSize: 11, color: colors.faint },
+  sheetPrimary: { backgroundColor: colors.amber, minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 10, marginBottom: 8 },
+  sheetPrimaryText: { color: colors.amberDark, fontWeight: "800", fontSize: 14 },
+  rollingSheetCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, marginBottom: 8 },
+  rollingStickerPreviewRow: { marginTop: 6, minHeight: 34, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 4 },
+  pdfCanvasWrap: { alignItems: "center", marginBottom: 12 },
+  pdfCanvasPreview: { width: "76%", maxWidth: 320, shadowColor: "#4A3428", shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
   autoAuthor: { fontSize: 13, fontWeight: "800", color: colors.amber, marginBottom: 8, marginTop: 8 },
   commentCard: {
     backgroundColor: colors.card,

@@ -81,6 +81,17 @@ export async function bootstrapCareLogsFromServer(opts: {
     };
   }
 
+  // Never create an anonymous session/baby while the login or first-run screen is visible.
+  // A server baby is bound only after onboarding has produced a real CareSetup.
+  if (!opts.hasSavedCareSetup || !(await AuthRepository.getSession())) {
+    return {
+      usedServer: false,
+      babyId: getSupabaseSync().babyId,
+      logs: null,
+      migrationCandidateCount: 0,
+    };
+  }
+
   try {
     const { babyId } = await bindBaby(opts.careSetup);
     const remote = await CareLogRepository.hydrateCareLogs(babyId);

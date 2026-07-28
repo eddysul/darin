@@ -7,9 +7,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenBackground } from "../../components/ScreenBackground";
 import { colors, radius } from "../../theme";
 
@@ -25,6 +26,12 @@ type Props = {
   secondaryLabel?: string;
   onSecondary?: () => void;
   footerHint?: string;
+  /** Tighter header spacing so login fits one screen without scroll. */
+  compact?: boolean;
+  /** Disable idle-page scrolling when compact content already fits the viewport. */
+  scrollEnabled?: boolean;
+  /** Center only short, non-scrolling content. Long forms must start at the top. */
+  centerContent?: boolean;
 };
 
 export function OnboardingShell({
@@ -38,64 +45,88 @@ export function OnboardingShell({
   secondaryLabel,
   onSecondary,
   footerHint,
+  compact = false,
+  scrollEnabled = true,
+  centerContent = compact && !scrollEnabled,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const topPad = Math.max(insets.top, 20) + 16;
+  const { height } = useWindowDimensions();
+  const topPad = compact ? 4 : Math.max(insets.top, 20) + 16;
+  const bottomPad = compact ? 8 : Math.max(insets.bottom, 12) + 24;
+  const compactOffset = height <= 820 ? -8 : height >= 900 ? -22 : -16;
 
   return (
     <ScreenBackground style={styles.root}>
-      <KeyboardAvoidingView
-        style={styles.root}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
-      >
-        <ScrollView
-          contentContainerStyle={[
-            styles.scroll,
-            {
-              paddingTop: topPad,
-              paddingBottom: Math.max(insets.bottom, 12) + 24,
-            },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+      <SafeAreaView style={styles.root} edges={compact ? ["top", "bottom"] : []}>
+        <KeyboardAvoidingView
+          style={styles.root}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
         >
-          <Image
-            source={require("../../../assets/darin-logo.png")}
-            style={styles.logo}
-            contentFit="contain"
-          />
-          {progressStep ? (
-            <Text style={styles.stepPill}>{progressStep} / 3 단계</Text>
-          ) : (
-            <View style={styles.stepSpacer} />
-          )}
-          <Text style={styles.title}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-
-          <View style={styles.body}>{children}</View>
-
-          {footerHint ? <Text style={styles.footerHint}>{footerHint}</Text> : null}
-
-          {primaryLabel && onPrimary ? (
-            <Pressable
-              style={[styles.cta, primaryDisabled && styles.ctaDisabled]}
-              onPress={onPrimary}
-              disabled={primaryDisabled}
-              accessibilityRole="button"
-              accessibilityLabel={primaryLabel}
+          <ScrollView
+            contentContainerStyle={[
+              styles.scroll,
+              compact && styles.scrollCompact,
+              centerContent && styles.scrollCentered,
+              {
+                paddingTop: topPad,
+                paddingBottom: bottomPad,
+              },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            scrollEnabled={scrollEnabled}
+            bounces={scrollEnabled && !compact}
+            alwaysBounceVertical={scrollEnabled && !compact}
+            overScrollMode="never"
+          >
+            <View
+              style={[
+                styles.content,
+                compact && styles.contentCompact,
+                centerContent && { transform: [{ translateY: compactOffset }] },
+              ]}
             >
-              <Text style={styles.ctaText}>{primaryLabel}</Text>
-            </Pressable>
-          ) : null}
+              <Image
+                source={require("../../../assets/darin-logo.png")}
+                style={[styles.logo, compact && styles.logoCompact]}
+                contentFit="contain"
+              />
+              {progressStep ? (
+                <Text style={styles.stepPill}>{progressStep} / 3 단계</Text>
+              ) : compact ? null : (
+                <View style={styles.stepSpacer} />
+              )}
+              <Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text>
+              {subtitle ? (
+                <Text style={[styles.subtitle, compact && styles.subtitleCompact]}>{subtitle}</Text>
+              ) : null}
 
-          {secondaryLabel && onSecondary ? (
-            <Pressable style={styles.secondaryBtn} onPress={onSecondary}>
-              <Text style={styles.secondaryText}>{secondaryLabel}</Text>
-            </Pressable>
-          ) : null}
-        </ScrollView>
-      </KeyboardAvoidingView>
+              <View style={[styles.body, compact && styles.bodyCompact]}>{children}</View>
+
+              {footerHint ? <Text style={styles.footerHint}>{footerHint}</Text> : null}
+
+              {primaryLabel && onPrimary ? (
+                <Pressable
+                  style={[styles.cta, primaryDisabled && styles.ctaDisabled]}
+                  onPress={onPrimary}
+                  disabled={primaryDisabled}
+                  accessibilityRole="button"
+                  accessibilityLabel={primaryLabel}
+                >
+                  <Text style={styles.ctaText}>{primaryLabel}</Text>
+                </Pressable>
+              ) : null}
+
+              {secondaryLabel && onSecondary ? (
+                <Pressable style={styles.secondaryBtn} onPress={onSecondary}>
+                  <Text style={styles.secondaryText}>{secondaryLabel}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </ScreenBackground>
   );
 }
@@ -164,11 +195,27 @@ export const onboardingInputStyle = {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { paddingHorizontal: 24, flexGrow: 1 },
+  scrollCompact: {
+    alignItems: "center",
+  },
+  scrollCentered: { justifyContent: "center" },
+  content: {
+    width: "100%",
+  },
+  contentCompact: {
+    maxWidth: 360,
+    width: "100%",
+  },
   logo: {
     width: 148,
     height: 110,
     alignSelf: "center",
     marginBottom: 20,
+  },
+  logoCompact: {
+    width: 80,
+    height: 60,
+    marginBottom: 8,
   },
   stepPill: {
     alignSelf: "center",
@@ -191,6 +238,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
     marginBottom: 8,
   },
+  titleCompact: {
+    fontSize: 28,
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
   subtitle: {
     fontSize: 14,
     lineHeight: 21,
@@ -198,7 +250,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 22,
   },
+  subtitleCompact: {
+    fontSize: 17,
+    lineHeight: 24,
+    marginBottom: 18,
+  },
   body: { gap: 4, marginBottom: 8 },
+  bodyCompact: { marginBottom: 0, gap: 0 },
   field: { marginBottom: 16 },
   label: { fontSize: 13, fontWeight: "700", color: colors.text, marginBottom: 8 },
   required: { color: colors.amber },

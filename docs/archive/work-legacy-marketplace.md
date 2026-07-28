@@ -1,10 +1,13 @@
-# Darin (Childcare Management App) — 작업 문서
+# [ARCHIVE] Darin 레거시 작업 문서 (마켓플레이스 시기)
+
+> **보관용.** 2026-06 기준 돌보미 매칭·스케줄러·Ask Darin 문서입니다.  
+> 현재 K-Nanny CareLog MVP 기준은 [`docs/README.md`](../README.md)를 보세요.
 
 **다린(Darin)** AI 돌봄 커뮤니케이션 앱 UI입니다.  
 **Expo React Native** 프로토타입이 메인 실행 대상이며, 실제 백엔드·SMS·OAuth·결제 연동은 없습니다.
 
-- **GitHub:** https://github.com/eddysul/darin
-- **작업 브랜치:** `joon-safe-port-main-features` (Joon 베이스 + main/dh 기능 안전 포트)
+- **GitHub (당시):** https://github.com/eddysul/darin
+- **작업 브랜치:** `joon-safe-port-main-features`
 
 ---
 
@@ -435,7 +438,7 @@ EXPO_PUBLIC_TRANSCRIBE_URL=http://127.0.0.1:8000
 | `ParentProfileView.tsx` | 부모 프로필 (접기/펼치기 + Child Snapshot) |
 | `eventStore.ts` | voice note 이벤트 영구 저장 |
 | `reportStore.ts` | dailyReport 히스토리 영구 저장 |
-| `aiReportContext.ts` | AI system prompt 구성 |ㅇ
+| `aiReportContext.ts` | AI system prompt 구성 |
 | `ReportScreen.tsx` | 리포트 타임라인 + Get advice |
 | `LogScreen.tsx` | Voice Note, categorized logs, 리포트 저장 |
 | `HomeScreen.tsx` | Messages, Schedule, Active Care |

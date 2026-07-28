@@ -3,7 +3,6 @@
  * Does NOT upload automatically — call `uploadLocalCareLogsMigration` explicitly.
  */
 import type { BabyLogEntry } from "../types/babyLog";
-import { CareLogRepository } from "../repositories/CareLogRepository";
 
 export function detectLocalCareLogMigrationCandidates(
   localLogs: BabyLogEntry[],
@@ -21,6 +20,9 @@ export async function uploadLocalCareLogsMigration(
   babyId: string,
   candidates: BabyLogEntry[],
 ): Promise<{ uploaded: number; failed: number }> {
+  // Keep candidate detection platform-neutral for the Node smoke suite. The
+  // repository pulls in React Native storage and is only needed when uploading.
+  const { CareLogRepository } = await import("../repositories/CareLogRepository");
   let uploaded = 0;
   let failed = 0;
   for (const entry of candidates) {

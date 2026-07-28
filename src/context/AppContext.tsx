@@ -1,8 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import type { CareSetup } from "../types/careSetup";
+import { DEFAULT_CARE_SETUP, type CareSetup } from "../types/careSetup";
 import type { UserProfile } from "../types/profile";
-import { getEffectiveCareSetup, hydrateCareSetup, loadCareSetup, saveCareSetup, clearCareSetup } from "../utils/careSetupStore";
-import { DEMO_CARE_SETUP } from "../types/careSetup";
+import { clearCareSetup, getEffectiveCareSetup, hydrateCareSetup, loadCareSetup, saveCareSetup } from "../utils/careSetupStore";
 import { clearSupabaseSync } from "../utils/supabaseSyncStore";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { isSupabaseConfigured } from "../lib/supabase";
@@ -39,7 +38,9 @@ type AppContextValue = {
   setCareSetup: (setup: CareSetup) => void;
   careSetupReady: boolean;
   hasSavedCareSetup: boolean;
-  /** Clear saved setup and return session to a logged-out baseline. */
+  /** Remove a stale device setup before onboarding a different account. */
+  resetCareSetup: () => Promise<void>;
+  /** Clear only the auth session. CareSetup remains a local cache for server restoration. */
   clearSession: () => Promise<void>;
 };
 
@@ -69,7 +70,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearSession = useCallback(async () => {
-    await clearCareSetup();
     await clearSupabaseSync();
     if (isSupabaseConfigured()) {
       try {
@@ -78,9 +78,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         /* local logout still proceeds */
       }
     }
-    setHasSavedCareSetup(false);
-    setCareSetupState(DEMO_CARE_SETUP);
     setProfile(DEFAULT_PARENT_PROFILE);
+  }, []);
+
+  const resetCareSetup = useCallback(async () => {
+    await clearCareSetup();
+    setHasSavedCareSetup(false);
+    setCareSetupState(DEFAULT_CARE_SETUP);
   }, []);
 
   return (
@@ -92,6 +96,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCareSetup,
         careSetupReady,
         hasSavedCareSetup,
+        resetCareSetup,
         clearSession,
       }}
     >

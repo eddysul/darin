@@ -35,7 +35,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Darin to access your photos for license and certificate uploads."
+          "photosPermission": "아기 사진과 일기·성장책 이미지를 추가하려면 사진 접근이 필요합니다."
         }
       ],
       [

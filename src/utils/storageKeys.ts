@@ -12,6 +12,8 @@ export const STORAGE_KEYS = {
   quickRecords: "darin:quick-records",
   growthBookEdit: "darin:growth-book-edit",
   babyStickers: "darin:baby-stickers",
+  growthRecords: "darin:growth-records",
+  growthRecordsMigration: "darin:growth-records-migration",
   activeTimers: "darin:active-timers",
   appSettings: "darin:app-settings",
   termsAccepted: "darin:terms-accepted",
@@ -19,6 +21,8 @@ export const STORAGE_KEYS = {
   supabaseSync: "darin:supabase-sync",
   /** Local device auth fallback when Anonymous is disabled. */
   supabaseDeviceAuth: "darin:supabase-device-auth",
+  /** Email verification/linking flow metadata. Never stores a password. */
+  pendingEmailAuth: "darin:pending-email-auth",
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

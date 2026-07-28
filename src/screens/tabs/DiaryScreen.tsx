@@ -42,6 +42,7 @@ import {
 } from "../../utils/diaryModel";
 import { buildTodaySummary } from "../../utils/reportAggregates";
 import { createGrowthBookPdf } from "../../utils/growthBookPdf";
+import { estimateGrowthBookPageCount } from "../../utils/growthBookPages";
 import {
   buildDiaryNotificationCopy,
   draftToComposePrefill,
@@ -90,6 +91,7 @@ export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
   const [filter, setFilter] = useState<DiaryFilter>("all");
   const [vaultOpen, setVaultOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editorInitialDiaryId, setEditorInitialDiaryId] = useState<string | null>(null);
   const [bookPreviewOpen, setBookPreviewOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chipPressing, setChipPressing] = useState(false);
@@ -351,14 +353,14 @@ export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
             <View style={styles.bookCardLeft}>
               <Text style={styles.bookCardTitle}>📖 {babyName}의 성장책</Text>
               <Text style={styles.bookCardStats}>
-                담은 기록 {bookEntries.length}개 · 사진 {bookPhotoCount}장
+                담은 기록 {bookEntries.length}개 · 사진 {bookPhotoCount}장 · 예상 {estimateGrowthBookPageCount(bookEntries.length)}쪽
               </Text>
               {bookEntries.length === 0 ? (
                 <Text style={styles.bookCardDesc}>소중한 순간을 성장책에 담아보세요</Text>
               ) : null}
             </View>
             <View style={styles.bookCardBtn}>
-              <Text style={styles.bookCardBtnText}>성장책 보기</Text>
+              <Text style={styles.bookCardBtnText}>성장책 보관함</Text>
               <BabyLogIcon kind="chevron" size={14} color={colors.amber} />
             </View>
           </Pressable>
@@ -386,7 +388,7 @@ export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
             [
               { key: "all", label: `전체 ${diaryEntries.length}` },
               { key: "growth", label: `성장 순간 ${growthCount}` },
-              { key: "book", label: `성장책 ${bookEntries.length}` },
+              { key: "book", label: `성장책에 담김 ${bookEntries.length}` },
             ] as const
           ).map((f) => {
             const active = filter === f.key;
@@ -482,6 +484,7 @@ export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
         edit={growthBookEdit}
         onClose={() => setVaultOpen(false)}
         onOpenEditor={() => {
+          setEditorInitialDiaryId(null);
           setVaultOpen(false);
           setEditorOpen(true);
         }}
@@ -491,10 +494,12 @@ export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
             updateDiary(id, { includedInGrowthBook: false });
           }
         }}
-        onOpenEntry={(entry) => {
+        onOpenPage={(entry) => {
+          setEditorInitialDiaryId(entry.id);
           setVaultOpen(false);
-          openEdit(entry);
+          setEditorOpen(true);
         }}
+        onGoToDiary={() => setVaultOpen(false)}
       />
 
       <GrowthBookEditorModal
@@ -505,8 +510,12 @@ export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
         edit={growthBookEdit}
         me={me}
         myRole={myFamilyRole}
+        initialDiaryId={editorInitialDiaryId}
         onChange={setGrowthBookEdit}
-        onClose={() => setEditorOpen(false)}
+        onClose={() => {
+          setEditorOpen(false);
+          setEditorInitialDiaryId(null);
+        }}
         onOpenBookPreview={() => {
           setEditorOpen(false);
           setBookPreviewOpen(true);

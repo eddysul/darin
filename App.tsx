@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { DEFAULT_PARENT_PROFILE, useApp } from "./src/context/AppContext";
 import { NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, View } from "react-native";
+import { Alert, Linking, StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppProvider } from "./src/context/AppContext";
 import { AppSettingsProvider } from "./src/context/AppSettingsContext";
+import { useAppSettings } from "./src/context/AppSettingsContext";
 import { BabyLogProvider, useBabyLog } from "./src/context/BabyLogContext";
 import { LogoutProvider } from "./src/context/LogoutContext";
 import { VoiceRecordingProvider } from "./src/context/VoiceRecordingContext";
@@ -16,12 +17,21 @@ import { OnboardingFlow, type OnboardingResult } from "./src/screens/onboarding/
 import { TermsConsentScreen } from "./src/screens/onboarding/TermsConsentScreen";
 import { MainTabs } from "./src/screens/MainTabs";
 import { SplashScreen } from "./src/screens/SplashScreen";
-import type { CareSetup } from "./src/types/careSetup";
-import { DEFAULT_CARE_SETUP } from "./src/types/careSetup";
+import {
+  DEFAULT_CARE_SETUP,
+  type CareSetup,
+  type ChildGender,
+  type ChildStatus,
+  type RelationshipToChild,
+} from "./src/types/careSetup";
 import type { UserProfile } from "./src/types/profile";
 import { WebAppShell } from "./src/components/WebAppShell";
 import { colors } from "./src/theme";
 import { resolvePostSplashPhase } from "./src/utils/appStartup";
+import { AuthRepository } from "./src/repositories/AuthRepository";
+import { BabyRepository } from "./src/repositories/BabyRepository";
+import { ProfileRepository } from "./src/repositories/ProfileRepository";
+import { FamilyRepository } from "./src/repositories/FamilyRepository";
 import {
   getTermsAccepted,
   hydrateTermsAccepted,
@@ -92,10 +102,11 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
 }
 
 function RootApp() {
-  const { careSetup, careSetupReady, hasSavedCareSetup, setProfile, setCareSetup, clearSession } =
+  const { careSetup, careSetupReady, hasSavedCareSetup, setProfile, setCareSetup, resetCareSetup, clearSession } =
     useApp();
-  const { applyOwnerFromSetup, joinWithInvite } = useBabyLog();
+  const { applyOwnerFromSetup, joinWithInvite, prepareForLogout, rehydrateFromServer } = useBabyLog();
   const { setLocale } = useLanguage();
+  const { setSettings } = useAppSettings();
   const [phase, setPhase] = useState<AppPhase>("splash");
   const [onboardingProfile, setOnboardingProfile] = useState<UserProfile | null>(null);
   const [splashFinished, setSplashFinished] = useState(false);
@@ -103,12 +114,48 @@ function RootApp() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [authName, setAuthName] = useState("");
   const [pendingInviteBaby, setPendingInviteBaby] = useState("");
+  const [authReady, setAuthReady] = useState(false);
+  const [hasAuthSession, setHasAuthSession] = useState(false);
+  const [authRecovery, setAuthRecovery] = useState(false);
 
   useEffect(() => {
     void hydrateTermsAccepted().then(() => {
       setTermsAccepted(getTermsAccepted());
       setTermsReady(true);
     });
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void AuthRepository.getSession()
+      .then((session) => {
+        if (active) setHasAuthSession(Boolean(session));
+      })
+      .finally(() => {
+        if (active) setAuthReady(true);
+      });
+
+    const handleUrl = async (url: string) => {
+      try {
+        const result = await AuthRepository.handleAuthUrl(url);
+        if (!result) return;
+        setHasAuthSession(true);
+        if (result === "recovery") {
+          setAuthRecovery(true);
+          setPhase("auth");
+        }
+      } catch (error) {
+        Alert.alert("인증 링크를 열지 못했어요", error instanceof Error ? error.message : "링크를 다시 요청해주세요.");
+      }
+    };
+    void Linking.getInitialURL().then((url) => {
+      if (url) return handleUrl(url);
+    });
+    const subscription = Linking.addEventListener("url", ({ url }) => void handleUrl(url));
+    return () => {
+      active = false;
+      subscription.remove();
+    };
   }, []);
 
   const applyParentSetup = useCallback(
@@ -145,12 +192,14 @@ function RootApp() {
   const handleSplashComplete = useCallback(() => setSplashFinished(true), []);
 
   const handleLogout = useCallback(async () => {
+    await prepareForLogout();
     await clearSession();
+    setHasAuthSession(false);
     setOnboardingProfile(null);
     setAuthName("");
     setPendingInviteBaby("");
     setPhase(getTermsAccepted() ? "auth" : "terms");
-  }, [clearSession]);
+  }, [clearSession, prepareForLogout]);
 
   useEffect(() => {
     if (phase !== "splash") return;
@@ -158,6 +207,8 @@ function RootApp() {
       splashFinished,
       careSetupReady,
       termsReady,
+      authReady,
+      hasAuthSession,
       hasSavedCareSetup,
       termsAccepted,
     });
@@ -177,6 +228,8 @@ function RootApp() {
     splashFinished,
     termsAccepted,
     termsReady,
+    authReady,
+    hasAuthSession,
   ]);
 
   const handleTermsAccept = useCallback((marketingOptIn: boolean) => {
@@ -186,8 +239,10 @@ function RootApp() {
     setPhase("auth");
   }, []);
 
-  const handleAuthenticated = useCallback((payload: { name?: string; provider: string }) => {
+  const handleAuthenticated = useCallback(async (payload: { name?: string; email?: string; provider: string; user?: { id: string } }) => {
     const name = payload.name?.trim() || "";
+    setHasAuthSession(true);
+    setAuthRecovery(false);
     setAuthName(name);
     if (name) {
       setProfile({
@@ -196,8 +251,63 @@ function RootApp() {
         role: "parent",
       });
     }
-    setPhase("setup");
-  }, [setProfile]);
+    if (payload.provider === "email" && payload.email) {
+      setSettings((current) => ({
+        ...current,
+        account: { ...current.account, email: payload.email!, loginMethod: "email" },
+      }));
+    }
+    const babies = await BabyRepository.listMyBabies();
+    const serverBaby = babies[0];
+    if (serverBaby) {
+      const [serverProfile, members] = await Promise.all([
+        ProfileRepository.getMyProfile(),
+        FamilyRepository.listMembers(serverBaby.id),
+      ]);
+      const authenticatedUser = payload.user ?? (await AuthRepository.getUser());
+      const me = members.find((member) => member.user_id === authenticatedUser?.id);
+      const relationshipMap: Record<string, RelationshipToChild> = {
+        "엄마": "mom",
+        "아빠": "dad",
+        "보호자": "guardian",
+        "가족": "family",
+        "시터": "sitter",
+      };
+      const childStatus: ChildStatus = ["unborn", "newborn", "infant"].includes(serverBaby.child_status)
+        ? (serverBaby.child_status as ChildStatus)
+        : "newborn";
+      const gender: ChildGender = ["girl", "boy", "unknown"].includes(serverBaby.gender ?? "")
+        ? (serverBaby.gender as ChildGender)
+        : "unknown";
+      const restoredSetup: CareSetup = {
+        parent: {
+          parentName: serverProfile?.display_name || name || "나",
+          relationshipToChild: relationshipMap[me?.relationship_label ?? ""] ?? "guardian",
+          postpartumStatus: careSetup.parent.postpartumStatus,
+          preferredLanguage: serverProfile?.preferred_language === "en" ? "en" : "ko",
+        },
+        child: {
+          childName: serverBaby.name,
+          birthDate: serverBaby.birth_date ?? undefined,
+          dueDate: serverBaby.due_date ?? undefined,
+          childStatus,
+          gender,
+          photoUri: serverBaby.photo_url ?? undefined,
+          gestationalAgeWeeks: serverBaby.gestational_age_weeks ?? undefined,
+          birthWeight: serverBaby.birth_weight ?? undefined,
+          specialNotes: serverBaby.special_notes ?? undefined,
+        },
+        preferences: hasSavedCareSetup ? careSetup.preferences : DEFAULT_CARE_SETUP.preferences,
+      };
+      setCareSetup(restoredSetup);
+      applyParentSetup(restoredSetup);
+      await rehydrateFromServer();
+      setPhase("main");
+    } else {
+      await resetCareSetup();
+      setPhase("setup");
+    }
+  }, [applyParentSetup, careSetup, hasSavedCareSetup, rehydrateFromServer, resetCareSetup, setCareSetup, setProfile, setSettings]);
 
   const handleSetupComplete = useCallback(
     (result: OnboardingResult) => {
@@ -254,7 +364,7 @@ function RootApp() {
         {phase === "main" && <MainNavigator onboardingProfile={onboardingProfile} />}
         {phase === "splash" && <SplashScreen onComplete={handleSplashComplete} />}
         {phase === "terms" && <TermsConsentScreen onAccept={handleTermsAccept} />}
-        {phase === "auth" && <AuthStartScreen onAuthenticated={handleAuthenticated} />}
+        {phase === "auth" && <AuthStartScreen recoveryMode={authRecovery} onAuthenticated={handleAuthenticated} />}
         {phase === "setup" && (
           <OnboardingFlow initialName={authName} onComplete={handleSetupComplete} />
         )}

@@ -10,6 +10,10 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "qa:mvp": "pnpm dlx tsx scripts/mvp-qa-smoke.mts",
+    "qa:supabase:growth": "node --env-file=.env scripts/verify-supabase-growth-records.mjs",
+    "qa:supabase:auth": "node --env-file=.env scripts/verify-supabase-email-auth.mjs",
+    "qa:supabase:account-deletion": "node --env-file=.env scripts/verify-supabase-account-deletion.mjs",
+    "qa:supabase": "pnpm qa:supabase:growth && pnpm qa:supabase:auth && pnpm qa:supabase:account-deletion",
     "server:dh": "bash -lc 'set -a && source .env && set +a && cd ../darin-dh/script && exec .venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8000'"
   },
   "dependencies": {
@@ -27,6 +31,7 @@
     "expo-image-picker": "~16.0.4",
     "expo-keep-awake": "~14.0.3",
     "expo-linear-gradient": "~14.0.2",
+    "expo-linking": "~7.0.5",
     "expo-notifications": "~0.29.14",
     "expo-print": "^14.0.3",
     "expo-sharing": "^13.0.1",

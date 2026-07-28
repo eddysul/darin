@@ -64,3 +64,23 @@ export function formatHeight(
     ? `${cleanNumber(numeric / 2.54)}inch`
     : `${cleanNumber(numeric)}cm`;
 }
+
+export function weightToKg(value: string | number, unit: WeightUnit): number | undefined {
+  const numeric = typeof value === "number" ? value : Number.parseFloat(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return undefined;
+  return Number((unit === "lb" ? numeric / 2.20462 : numeric).toFixed(3));
+}
+
+export function weightFromKg(value: number, unit: WeightUnit): string {
+  return cleanNumber(unit === "lb" ? value * 2.20462 : value, 1);
+}
+
+export function lengthToCm(value: string | number, unit: "cm" | "in" | "inch"): number | undefined {
+  const numeric = typeof value === "number" ? value : Number.parseFloat(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return undefined;
+  return Number((unit === "cm" ? numeric : numeric * 2.54).toFixed(2));
+}
+
+export function lengthFromCm(value: number, unit: "cm" | "in" | "inch"): string {
+  return cleanNumber(unit === "cm" ? value : value / 2.54, 1);
+}

@@ -11,10 +11,14 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { User } from "@supabase/supabase-js";
+import { EmailAuthModal } from "../../components/auth/EmailAuthModal";
 import { BabyLogIcon, type MiscIconKey } from "../../components/babylog/BabyLogIcon";
 import { BabyStickerVaultModal } from "../../components/babylog/BabyStickerVaultModal";
 import { DiaryReminderSettingsModal } from "../../components/babylog/DiaryReminderSettingsModal";
 import { QuickRecordEditorSheet } from "../../components/babylog/QuickRecordEditorSheet";
+import { GrowthRecordModal } from "../../components/babylog/GrowthRecordModal";
+import { GrowthRecordsManagerModal } from "../../components/babylog/GrowthRecordsManagerModal";
 import { ErrorState } from "../../components/states/FeedbackStates";
 import { QaDebugPanel } from "../../components/qa/QaDebugPanel";
 import {
@@ -24,8 +28,10 @@ import {
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { useLogout } from "../../context/LogoutContext";
+import { AuthRepository } from "../../repositories/AuthRepository";
 import { colors, radius } from "../../theme";
 import type { DiaryReminderSettings } from "../../types/diaryReminder";
+import type { GrowthRecord } from "../../types/growthRecord";
 import { DEFAULT_DIARY_REMINDER } from "../../types/diaryReminder";
 import {
   clearLocalAppData,
@@ -43,7 +49,7 @@ type Props = { onOpenProfile: () => void };
 export function MenuScreen({ onOpenProfile }: Props) {
   const insets = useSafeAreaInsets();
   const logout = useLogout();
-  const { resetSettings } = useAppSettings();
+  const { settings, setSettings, resetSettings } = useAppSettings();
   const {
     babyName,
     babyStickers,
@@ -53,16 +59,26 @@ export function MenuScreen({ onOpenProfile }: Props) {
     quickRecords,
     setQuickRecords,
     clearAllUserData,
+    growthRecords,
+    addGrowthRecord,
+    updateGrowthRecord,
+    deleteGrowthRecord,
+    rehydrateFromServer,
   } = useBabyLog();
   const [settingsPage, setSettingsPage] = useState<SettingsPage | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const [quickRecordsOpen, setQuickRecordsOpen] = useState(false);
+  const [growthManagerOpen, setGrowthManagerOpen] = useState(false);
+  const [growthEditorOpen, setGrowthEditorOpen] = useState(false);
+  const [editingGrowthRecord, setEditingGrowthRecord] = useState<GrowthRecord | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLocal, setDeleteLocal] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
+  const [emailAuthOpen, setEmailAuthOpen] = useState(false);
+  const [authUser, setAuthUser] = useState<User | null>(null);
   const [reminder, setReminder] = useState<DiaryReminderSettings>({
     ...DEFAULT_DIARY_REMINDER,
   });
@@ -70,10 +86,18 @@ export function MenuScreen({ onOpenProfile }: Props) {
 
   useEffect(() => {
     void hydrateDiaryReminder().then(() => setReminder(getDiaryReminder()));
+    void AuthRepository.getUser().then(setAuthUser).catch(() => setAuthUser(null));
   }, []);
 
+  useEffect(() => {
+    if (hasServerDeletion) setDeleteError("");
+  }, [hasServerDeletion]);
+
   const confirmLogout = () => {
-    Alert.alert("로그아웃", "로그인 화면으로 돌아갈까요?\n기기에 저장된 육아 기록은 그대로 남아요.", [
+    const anonymous = AuthRepository.isAnonymousUser(authUser);
+    Alert.alert("로그아웃", anonymous
+      ? "익명 계정은 로그아웃 후 다시 찾을 수 없어요. 먼저 이메일 계정에 연결해주세요."
+      : "로그인 화면으로 돌아갈까요? 서버 기록은 다시 로그인하면 복원돼요.", [
       { text: "취소", style: "cancel" },
       {
         text: "로그아웃",
@@ -88,6 +112,10 @@ export function MenuScreen({ onOpenProfile }: Props) {
 
   const performDelete = async () => {
     if (deleting) return;
+    if (authUser && !AuthRepository.isAnonymousUser(authUser) && !hasServerDeletion) {
+      setDeleteError("이메일 계정 삭제용 서버 API가 아직 배포되지 않았어요. 데이터 보호를 위해 로컬 삭제만 진행하지 않습니다.");
+      return;
+    }
     setDeleting(true);
     setDeleteError("");
     try {
@@ -147,6 +175,7 @@ export function MenuScreen({ onOpenProfile }: Props) {
         </MenuSection>
 
         <MenuSection title="기록 설정">
+          <MenuRow icon="interval" title="성장 기록 관리" subtitle="키·몸무게·머리둘레 기록" onPress={() => setGrowthManagerOpen(true)} />
           <MenuRow icon="edit" title="기록 카테고리 설정" subtitle="표시·순서·기본 6개 관리" onPress={() => setSettingsPage("categories")} />
           <MenuRow icon="sparkles" title="자주 쓰는 기록" subtitle="기본값 빠른 기록 관리" onPress={() => setQuickRecordsOpen(true)} />
           <MenuRow icon="clock" title="스탑워치 설정" subtitle="타이머 종류와 복원 방식" onPress={() => setSettingsPage("timers")} />
@@ -168,6 +197,9 @@ export function MenuScreen({ onOpenProfile }: Props) {
         {__DEV__ ? <QaDebugPanel trigger="menu" /> : null}
 
         <MenuSection title="계정">
+          {AuthRepository.isAnonymousUser(authUser) ? (
+            <MenuRow icon="profile" title="이메일 계정 연결" subtitle="현재 아기와 기록을 그대로 보호" onPress={() => setEmailAuthOpen(true)} />
+          ) : null}
           <MenuRow icon="profile" title="계정 설정" subtitle="이름·이메일·언어·관계" onPress={() => setSettingsPage("account")} />
           <MenuRow icon="logout" title="로그아웃" subtitle="로그인 화면으로 이동" onPress={confirmLogout} disabled={loggingOut} />
           <MenuRow
@@ -184,6 +216,21 @@ export function MenuScreen({ onOpenProfile }: Props) {
       </ScrollView>
 
       <AppSettingsModal page={settingsPage} onClose={() => setSettingsPage(null)} />
+
+      <EmailAuthModal
+        visible={emailAuthOpen}
+        onClose={() => setEmailAuthOpen(false)}
+        onAuthenticated={async ({ user, email }) => {
+          setAuthUser(user);
+          setSettings((current) => ({
+            ...current,
+            account: { ...current.account, email, loginMethod: "email" },
+          }));
+          await rehydrateFromServer();
+          setEmailAuthOpen(false);
+          Alert.alert("계정 연결 완료", "기존 아기와 기록을 유지한 채 이메일 계정으로 연결했어요.");
+        }}
+      />
 
       <DiaryReminderSettingsModal
         visible={reminderOpen}
@@ -214,6 +261,39 @@ export function MenuScreen({ onOpenProfile }: Props) {
         onDeleteSticker={deleteBabySticker}
       />
 
+      <GrowthRecordsManagerModal
+        visible={growthManagerOpen}
+        records={growthRecords}
+        weightUnit={settings.units.weight}
+        heightUnit={settings.units.height}
+        onClose={() => setGrowthManagerOpen(false)}
+        onAdd={() => {
+          setGrowthManagerOpen(false);
+          setEditingGrowthRecord(null);
+          setTimeout(() => setGrowthEditorOpen(true), 120);
+        }}
+        onEdit={(record) => {
+          setGrowthManagerOpen(false);
+          setEditingGrowthRecord(record);
+          setTimeout(() => setGrowthEditorOpen(true), 120);
+        }}
+        onDelete={deleteGrowthRecord}
+      />
+
+      <GrowthRecordModal
+        visible={growthEditorOpen}
+        record={editingGrowthRecord}
+        onClose={() => {
+          setGrowthEditorOpen(false);
+          setEditingGrowthRecord(null);
+          setTimeout(() => setGrowthManagerOpen(true), 120);
+        }}
+        onSave={(draft, editId) => {
+          if (editId) updateGrowthRecord(editId, draft);
+          else addGrowthRecord(draft);
+        }}
+      />
+
       <Modal visible={deleteOpen} transparent animationType="fade" onRequestClose={() => !deleting && setDeleteOpen(false)}>
         <View style={styles.overlay}>
           <View style={styles.deleteCard}>
@@ -221,7 +301,9 @@ export function MenuScreen({ onOpenProfile }: Props) {
             <Text style={styles.deleteBody}>
               {hasServerDeletion
                 ? "서버 계정과 가족 공유 연결에서 제거됩니다. 삭제한 서버 데이터는 복구할 수 없어요."
-                : "현재 데모 빌드에는 서버 계정이 없어, 선택한 경우에만 이 기기의 로컬 데이터를 삭제합니다."}
+                : authUser && !AuthRepository.isAnonymousUser(authUser)
+                  ? "이메일 계정의 안전한 서버 삭제 API가 아직 필요합니다. 현재는 계정을 삭제하지 않습니다."
+                  : "익명 계정은 선택한 경우에만 이 기기의 로컬 데이터를 삭제합니다."}
             </Text>
             <View style={styles.deleteOption}>
               <View style={styles.deleteOptionCopy}>

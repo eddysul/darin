@@ -36,6 +36,8 @@ type Props = {
   onDelete?: (id: string) => void;
   /** Render as overlay inside a parent Modal (iOS nested-Modal safe). */
   embedded?: boolean;
+  /** Opens the separate growth-record flow from a clinic visit. */
+  onOpenGrowthRecord?: () => void;
 };
 
 function minutesToHhMm(start: string, minutes: number): string {
@@ -78,6 +80,7 @@ export function RecordDetailSheet({
   onSave,
   onDelete,
   embedded = false,
+  onOpenGrowthRecord,
 }: Props) {
   const { settings } = useAppSettings();
   const [time, setTime] = useState(nowTime());
@@ -539,6 +542,21 @@ export function RecordDetailSheet({
                 placeholder="예: 7/28 10:30"
                 placeholderTextColor={colors.faint}
               />
+              {onOpenGrowthRecord ? (
+                <Pressable
+                  style={styles.growthLink}
+                  onPress={() => {
+                    handleSave();
+                    setTimeout(onOpenGrowthRecord, 120);
+                  }}
+                >
+                  <View style={styles.growthLinkCopy}>
+                    <Text style={styles.growthLinkTitle}>이번 방문 성장 기록 추가</Text>
+                    <Text style={styles.growthLinkBody}>키·몸무게·머리둘레는 별도 성장 기록으로 저장돼요.</Text>
+                  </View>
+                  <Text style={styles.growthLinkArrow}>›</Text>
+                </Pressable>
+              ) : null}
             </>
           )}
 
@@ -720,6 +738,21 @@ const styles = StyleSheet.create({
   chipSel: { backgroundColor: colors.amber, borderColor: colors.amber },
   chipText: { fontSize: 13, color: colors.muted, fontWeight: "600" },
   chipTextSel: { color: colors.amberDark },
+  growthLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 16,
+    padding: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.amber,
+    backgroundColor: colors.amberSoft,
+  },
+  growthLinkCopy: { flex: 1 },
+  growthLinkTitle: { color: colors.amber, fontSize: 13.5, fontWeight: "800" },
+  growthLinkBody: { color: colors.muted, fontSize: 11.5, marginTop: 3, lineHeight: 16 },
+  growthLinkArrow: { color: colors.amber, fontSize: 24, fontWeight: "400" },
   deleteBtn: { paddingVertical: 10, marginTop: 8 },
   deleteText: { color: colors.dangerText, fontSize: 14 },
   actions: { flexDirection: "row", gap: 10, marginTop: 20, marginBottom: 8 },

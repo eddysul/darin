@@ -25,7 +25,10 @@ function normalize(raw: unknown): BabySticker[] {
   return raw.filter(isSticker).map((s) => ({
     ...s,
     cutoutImageUri: s.cutoutImageUri || s.originalImageUri,
+    faceImageUri: s.faceImageUri || s.cutoutImageUri || s.originalImageUri,
     finalStickerImageUri: s.finalStickerImageUri || s.cutoutImageUri || s.originalImageUri,
+    stickerType: s.stickerType ?? "faceTemplate",
+    templateId: s.templateId ?? "portrait",
     label: s.label || "내 아기 스티커",
     borderStyle: s.borderStyle ?? "whiteThick",
     shadowStyle: s.shadowStyle ?? "soft",

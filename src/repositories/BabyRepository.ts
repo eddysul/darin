@@ -115,17 +115,10 @@ export const BabyRepository = {
 
     const mine = await this.listMyBabies();
     if (mine[0]) {
-      return this.updateBaby(mine[0].id, {
-        name: setup.child.childName.trim() || mine[0].name,
-        birthDate: setup.child.birthDate ?? null,
-        dueDate: setup.child.dueDate ?? null,
-        childStatus: setup.child.childStatus,
-        gender: setup.child.gender ?? null,
-        photoUrl: setup.child.photoUri ?? null,
-        gestationalAgeWeeks: setup.child.gestationalAgeWeeks ?? null,
-        birthWeight: setup.child.birthWeight ?? null,
-        specialNotes: setup.child.specialNotes ?? null,
-      });
+      // With no account-scoped baby hint, the server row is authoritative.
+      // Updating it from a device cache here could overwrite another account
+      // immediately after logout/login on a shared device.
+      return mine[0];
     }
 
     return this.createBaby({

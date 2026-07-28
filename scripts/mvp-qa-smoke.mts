@@ -10,7 +10,7 @@ import {
   getLogsForDay,
   weeklyTrend,
 } from "../src/utils/reportAggregates";
-import { buildCareLogDailySummary } from "../src/utils/diaryMomentSuggestions";
+import { buildCareLogDailySummary, buildDiaryMomentSuggestions } from "../src/utils/diaryMomentSuggestions";
 import { buildGrowthBookPages, estimateGrowthBookPageCount } from "../src/utils/growthBookPages";
 import { filterDiaries, resolveDiaryComposeTarget } from "../src/utils/diaryToday";
 import { buildVoiceSession } from "../src/utils/voiceToBabyLog";
@@ -40,13 +40,19 @@ import {
   normalizeAppSettings,
 } from "../src/types/appSettings";
 import {
+  lengthFromCm,
+  lengthToCm,
   temperatureFromCelsius,
   temperatureToCelsius,
   volumeFromMl,
   volumeToMl,
+  weightFromKg,
+  weightToKg,
 } from "../src/utils/measurementFormat";
 import { familyRoleToPermission, recordedAtFromDateKeyTime } from "../src/utils/supabaseMappers";
 import { detectLocalCareLogMigrationCandidates } from "../src/utils/careLogsMigration";
+import { detectLocalGrowthRecordMigrationCandidates } from "../src/utils/growthRecordsMigration";
+import type { GrowthRecord } from "../src/types/growthRecord";
 
 const today = formatDateKey();
 const me = { id: "me", name: "Me", role: "editor" as const, status: "active" as const, isMe: true };
@@ -59,6 +65,31 @@ function log(
     source: "manual",
     ...partial,
   };
+}
+
+// --- Growth record migration dedupes both server ids and client-generated ids ---
+{
+  const base: GrowthRecord = {
+    id: "local-growth-1",
+    babyId: "baby-1",
+    measuredAt: "2026-07-27",
+    weightKg: 8.4,
+    weightUnit: "kg",
+    heightUnit: "cm",
+    headCircumferenceUnit: "cm",
+    source: "hospital",
+    inputMethod: "manual",
+    userConfirmed: true,
+    createdBy: "user-1",
+    createdAt: "2026-07-27T00:00:00.000Z",
+    updatedAt: "2026-07-27T00:00:00.000Z",
+  };
+  const remote = [{ ...base, id: "server-growth-1", clientGeneratedId: base.id }];
+  assert.deepEqual(detectLocalGrowthRecordMigrationCandidates([base], remote), []);
+  assert.deepEqual(
+    detectLocalGrowthRecordMigrationCandidates([{ ...base, id: "local-growth-2" }], remote).map((record) => record.id),
+    ["local-growth-2"],
+  );
 }
 
 // --- Local dateKey generation: month/year boundaries and oldest → newest range ---
@@ -116,6 +147,10 @@ function log(
   assert.equal(volumeToMl(volumeFromMl("120", "oz"), "oz"), "121");
   assert.equal(temperatureFromCelsius("36.5", "f"), "97.7");
   assert.equal(temperatureToCelsius("97.7", "f"), "36.5");
+  assert.equal(weightToKg("22.0", "lb"), 9.979);
+  assert.equal(weightFromKg(10, "lb"), "22");
+  assert.equal(lengthToCm("25", "in"), 63.5);
+  assert.equal(lengthFromCm(63.5, "in"), "25");
 }
 
 // --- App restart routing waits for storage and resumes a configured user ---
@@ -125,6 +160,8 @@ function log(
       splashFinished: true,
       careSetupReady: false,
       termsReady: true,
+      authReady: false,
+      hasAuthSession: true,
       hasSavedCareSetup: true,
       termsAccepted: true,
     }),
@@ -135,6 +172,8 @@ function log(
       splashFinished: true,
       careSetupReady: true,
       termsReady: true,
+      authReady: true,
+      hasAuthSession: true,
       hasSavedCareSetup: true,
       termsAccepted: true,
     }),
@@ -145,6 +184,8 @@ function log(
       splashFinished: true,
       careSetupReady: true,
       termsReady: true,
+      authReady: true,
+      hasAuthSession: false,
       hasSavedCareSetup: false,
       termsAccepted: false,
     }),
@@ -155,7 +196,21 @@ function log(
       splashFinished: true,
       careSetupReady: true,
       termsReady: true,
+      authReady: true,
+      hasAuthSession: false,
       hasSavedCareSetup: false,
+      termsAccepted: true,
+    }),
+    "auth",
+  );
+  assert.equal(
+    resolvePostSplashPhase({
+      splashFinished: true,
+      careSetupReady: true,
+      termsReady: true,
+      authReady: true,
+      hasAuthSession: false,
+      hasSavedCareSetup: true,
       termsAccepted: true,
     }),
     "auth",
@@ -244,6 +299,12 @@ function log(
   ];
   const live = buildCareLogDailySummary(buildTodaySummary(logs), getLogsForDay(logs, today, today));
   assert.match(live, /수유 1회/);
+  const sentenceSuggestions = buildDiaryMomentSuggestions({
+    babyName: "콩",
+    todayLogs: getLogsForDay(logs, today, today),
+    summary: buildTodaySummary(logs),
+  });
+  assert.ok(sentenceSuggestions.every((item) => !item.text.includes("?") && !item.text.includes("질문")));
 
   const frozen = "오늘은 수유 9회, 수면 9시간이 기록되었어요.";
   const diary: DiaryEntry = {

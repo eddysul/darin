@@ -20,7 +20,7 @@ import {
   syncCareLogDelete,
   syncCareLogUpdate,
 } from "../utils/careLogServerSync";
-import { clearSupabaseSync, hydrateSupabaseSync } from "../utils/supabaseSyncStore";
+import { clearSupabaseSync, getSupabaseSync, hydrateSupabaseSync } from "../utils/supabaseSyncStore";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { getDiaryEntries, hydrateDiaryEntries, saveDiaryEntries } from "../utils/diaryStore";
@@ -39,8 +39,21 @@ import {
 } from "../utils/babyStickersStore";
 import type { GrowthBookEdit } from "../types/growthBook";
 import type { BabySticker } from "../types/babySticker";
+import type { GrowthRecord, GrowthRecordDraft } from "../types/growthRecord";
 import { createEmptyGrowthBookEdit } from "../types/growthBook";
 import { createId } from "../utils/id";
+import {
+  getGrowthRecords,
+  hydrateGrowthRecords,
+  saveGrowthRecords,
+} from "../utils/growthRecordsStore";
+import {
+  bootstrapGrowthRecordsFromServer,
+  syncGrowthRecordCreate,
+  syncGrowthRecordDelete,
+  syncGrowthRecordUpdate,
+} from "../utils/growthRecordServerSync";
+import { clearGrowthRecordsMigrationState } from "../utils/growthRecordsMigrationStore";
 import { formatDateKey, shiftDateKey } from "../utils/dateKey";
 import { actorFromFamily } from "../utils/logProvenance";
 import type { BabyLogSource } from "../types/babyLog";
@@ -236,6 +249,10 @@ type BabyLogContextValue = {
   babyStickers: BabySticker[];
   addBabySticker: (sticker: BabySticker) => void;
   deleteBabySticker: (id: string) => void;
+  growthRecords: GrowthRecord[];
+  addGrowthRecord: (draft: GrowthRecordDraft) => GrowthRecord;
+  updateGrowthRecord: (id: string, draft: GrowthRecordDraft) => void;
+  deleteGrowthRecord: (id: string) => void;
   myFamilyRole: FamilyRole;
   inviteFamilyMember: (draft: {
     name: string;
@@ -274,6 +291,8 @@ type BabyLogContextValue = {
   storageReady: boolean;
   storageIssue: StorageIssue | null;
   retryPersistence: () => Promise<void>;
+  rehydrateFromServer: () => Promise<void>;
+  prepareForLogout: () => Promise<void>;
   dismissStorageIssue: () => void;
   clearAllUserData: () => Promise<void>;
   qaDebug: {
@@ -301,6 +320,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const [growthBookHydrated, setGrowthBookHydrated] = useState(false);
   const [babyStickers, setBabyStickers] = useState<BabySticker[]>([]);
   const [stickersHydrated, setStickersHydrated] = useState(false);
+  const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>([]);
+  const [growthRecordsHydrated, setGrowthRecordsHydrated] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([DEFAULT_GREETING]);
   const [chatHydrated, setChatHydrated] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -312,7 +333,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   useEffect(() => subscribeStorageIssues(setStorageIssue), []);
 
   const hydrateStorageState = useCallback(async (force = false) => {
-    const [customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, syncOk] =
+    const [customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, growthRecordsOk, syncOk] =
       await Promise.all([
       hydrateCustomCategories(force),
       hydrateQuickRecords(force),
@@ -322,6 +343,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       hydrateFamilyMembers(force),
       hydrateGrowthBookEdit(force),
       hydrateBabyStickers(force),
+      hydrateGrowthRecords(force),
       hydrateSupabaseSync(force),
     ]);
     void syncOk;
@@ -396,8 +418,22 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       if (storedStickers !== null) setBabyStickers(storedStickers);
       setStickersHydrated(true);
     }
+    if (growthRecordsOk) {
+      const storedGrowthRecords = getGrowthRecords();
+      const localGrowthRecords = storedGrowthRecords ?? [];
+      const boot = hasSavedCareSetup
+        ? await bootstrapGrowthRecordsFromServer(localGrowthRecords)
+        : { usedServer: false, records: null, migrated: 0, migrationFailed: 0 };
+      if (boot.usedServer && boot.records !== null) {
+        setGrowthRecords(boot.records);
+        void saveGrowthRecords(boot.records);
+      } else if (storedGrowthRecords !== null) {
+        setGrowthRecords(storedGrowthRecords);
+      }
+      setGrowthRecordsHydrated(true);
+    }
     const allLoaded =
-      customOk && quickOk && logsOk && diaryOk && chatOk && familyOk && growthOk && stickersOk;
+      customOk && quickOk && logsOk && diaryOk && chatOk && familyOk && growthOk && stickersOk && growthRecordsOk;
     if (!allLoaded) {
       const issue = getStorageIssue();
       if (issue) setStorageIssue(issue);
@@ -441,6 +477,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     void saveBabyStickers(babyStickers);
   }, [babyStickers, stickersHydrated]);
 
+  useEffect(() => {
+    if (!growthRecordsHydrated) return;
+    void saveGrowthRecords(growthRecords);
+  }, [growthRecords, growthRecordsHydrated]);
+
   const setGrowthBookEdit = useCallback(
     (edit: GrowthBookEdit | ((prev: GrowthBookEdit) => GrowthBookEdit)) => {
       setGrowthBookEditState((prev) => (typeof edit === "function" ? edit(prev) : edit));
@@ -464,6 +505,56 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     if (me) return { ...actorFromFamily(me), name };
     return { userId: "local-me", name, role: "owner" };
   }, [careSetup.parent.parentName, me]);
+
+  const addGrowthRecord = useCallback((draft: GrowthRecordDraft) => {
+    const now = new Date().toISOString();
+    const sync = getSupabaseSync();
+    const record: GrowthRecord = {
+      ...draft,
+      id: createId(),
+      babyId: sync.babyId ?? "baby-1",
+      createdBy: sync.userId ?? logAuthor.userId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setGrowthRecords((current) => [record, ...current]);
+    void syncGrowthRecordCreate(record).then((remote) => {
+      if (remote) {
+        setGrowthRecords((current) => current.map((item) => item.id === record.id ? remote : item));
+      } else if (isSupabaseConfigured()) {
+        // RLS/network failure: server is source of truth, so remove the optimistic cache row.
+        setGrowthRecords((current) => current.filter((item) => item.id !== record.id));
+      }
+    });
+    return record;
+  }, [logAuthor.userId]);
+
+  const updateGrowthRecord = useCallback((id: string, draft: GrowthRecordDraft) => {
+    const previous = growthRecords.find((record) => record.id === id);
+    setGrowthRecords((current) => current.map((record) => record.id === id ? {
+      ...record,
+      ...draft,
+      id,
+      updatedAt: new Date().toISOString(),
+    } : record));
+    void syncGrowthRecordUpdate(id, draft).then((remote) => {
+      if (remote) {
+        setGrowthRecords((current) => current.map((record) => record.id === id ? remote : record));
+      } else if (isSupabaseConfigured() && previous) {
+        setGrowthRecords((current) => current.map((record) => record.id === id ? previous : record));
+      }
+    });
+  }, [growthRecords]);
+
+  const deleteGrowthRecord = useCallback((id: string) => {
+    const previous = growthRecords.find((record) => record.id === id);
+    setGrowthRecords((current) => current.filter((record) => record.id !== id));
+    void syncGrowthRecordDelete(id).then((deleted) => {
+      if (!deleted && isSupabaseConfigured() && previous) {
+        setGrowthRecords((current) => current.some((record) => record.id === id) ? current : [previous, ...current]);
+      }
+    });
+  }, [growthRecords]);
 
   const setQuickRecords = useCallback(
     (records: QuickRecord[] | ((prev: QuickRecord[]) => QuickRecord[])) => {
@@ -615,6 +706,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setFamilyMembers([]);
     setGrowthBookEditState(emptyGrowthBook);
     setBabyStickers([]);
+    setGrowthRecords([]);
     setChatHistory([]);
     setCustomCategoriesState([]);
     setQuickRecordsState([]);
@@ -624,6 +716,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveFamilyMembers([]),
       saveGrowthBookEdit(emptyGrowthBook),
       saveBabyStickers([]),
+      saveGrowthRecords([]),
+      clearGrowthRecordsMigrationState(),
       saveChatHistory([]),
       saveCustomCategories([]),
       saveQuickRecords([]),
@@ -763,6 +857,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveFamilyMembers(familyMembers),
       saveGrowthBookEdit(growthBookEdit),
       saveBabyStickers(babyStickers),
+      saveGrowthRecords(growthRecords),
       saveQuickRecords(quickRecords),
       saveCustomCategories(customCategories),
       saveDiaryReminder(reminder),
@@ -778,9 +873,22 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     hydrateStorageState,
     logs,
     babyStickers,
+    growthRecords,
     quickRecords,
     storageIssue,
   ]);
+
+  const rehydrateFromServer = useCallback(async () => {
+    await hydrateStorageState(true);
+  }, [hydrateStorageState]);
+
+  const prepareForLogout = useCallback(async () => {
+    // Server-backed records must not remain visible if a different account signs in.
+    // CareSetup and per-user migration markers are intentionally retained for restoration.
+    setLogs([]);
+    setGrowthRecords([]);
+    await Promise.all([saveBabyLogs([]), saveGrowthRecords([]), clearSupabaseSync()]);
+  }, []);
 
   const qaDebug = useMemo<BabyLogContextValue["qaDebug"]>(() => {
     if (!__DEV__) return null;
@@ -848,6 +956,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       babyStickers,
       addBabySticker,
       deleteBabySticker,
+      growthRecords,
+      addGrowthRecord,
+      updateGrowthRecord,
+      deleteGrowthRecord,
       myFamilyRole,
       inviteFamilyMember,
       applyOwnerFromSetup,
@@ -872,6 +984,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       storageReady,
       storageIssue,
       retryPersistence,
+      rehydrateFromServer,
+      prepareForLogout,
       dismissStorageIssue: clearStorageIssue,
       clearAllUserData,
       qaDebug,
@@ -890,6 +1004,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       babyStickers,
       addBabySticker,
       deleteBabySticker,
+      growthRecords,
+      addGrowthRecord,
+      updateGrowthRecord,
+      deleteGrowthRecord,
       myFamilyRole,
       inviteFamilyMember,
       applyOwnerFromSetup,
@@ -913,6 +1031,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       storageReady,
       storageIssue,
       retryPersistence,
+      rehydrateFromServer,
+      prepareForLogout,
       clearAllUserData,
       qaDebug,
     ],

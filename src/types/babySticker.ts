@@ -4,13 +4,42 @@ export type StickerBorderStyle = "none" | "whiteThick" | "cream" | "coral";
 export type StickerShadowStyle = "none" | "soft" | "paper";
 export type StickerSpeechBubbleType = "none" | "round" | "small" | "ribbon";
 export type StickerFrameType = "none" | "star" | "heart" | "ribbon" | "growthBook";
+export type StickerType = "faceCrop" | "faceTemplate";
+export type StickerTemplateId =
+  | "portrait"
+  | "sleepy"
+  | "hungry"
+  | "yummy"
+  | "milestone"
+  | "love"
+  | "proud"
+  | "excited";
+
+export const STICKER_TEMPLATE_OPTIONS: Array<{
+  value: StickerTemplateId;
+  label: string;
+  defaultPhrase: string;
+}> = [
+  { value: "portrait", label: "기본 얼굴", defaultPhrase: "" },
+  { value: "sleepy", label: "졸려요", defaultPhrase: "졸려요" },
+  { value: "hungry", label: "배고파요", defaultPhrase: "배고파요" },
+  { value: "yummy", label: "잘 먹었어요", defaultPhrase: "오늘도 잘 먹었어요" },
+  { value: "milestone", label: "뒤집기 성공", defaultPhrase: "첫 뒤집기 성공!" },
+  { value: "love", label: "사랑해", defaultPhrase: "오늘도 사랑해" },
+  { value: "proud", label: "뿌듯해요", defaultPhrase: "나 잘했죠?" },
+  { value: "excited", label: "신나요", defaultPhrase: "신나는 하루!" },
+];
 
 export type BabySticker = {
   id: string;
   babyId: string;
   originalImageUri: string;
+  /** Face/cutout source kept separate for future face detection and AI cutout. */
+  faceImageUri: string;
   cutoutImageUri: string;
   finalStickerImageUri: string;
+  stickerType: StickerType;
+  templateId: StickerTemplateId;
   label: string;
   borderStyle: StickerBorderStyle;
   shadowStyle: StickerShadowStyle;
@@ -24,7 +53,10 @@ export type BabySticker = {
 
 export type BabyStickerDraft = {
   originalImageUri: string;
+  faceImageUri: string;
   cutoutImageUri: string;
+  stickerType: StickerType;
+  templateId: StickerTemplateId;
   borderStyle: StickerBorderStyle;
   shadowStyle: StickerShadowStyle;
   speechBubbleType: StickerSpeechBubbleType;
@@ -65,15 +97,23 @@ export const STICKER_SUGGESTED_PHRASES = [
   "오늘도 잘 먹었어요",
   "첫 뒤집기 성공!",
   "졸려요",
+  "배고파요",
+  "나 잘했죠?",
+  "신나는 하루!",
   "엄마 최고",
+  "아빠 최고",
+  "할머니 보고 싶어요",
   "많이 컸어요",
-  "사랑해요",
+  "오늘도 사랑해",
 ] as const;
 
 export function defaultStickerDraft(originalUri: string, cutoutUri: string): BabyStickerDraft {
   return {
     originalImageUri: originalUri,
+    faceImageUri: cutoutUri,
     cutoutImageUri: cutoutUri,
+    stickerType: "faceTemplate",
+    templateId: "portrait",
     borderStyle: "whiteThick",
     shadowStyle: "soft",
     speechBubbleType: "none",

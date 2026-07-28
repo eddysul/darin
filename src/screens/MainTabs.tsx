@@ -275,6 +275,7 @@ function ReportTab() {
   return (
     <BabyReportScreen
       onOpenProfile={() => setProfileOpen(true)}
+      onOpenRecord={() => navigation.navigate("Record")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
       }

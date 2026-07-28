@@ -51,8 +51,8 @@ export function buildCareLogDailySummary(
 }
 
 /**
- * Rule-based Moment Suggestions (no LLM).
- * Always 3–4 question prompts; sleep-short / activity-aware when signals exist.
+ * Rule-based Moment Sentence Suggestions (no LLM).
+ * These are editable record-based draft sentences, never questions the user must answer.
  */
 export function buildDiaryMomentSuggestions(input: {
   babyName: string;
@@ -62,8 +62,8 @@ export function buildDiaryMomentSuggestions(input: {
   const { babyName, todayLogs, summary } = input;
   const cats = new Set(todayLogs.map((l) => l.cat));
   const out: MomentSuggestion[] = [
-    { id: "first-action", text: "오늘 처음 해본 행동이 있었나요?" },
-    { id: "cute-face", text: `오늘 ${babyName}의 가장 귀여웠던 표정은 무엇이었나요?` },
+    { id: "first-action", text: `오늘 ${babyName}의 새로운 모습을 발견한 소중한 하루였어요.` },
+    { id: "cute-face", text: `${babyName}의 귀여운 표정이 오래 기억에 남는 하루였어요.` },
   ];
 
   if (
@@ -72,28 +72,28 @@ export function buildDiaryMomentSuggestions(input: {
   ) {
     out.push({
       id: "short-nap",
-      text: "낮잠이 평소보다 짧았는데 특별한 이유가 있었나요?",
+      text: "낮잠이 평소보다 짧아 조금 더 세심히 지켜본 하루였어요.",
     });
   } else if (cats.has("bath")) {
     out.push({
       id: "bath",
-      text: "목욕할 때 물을 좋아했나요, 아니면 조심스러웠나요?",
+      text: "목욕하며 물과 한층 더 가까워진 즐거운 시간이었어요.",
     });
   } else if (cats.has("tummy") || cats.has("play")) {
     out.push({
       id: "play",
-      text: "놀이나 터미타임 중에 기억에 남는 장면이 있었나요?",
+      text: "놀이나 터미타임에서 힘차게 움직이는 모습이 인상적이었어요.",
     });
   } else {
     out.push({
       id: "mood",
-      text: "오늘 하루 컨디션은 어땠나요?",
+      text: "오늘의 표정과 컨디션을 천천히 살펴본 하루였어요.",
     });
   }
 
   out.push({
     id: "growth-book",
-    text: "오늘 성장책에 남기고 싶은 순간이 있었나요?",
+    text: "오늘의 예쁜 순간을 성장책에 오래 남겨두고 싶어요.",
   });
 
   return out.slice(0, 4);

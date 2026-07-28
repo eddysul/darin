@@ -19,6 +19,7 @@ import {
   STICKER_FRAME_OPTIONS,
   STICKER_SHADOW_OPTIONS,
   STICKER_SUGGESTED_PHRASES,
+  STICKER_TEMPLATE_OPTIONS,
   defaultStickerDraft,
 } from "../../types/babySticker";
 import { persistStickerAsset, deleteStickerAssets } from "../../utils/babyStickerAssets";
@@ -155,8 +156,11 @@ export function BabyStickerVaultModal({
         id,
         babyId,
         originalImageUri,
+        faceImageUri: cutoutImageUri,
         cutoutImageUri,
         finalStickerImageUri,
+        stickerType: draft.stickerType,
+        templateId: draft.templateId,
         label,
         borderStyle: draft.borderStyle,
         shadowStyle: draft.shadowStyle,
@@ -210,6 +214,7 @@ export function BabyStickerVaultModal({
                   onPress: () => {
                     void deleteStickerAssets([
                       sticker.originalImageUri,
+                      sticker.faceImageUri,
                       sticker.cutoutImageUri,
                       sticker.finalStickerImageUri,
                     ]);
@@ -224,7 +229,7 @@ export function BabyStickerVaultModal({
 
         {mode === "pickPhoto" ? (
           <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}>
-            <Text style={styles.hint}>갤러리에서 고르거나 카메라로 찍어 주세요.</Text>
+            <Text style={styles.hint}>아기 얼굴이 잘 보이는 사진을 골라 주세요. 얼굴은 둥근 crop으로 안전하게 표시됩니다.</Text>
             <Pressable style={styles.primaryBtn} onPress={() => void pickFromLibrary()}>
               <Text style={styles.primaryBtnText}>갤러리에서 선택</Text>
             </Pressable>
@@ -239,7 +244,7 @@ export function BabyStickerVaultModal({
             {cutoutError ? (
               <>
                 <Text style={styles.errorTitle}>배경 제거에 실패했어요.</Text>
-                <Text style={styles.hint}>다시 시도하거나 원본 사진으로 계속할 수 있어요.</Text>
+                <Text style={styles.hint}>다시 시도하거나 원본 사진의 얼굴을 둥글게 crop하는 fallback으로 계속할 수 있어요.</Text>
                 <Pressable
                   style={styles.primaryBtn}
                   onPress={() => pendingOriginal && void runCutout(pendingOriginal)}
@@ -259,7 +264,7 @@ export function BabyStickerVaultModal({
                     setMode("decorate");
                   }}
                 >
-                  <Text style={styles.secondaryBtnText}>원본으로 계속</Text>
+                  <Text style={styles.secondaryBtnText}>둥근 얼굴 crop으로 계속</Text>
                 </Pressable>
               </>
             ) : (
@@ -295,6 +300,7 @@ export function BabyStickerVaultModal({
                 shadowStyle={draft.shadowStyle}
                 speechBubbleType={draft.speechBubbleType}
                 frameType={draft.frameType}
+                templateId={draft.templateId}
                 text={draft.text}
                 size={150}
               />
@@ -428,10 +434,27 @@ function DecorateStep({
           shadowStyle={draft.shadowStyle}
           speechBubbleType={draft.speechBubbleType}
           frameType={draft.frameType}
+          templateId={draft.templateId}
           text={draft.text}
           size={150}
         />
       </View>
+
+      <OptionRow
+        label="상황 템플릿"
+        options={STICKER_TEMPLATE_OPTIONS}
+        value={draft.templateId}
+        onChange={(templateId) => {
+          const option = STICKER_TEMPLATE_OPTIONS.find((item) => item.value === templateId);
+          onChange({
+            ...draft,
+            stickerType: templateId === "portrait" ? "faceCrop" : "faceTemplate",
+            templateId,
+            text: option?.defaultPhrase ?? draft.text,
+            speechBubbleType: templateId === "portrait" ? draft.speechBubbleType : draft.speechBubbleType === "none" ? "round" : draft.speechBubbleType,
+          });
+        }}
+      />
 
       <OptionRow
         label="테두리"

@@ -1,12 +1,15 @@
 import type { DiaryEntry } from "../types/babyLog";
 import type {
   GrowthBookComment,
+  GrowthBookCommentSticker,
   GrowthBookEdit,
   GrowthBookLetter,
   GrowthBookPageEdit,
+  GrowthBookPageSticker,
   PhotoLayout,
+  PhotoLayoutTuning,
 } from "../types/growthBook";
-import { defaultLayoutForPhotoCount } from "../types/growthBook";
+import { getPhotoLayoutCount, normalizePhotoLayout } from "./growthBookPhotoLayouts";
 import {
   diaryBookBody,
   diaryMilestoneLabel,
@@ -15,16 +18,30 @@ import {
 } from "./diaryModel";
 
 export type GrowthBookPageKind = "cover" | "moment" | "photo" | "letter";
+export type GrowthBookPageType = "cover" | "diary" | "final_letter";
+
+export type GrowthBookPageMeta = {
+  id: string;
+  pageType: GrowthBookPageType;
+  order: number;
+  linkedDiaryEntryId?: string;
+  title: string;
+  dataRef: string;
+};
 
 export type GrowthBookPage = {
   id: string;
   kind: GrowthBookPageKind;
+  pageType: GrowthBookPageType;
   title: string;
   subtitle?: string;
   body?: string;
   /** @deprecated prefer photoUris — kept for simple single-photo spots */
   photoUri?: string | null;
   photoUris?: string[];
+  photoLayout?: PhotoLayout;
+  photoLayoutTuning?: PhotoLayoutTuning;
+  /** @deprecated use photoLayout */
   layout?: PhotoLayout;
   dateLabel?: string;
   moodStamp?: string | null;
@@ -33,8 +50,24 @@ export type GrowthBookPage = {
   diaryId?: string;
   rollingComments?: GrowthBookComment[];
   letters?: GrowthBookLetter[];
+  pageStickers?: GrowthBookPageSticker[];
+  commentStickers?: GrowthBookCommentSticker[];
   stickerIds?: string[];
 };
+
+function legacyPageStickers(pageId: string, stickerIds: string[]): GrowthBookPageSticker[] {
+  return stickerIds.slice(0, 3).map((stickerId, index) => ({
+    id: `legacy-${pageId}-${index}-${stickerId}`,
+    pageId,
+    stickerId,
+    xRatio: 0.25 + index * 0.2,
+    yRatio: 0.8,
+    widthRatio: 0.16,
+    zIndex: index + 1,
+    createdBy: "legacy",
+    createdAt: "",
+  }));
+}
 
 function formatRange(entries: DiaryEntry[]): string {
   if (entries.length === 0) return "";
@@ -57,13 +90,21 @@ export function resolvePageEdit(
 ): GrowthBookPageEdit {
   const existing = edit?.pages?.[diaryId];
   const photos = existing?.photos ?? diary.photos ?? [];
+  const legacyStickerIds = Array.isArray(existing?.stickerIds) ? existing.stickerIds : [];
+  const photoLayout = normalizePhotoLayout(existing?.photoLayout ?? existing?.layout, photos.length);
   return {
     diaryId,
     photos,
-    layout: existing?.layout ?? defaultLayoutForPhotoCount(photos.length),
+    photoLayout,
+    photoLayoutTuning: existing?.photoLayoutTuning,
+    layout: existing?.layout,
     pageComment: existing?.pageComment,
+    pageStickers: Array.isArray(existing?.pageStickers)
+      ? existing.pageStickers
+      : legacyPageStickers(diaryId, legacyStickerIds),
+    commentStickers: Array.isArray(existing?.commentStickers) ? existing.commentStickers : [],
     rollingComments: existing?.rollingComments ?? [],
-    stickerIds: existing?.stickerIds ?? [],
+    stickerIds: legacyStickerIds,
   };
 }
 
@@ -98,11 +139,12 @@ export function buildGrowthBookPages(input: {
   pages.push({
     id: "cover",
     kind: "cover",
+    pageType: "cover",
     title: edit?.coverTitle?.trim() || `${input.babyName}의 성장책`,
-    subtitle: "성장책",
+    subtitle: edit?.coverSubtitle?.trim() || "성장책",
     photoUri: defaultCoverPhoto,
     photoUris: defaultCoverPhoto ? [defaultCoverPhoto] : [],
-    dateLabel: formatRange(sorted) || `${new Date().getFullYear()}`,
+    dateLabel: edit?.coverDateRange?.trim() || formatRange(sorted) || `${new Date().getFullYear()}`,
   });
 
   for (const entry of sorted) {
@@ -110,24 +152,29 @@ export function buildGrowthBookPages(input: {
     const photos = resolvePagePhotos(entry, pageEdit);
     const milestone = diaryMilestoneLabel(entry);
     const kind: GrowthBookPageKind = photos.length > 0 && !milestone ? "photo" : "moment";
-    const layout = pageEdit.layout;
+    const photoLayout = pageEdit.photoLayout;
 
     pages.push({
       id: `entry-${entry.id}`,
       kind,
+      pageType: "diary",
       diaryId: entry.id,
       title: milestone ?? `${input.babyName}의 하루`,
       subtitle: milestone ? "성장 순간" : photos.length ? "사진" : "일기",
       body: resolvePageBody(entry, pageEdit),
       photoUri: photos[0] ?? null,
-      photoUris: photos.slice(0, layout),
-      layout,
+      photoUris: photos.slice(0, getPhotoLayoutCount(photoLayout)),
+      photoLayout,
+      photoLayoutTuning: pageEdit.photoLayoutTuning,
+      layout: photoLayout,
       dateLabel: entry.date,
       moodStamp: entry.moodStamp,
       weatherStamp: entry.weatherStamp,
       milestone,
       rollingComments: pageEdit.rollingComments,
-      stickerIds: pageEdit.stickerIds ?? [],
+      pageStickers: pageEdit.pageStickers ?? [],
+      commentStickers: pageEdit.commentStickers ?? [],
+      stickerIds: (pageEdit.pageStickers ?? []).map((item) => item.stickerId),
     });
   }
 
@@ -147,6 +194,7 @@ export function buildGrowthBookPages(input: {
   pages.push({
     id: "letter",
     kind: "letter",
+    pageType: "final_letter",
     title: "사랑하는 너에게",
     subtitle: "마지막 편지",
     body: letterBody,
@@ -154,6 +202,65 @@ export function buildGrowthBookPages(input: {
   });
 
   return pages;
+}
+
+/** Ordered adapter used by editor navigation, preview and PDF book flow. */
+export function buildGrowthBookPageMeta(pages: GrowthBookPage[]): GrowthBookPageMeta[] {
+  let diaryNumber = 0;
+  return pages.map((page, order) => {
+    if (page.pageType === "diary") diaryNumber += 1;
+    return {
+      id: page.id,
+      pageType: page.pageType,
+      order,
+      linkedDiaryEntryId: page.diaryId,
+      title: page.pageType === "cover" ? "표지" : page.pageType === "final_letter" ? "편지" : `${diaryNumber}`,
+      dataRef: page.diaryId ?? page.id,
+    };
+  });
+}
+
+export type GrowthBookPaginationItem =
+  | { type: "page"; index: number; key: string }
+  | { type: "ellipsis"; key: string };
+
+/** Keeps cover/current/final-letter reachable without letting a long book dominate the screen. */
+export function buildGrowthBookPaginationItems(
+  pageCount: number,
+  currentPageIndex: number,
+  compactThreshold = 7,
+): GrowthBookPaginationItem[] {
+  if (pageCount <= 0) return [];
+  if (pageCount <= compactThreshold) {
+    return Array.from({ length: pageCount }, (_, index) => ({ type: "page" as const, index, key: `page-${index}` }));
+  }
+
+  const last = pageCount - 1;
+  const current = Math.max(0, Math.min(last, currentPageIndex));
+  const windowStart = Math.max(1, Math.min(current - 1, last - 3));
+  const visible = new Set([0, last, windowStart, windowStart + 1, windowStart + 2]);
+  const indices = [...visible].filter((index) => index >= 0 && index <= last).sort((a, b) => a - b);
+  const items: GrowthBookPaginationItem[] = [];
+  indices.forEach((index, itemIndex) => {
+    const previous = indices[itemIndex - 1];
+    if (previous !== undefined && index - previous > 1) {
+      items.push({ type: "ellipsis", key: `ellipsis-${previous}-${index}` });
+    }
+    items.push({ type: "page", index, key: `page-${index}` });
+  });
+  return items;
+}
+
+export type GrowthBookSwipeDirection = "previous" | "next" | null;
+
+/** Ignores short/vertical gestures so photo taps and vertical sheet movement stay intact. */
+export function resolveGrowthBookSwipeDirection(
+  dx: number,
+  dy: number,
+  minimumDistance = 48,
+): GrowthBookSwipeDirection {
+  if (Math.abs(dx) < minimumDistance || Math.abs(dx) <= Math.abs(dy) * 1.35) return null;
+  return dx < 0 ? "next" : "previous";
 }
 
 export function estimateGrowthBookPageCount(entryCount: number): number {

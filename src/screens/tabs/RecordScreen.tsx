@@ -22,6 +22,7 @@ import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { RecordCreatedToast } from "../../components/babylog/RecordCreatedToast";
 import { RecordDetailSheet, type RecordSheetPrefill } from "../../components/babylog/RecordDetailSheet";
 import { RecordHomeHeader } from "../../components/babylog/RecordHomeHeader";
+import { GrowthRecordModal } from "../../components/babylog/GrowthRecordModal";
 import { TodayLogSummaryCard } from "../../components/babylog/TodayLogSummaryCard";
 import { TodayTimeline } from "../../components/babylog/TodayTimeline";
 import { EmptyState } from "../../components/states/FeedbackStates";
@@ -106,6 +107,8 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
     myFamilyRole,
     familyMembers,
     storageReady,
+    addGrowthRecord,
+    updateGrowthRecord,
   } = useBabyLog();
   const [sheetCat, setSheetCat] = useState<LogCategoryKey | null>(null);
   const [prefill, setPrefill] = useState<RecordSheetPrefill | null>(null);
@@ -119,6 +122,8 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
   const [scrolling, setScrolling] = useState(false);
   const [categoryPressing, setCategoryPressing] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [growthRecordOpen, setGrowthRecordOpen] = useState(false);
+  const [growthMeasuredAt, setGrowthMeasuredAt] = useState<string | undefined>(undefined);
   const scrollHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerRestoreInitialized = useRef(false);
   const activeSleepRef = useRef<BabyLogEntry | undefined>(undefined);
@@ -515,7 +520,8 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
     Boolean(sheetTimer) ||
     sheetCat !== null ||
     consultPromptOpen ||
-    keyboardOpen;
+    keyboardOpen ||
+    growthRecordOpen;
 
   return (
     <View style={styles.root}>
@@ -569,6 +575,10 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
           onSelect={handleOneTouch}
           onLongPress={handleLongPress}
           onInteractionChange={setCategoryPressing}
+          onOpenGrowth={() => {
+            setGrowthMeasuredAt(selectedDateKey);
+            setGrowthRecordOpen(true);
+          }}
           onOpenActiveTimer={(action) => {
             const found = activeTimers.find((t) => t.action === action);
             if (found) setTimerSheetId(found.id);
@@ -645,6 +655,14 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
           setPrefill(null);
         }}
         onSave={handleSave}
+        onOpenGrowthRecord={
+          sheetCat === "doctor"
+            ? () => {
+                setGrowthMeasuredAt(prefill?.dateKey ?? selectedDateKey);
+                setTimeout(() => setGrowthRecordOpen(true), 120);
+              }
+            : undefined
+        }
         onDelete={
           allowDelete
             ? (id) => {
@@ -674,6 +692,20 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
           patchTimer(sheetTimer.id, resumeTimer);
         }}
         onStop={handleStopTimer}
+      />
+
+      <GrowthRecordModal
+        visible={growthRecordOpen}
+        initialSource="hospital"
+        initialMeasuredAt={growthMeasuredAt}
+        onClose={() => {
+          setGrowthRecordOpen(false);
+          setGrowthMeasuredAt(undefined);
+        }}
+        onSave={(draft, editId) => {
+          if (editId) updateGrowthRecord(editId, draft);
+          else addGrowthRecord(draft);
+        }}
       />
     </View>
   );

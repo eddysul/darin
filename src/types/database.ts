@@ -1,4 +1,6 @@
-/** Generated-style Database types for CareLog vertical slice. */
+/** Generated-style Database types for Supabase-backed vertical slices. */
+
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type PermissionRole = "admin" | "editor" | "viewer";
 export type DbRelationshipLabel =
@@ -98,6 +100,25 @@ export type CareLogRow = {
   updated_at: string;
 };
 
+export type GrowthRecordRow = {
+  id: string;
+  baby_id: string;
+  client_generated_id: string | null;
+  measured_at: string;
+  weight_kg: number | null;
+  height_cm: number | null;
+  head_circumference_cm: number | null;
+  source: "hospital" | "home";
+  input_method: "manual" | "ai_extract";
+  user_confirmed: boolean;
+  confidence: Json | null;
+  original_text: Json | null;
+  note: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -133,12 +154,20 @@ export type Database = {
         Update: Partial<CareLogRow>;
         Relationships: [];
       };
+      growth_records: {
+        Row: GrowthRecordRow;
+        Insert: Partial<GrowthRecordRow> &
+          Pick<GrowthRecordRow, "baby_id" | "measured_at" | "created_by">;
+        Update: Partial<GrowthRecordRow>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
       is_baby_member: { Args: { p_baby_id: string }; Returns: boolean };
       baby_permission: { Args: { p_baby_id: string }; Returns: PermissionRole };
       can_edit_care_logs: { Args: { p_baby_id: string }; Returns: boolean };
+      can_edit_growth_records: { Args: { p_baby_id: string }; Returns: boolean };
       create_baby_with_owner: {
         Args: {
           p_name: string;

@@ -6,6 +6,7 @@ import type {
   StickerFrameType,
   StickerShadowStyle,
   StickerSpeechBubbleType,
+  StickerTemplateId,
 } from "../../types/babySticker";
 import { colors } from "../../theme";
 
@@ -15,6 +16,7 @@ type VisualProps = {
   shadowStyle?: StickerShadowStyle;
   speechBubbleType?: StickerSpeechBubbleType;
   frameType?: StickerFrameType;
+  templateId?: StickerTemplateId;
   text?: string;
   size?: number;
   style?: StyleProp<ViewStyle>;
@@ -26,27 +28,45 @@ export function BabyStickerView({
   shadowStyle = "soft",
   speechBubbleType = "none",
   frameType = "none",
-  text = "",
+  templateId = "portrait",
+  text,
   size = 132,
   style,
 }: VisualProps) {
   const border = borderStyleMap[borderStyle];
   const shadow = shadowStyleMap[shadowStyle];
   const frame = frameStyleMap[frameType];
+  const template = templateStyleMap[templateId];
+  const label = typeof text === "string" ? text.trim() : "";
 
   return (
     <View style={[styles.wrap, { width: size + 24 }, style]}>
-      {speechBubbleType !== "none" && text.trim() ? (
+      {speechBubbleType !== "none" && label ? (
         <View style={[styles.bubble, bubbleStyleMap[speechBubbleType]]}>
           <Text style={styles.bubbleText} numberOfLines={2}>
-            {text.trim()}
+            {label}
           </Text>
           <View style={styles.bubbleTail} />
         </View>
       ) : null}
 
       <View style={[styles.frameOuter, frame.outer, { width: size + 8, height: size + 8 }]}>
-        {frame.ornament ? <Text style={styles.ornament}>{frame.ornament}</Text> : null}
+        {templateId !== "portrait" ? (
+          <View
+            style={[
+              styles.templateBody,
+              {
+                width: size * 0.74,
+                height: size * 0.42,
+                borderRadius: size * 0.2,
+                backgroundColor: template.bodyColor,
+                borderColor: template.accent,
+              },
+            ]}
+          >
+            <Text style={[styles.templateBadge, { color: template.accent }]}>{template.badge}</Text>
+          </View>
+        ) : null}
         <View
           style={[
             styles.photoShell,
@@ -63,9 +83,9 @@ export function BabyStickerView({
         </View>
       </View>
 
-      {speechBubbleType === "none" && text.trim() ? (
+      {speechBubbleType === "none" && label ? (
         <Text style={styles.caption} numberOfLines={2}>
-          {text.trim()}
+          {label}
         </Text>
       ) : null}
     </View>
@@ -88,6 +108,7 @@ export function BabyStickerFromModel({
       shadowStyle={sticker.shadowStyle}
       speechBubbleType={sticker.speechBubbleType}
       frameType={sticker.frameType}
+      templateId={sticker.templateId}
       text={sticker.text}
       size={size}
       style={style}
@@ -132,12 +153,23 @@ const bubbleStyleMap: Record<Exclude<StickerSpeechBubbleType, "none">, object> =
   },
 };
 
-const frameStyleMap: Record<StickerFrameType, { outer: object; ornament?: string }> = {
+const frameStyleMap: Record<StickerFrameType, { outer: object }> = {
   none: { outer: {} },
-  star: { outer: { borderColor: "#F0C95A", borderWidth: 2, borderRadius: 18 }, ornament: "✦" },
-  heart: { outer: { borderColor: "#E8918A", borderWidth: 2, borderRadius: 18 }, ornament: "♥" },
-  ribbon: { outer: { borderColor: "#C9A0C4", borderWidth: 2, borderRadius: 18 }, ornament: "🎀" },
-  growthBook: { outer: { borderColor: "#8A735A", borderWidth: 2, borderRadius: 14 }, ornament: "📖" },
+  star: { outer: { borderColor: "#F0C95A", borderWidth: 2, borderRadius: 18 } },
+  heart: { outer: { borderColor: "#E8918A", borderWidth: 2, borderRadius: 18 } },
+  ribbon: { outer: { borderColor: "#C9A0C4", borderWidth: 2, borderRadius: 18 } },
+  growthBook: { outer: { borderColor: "#8A735A", borderWidth: 2, borderRadius: 14 } },
+};
+
+const templateStyleMap: Record<StickerTemplateId, { bodyColor: string; accent: string; badge: string }> = {
+  portrait: { bodyColor: "transparent", accent: colors.amber, badge: "" },
+  sleepy: { bodyColor: "#EEE9FF", accent: "#7669A8", badge: "쿨쿨" },
+  hungry: { bodyColor: "#FFF0DF", accent: "#C77845", badge: "꼬르륵" },
+  yummy: { bodyColor: "#FFF4D8", accent: "#B77B28", badge: "냠냠" },
+  milestone: { bodyColor: "#E8F4E8", accent: "#648C64", badge: "성공" },
+  love: { bodyColor: "#FFE8E5", accent: "#C85F65", badge: "사랑" },
+  proud: { bodyColor: "#E5F1F4", accent: "#4E8290", badge: "뿌듯" },
+  excited: { bodyColor: "#FFF0E8", accent: "#D96F5F", badge: "신남" },
 };
 
 const styles = StyleSheet.create({
@@ -167,13 +199,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  ornament: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    fontSize: 14,
-    zIndex: 3,
-  },
+  templateBody: { position: "absolute", bottom: -12, alignItems: "center", justifyContent: "flex-end", borderWidth: 2, paddingBottom: 3 },
+  templateBadge: { fontSize: 9, fontWeight: "900", letterSpacing: -0.2 },
   photoShell: {
     alignItems: "center",
     justifyContent: "center",
