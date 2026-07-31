@@ -4,15 +4,22 @@ import type {
   MemoryMediaRow,
   MemoryPostRow,
   MemoryReactionRow,
+  MemorySelectedPersonRow,
+  MemoryTagRow,
 } from "../types/database";
 import type {
   AddMemoryCommentInput,
   AddMemoryMediaInput,
   CreateMemoryPostInput,
+  CreateMemoryWithImageInput,
+  MemoryCard,
   MemoryComment,
   MemoryMedia,
   MemoryPost,
+  MemoryPostBundle,
   MemoryReaction,
+  MemoryTag,
+  MemoryTagDraft,
   SetMemoryReactionInput,
   UpdateMemoryPostInput,
 } from "../types/memory";
@@ -20,6 +27,9 @@ import { createId } from "../utils/id";
 import { AuthRepository } from "./AuthRepository";
 
 const MEMORIES_BUCKET = "memories";
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+const CAPTION_MAX_LENGTH = 1200;
+const COMMENT_MAX_LENGTH = 500;
 
 export function memoryPostRowToModel(row: MemoryPostRow): MemoryPost {
   return {
@@ -69,6 +79,70 @@ export function memoryReactionRowToModel(row: MemoryReactionRow): MemoryReaction
   };
 }
 
+export function memoryTagRowToModel(row: MemoryTagRow): MemoryTag {
+  return {
+    id: row.id,
+    memoryPostId: row.memory_post_id,
+    tagType: row.tag_type,
+    babyId: row.baby_id ?? undefined,
+    taggedUserId: row.tagged_user_id ?? undefined,
+    taggedBabyId: row.tagged_baby_id ?? undefined,
+    manualLabel: row.manual_label ?? undefined,
+    status: row.status,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  };
+}
+
+function normalizeCaption(caption?: string | null): string | null {
+  const value = caption?.trim() ?? "";
+  if (value.length > CAPTION_MAX_LENGTH) {
+    throw new Error(`설명은 ${CAPTION_MAX_LENGTH}자 이하로 입력해주세요.`);
+  }
+  return value || null;
+}
+
+function imageExtension(mimeType?: string): string {
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/heic" || mimeType === "image/heif") return "heic";
+  return "jpg";
+}
+
+async function replaceSelectedPeople(memoryPostId: string, userIds: string[]): Promise<void> {
+  const sb = requireSupabase();
+  const uniqueIds = [...new Set(userIds.filter(Boolean))];
+  const { error: deleteError } = await sb
+    .from("memory_selected_people")
+    .delete()
+    .eq("memory_post_id", memoryPostId);
+  if (deleteError) throw deleteError;
+  if (uniqueIds.length === 0) return;
+  const { error } = await sb.from("memory_selected_people").insert(
+    uniqueIds.map((userId) => ({ memory_post_id: memoryPostId, user_id: userId })),
+  );
+  if (error) throw error;
+}
+
+async function replaceTags(memoryPostId: string, tags: MemoryTagDraft[]): Promise<void> {
+  const sb = requireSupabase();
+  const createdBy = await requireUserId();
+  const { error: deleteError } = await sb.from("memory_tags").delete().eq("memory_post_id", memoryPostId);
+  if (deleteError) throw deleteError;
+  if (tags.length === 0) return;
+  const rows = tags.map((tag) => ({
+    memory_post_id: memoryPostId,
+    tag_type: tag.tagType,
+    baby_id: tag.tagType === "baby" ? tag.babyId : null,
+    tagged_user_id: tag.tagType === "family_member" ? tag.taggedUserId : null,
+    tagged_baby_id: null,
+    manual_label: tag.tagType === "manual_guest" ? tag.manualLabel.trim() : null,
+    status: "approved" as const,
+    created_by: createdBy,
+  }));
+  const { error } = await sb.from("memory_tags").insert(rows);
+  if (error) throw error;
+}
+
 async function requireUserId(): Promise<string> {
   const user = await AuthRepository.getUser();
   if (!user) throw new Error("Memories requires an authenticated user.");
@@ -110,7 +184,7 @@ export const MemoriesRepository = {
         id: postId,
         baby_id: input.babyId,
         author_id: authorId,
-        caption: input.caption ?? null,
+        caption: normalizeCaption(input.caption),
         privacy_type: input.privacyType,
       })
       .select("*")
@@ -159,23 +233,29 @@ export const MemoriesRepository = {
 
   async updateMemoryPost(input: UpdateMemoryPostInput): Promise<MemoryPost> {
     const changes: { caption?: string | null; privacy_type?: UpdateMemoryPostInput["privacyType"] } = {};
-    if (input.caption !== undefined) changes.caption = input.caption;
+    if (input.caption !== undefined) changes.caption = normalizeCaption(input.caption);
     if (input.privacyType !== undefined) changes.privacy_type = input.privacyType;
-    if (Object.keys(changes).length === 0) {
-      const existing = await this.getById(input.memoryPostId);
-      if (!existing) throw new Error("Memory post not found or not accessible.");
-      return existing;
+    let post: MemoryPost | null = null;
+    if (Object.keys(changes).length > 0) {
+      const sb = requireSupabase();
+      const { data, error } = await sb
+        .from("memory_posts")
+        .update(changes)
+        .eq("id", input.memoryPostId)
+        .select("*")
+        .single();
+      if (error) throw error;
+      post = memoryPostRowToModel(data);
     }
-
-    const sb = requireSupabase();
-    const { data, error } = await sb
-      .from("memory_posts")
-      .update(changes)
-      .eq("id", input.memoryPostId)
-      .select("*")
-      .single();
-    if (error) throw error;
-    return memoryPostRowToModel(data);
+    if (input.selectedUserIds !== undefined) {
+      await replaceSelectedPeople(input.memoryPostId, input.selectedUserIds);
+    }
+    if (input.tags !== undefined) {
+      await replaceTags(input.memoryPostId, input.tags);
+    }
+    if (!post) post = await this.getById(input.memoryPostId);
+    if (!post) throw new Error("Memory post not found or not accessible.");
+    return post;
   },
 
   async softDeleteMemoryPost(memoryPostId: string): Promise<void> {
@@ -199,6 +279,9 @@ export const MemoriesRepository = {
   },
 
   async addComment(input: AddMemoryCommentInput): Promise<MemoryComment> {
+    const body = input.body.trim();
+    if (!body) throw new Error("댓글을 입력해주세요.");
+    if (body.length > COMMENT_MAX_LENGTH) throw new Error(`댓글은 ${COMMENT_MAX_LENGTH}자 이하로 입력해주세요.`);
     const sb = requireSupabase();
     const authorId = await requireUserId();
     const { data, error } = await sb
@@ -207,7 +290,7 @@ export const MemoriesRepository = {
         id: input.id ?? createId(),
         memory_post_id: input.memoryPostId,
         author_id: authorId,
-        body: input.body,
+        body,
       })
       .select("*")
       .single();
@@ -272,5 +355,132 @@ export const MemoriesRepository = {
       .createSignedUrl(storagePath, expiresInSeconds);
     if (error) throw error;
     return data.signedUrl;
+  },
+
+  async listMedia(memoryPostId: string): Promise<MemoryMedia[]> {
+    const sb = requireSupabase();
+    const { data, error } = await sb
+      .from("memory_media")
+      .select("*")
+      .eq("memory_post_id", memoryPostId)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(memoryMediaRowToModel);
+  },
+
+  async listTags(memoryPostId: string): Promise<MemoryTag[]> {
+    const sb = requireSupabase();
+    const { data, error } = await sb
+      .from("memory_tags")
+      .select("*")
+      .eq("memory_post_id", memoryPostId)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(memoryTagRowToModel);
+  },
+
+  async listReactions(memoryPostId: string): Promise<MemoryReaction[]> {
+    const sb = requireSupabase();
+    const { data, error } = await sb
+      .from("memory_reactions")
+      .select("*")
+      .eq("memory_post_id", memoryPostId)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(memoryReactionRowToModel);
+  },
+
+  async listSelectedPeople(memoryPostId: string): Promise<string[]> {
+    const sb = requireSupabase();
+    const { data, error } = await sb
+      .from("memory_selected_people")
+      .select("*")
+      .eq("memory_post_id", memoryPostId);
+    if (error) throw error;
+    return ((data ?? []) as MemorySelectedPersonRow[]).map((row) => row.user_id);
+  },
+
+  async getBundleById(memoryPostId: string): Promise<MemoryPostBundle | null> {
+    const post = await this.getById(memoryPostId);
+    if (!post) return null;
+    const [media, tags, comments, reactions, selectedUserIds] = await Promise.all([
+      this.listMedia(memoryPostId),
+      this.listTags(memoryPostId),
+      this.listComments(memoryPostId),
+      this.listReactions(memoryPostId),
+      this.listSelectedPeople(memoryPostId),
+    ]);
+    return { post, media, tags, comments, reactions, selectedUserIds };
+  },
+
+  async listCardsByBabyId(babyId: string): Promise<MemoryCard[]> {
+    const posts = await this.listByBabyId(babyId);
+    return Promise.all(posts.map(async (post) => {
+      const [media, tags, comments, reactions] = await Promise.all([
+        this.listMedia(post.id),
+        this.listTags(post.id),
+        this.listComments(post.id),
+        this.listReactions(post.id),
+      ]);
+      const coverMedia = media[0];
+      const coverUrl = coverMedia ? await this.createSignedUrl(coverMedia.storagePath) : undefined;
+      return {
+        post,
+        coverMedia,
+        coverUrl,
+        tags,
+        commentCount: comments.length,
+        reactionCount: reactions.length,
+      };
+    }));
+  },
+
+  async createMemoryWithImage(input: CreateMemoryWithImageInput): Promise<MemoryPostBundle> {
+    if (input.imageSizeBytes !== undefined && input.imageSizeBytes > MAX_IMAGE_BYTES) {
+      throw new Error("사진은 25MB 이하만 올릴 수 있어요.");
+    }
+    const postId = createId();
+    const mediaId = createId();
+    const storagePath = `${input.babyId}/${postId}/${mediaId}.${imageExtension(input.mimeType)}`;
+    const sb = requireSupabase();
+    let objectUploaded = false;
+    let postCreated = false;
+    try {
+      await this.createMemoryPost({
+        id: postId,
+        babyId: input.babyId,
+        caption: input.caption,
+        privacyType: input.privacyType,
+        selectedUserIds: input.selectedUserIds,
+      });
+      postCreated = true;
+      const response = await fetch(input.imageUri);
+      const bytes = await response.arrayBuffer();
+      if (bytes.byteLength === 0) throw new Error("선택한 사진을 읽지 못했어요.");
+      if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("사진은 25MB 이하만 올릴 수 있어요.");
+      const { error: uploadError } = await sb.storage.from(MEMORIES_BUCKET).upload(storagePath, bytes, {
+        contentType: input.mimeType ?? "image/jpeg",
+        upsert: false,
+      });
+      if (uploadError) throw uploadError;
+      objectUploaded = true;
+      await this.addMedia({
+        id: mediaId,
+        memoryPostId: postId,
+        babyId: input.babyId,
+        storagePath,
+        mediaType: "image",
+        width: input.width,
+        height: input.height,
+      });
+      await replaceTags(postId, input.tags ?? [{ tagType: "baby", babyId: input.babyId }]);
+      const bundle = await this.getBundleById(postId);
+      if (!bundle) throw new Error("업로드한 추억을 다시 불러오지 못했어요.");
+      return bundle;
+    } catch (error) {
+      if (objectUploaded) await sb.storage.from(MEMORIES_BUCKET).remove([storagePath]);
+      if (postCreated) await sb.from("memory_posts").delete().eq("id", postId);
+      throw error;
+    }
   },
 };

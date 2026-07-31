@@ -7,10 +7,11 @@ import { colors, radius } from "../../theme";
 
 type Props = {
   onOpenProfile: () => void;
+  onOpenSettings?: () => void;
   onOpenShared?: () => void;
 };
 
-export function AppHeader({ onOpenProfile, onOpenShared }: Props) {
+export function AppHeader({ onOpenProfile, onOpenSettings, onOpenShared }: Props) {
   const insets = useSafeAreaInsets();
   const { babyName, babyBadge } = useBabyLog();
 
@@ -31,11 +32,11 @@ export function AppHeader({ onOpenProfile, onOpenShared }: Props) {
         </View>
         <Pressable
           style={styles.profileBtn}
-          onPress={onOpenProfile}
+          onPress={onOpenSettings ?? onOpenProfile}
           accessibilityRole="button"
-          accessibilityLabel="아기 프로필 및 가족 관리"
+          accessibilityLabel={onOpenSettings ? "설정 열기" : "아기 프로필 및 가족 관리"}
         >
-          <BabyLogIcon kind="profile" size={16} color={colors.muted} />
+          <BabyLogIcon kind={onOpenSettings ? "settings" : "profile"} size={16} color={colors.muted} />
         </Pressable>
       </View>
     </View>

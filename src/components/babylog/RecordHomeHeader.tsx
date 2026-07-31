@@ -10,9 +10,10 @@ import { formatBabyAge } from "../../utils/childDisplay";
 
 type Props = {
   onOpenProfile: () => void;
+  onOpenSettings?: () => void;
 };
 
-export function RecordHomeHeader({ onOpenProfile }: Props) {
+export function RecordHomeHeader({ onOpenProfile, onOpenSettings }: Props) {
   const insets = useSafeAreaInsets();
   const { babyName, babyBadge, babyBirthMeta, careSetup } = useBabyLog();
   const { settings } = useAppSettings();
@@ -41,8 +42,13 @@ export function RecordHomeHeader({ onOpenProfile }: Props) {
           </View>
         </View>
 
-        <Pressable style={styles.profileBtn} onPress={onOpenProfile}>
-          <BabyLogIcon kind="profile" size={18} color={colors.muted} />
+        <Pressable
+          style={styles.profileBtn}
+          onPress={onOpenSettings ?? onOpenProfile}
+          accessibilityRole="button"
+          accessibilityLabel={onOpenSettings ? "설정 열기" : "아기 프로필 열기"}
+        >
+          <BabyLogIcon kind={onOpenSettings ? "settings" : "profile"} size={18} color={colors.muted} />
         </Pressable>
       </View>
     </View>

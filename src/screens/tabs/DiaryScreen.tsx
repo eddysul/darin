@@ -57,12 +57,13 @@ import type { MainTabParamList } from "../../navigation/types";
 
 type Props = {
   onOpenProfile: () => void;
+  onOpenSettings: () => void;
   onOpenConsult: (initialQuestion?: string) => void;
 };
 
 type DiaryFilter = "all" | "growth" | "book";
 
-export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
+export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Props) {
   const route = useRoute<RouteProp<MainTabParamList, "Diary">>();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList, "Diary">>();
   const {
@@ -211,6 +212,12 @@ export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
   }, [route.params, openFromNotification, navigation]);
 
   useEffect(() => {
+    if (!route.params?.openGrowthBookVault) return;
+    setVaultOpen(true);
+    navigation.setParams({ openGrowthBookVault: undefined });
+  }, [navigation, route.params?.openGrowthBookVault]);
+
+  useEffect(() => {
     if (!reminder.enabled) return;
     const tick = () => {
       const now = new Date();
@@ -348,7 +355,7 @@ export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
           openFromNotification();
         }}
       />
-      <AppHeader onOpenProfile={onOpenProfile} />
+      <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

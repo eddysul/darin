@@ -9,16 +9,19 @@ export type MainTabParamList = {
     openCompose?: boolean;
     date?: string;
     source?: string;
+    openGrowthBookVault?: boolean;
   } | undefined;
   Mic: undefined;
   Report: undefined;
   Consult: { initialQuestion?: string } | undefined;
-  Menu: undefined;
+  Memories: undefined;
 };
 
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   BabyProfile: undefined;
+  SettingsHome: undefined;
   SettingsDetail: { page: SettingsDetailPage };
   GrowthRecords: undefined;
+  MemoryDetail: { memoryPostId: string };
 };

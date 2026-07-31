@@ -20,7 +20,7 @@ import { BabyReportScreen } from "./tabs/BabyReportScreen";
 import { ConsultScreen } from "./tabs/ConsultScreen";
 import { DiaryScreen } from "./tabs/DiaryScreen";
 import { RecordScreen } from "./tabs/RecordScreen";
-import { MenuScreen } from "./tabs/MenuScreen";
+import { MemoriesScreen } from "./tabs/MemoriesScreen";
 import type { LogCategoryKey } from "../types/logCategory";
 import type { BabyLogCategoryId } from "../constants/babyLogCategories";
 import type { MessageKey } from "../i18n";
@@ -37,7 +37,7 @@ const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
   Mic: "tabs.voice",
   Report: "tabs.overview",
   Consult: "tabs.consult",
-  Menu: "tabs.menu",
+  Memories: "tabs.memories",
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -47,7 +47,7 @@ const TAB_ICONS: Record<Exclude<keyof MainTabParamList, "Mic">, TabIconKey> = {
   Diary: "diary",
   Report: "report",
   Consult: "consult",
-  Menu: "menu",
+  Memories: "memories",
 };
 
 function MicPlaceholder() {
@@ -81,7 +81,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     { name: "Diary" },
     { name: "Mic", center: true },
     { name: "Report" },
-    { name: "Menu" },
+    { name: "Memories" },
   ];
 
   return (
@@ -237,6 +237,7 @@ function RecordTab() {
   return (
     <RecordScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
       }
@@ -250,6 +251,7 @@ function DiaryTab() {
   return (
     <DiaryScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
       }
@@ -263,6 +265,7 @@ function ReportTab() {
   return (
     <BabyReportScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenRecord={() => navigation.navigate("Record")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
@@ -274,17 +277,21 @@ function ReportTab() {
 function ConsultTab() {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
-  return <ConsultScreen onOpenProfile={() => rootNavigation?.navigate("BabyProfile")} />;
+  return (
+    <ConsultScreen
+      onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+    />
+  );
 }
 
-function MenuTab() {
+function MemoriesTab() {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   return (
-    <MenuScreen
-      onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
-      onOpenSettings={(page) => rootNavigation?.navigate("SettingsDetail", { page })}
-      onOpenGrowthRecords={() => rootNavigation?.navigate("GrowthRecords")}
+    <MemoriesScreen
+      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+      onOpenDetail={(memoryPostId) => rootNavigation?.navigate("MemoryDetail", { memoryPostId })}
     />
   );
 }
@@ -307,7 +314,7 @@ export function MainTabs() {
         <Tab.Screen name="Diary" component={DiaryTab} />
         <Tab.Screen name="Mic" component={MicPlaceholder} />
         <Tab.Screen name="Report" component={ReportTab} />
-        <Tab.Screen name="Menu" component={MenuTab} />
+        <Tab.Screen name="Memories" component={MemoriesTab} />
         <Tab.Screen name="Consult" component={ConsultTab} />
       </Tab.Navigator>
       {storageIssue ? (

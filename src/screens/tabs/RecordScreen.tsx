@@ -61,6 +61,7 @@ import { colors } from "../../theme";
 
 type Props = {
   onOpenProfile: () => void;
+  onOpenSettings: () => void;
   onOpenConsult: (initialQuestion?: string) => void;
 };
 
@@ -94,7 +95,7 @@ const TIMER_LABEL: Record<ActiveTimer["kind"], string> = {
   play: "놀이",
 };
 
-export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
+export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Props) {
   const { settings, ready: settingsReady } = useAppSettings();
   const {
     logs,
@@ -525,7 +526,7 @@ export function RecordScreen({ onOpenProfile, onOpenConsult }: Props) {
 
   return (
     <View style={styles.root}>
-      <RecordHomeHeader onOpenProfile={onOpenProfile} />
+      <RecordHomeHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

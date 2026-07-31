@@ -61,6 +61,29 @@ export type MemoryReaction = {
   createdAt: string;
 };
 
+export type MemoryPostBundle = {
+  post: MemoryPost;
+  media: MemoryMedia[];
+  tags: MemoryTag[];
+  comments: MemoryComment[];
+  reactions: MemoryReaction[];
+  selectedUserIds: string[];
+};
+
+export type MemoryCard = {
+  post: MemoryPost;
+  coverMedia?: MemoryMedia;
+  coverUrl?: string;
+  tags: MemoryTag[];
+  commentCount: number;
+  reactionCount: number;
+};
+
+export type MemoryTagDraft =
+  | { tagType: "baby"; babyId: string }
+  | { tagType: "family_member"; taggedUserId: string }
+  | { tagType: "manual_guest"; manualLabel: string };
+
 export type CreateMemoryPostInput = {
   id?: string;
   babyId: string;
@@ -73,6 +96,21 @@ export type UpdateMemoryPostInput = {
   memoryPostId: string;
   caption?: string | null;
   privacyType?: MemoryPrivacyType;
+  selectedUserIds?: string[];
+  tags?: MemoryTagDraft[];
+};
+
+export type CreateMemoryWithImageInput = {
+  babyId: string;
+  imageUri: string;
+  imageSizeBytes?: number;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  caption?: string;
+  privacyType: MemoryPrivacyType;
+  selectedUserIds?: string[];
+  tags?: MemoryTagDraft[];
 };
 
 export type AddMemoryMediaInput = {

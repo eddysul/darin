@@ -24,6 +24,7 @@ import {
   Pencil,
   Pill,
   Plus,
+  Settings,
   Sparkles,
   Star,
   Stethoscope,
@@ -66,7 +67,7 @@ export const CATEGORY_ICONS: Record<BabyLogCategoryId, IconComponent> = {
   other: Star,
 };
 
-export type TabIconKey = "record" | "diary" | "report" | "consult" | "mic" | "menu";
+export type TabIconKey = "record" | "diary" | "report" | "consult" | "mic" | "menu" | "memories";
 export type MiscIconKey =
   | "new"
   | "baby"
@@ -83,7 +84,8 @@ export type MiscIconKey =
   | "voice"
   | "trash"
   | "bot"
-  | "logout";
+  | "logout"
+  | "settings";
 
 export const TAB_ICONS: Record<TabIconKey, IconComponent> = {
   record: ClipboardList,
@@ -92,6 +94,7 @@ export const TAB_ICONS: Record<TabIconKey, IconComponent> = {
   consult: MessageCircle,
   mic: Mic,
   menu: Menu,
+  memories: FolderOpen,
 };
 
 export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
@@ -111,4 +114,5 @@ export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
   trash: Trash2,
   bot: Bot,
   logout: LogOut,
+  settings: Settings,
 };

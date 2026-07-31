@@ -43,9 +43,10 @@ type ConsultNav = BottomTabNavigationProp<
 
 type Props = {
   onOpenProfile: () => void;
+  onOpenSettings: () => void;
 };
 
-export function ConsultScreen({ onOpenProfile }: Props) {
+export function ConsultScreen({ onOpenProfile, onOpenSettings }: Props) {
   const route = useRoute<RouteProp<{ Consult: ConsultRouteParams }, "Consult">>();
   const navigation = useNavigation<ConsultNav>();
   const {
@@ -165,7 +166,7 @@ export function ConsultScreen({ onOpenProfile }: Props) {
   if (!storageReady) {
     return (
       <View style={styles.root}>
-        <AppHeader onOpenProfile={onOpenProfile} />
+        <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
         <View style={styles.loadingBox}>
           <LoadingState label="상담 기록을 불러오는 중…" />
         </View>
@@ -179,7 +180,7 @@ export function ConsultScreen({ onOpenProfile }: Props) {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={88}
     >
-      <AppHeader onOpenProfile={onOpenProfile} />
+      <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
 
       <Pressable style={styles.banner} onPress={() => setBannerOpen(true)}>
         <Text style={styles.bannerEyebrow}>AI가 참고 중</Text>

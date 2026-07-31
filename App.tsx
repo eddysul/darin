@@ -19,6 +19,8 @@ import { TermsConsentScreen } from "./src/screens/onboarding/TermsConsentScreen"
 import { MainTabs } from "./src/screens/MainTabs";
 import { BabyProfileScreen } from "./src/screens/BabyProfileScreen";
 import { GrowthRecordsManagerScreen } from "./src/screens/GrowthRecordsManagerScreen";
+import { MemoryDetailScreen } from "./src/screens/MemoryDetailScreen";
+import { SettingsHomeScreen } from "./src/screens/SettingsHomeScreen";
 import { AppSettingsModal, SETTINGS_PAGE_TITLES } from "./src/components/settings/AppSettingsModal";
 import type { RootStackParamList } from "./src/navigation/types";
 import { SplashScreen } from "./src/screens/SplashScreen";
@@ -97,7 +99,7 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
             Record: "record",
             Report: "report",
             Consult: "consult",
-            Menu: "menu",
+            Memories: "memories",
             Mic: "mic",
           },
         },
@@ -120,6 +122,7 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
       >
         <RootStack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
         <RootStack.Screen name="BabyProfile" component={BabyProfileScreen} options={{ title: "아기 프로필" }} />
+        <RootStack.Screen name="SettingsHome" component={SettingsHomeScreen} options={{ title: "설정" }} />
         <RootStack.Screen
           name="SettingsDetail"
           options={({ route }) => ({ title: SETTINGS_PAGE_TITLES[route.params.page] })}
@@ -133,6 +136,7 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
           )}
         </RootStack.Screen>
         <RootStack.Screen name="GrowthRecords" component={GrowthRecordsManagerScreen} options={{ title: "성장 기록 관리" }} />
+        <RootStack.Screen name="MemoryDetail" component={MemoryDetailScreen} options={{ title: "추억" }} />
       </RootStack.Navigator>
     </NavigationContainer>
   );

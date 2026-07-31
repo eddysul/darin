@@ -27,13 +27,14 @@ import { formatWeight, lengthFromCm } from "../../utils/measurementFormat";
 
 type Props = {
   onOpenProfile: () => void;
+  onOpenSettings: () => void;
   onOpenConsult: (initialQuestion?: string) => void;
   onOpenRecord: () => void;
 };
 
 type ReportCat = "all" | BabyLogCategoryId;
 
-export function BabyReportScreen({ onOpenProfile, onOpenConsult, onOpenRecord }: Props) {
+export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult, onOpenRecord }: Props) {
   const { logs, babyName, careSetup, diaryEntries, growthRecords, addGrowthRecord, updateGrowthRecord } = useBabyLog();
   const { settings } = useAppSettings();
   const [reportCat, setReportCat] = useState<ReportCat>("all");
@@ -92,7 +93,7 @@ export function BabyReportScreen({ onOpenProfile, onOpenConsult, onOpenRecord }:
 
   return (
     <View style={styles.root}>
-      <AppHeader onOpenProfile={onOpenProfile} />
+      <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
       <ScrollView showsVerticalScrollIndicator={false} {...scrollProps}>
         {reportCat === "all" ? (
           <View style={styles.pad}>

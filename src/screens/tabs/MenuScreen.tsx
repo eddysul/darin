@@ -45,9 +45,11 @@ type Props = {
   onOpenProfile: () => void;
   onOpenSettings: (page: SettingsDetailPage) => void;
   onOpenGrowthRecords: () => void;
+  onOpenGrowthBookStorage?: () => void;
+  embedded?: boolean;
 };
 
-export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords }: Props) {
+export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords, onOpenGrowthBookStorage, embedded = false }: Props) {
   const insets = useSafeAreaInsets();
   const logout = useLogout();
   const { settings, setSettings, resetSettings } = useAppSettings();
@@ -149,12 +151,15 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords 
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: Math.max(insets.top + 10, 24), paddingBottom: insets.bottom + 36 },
+          {
+            paddingTop: embedded ? 20 : Math.max(insets.top + 10, 24),
+            paddingBottom: insets.bottom + 36,
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.eyebrow}>K-NANNY</Text>
-        <Text style={styles.title}>메뉴</Text>
+        {!embedded ? <Text style={styles.eyebrow}>K-NANNY</Text> : null}
+        {!embedded ? <Text style={styles.title}>메뉴</Text> : null}
         <Text style={styles.subtitle}>계정과 기록 방식을 한 곳에서 관리해요.</Text>
 
         <MenuSection title="아기/가족">
@@ -179,6 +184,7 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords 
 
         <MenuSection title="꾸미기/성장책">
           <MenuRow icon="baby" title="내 아기 스티커" subtitle="스티커 만들기와 보관함" onPress={() => setStickerOpen(true)} />
+          {onOpenGrowthBookStorage ? <MenuRow icon="folder" title="성장책 보관함" subtitle="담긴 기록·미리보기·PDF 관리" onPress={onOpenGrowthBookStorage} /> : null}
           <MenuRow icon="folder" title="성장책 설정" subtitle="날짜·작성자·기본 레이아웃" onPress={() => onOpenSettings("growthBook")} />
         </MenuSection>
 
@@ -186,6 +192,7 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords 
           <MenuRow icon="check" title="결제/구독" subtitle="플랜과 구매 복원" onPress={() => onOpenSettings("billing")} />
           <MenuRow icon="folder" title="개인정보처리방침" subtitle="수집·보관·삭제 안내" onPress={() => onOpenSettings("privacy")} />
           <MenuRow icon="folder" title="이용약관" subtitle="서비스 이용과 AI 안내" onPress={() => onOpenSettings("terms")} />
+          <MenuRow icon="edit" title="문의하기" subtitle="고객지원 및 문의 안내" onPress={() => onOpenSettings("privacy")} />
         </MenuSection>
 
         {__DEV__ ? <QaDebugPanel trigger="menu" /> : null}
