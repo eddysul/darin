@@ -14,6 +14,7 @@ import {
   type FamilyRole,
 } from "../types/family";
 import { colors, radius } from "../theme";
+import { NavigationHeader } from "../components/navigation/NavigationHeader";
 
 type Props = {
   visible: boolean;
@@ -44,12 +45,7 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.root}>
-        <View style={styles.header}>
-          <Text style={styles.title}>프로필</Text>
-          <Pressable onPress={onClose} hitSlop={12}>
-            <Text style={styles.close}>✕</Text>
-          </Pressable>
-        </View>
+        <NavigationHeader title="아기 프로필" onBack={onClose} />
 
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.babyCard}>
@@ -154,18 +150,6 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  title: { fontSize: 18, fontWeight: "700", color: colors.text },
-  close: { fontSize: 20, color: colors.muted },
   content: { padding: 20 },
   babyCard: {
     flexDirection: "row",

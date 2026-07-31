@@ -25,7 +25,8 @@ export type GrowthRecord = {
   confidence?: number;
   originalText?: string;
   note?: string;
-  createdBy: string;
+  /** Null only when the original author deleted an account on a shared baby. */
+  createdBy: string | null;
   createdAt: string;
   updatedAt: string;
 };

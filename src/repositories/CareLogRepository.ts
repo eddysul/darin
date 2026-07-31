@@ -45,11 +45,13 @@ export function careLogRowToEntry(row: CareLogRow): BabyLogEntry {
     rawTranscript: p.rawTranscript,
     confidence: p.confidence,
     flags: p.flags as BabyLogFlag[] | undefined,
-    createdBy: p.createdBy
+    createdBy: row.created_by
       ? {
-          userId: p.createdBy.userId,
-          name: p.createdBy.name,
-          role: p.createdBy.role as import("../types/family").FamilyRole,
+          // The relational column is protected by RLS and is authoritative.
+          // Payload actor metadata is only a display snapshot.
+          userId: row.created_by,
+          name: p.createdBy?.name ?? "멤버",
+          role: (p.createdBy?.role as import("../types/family").FamilyRole | undefined) ?? "editor",
         }
       : undefined,
   };

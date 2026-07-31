@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -72,6 +72,7 @@ export function MenuScreen({ onOpenProfile }: Props) {
   const [growthManagerOpen, setGrowthManagerOpen] = useState(false);
   const [growthEditorOpen, setGrowthEditorOpen] = useState(false);
   const [editingGrowthRecord, setEditingGrowthRecord] = useState<GrowthRecord | null>(null);
+  const growthNextModal = useRef<"editor" | "manager" | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLocal, setDeleteLocal] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -267,15 +268,20 @@ export function MenuScreen({ onOpenProfile }: Props) {
         weightUnit={settings.units.weight}
         heightUnit={settings.units.height}
         onClose={() => setGrowthManagerOpen(false)}
+        onDismiss={() => {
+          if (growthNextModal.current !== "editor") return;
+          growthNextModal.current = null;
+          setGrowthEditorOpen(true);
+        }}
         onAdd={() => {
-          setGrowthManagerOpen(false);
           setEditingGrowthRecord(null);
-          setTimeout(() => setGrowthEditorOpen(true), 120);
+          growthNextModal.current = "editor";
+          setGrowthManagerOpen(false);
         }}
         onEdit={(record) => {
-          setGrowthManagerOpen(false);
           setEditingGrowthRecord(record);
-          setTimeout(() => setGrowthEditorOpen(true), 120);
+          growthNextModal.current = "editor";
+          setGrowthManagerOpen(false);
         }}
         onDelete={deleteGrowthRecord}
       />
@@ -284,9 +290,14 @@ export function MenuScreen({ onOpenProfile }: Props) {
         visible={growthEditorOpen}
         record={editingGrowthRecord}
         onClose={() => {
+          growthNextModal.current = "manager";
           setGrowthEditorOpen(false);
           setEditingGrowthRecord(null);
-          setTimeout(() => setGrowthManagerOpen(true), 120);
+        }}
+        onDismiss={() => {
+          if (growthNextModal.current !== "manager") return;
+          growthNextModal.current = null;
+          setGrowthManagerOpen(true);
         }}
         onSave={(draft, editId) => {
           if (editId) updateGrowthRecord(editId, draft);

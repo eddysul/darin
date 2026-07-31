@@ -18,6 +18,7 @@ type Props = {
   initialSource?: GrowthRecordSource;
   initialMeasuredAt?: string;
   onClose: () => void;
+  onDismiss?: () => void;
   onSave: (draft: GrowthRecordDraft, editId?: string) => void;
 };
 
@@ -39,7 +40,7 @@ function UnitToggle<T extends string>({ value, options, onChange }: { value: T; 
   );
 }
 
-export function GrowthRecordModal({ visible, record, initialSource = "hospital", initialMeasuredAt, onClose, onSave }: Props) {
+export function GrowthRecordModal({ visible, record, initialSource = "hospital", initialMeasuredAt, onClose, onDismiss, onSave }: Props) {
   const { settings } = useAppSettings();
   const preferredWeightUnit: GrowthWeightUnit = settings.units.weight;
   const preferredLengthUnit: GrowthLengthUnit = settings.units.height === "inch" ? "in" : "cm";
@@ -52,20 +53,62 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
   const [headUnit, setHeadUnit] = useState<GrowthLengthUnit>(preferredLengthUnit);
   const [source, setSource] = useState<GrowthRecordSource>(initialSource);
   const [note, setNote] = useState("");
+  const [initialFormKey, setInitialFormKey] = useState("");
 
   useEffect(() => {
     if (!visible) return;
-    setMeasuredAt(record?.measuredAt ?? initialMeasuredAt ?? todayDate());
+    const nextMeasuredAt = record?.measuredAt ?? initialMeasuredAt ?? todayDate();
+    const nextWeight = record?.weightKg === undefined ? "" : weightFromKg(record.weightKg, preferredWeightUnit);
+    const nextHeight = record?.heightCm === undefined ? "" : lengthFromCm(record.heightCm, preferredLengthUnit);
+    const nextHead = record?.headCircumferenceCm === undefined ? "" : lengthFromCm(record.headCircumferenceCm, preferredLengthUnit);
+    const nextSource = record?.source ?? initialSource;
+    const nextNote = record?.note ?? "";
+    setMeasuredAt(nextMeasuredAt);
     // Supabase stores canonical kg/cm only; always reopen in the user's current display units.
     setWeightUnit(preferredWeightUnit);
     setHeightUnit(preferredLengthUnit);
     setHeadUnit(preferredLengthUnit);
-    setWeight(record?.weightKg === undefined ? "" : weightFromKg(record.weightKg, preferredWeightUnit));
-    setHeight(record?.heightCm === undefined ? "" : lengthFromCm(record.heightCm, preferredLengthUnit));
-    setHead(record?.headCircumferenceCm === undefined ? "" : lengthFromCm(record.headCircumferenceCm, preferredLengthUnit));
-    setSource(record?.source ?? initialSource);
-    setNote(record?.note ?? "");
+    setWeight(nextWeight);
+    setHeight(nextHeight);
+    setHead(nextHead);
+    setSource(nextSource);
+    setNote(nextNote);
+    setInitialFormKey(JSON.stringify({
+      measuredAt: nextMeasuredAt,
+      weight: nextWeight,
+      weightUnit: preferredWeightUnit,
+      height: nextHeight,
+      heightUnit: preferredLengthUnit,
+      head: nextHead,
+      headUnit: preferredLengthUnit,
+      source: nextSource,
+      note: nextNote,
+    }));
   }, [initialMeasuredAt, initialSource, preferredLengthUnit, preferredWeightUnit, record, visible]);
+
+  const formKey = JSON.stringify({
+    measuredAt,
+    weight,
+    weightUnit,
+    height,
+    heightUnit,
+    head,
+    headUnit,
+    source,
+    note,
+  });
+  const dirty = visible && initialFormKey !== "" && formKey !== initialFormKey;
+
+  const requestClose = () => {
+    if (!dirty) {
+      onClose();
+      return;
+    }
+    Alert.alert("변경사항을 취소할까요?", "저장하지 않은 성장 기록은 사라져요.", [
+      { text: "계속 편집", style: "cancel" },
+      { text: "변경사항 취소", style: "destructive", onPress: onClose },
+    ]);
+  };
 
   const changeWeightUnit = (next: GrowthWeightUnit) => {
     const canonical = weightToKg(weight, weightUnit);
@@ -117,8 +160,8 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessible={false}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={requestClose} onDismiss={onDismiss}>
+      <Pressable style={styles.backdrop} onPress={requestClose} accessible={false}>
         <Pressable style={styles.sheet} onPress={() => {}} accessible={false}>
           <View style={styles.handle} />
           <View style={styles.titleRow}>
@@ -150,7 +193,7 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
             <TextInput style={[styles.input, styles.noteInput]} value={note} onChangeText={setNote} multiline placeholder="검진 내용이나 측정 상황을 남겨보세요" placeholderTextColor={colors.faint} />
 
             <View style={styles.actions}>
-              <Pressable style={[styles.actionBtn, styles.cancelBtn]} onPress={onClose}><Text style={styles.cancelText}>취소</Text></Pressable>
+              <Pressable style={[styles.actionBtn, styles.cancelBtn]} onPress={requestClose}><Text style={styles.cancelText}>취소</Text></Pressable>
               <Pressable style={[styles.actionBtn, styles.saveBtn]} onPress={save}><Text style={styles.saveText}>저장</Text></Pressable>
             </View>
           </ScrollView>

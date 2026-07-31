@@ -22,6 +22,7 @@ import {
   type PreferredLanguage,
   type RelationshipToChild,
 } from "../../types/careSetup";
+import { NavigationHeader } from "../navigation/NavigationHeader";
 
 export type SettingsPage =
   | "account"
@@ -64,13 +65,25 @@ export function AppSettingsModal({
   const [email, setEmail] = useState("");
   const [language, setLanguage] = useState<PreferredLanguage>("ko");
   const [relationship, setRelationship] = useState<RelationshipToChild>("mom");
+  const [accountReady, setAccountReady] = useState(false);
+
+  const accountDirty = page === "account" && accountReady && (
+    name !== (careSetup.parent.parentName || profile.name) ||
+    email !== settings.account.email ||
+    language !== settings.account.language ||
+    relationship !== settings.account.relationship
+  );
 
   useEffect(() => {
-    if (page !== "account") return;
+    if (page !== "account") {
+      setAccountReady(false);
+      return;
+    }
     setName(careSetup.parent.parentName || profile.name);
     setEmail(settings.account.email);
     setLanguage(settings.account.language);
     setRelationship(settings.account.relationship);
+    setAccountReady(true);
   }, [
     careSetup.parent.parentName,
     page,
@@ -86,6 +99,17 @@ export function AppSettingsModal({
   );
 
   if (!page) return null;
+
+  const requestClose = () => {
+    if (accountDirty) {
+      Alert.alert("변경사항을 취소할까요?", "저장하지 않은 계정 설정은 사라져요.", [
+        { text: "계속 편집", style: "cancel" },
+        { text: "변경사항 취소", style: "destructive", onPress: onClose },
+      ]);
+      return;
+    }
+    onClose();
+  };
 
   const saveAccount = () => {
     const nextSetup = {
@@ -155,15 +179,15 @@ export function AppSettingsModal({
   };
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
+    <Modal visible animationType="slide" onRequestClose={requestClose}>
       <View style={styles.root}>
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
-          <Pressable onPress={onClose} style={styles.headerButton}>
-            <Text style={styles.headerButtonText}>닫기</Text>
-          </Pressable>
-          <Text style={styles.headerTitle}>{PAGE_TITLE[page]}</Text>
-          <View style={styles.headerButton} />
-        </View>
+        <NavigationHeader
+          title={PAGE_TITLE[page]}
+          onBack={page === "account" ? requestClose : onClose}
+          leftLabel={page === "account" ? "취소" : undefined}
+          rightLabel={page === "account" ? "저장" : undefined}
+          onRightPress={page === "account" ? saveAccount : undefined}
+        />
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 24, 36) }]}
           keyboardShouldPersistTaps="handled"
@@ -181,7 +205,7 @@ export function AppSettingsModal({
                   editable={settings.account.loginMethod !== "email"}
                 />
                 {settings.account.loginMethod === "email" ? (
-                  <Text style={styles.help}>로그인 이메일 변경은 별도 인증 절차가 필요해 현재 화면에서는 수정할 수 없어요.</Text>
+                  <Text style={[styles.help, styles.accountEmailHelp]}>로그인 이메일 변경은 별도 인증 절차가 필요해 현재 화면에서는 수정할 수 없어요.</Text>
                 ) : null}
                 <ChoiceRow
                   label="언어"
@@ -200,7 +224,6 @@ export function AppSettingsModal({
                 />
                 <InfoRow label="로그인 방식" value={loginMethodLabel(settings.account.loginMethod)} />
               </SettingsSection>
-              <PrimaryButton label="저장" onPress={saveAccount} />
             </>
           ) : null}
 
@@ -472,6 +495,7 @@ const styles = StyleSheet.create({
   stateButtonText: { color: colors.faint, fontSize: 10, fontWeight: "800" },
   stateButtonTextOn: { color: colors.text },
   help: { color: colors.muted, fontSize: 12.5, lineHeight: 19 },
+  accountEmailHelp: { paddingHorizontal: 14, paddingVertical: 10 },
   primaryButton: { minHeight: 50, borderRadius: 15, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
   primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   secondaryButton: { minHeight: 48, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },

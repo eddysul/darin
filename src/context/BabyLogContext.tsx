@@ -606,9 +606,12 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       const next = normalizeEntry(entry);
       setLogs((prev) => [...prev, next]);
       void syncCareLogCreate(next).then((remote) => {
-        if (!remote) return;
-        if (remote.id !== next.id) {
-          setLogs((prev) => prev.map((l) => (l.id === next.id ? remote : l)));
+        if (remote) {
+          setLogs((prev) => prev.map((log) => (log.id === next.id ? remote : log)));
+        } else if (isSupabaseConfigured()) {
+          // Server is authoritative when configured. Do not leave a record that
+          // appears saved locally but disappears on the next hydrate.
+          setLogs((prev) => prev.filter((log) => log.id !== next.id));
         }
       });
       return next;
@@ -622,12 +625,15 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       const nextEntries = entries.map(normalizeEntry);
       setLogs((prev) => [...prev, ...nextEntries]);
       void Promise.all(nextEntries.map((entry) => syncCareLogCreate(entry))).then((remotes) => {
+        const resultsByLocalId = new Map(
+          nextEntries.map((entry, index) => [entry.id, remotes[index]] as const),
+        );
         setLogs((prev) =>
-          prev.map((local) => {
-            const idx = nextEntries.findIndex((n) => n.id === local.id);
-            if (idx < 0) return local;
-            const remote = remotes[idx];
-            return remote && remote.id !== local.id ? remote : local;
+          prev.flatMap((local) => {
+            if (!resultsByLocalId.has(local.id)) return [local];
+            const remote = resultsByLocalId.get(local.id);
+            if (remote) return [remote];
+            return isSupabaseConfigured() ? [] : [local];
           }),
         );
       });
@@ -636,6 +642,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   );
 
   const updateLog = useCallback((id: string, entry: Omit<BabyLogEntry, "id">) => {
+    const previous = logs.find((log) => log.id === id);
     setLogs((prev) =>
       prev.map((l) =>
         l.id === id
@@ -649,13 +656,24 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
           : l,
       ),
     );
-    void syncCareLogUpdate(id, entry);
-  }, []);
+    void syncCareLogUpdate(id, entry).then((remote) => {
+      if (remote) {
+        setLogs((current) => current.map((log) => (log.id === id ? remote : log)));
+      } else if (isSupabaseConfigured() && previous) {
+        setLogs((current) => current.map((log) => (log.id === id ? previous : log)));
+      }
+    });
+  }, [logs]);
 
   const deleteLog = useCallback((id: string) => {
+    const previous = logs.find((log) => log.id === id);
     setLogs((prev) => prev.filter((l) => l.id !== id));
-    void syncCareLogDelete(id);
-  }, []);
+    void syncCareLogDelete(id).then((deleted) => {
+      if (!deleted && isSupabaseConfigured() && previous) {
+        setLogs((current) => current.some((log) => log.id === id) ? current : [...current, previous]);
+      }
+    });
+  }, [logs]);
 
   const addDiary = useCallback(
     (entry: Omit<DiaryEntry, "id" | "createdAt" | "updatedAt"> & { createdAt?: string; updatedAt?: string }) => {

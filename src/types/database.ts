@@ -114,7 +114,7 @@ export type GrowthRecordRow = {
   confidence: Json | null;
   original_text: Json | null;
   note: string | null;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -168,6 +168,14 @@ export type Database = {
       baby_permission: { Args: { p_baby_id: string }; Returns: PermissionRole };
       can_edit_care_logs: { Args: { p_baby_id: string }; Returns: boolean };
       can_edit_growth_records: { Args: { p_baby_id: string }; Returns: boolean };
+      care_log_creator_unchanged: {
+        Args: { p_id: string; p_created_by: string | null };
+        Returns: boolean;
+      };
+      growth_record_creator_unchanged: {
+        Args: { p_id: string; p_created_by: string | null };
+        Returns: boolean;
+      };
       create_baby_with_owner: {
         Args: {
           p_name: string;

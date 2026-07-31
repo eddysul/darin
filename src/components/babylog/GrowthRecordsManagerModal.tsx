@@ -12,6 +12,7 @@ type Props = {
   weightUnit: WeightUnit;
   heightUnit: HeightUnit;
   onClose: () => void;
+  onDismiss?: () => void;
   onAdd: () => void;
   onEdit: (record: GrowthRecord) => void;
   onDelete: (id: string) => void;
@@ -33,6 +34,7 @@ export function GrowthRecordsManagerModal({
   weightUnit,
   heightUnit,
   onClose,
+  onDismiss,
   onAdd,
   onEdit,
   onDelete,
@@ -52,7 +54,7 @@ export function GrowthRecordsManagerModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose} onDismiss={onDismiss}>
       <View style={styles.root}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
           <Pressable style={styles.headerSide} onPress={onClose}><Text style={styles.closeText}>닫기</Text></Pressable>
