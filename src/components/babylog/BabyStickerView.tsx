@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-na
 import type {
   BabySticker,
   StickerBorderStyle,
+  StickerCutoutMode,
   StickerFrameType,
   StickerShadowStyle,
   StickerSpeechBubbleType,
@@ -12,6 +13,7 @@ import { colors } from "../../theme";
 
 type VisualProps = {
   imageUri: string;
+  cutoutMode?: StickerCutoutMode;
   borderStyle?: StickerBorderStyle;
   shadowStyle?: StickerShadowStyle;
   speechBubbleType?: StickerSpeechBubbleType;
@@ -24,6 +26,7 @@ type VisualProps = {
 
 export function BabyStickerView({
   imageUri,
+  cutoutMode = "circular",
   borderStyle = "whiteThick",
   shadowStyle = "soft",
   speechBubbleType = "none",
@@ -38,6 +41,9 @@ export function BabyStickerView({
   const frame = frameStyleMap[frameType];
   const template = templateStyleMap[templateId];
   const label = typeof text === "string" ? text.trim() : "";
+  const isPerson = cutoutMode === "personCutout";
+  const shellRadius = isPerson ? 0 : size / 2;
+  const imageRadius = isPerson ? 0 : (size - 4) / 2;
 
   return (
     <View style={[styles.wrap, { width: size + 24 }, style]}>
@@ -72,13 +78,19 @@ export function BabyStickerView({
             styles.photoShell,
             border,
             shadow,
-            { width: size, height: size, borderRadius: size / 2 },
+            {
+              width: size,
+              height: size,
+              borderRadius: shellRadius,
+              overflow: isPerson ? "visible" : "hidden",
+              backgroundColor: isPerson && borderStyle === "none" ? "transparent" : undefined,
+            },
           ]}
         >
           <Image
             source={{ uri: imageUri }}
-            style={{ width: size - 4, height: size - 4, borderRadius: (size - 4) / 2 }}
-            contentFit="cover"
+            style={{ width: size - 4, height: size - 4, borderRadius: imageRadius }}
+            contentFit={isPerson ? "contain" : "cover"}
           />
         </View>
       </View>
@@ -104,6 +116,7 @@ export function BabyStickerFromModel({
   return (
     <BabyStickerView
       imageUri={sticker.finalStickerImageUri || sticker.cutoutImageUri || sticker.originalImageUri}
+      cutoutMode={sticker.cutoutMode ?? "circular"}
       borderStyle={sticker.borderStyle}
       shadowStyle={sticker.shadowStyle}
       speechBubbleType={sticker.speechBubbleType}

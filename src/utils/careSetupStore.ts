@@ -1,5 +1,5 @@
 import type { CareSetup } from "../types/careSetup";
-import { DEMO_CARE_SETUP } from "../types/careSetup";
+import { DEFAULT_CARE_SETUP } from "../types/careSetup";
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
 import { qaStorage } from "./qaStorage";
@@ -32,7 +32,7 @@ export function loadCareSetup(): CareSetup | null {
 }
 
 export function getEffectiveCareSetup(): CareSetup {
-  return memorySetup ?? DEMO_CARE_SETUP;
+  return memorySetup ?? DEFAULT_CARE_SETUP;
 }
 
 export async function saveCareSetup(setup: CareSetup): Promise<void> {

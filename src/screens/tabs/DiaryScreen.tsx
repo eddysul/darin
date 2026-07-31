@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image } from "expo-image";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { AppHeader } from "../../components/babylog/AppHeader";
@@ -94,6 +94,7 @@ export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
   const [editorInitialDiaryId, setEditorInitialDiaryId] = useState<string | null>(null);
   const [bookPreviewOpen, setBookPreviewOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const pendingGrowthBookEditorRef = useRef<{ diaryId: string | null } | null>(null);
   const [chipPressing, setChipPressing] = useState(false);
   const [reminder, setReminder] = useState<DiaryReminderSettings>({ ...DEFAULT_DIARY_REMINDER });
   const [draftMemory, setDraftMemory] = useState<DiaryDraft | null>(null);
@@ -139,6 +140,26 @@ export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
     setComposeFromPush(false);
     setComposeOpen(true);
   }, [allowAdd, me, myFamilyRole]);
+
+  const requestGrowthBookEditor = useCallback((diaryId: string | null) => {
+    if (Platform.OS === "ios") {
+      pendingGrowthBookEditorRef.current = { diaryId };
+      setVaultOpen(false);
+      return;
+    }
+
+    setEditorInitialDiaryId(diaryId);
+    setVaultOpen(false);
+    setEditorOpen(true);
+  }, []);
+
+  const openPendingGrowthBookEditor = useCallback(() => {
+    const request = pendingGrowthBookEditorRef.current;
+    if (!request) return;
+    pendingGrowthBookEditorRef.current = null;
+    setEditorInitialDiaryId(request.diaryId);
+    setEditorOpen(true);
+  }, []);
 
   const openEdit = useCallback((entry: DiaryEntry, fromPush = false) => {
     if (!canEditLog(myFamilyRole, entry.createdBy, me)) return;
@@ -483,22 +504,15 @@ export function DiaryScreen({ onOpenProfile, onOpenConsult }: Props) {
         entries={diaryEntries}
         edit={growthBookEdit}
         onClose={() => setVaultOpen(false)}
-        onOpenEditor={() => {
-          setEditorInitialDiaryId(null);
-          setVaultOpen(false);
-          setEditorOpen(true);
-        }}
+        onDismiss={openPendingGrowthBookEditor}
+        onOpenEditor={() => requestGrowthBookEditor(null)}
         onRemove={(id) => {
           const entry = diaryEntries.find((diary) => diary.id === id);
           if (entry && canEditLog(myFamilyRole, entry.createdBy, me)) {
             updateDiary(id, { includedInGrowthBook: false });
           }
         }}
-        onOpenPage={(entry) => {
-          setEditorInitialDiaryId(entry.id);
-          setVaultOpen(false);
-          setEditorOpen(true);
-        }}
+        onOpenPage={(entry) => requestGrowthBookEditor(entry.id)}
         onGoToDiary={() => setVaultOpen(false)}
       />
 

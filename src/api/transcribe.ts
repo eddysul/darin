@@ -1,6 +1,7 @@
 import { TRANSCRIBE_API_URL } from "../config/api";
 import type { TranscribeResult } from "../types/transcribe";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { getAIRequestHeaders } from "./aiAuth";
 
 function guessMimeType(uri: string) {
   const lower = uri.toLowerCase();
@@ -18,6 +19,7 @@ function guessFileName(uri: string) {
 }
 
 export async function transcribeRecording(uri: string): Promise<TranscribeResult> {
+  const authHeaders = await getAIRequestHeaders();
   const formData = new FormData();
   formData.append("file", {
     uri,
@@ -32,6 +34,7 @@ export async function transcribeRecording(uri: string): Promise<TranscribeResult
       body: formData,
       headers: {
         Accept: "application/json",
+        ...authHeaders,
       },
     },
     90_000,

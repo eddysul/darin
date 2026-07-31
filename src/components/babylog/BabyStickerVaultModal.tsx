@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { BabySticker, BabyStickerDraft } from "../../types/babySticker";
+import type { BabySticker, BabyStickerDraft, StickerCutoutMode } from "../../types/babySticker";
 import {
   STICKER_BORDER_OPTIONS,
   STICKER_BUBBLE_OPTIONS,
@@ -23,7 +23,11 @@ import {
   defaultStickerDraft,
 } from "../../types/babySticker";
 import { persistStickerAsset, deleteStickerAssets } from "../../utils/babyStickerAssets";
-import { removeBackground } from "../../utils/babyStickerCutout";
+import {
+  STICKER_CUTOUT_MODE_OPTIONS,
+  createStickerCutout,
+  isPersonCutoutSupported,
+} from "../../utils/babyStickerCutout";
 import { createId } from "../../utils/id";
 import { colors, radius } from "../../theme";
 import { EmptyState } from "../states/FeedbackStates";
@@ -67,6 +71,8 @@ export function BabyStickerVaultModal({
   const [pendingOriginal, setPendingOriginal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [seedPhrase, setSeedPhrase] = useState<string | null>(null);
+  const [cutoutMode, setCutoutMode] = useState<StickerCutoutMode>("circular");
+  const personCutoutSupported = isPersonCutoutSupported();
 
   useEffect(() => {
     if (!visible) {
@@ -76,6 +82,7 @@ export function BabyStickerVaultModal({
       setPendingOriginal(null);
       setSaving(false);
       setSeedPhrase(null);
+      setCutoutMode("circular");
     }
   }, [visible]);
 
@@ -87,7 +94,9 @@ export function BabyStickerVaultModal({
       : mode === "pickPhoto"
         ? "사진 선택"
         : mode === "cutting"
-          ? "배경 제거"
+          ? cutoutMode === "personCutout"
+            ? "인물 컷아웃"
+            : "둥근 스티커"
           : mode === "decorate"
             ? "스티커 꾸미기"
             : "스티커 저장";
@@ -97,25 +106,35 @@ export function BabyStickerVaultModal({
     setCutoutError(false);
     setPendingOriginal(null);
     setSeedPhrase(phrase ?? null);
+    setCutoutMode("circular");
     setMode("pickPhoto");
   };
 
-  const runCutout = async (originalUri: string) => {
+  const applyDraftFromCutout = (originalUri: string, cutoutUri: string, modeUsed: StickerCutoutMode) => {
+    const next = defaultStickerDraft(originalUri, cutoutUri, modeUsed);
+    if (seedPhrase) {
+      next.text = seedPhrase;
+      next.label = seedPhrase;
+    }
+    setDraft(next);
+    setMode("decorate");
+  };
+
+  const runCutout = async (originalUri: string, preferredMode: StickerCutoutMode = cutoutMode) => {
     setPendingOriginal(originalUri);
     setMode("cutting");
     setCutoutError(false);
     try {
-      const result = await removeBackground(originalUri);
-      const next = defaultStickerDraft(originalUri, result.uri);
-      if (seedPhrase) {
-        next.text = seedPhrase;
-        next.label = seedPhrase;
-      }
-      setDraft(next);
-      setMode("decorate");
+      const result = await createStickerCutout(originalUri, preferredMode);
+      applyDraftFromCutout(originalUri, result.uri, result.mode);
     } catch {
       setCutoutError(true);
     }
+  };
+
+  const continueAsCircular = () => {
+    if (!pendingOriginal) return;
+    void runCutout(pendingOriginal, "circular");
   };
 
   const pickFromLibrary = async () => {
@@ -159,6 +178,7 @@ export function BabyStickerVaultModal({
         faceImageUri: cutoutImageUri,
         cutoutImageUri,
         finalStickerImageUri,
+        cutoutMode: draft.cutoutMode,
         stickerType: draft.stickerType,
         templateId: draft.templateId,
         label,
@@ -229,7 +249,29 @@ export function BabyStickerVaultModal({
 
         {mode === "pickPhoto" ? (
           <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}>
-            <Text style={styles.hint}>아기 얼굴이 잘 보이는 사진을 골라 주세요. 얼굴은 둥근 crop으로 안전하게 표시됩니다.</Text>
+            <Text style={styles.label}>스티커 만들기 방식</Text>
+            <View style={styles.modeRow}>
+              {STICKER_CUTOUT_MODE_OPTIONS.filter((option) => !option.iosOnly || personCutoutSupported).map(
+                (option) => {
+                  const selected = cutoutMode === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      style={[styles.modeCard, selected && styles.modeCardActive]}
+                      onPress={() => setCutoutMode(option.value)}
+                    >
+                      <Text style={[styles.modeTitle, selected && styles.modeTitleActive]}>{option.label}</Text>
+                      <Text style={styles.modeHint}>{option.hint}</Text>
+                    </Pressable>
+                  );
+                },
+              )}
+            </View>
+            {!personCutoutSupported ? (
+              <Text style={styles.hint}>인물 컷아웃은 iOS에서만 사용할 수 있어요. 지금은 둥근 스티커로 만들 수 있어요.</Text>
+            ) : (
+              <Text style={styles.hint}>사진은 기기 안에서만 처리되며 서버로 올라가지 않아요.</Text>
+            )}
             <Pressable style={styles.primaryBtn} onPress={() => void pickFromLibrary()}>
               <Text style={styles.primaryBtnText}>갤러리에서 선택</Text>
             </Pressable>
@@ -243,37 +285,27 @@ export function BabyStickerVaultModal({
           <View style={[styles.content, styles.centerBlock, { paddingBottom: insets.bottom + 28 }]}>
             {cutoutError ? (
               <>
-                <Text style={styles.errorTitle}>배경 제거에 실패했어요.</Text>
-                <Text style={styles.hint}>다시 시도하거나 원본 사진의 얼굴을 둥글게 crop하는 fallback으로 계속할 수 있어요.</Text>
+                <Text style={styles.errorTitle}>스티커 만들기에 실패했어요.</Text>
+                <Text style={styles.hint}>다시 시도하거나 둥근 스티커 방식으로 계속할 수 있어요.</Text>
                 <Pressable
                   style={styles.primaryBtn}
-                  onPress={() => pendingOriginal && void runCutout(pendingOriginal)}
+                  onPress={() => pendingOriginal && void runCutout(pendingOriginal, cutoutMode)}
                 >
                   <Text style={styles.primaryBtnText}>다시 시도</Text>
                 </Pressable>
-                <Pressable
-                  style={styles.secondaryBtn}
-                  onPress={() => {
-                    if (!pendingOriginal) return;
-                    const next = defaultStickerDraft(pendingOriginal, pendingOriginal);
-                    if (seedPhrase) {
-                      next.text = seedPhrase;
-                      next.label = seedPhrase;
-                    }
-                    setDraft(next);
-                    setMode("decorate");
-                  }}
-                >
-                  <Text style={styles.secondaryBtnText}>둥근 얼굴 crop으로 계속</Text>
+                <Pressable style={styles.secondaryBtn} onPress={continueAsCircular}>
+                  <Text style={styles.secondaryBtnText}>둥근 스티커로 계속</Text>
                 </Pressable>
               </>
             ) : (
               <>
                 <ActivityIndicator color={colors.amber} size="large" />
                 <Text style={[styles.hint, { marginTop: 16, textAlign: "center" }]}>
-                  배경을 지우는 중이에요...
+                  {cutoutMode === "personCutout"
+                    ? "기기에서 인물을 찾아 배경을 지우는 중이에요..."
+                    : "둥근 스티커를 만드는 중이에요..."}
                 </Text>
-                <Text style={styles.mockNote}>개발용 mock 누끼 · 이후 서버 프록시로 교체 가능</Text>
+                <Text style={styles.mockNote}>온디바이스 처리 · 사진은 서버로 전송되지 않아요</Text>
               </>
             )}
           </View>
@@ -296,6 +328,7 @@ export function BabyStickerVaultModal({
             <View style={styles.previewCenter}>
               <BabyStickerView
                 imageUri={draft.cutoutImageUri || draft.originalImageUri}
+                cutoutMode={draft.cutoutMode}
                 borderStyle={draft.borderStyle}
                 shadowStyle={draft.shadowStyle}
                 speechBubbleType={draft.speechBubbleType}
@@ -379,7 +412,9 @@ function VaultHome({
               onPress={() => (pickMode ? onPick(sticker) : undefined)}
               onLongPress={() => onDelete(sticker)}
             >
-              <BabyStickerFromModel sticker={sticker} size={88} />
+              <View style={styles.cardStickerPreview}>
+                <BabyStickerFromModel sticker={sticker} size={88} />
+              </View>
               <Text style={styles.cardLabel} numberOfLines={2}>
                 {sticker.label}
               </Text>
@@ -430,6 +465,7 @@ function DecorateStep({
       <View style={styles.previewCenter}>
         <BabyStickerView
           imageUri={draft.cutoutImageUri || draft.originalImageUri}
+          cutoutMode={draft.cutoutMode}
           borderStyle={draft.borderStyle}
           shadowStyle={draft.shadowStyle}
           speechBubbleType={draft.speechBubbleType}
@@ -564,6 +600,19 @@ const styles = StyleSheet.create({
   centerBlock: { flex: 1, justifyContent: "center" },
   hint: { fontSize: 13, color: colors.muted, lineHeight: 19, marginBottom: 14 },
   mockNote: { marginTop: 10, fontSize: 11, color: colors.faint, textAlign: "center" },
+  modeRow: { gap: 10, marginBottom: 12 },
+  modeCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  modeCardActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  modeTitle: { fontSize: 14, fontWeight: "800", color: colors.text, marginBottom: 4 },
+  modeTitleActive: { color: colors.amberDark },
+  modeHint: { fontSize: 12, color: colors.muted, lineHeight: 17 },
   errorTitle: { fontSize: 16, fontWeight: "800", color: colors.text, marginBottom: 8 },
   sectionTitle: { fontSize: 16, fontWeight: "800", color: colors.text, marginBottom: 10, marginTop: 8 },
   primaryBtn: {
@@ -595,8 +644,17 @@ const styles = StyleSheet.create({
     padding: 10,
     alignItems: "center",
   },
-  cardLabel: { marginTop: 8, fontSize: 12, fontWeight: "700", color: colors.text, textAlign: "center" },
-  deleteLink: { marginTop: 6, fontSize: 11, fontWeight: "700", color: colors.dangerText },
+  cardStickerPreview: { paddingBottom: 16 },
+  cardLabel: {
+    marginTop: 8,
+    minHeight: 17,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+    color: colors.text,
+    textAlign: "center",
+  },
+  deleteLink: { marginTop: 8, fontSize: 11, lineHeight: 16, fontWeight: "700", color: colors.dangerText },
   pickHint: { marginTop: 6, fontSize: 11, fontWeight: "700", color: colors.amber },
   phraseRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   phraseChip: {

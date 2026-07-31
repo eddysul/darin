@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { User } from "@supabase/supabase-js";
 import {
   EmailAuthForm,
@@ -10,6 +10,7 @@ import {
   type SettingsPage,
 } from "../../components/settings/AppSettingsModal";
 import { authProviderFlags } from "../../config/authProviders";
+import { AuthRepository } from "../../repositories/AuthRepository";
 import { colors } from "../../theme";
 import { OnboardingShell } from "./OnboardingShell";
 
@@ -18,7 +19,7 @@ type Props = {
   onAuthenticated: (payload: {
     name?: string;
     email?: string;
-    provider: "email";
+    provider: "email" | "google" | "apple";
     user?: User;
   }) => void | Promise<void>;
 };
@@ -28,7 +29,61 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
   const [authMode, setAuthMode] = useState<EmailAuthMode>(
     recoveryMode ? "reset-password" : "login",
   );
+  const [socialBusy, setSocialBusy] = useState<"apple" | "google" | null>(null);
+  const [socialError, setSocialError] = useState("");
   const hasSocialLogin = authProviderFlags.apple.visible || authProviderFlags.google.visible;
+
+  const continueWithApple = async () => {
+    if (socialBusy) return;
+    setSocialError("");
+    setSocialBusy("apple");
+    try {
+      const result = await AuthRepository.signInWithApple();
+      if (!result) return;
+      await onAuthenticated({
+        provider: "apple",
+        user: result.user,
+        email: result.email,
+        name: result.name,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Apple 로그인에 실패했어요.";
+      setSocialError(
+        /provider is not enabled|unsupported provider/i.test(message)
+          ? "Supabase에서 Apple 로그인을 먼저 활성화해주세요."
+          : message,
+      );
+    } finally {
+      setSocialBusy(null);
+    }
+  };
+
+  const continueWithGoogle = async () => {
+    if (socialBusy) return;
+    setSocialError("");
+    setSocialBusy("google");
+    try {
+      const result = await AuthRepository.signInWithGoogle();
+      if (!result) return;
+      await onAuthenticated({
+        provider: "google",
+        user: result.user,
+        email: result.email,
+        name: result.name,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Google 로그인에 실패했어요.";
+      setSocialError(
+        /provider is not enabled|unsupported provider/i.test(message)
+          ? "Supabase에서 Google 로그인을 먼저 활성화해주세요."
+          : /manual linking/i.test(message)
+            ? "Supabase의 Allow manual linking 설정을 활성화해주세요."
+            : message,
+      );
+    } finally {
+      setSocialBusy(null);
+    }
+  };
 
   return (
     <>
@@ -66,7 +121,9 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
                     <SocialLoginButton
                       label="Apple로 계속하기"
                       symbol=""
-                      enabled={authProviderFlags.apple.enabled}
+                      enabled={authProviderFlags.apple.enabled && Platform.OS === "ios"}
+                      busy={socialBusy === "apple"}
+                      onPress={() => void continueWithApple()}
                     />
                   ) : null}
                   {authProviderFlags.google.visible ? (
@@ -74,9 +131,12 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
                       label="Google로 계속하기"
                       symbol="G"
                       enabled={authProviderFlags.google.enabled}
+                      busy={socialBusy === "google"}
+                      onPress={() => void continueWithGoogle()}
                     />
                   ) : null}
                 </View>
+                {socialError ? <Text style={styles.socialError}>{socialError}</Text> : null}
               </>
             ) : null}
 
@@ -104,22 +164,29 @@ function SocialLoginButton({
   label,
   symbol,
   enabled,
+  busy = false,
+  onPress,
 }: {
   label: string;
   symbol: string;
   enabled: boolean;
+  busy?: boolean;
+  onPress?: () => void;
 }) {
   return (
     <Pressable
       style={[styles.socialButton, !enabled && styles.socialButtonDisabled]}
-      disabled={!enabled}
+      disabled={!enabled || busy}
+      onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: !enabled }}
+      accessibilityState={{ disabled: !enabled || busy, busy }}
     >
       <Text style={styles.socialSymbol}>{symbol}</Text>
       <Text style={styles.socialLabel}>{label}</Text>
-      <View style={styles.trailingSpacer} />
+      <View style={styles.trailingSpacer}>
+        {busy ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+      </View>
     </Pressable>
   );
 }
@@ -143,7 +210,8 @@ const styles = StyleSheet.create({
   socialButtonDisabled: { opacity: 0.58 },
   socialSymbol: { width: 28, color: colors.text, fontSize: 18, fontWeight: "800" },
   socialLabel: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800", textAlign: "center" },
-  trailingSpacer: { width: 28 },
+  trailingSpacer: { width: 28, alignItems: "center", justifyContent: "center" },
+  socialError: { color: colors.dangerText, fontSize: 12, lineHeight: 17, textAlign: "center", marginTop: 8 },
   legalRow: {
     flexDirection: "row",
     flexWrap: "wrap",

@@ -128,7 +128,15 @@ function RootApp() {
   useEffect(() => {
     let active = true;
     void AuthRepository.getSession()
-      .then((session) => {
+      .then(async (session) => {
+        if (session) {
+          try {
+            const babies = await BabyRepository.listMyBabies();
+            if (babies.length === 0) await resetCareSetup();
+          } catch {
+            // Keep the local cache on transient network/RLS failures.
+          }
+        }
         if (active) setHasAuthSession(Boolean(session));
       })
       .finally(() => {
@@ -156,7 +164,7 @@ function RootApp() {
       active = false;
       subscription.remove();
     };
-  }, []);
+  }, [resetCareSetup]);
 
   const applyParentSetup = useCallback(
     (setup: CareSetup) => {
@@ -239,7 +247,7 @@ function RootApp() {
     setPhase("auth");
   }, []);
 
-  const handleAuthenticated = useCallback(async (payload: { name?: string; email?: string; provider: string; user?: { id: string } }) => {
+  const handleAuthenticated = useCallback(async (payload: { name?: string; email?: string; provider: "email" | "google" | "apple"; user?: { id: string } }) => {
     const name = payload.name?.trim() || "";
     setHasAuthSession(true);
     setAuthRecovery(false);
@@ -251,10 +259,13 @@ function RootApp() {
         role: "parent",
       });
     }
-    if (payload.provider === "email" && payload.email) {
+    if (
+      (payload.provider === "email" || payload.provider === "google" || payload.provider === "apple") &&
+      payload.email
+    ) {
       setSettings((current) => ({
         ...current,
-        account: { ...current.account, email: payload.email!, loginMethod: "email" },
+        account: { ...current.account, email: payload.email!, loginMethod: payload.provider },
       }));
     }
     const babies = await BabyRepository.listMyBabies();

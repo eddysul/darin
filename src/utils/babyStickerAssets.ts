@@ -9,7 +9,7 @@ export async function persistStickerAsset(
 ): Promise<string> {
   const dir = `${FileSystem.documentDirectory}stickers/${babyId}/`;
   await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => undefined);
-  const ext = guessExt(sourceUri);
+  const ext = guessExt(sourceUri, kind);
   const dest = `${dir}${stickerId}-${kind}${ext}`;
   try {
     const info = await FileSystem.getInfoAsync(sourceUri);
@@ -32,8 +32,10 @@ export async function deleteStickerAssets(uris: Array<string | null | undefined>
   }
 }
 
-function guessExt(uri: string): string {
+function guessExt(uri: string, kind?: "original" | "cutout" | "final"): string {
   const match = uri.match(/\.(jpg|jpeg|png|webp|heic)(\?|$)/i);
-  if (!match) return ".jpg";
-  return `.${match[1].toLowerCase().replace("jpeg", "jpg")}`;
+  if (match) return `.${match[1].toLowerCase().replace("jpeg", "jpg")}`;
+  // Cutouts are transparent PNGs when produced on-device.
+  if (kind === "cutout" || kind === "final") return ".png";
+  return ".jpg";
 }

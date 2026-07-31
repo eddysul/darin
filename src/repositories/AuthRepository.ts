@@ -1,9 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Session, User } from "@supabase/supabase-js";
-import * as ExpoLinking from "expo-linking";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as WebBrowser from "expo-web-browser";
 import { getSupabase, isSupabaseConfigured, requireSupabase } from "../lib/supabase";
 import { createId } from "../utils/id";
 import { STORAGE_KEYS } from "../utils/storageKeys";
+
+WebBrowser.maybeCompleteAuthSession();
 
 type DeviceAuth = { email: string; password: string };
 type PendingEmailAuth = { email: string; flow: "anonymous_upgrade" | "signup" };
@@ -16,10 +19,10 @@ export type EmailAuthResult = {
 };
 
 function authRedirectUrl(path: "callback" | "reset-password"): string {
-  // Expo Go uses exp://host/--/... while development/production builds use
-  // the `knanny` scheme configured in app.json. Generate the URL at runtime
-  // so email links return to whichever client initiated the auth request.
-  return ExpoLinking.createURL(`auth/${path}`);
+  // TestFlight/standalone builds do not always expose an Expo manifest to
+  // expo-linking. The native URL scheme is part of Info.plist, so use it
+  // directly instead of asking expo-linking to infer it at runtime.
+  return `knanny://auth/${path}`;
 }
 
 function authRedirectPath(url: URL): "/auth/callback" | "/auth/reset-password" | null {
@@ -79,6 +82,12 @@ function isAnonymousUser(user: User | null | undefined): boolean {
 function isEmailConfirmed(user: User | null | undefined): boolean {
   if (!user) return false;
   return Boolean(user.email_confirmed_at);
+}
+
+function socialDisplayName(user: User): string | undefined {
+  const metadata = user.user_metadata;
+  const value = metadata?.full_name ?? metadata?.name ?? metadata?.display_name;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 async function anonymousHasBabyMembership(): Promise<boolean> {
@@ -262,6 +271,136 @@ export const AuthRepository = {
     if (!data.session) throw new Error("로그인 세션을 만들지 못했어요.");
     await Promise.all([clearDeviceAuth(), clearPendingEmailAuth()]);
     return data.session;
+  },
+
+  /**
+   * Google OAuth for Expo native/web. Existing anonymous users are linked in
+   * place so baby membership and every RLS-owned record keep the same auth.uid().
+   */
+  async signInWithGoogle(): Promise<{
+    user: User;
+    email: string;
+    name?: string;
+    linkedAnonymousUser: boolean;
+  } | null> {
+    const sb = requireSupabase();
+    const previousSession = await this.getSession();
+    const linkAnonymous = Boolean(previousSession && isAnonymousUser(previousSession.user));
+    const redirectTo = authRedirectUrl("callback");
+    const credentials = {
+      provider: "google" as const,
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true,
+        queryParams: { prompt: "select_account" },
+      },
+    };
+    const oauth = linkAnonymous
+      ? await sb.auth.linkIdentity(credentials)
+      : await sb.auth.signInWithOAuth(credentials);
+    if (oauth.error) throw oauth.error;
+    if (!oauth.data.url) throw new Error("Google 로그인 주소를 만들지 못했어요.");
+
+    const browserResult = await WebBrowser.openAuthSessionAsync(oauth.data.url, redirectTo);
+    if (browserResult.type !== "success" || !("url" in browserResult) || !browserResult.url) {
+      return null;
+    }
+    await this.handleAuthUrl(browserResult.url);
+    const session = await this.getSession();
+    if (!session?.user) throw new Error("Google 로그인 세션을 만들지 못했어요.");
+
+    if (linkAnonymous && previousSession && session.user.id !== previousSession.user.id) {
+      await sb.auth.setSession({
+        access_token: previousSession.access_token,
+        refresh_token: previousSession.refresh_token,
+      });
+      throw new Error("기존 기록 계정과 Google 계정을 안전하게 연결하지 못했어요.");
+    }
+    if (linkAnonymous) {
+      const { data: identities, error: identitiesError } = await sb.auth.getUserIdentities();
+      if (identitiesError) throw identitiesError;
+      if (!identities.identities.some((identity) => identity.provider === "google")) {
+        throw new Error("Google 계정 연결 완료를 확인하지 못했어요. 다시 시도해주세요.");
+      }
+    }
+
+    await Promise.all([clearDeviceAuth(), clearPendingEmailAuth()]);
+    return {
+      user: session.user,
+      email: session.user.email ?? "",
+      name: socialDisplayName(session.user),
+      linkedAnonymousUser: linkAnonymous,
+    };
+  },
+
+  /** Native Sign in with Apple followed by Supabase ID-token authentication. */
+  async signInWithApple(): Promise<{
+    user: User;
+    email: string;
+    name?: string;
+  } | null> {
+    const available = await AppleAuthentication.isAvailableAsync();
+    if (!available) throw new Error("이 기기에서는 Apple 로그인을 사용할 수 없어요.");
+
+    const previousSession = await this.getSession();
+    if (
+      previousSession &&
+      isAnonymousUser(previousSession.user) &&
+      (await anonymousHasBabyMembership())
+    ) {
+      throw new Error(
+        "이 기기의 익명 기록을 먼저 이메일 계정에 연결해주세요. Apple 로그인으로는 기존 기록을 안전하게 합칠 수 없어요.",
+      );
+    }
+
+    let credential: AppleAuthentication.AppleAuthenticationCredential;
+    try {
+      credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        (error as Error & { code?: string }).code === "ERR_REQUEST_CANCELED"
+      ) {
+        return null;
+      }
+      throw error;
+    }
+
+    if (!credential.identityToken) {
+      throw new Error("Apple 인증 토큰을 받지 못했어요. 다시 시도해주세요.");
+    }
+
+    const sb = requireSupabase();
+    const { data, error } = await sb.auth.signInWithIdToken({
+      provider: "apple",
+      token: credential.identityToken,
+    });
+    if (error) throw error;
+    if (!data.user || !data.session) throw new Error("Apple 로그인 세션을 만들지 못했어요.");
+
+    const fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+      .filter((part): part is string => Boolean(part?.trim()))
+      .join(" ")
+      .trim();
+    let user = data.user;
+    if (fullName && !socialDisplayName(user)) {
+      const updated = await sb.auth.updateUser({ data: { display_name: fullName } });
+      if (updated.error) throw updated.error;
+      user = updated.data.user;
+    }
+
+    await Promise.all([clearDeviceAuth(), clearPendingEmailAuth()]);
+    return {
+      user,
+      email: user.email ?? credential.email ?? "",
+      name: socialDisplayName(user) ?? (fullName || undefined),
+    };
   },
 
   async sendPasswordReset(emailInput: string): Promise<void> {

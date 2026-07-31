@@ -1,0 +1,14 @@
+{
+  "name": "person-cutout",
+  "version": "1.0.0",
+  "private": true,
+  "description": "On-device person segmentation cutout for Darin stickers (iOS Vision)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {},
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

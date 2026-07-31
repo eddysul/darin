@@ -5,8 +5,8 @@
  * - EXPO_PUBLIC_SHOW_*_LOGIN=false 로만 숨길 수 있다.
  * - Flip the implementation guard only when the corresponding flow is wired.
  */
-const APPLE_LOGIN_IMPLEMENTED = false;
-const GOOGLE_LOGIN_IMPLEMENTED = false;
+const APPLE_LOGIN_IMPLEMENTED = true;
+const GOOGLE_LOGIN_IMPLEMENTED = true;
 
 function providerFlag(implemented: boolean, enableEnv?: string, showEnv?: string) {
   const enabled = implemented && enableEnv === "true";

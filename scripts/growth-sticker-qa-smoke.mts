@@ -125,6 +125,7 @@ const sticker: BabySticker = {
   faceImageUri: "cutout.png",
   cutoutImageUri: "cutout.png",
   finalStickerImageUri: "final.png",
+  cutoutMode: "circular",
   stickerType: "faceTemplate",
   templateId: "milestone",
   label: "QA 스티커",
@@ -236,6 +237,11 @@ assert.equal(stickerDraft.originalImageUri, "original.png");
 assert.equal(stickerDraft.cutoutImageUri, "cutout.png");
 assert.equal(stickerDraft.faceImageUri, "cutout.png");
 assert.equal(stickerDraft.templateId, "portrait");
+assert.equal(stickerDraft.cutoutMode, "circular");
+assert.equal(stickerDraft.borderStyle, "whiteThick");
+const personStickerDraft = defaultStickerDraft("original.png", "person.png", "personCutout");
+assert.equal(personStickerDraft.cutoutMode, "personCutout");
+assert.equal(personStickerDraft.borderStyle, "none");
 
 const me: FamilyMember = {
   id: "me",

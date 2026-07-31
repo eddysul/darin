@@ -26,6 +26,7 @@ type Props = {
   entries: DiaryEntry[];
   edit?: GrowthBookEdit | null;
   onClose: () => void;
+  onDismiss?: () => void;
   onRemove: (id: string) => void;
   onOpenPage?: (entry: DiaryEntry) => void;
   onOpenEditor?: () => void;
@@ -38,6 +39,7 @@ export function GrowthBookVaultModal({
   entries,
   edit,
   onClose,
+  onDismiss,
   onRemove,
   onOpenPage,
   onOpenEditor,
@@ -80,7 +82,13 @@ export function GrowthBookVaultModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+      onDismiss={onDismiss}
+    >
       <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.header}>
           <Pressable onPress={onClose} hitSlop={10}>

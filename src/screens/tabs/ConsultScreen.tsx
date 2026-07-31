@@ -30,7 +30,7 @@ const QUICK_CHIPS = [
   "오늘 특이한 점 있어?",
 ];
 
-const HAS_OPENAI_KEY = Boolean((process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? "").trim());
+const HAS_AI_SERVER = Boolean((process.env.EXPO_PUBLIC_TRANSCRIBE_URL ?? "").trim());
 
 type ConsultRouteParams = {
   initialQuestion?: string;
@@ -192,9 +192,9 @@ export function ConsultScreen({ onOpenProfile }: Props) {
         <Text style={styles.bannerTap}>탭하여 참고 정보 보기</Text>
       </Pressable>
 
-      {!HAS_OPENAI_KEY && (
+      {!HAS_AI_SERVER && (
         <View style={styles.warnBanner}>
-          <Text style={styles.warnText}>OpenAI 키가 없어요. `.env`에 EXPO_PUBLIC_OPENAI_API_KEY를 넣어 주세요.</Text>
+          <Text style={styles.warnText}>AI 서버가 없어요. `.env`에 EXPO_PUBLIC_TRANSCRIBE_URL을 넣어 주세요.</Text>
         </View>
       )}
 

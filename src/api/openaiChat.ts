@@ -1,4 +1,7 @@
-const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? "";
+import { TRANSCRIBE_API_URL } from "../config/api";
+import { getAIRequestHeaders } from "./aiAuth";
+
+const CHAT_API_URL = `${TRANSCRIBE_API_URL}/chat`;
 
 export type OpenAIMessage = {
   role: "system" | "user" | "assistant";
@@ -20,20 +23,17 @@ export async function callOpenAI(
   systemPrompt: string,
   maxTokens = 300,
 ): Promise<string> {
-  if (!OPENAI_API_KEY.trim()) {
-    throw new OpenAIChatError("Missing EXPO_PUBLIC_OPENAI_API_KEY", "missing_api_key");
-  }
-
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+  const authHeaders = await getAIRequestHeaders();
+  const res = await fetch(CHAT_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      ...authHeaders,
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [{ role: "system", content: systemPrompt }, ...history],
-      max_tokens: maxTokens,
+      history,
+      systemPrompt,
+      maxTokens,
     }),
   });
 
@@ -42,6 +42,10 @@ export async function callOpenAI(
     throw new OpenAIChatError(`OpenAI error ${res.status}: ${detail.slice(0, 120)}`, "api_error");
   }
 
-  const data = (await res.json()) as { choices: { message: { content: string } }[] };
-  return data.choices[0].message.content.trim();
+  const data = (await res.json()) as { reply?: string; content?: string };
+  const reply = data.reply ?? data.content;
+  if (!reply?.trim()) {
+    throw new OpenAIChatError("AI server returned an empty response", "api_error");
+  }
+  return reply.trim();
 }

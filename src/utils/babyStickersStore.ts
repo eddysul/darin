@@ -27,6 +27,7 @@ function normalize(raw: unknown): BabySticker[] {
     cutoutImageUri: s.cutoutImageUri || s.originalImageUri,
     faceImageUri: s.faceImageUri || s.cutoutImageUri || s.originalImageUri,
     finalStickerImageUri: s.finalStickerImageUri || s.cutoutImageUri || s.originalImageUri,
+    cutoutMode: s.cutoutMode === "personCutout" ? "personCutout" : "circular",
     stickerType: s.stickerType ?? "faceTemplate",
     templateId: s.templateId ?? "portrait",
     label: s.label || "내 아기 스티커",

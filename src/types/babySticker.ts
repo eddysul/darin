@@ -5,6 +5,8 @@ export type StickerShadowStyle = "none" | "soft" | "paper";
 export type StickerSpeechBubbleType = "none" | "round" | "small" | "ribbon";
 export type StickerFrameType = "none" | "star" | "heart" | "ribbon" | "growthBook";
 export type StickerType = "faceCrop" | "faceTemplate";
+/** How the base photo was turned into a sticker image. */
+export type StickerCutoutMode = "circular" | "personCutout";
 export type StickerTemplateId =
   | "portrait"
   | "sleepy"
@@ -38,6 +40,8 @@ export type BabySticker = {
   faceImageUri: string;
   cutoutImageUri: string;
   finalStickerImageUri: string;
+  /** circular = round crop; personCutout = Vision person segmentation (iOS). */
+  cutoutMode: StickerCutoutMode;
   stickerType: StickerType;
   templateId: StickerTemplateId;
   label: string;
@@ -55,6 +59,7 @@ export type BabyStickerDraft = {
   originalImageUri: string;
   faceImageUri: string;
   cutoutImageUri: string;
+  cutoutMode: StickerCutoutMode;
   stickerType: StickerType;
   templateId: StickerTemplateId;
   borderStyle: StickerBorderStyle;
@@ -107,14 +112,19 @@ export const STICKER_SUGGESTED_PHRASES = [
   "오늘도 사랑해",
 ] as const;
 
-export function defaultStickerDraft(originalUri: string, cutoutUri: string): BabyStickerDraft {
+export function defaultStickerDraft(
+  originalUri: string,
+  cutoutUri: string,
+  cutoutMode: StickerCutoutMode = "circular",
+): BabyStickerDraft {
   return {
     originalImageUri: originalUri,
     faceImageUri: cutoutUri,
     cutoutImageUri: cutoutUri,
+    cutoutMode,
     stickerType: "faceTemplate",
     templateId: "portrait",
-    borderStyle: "whiteThick",
+    borderStyle: cutoutMode === "personCutout" ? "none" : "whiteThick",
     shadowStyle: "soft",
     speechBubbleType: "none",
     frameType: "none",

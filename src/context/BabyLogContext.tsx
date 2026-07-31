@@ -72,6 +72,12 @@ import {
   restoreQaBackup,
   switchToQaEmptyData,
 } from "../utils/qaDebug";
+import {
+  containsLegacySampleDiary,
+  removeLegacySampleDiaries,
+  removeLegacySampleFamily,
+  removeLegacySampleLogs,
+} from "../utils/legacySampleData";
 
 const TODAY = formatDateKey();
 
@@ -308,14 +314,14 @@ const BabyLogContext = createContext<BabyLogContextValue | null>(null);
 
 export function BabyLogProvider({ children }: { children: ReactNode }) {
   const { careSetup, hasSavedCareSetup } = useApp();
-  const [logs, setLogs] = useState<BabyLogEntry[]>(() => seedLogs().map((l) => ({ ...l, id: createId() })));
+  const [logs, setLogs] = useState<BabyLogEntry[]>([]);
   const [logsHydrated, setLogsHydrated] = useState(false);
-  const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>(SEED_DIARY);
+  const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
   const [diaryHydrated, setDiaryHydrated] = useState(false);
-  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(SEED_FAMILY);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [familyHydrated, setFamilyHydrated] = useState(false);
   const [growthBookEdit, setGrowthBookEditState] = useState<GrowthBookEdit>(() =>
-    createEmptyGrowthBookEdit({ babyId: "baby-1", babyName: "콩" }),
+    createEmptyGrowthBookEdit({ babyId: "baby-1", babyName: "" }),
   );
   const [growthBookHydrated, setGrowthBookHydrated] = useState(false);
   const [babyStickers, setBabyStickers] = useState<BabySticker[]>([]);
@@ -355,7 +361,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       let nextLogs: BabyLogEntry[] | null = null;
       if (storedLogs !== null) {
         const today = formatDateKey();
-        nextLogs = storedLogs.map((l) => ({
+        nextLogs = removeLegacySampleLogs(storedLogs).map((l) => ({
           ...l,
           dateKey: l.dateKey ?? today,
           createdBy: l.createdBy
@@ -388,7 +394,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     if (diaryOk) {
       const storedDiary = getDiaryEntries();
       if (storedDiary !== null) {
-        setDiaryEntries(storedDiary);
+        const cleanedDiary = removeLegacySampleDiaries(storedDiary);
+        setDiaryEntries(cleanedDiary);
+        if (cleanedDiary.length !== storedDiary.length) void saveDiaryEntries(cleanedDiary);
       }
       setDiaryHydrated(true);
     }
@@ -399,17 +407,24 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     }
     if (familyOk) {
       const storedFamily = getFamilyMembers();
-      if (storedFamily !== null) setFamilyMembers(storedFamily);
+      if (storedFamily !== null) {
+        const cleanedFamily = removeLegacySampleFamily(storedFamily);
+        setFamilyMembers(cleanedFamily);
+        if (cleanedFamily.length !== storedFamily.length) void saveFamilyMembers(cleanedFamily);
+      }
       setFamilyHydrated(true);
     }
     if (growthOk) {
       const storedEdit = getGrowthBookEdit();
+      const storedDiary = getDiaryEntries();
       setGrowthBookEditState(
-        ensureGrowthBookEdit({
-          babyId: "baby-1",
-          babyName: "콩",
-          existing: storedEdit,
-        }),
+        storedDiary && containsLegacySampleDiary(storedDiary)
+          ? createEmptyGrowthBookEdit({ babyId: "baby-1", babyName: careSetup.child.childName })
+          : ensureGrowthBookEdit({
+              babyId: "baby-1",
+              babyName: careSetup.child.childName,
+              existing: storedEdit,
+            }),
       );
       setGrowthBookHydrated(true);
     }
@@ -883,11 +898,26 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   }, [hydrateStorageState]);
 
   const prepareForLogout = useCallback(async () => {
-    // Server-backed records must not remain visible if a different account signs in.
-    // CareSetup and per-user migration markers are intentionally retained for restoration.
+    // Account-scoped local data must never leak into a different login. Diary,
+    // growth-book and family data are still local-only, so clear their cache on logout.
+    const emptyGrowthBook = createEmptyGrowthBookEdit({ babyId: "baby-1", babyName: "" });
     setLogs([]);
+    setDiaryEntries([]);
+    setFamilyMembers([]);
+    setGrowthBookEditState(emptyGrowthBook);
+    setBabyStickers([]);
     setGrowthRecords([]);
-    await Promise.all([saveBabyLogs([]), saveGrowthRecords([]), clearSupabaseSync()]);
+    setChatHistory([DEFAULT_GREETING]);
+    await Promise.all([
+      saveBabyLogs([]),
+      saveDiaryEntries([]),
+      saveFamilyMembers([]),
+      saveGrowthBookEdit(emptyGrowthBook),
+      saveBabyStickers([]),
+      saveGrowthRecords([]),
+      saveChatHistory([DEFAULT_GREETING]),
+      clearSupabaseSync(),
+    ]);
   }, []);
 
   const qaDebug = useMemo<BabyLogContextValue["qaDebug"]>(() => {
