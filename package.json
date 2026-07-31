@@ -11,9 +11,10 @@
     "typecheck": "tsc --noEmit",
     "qa:mvp": "pnpm dlx tsx scripts/mvp-qa-smoke.mts",
     "qa:supabase:growth": "node --env-file=.env scripts/verify-supabase-growth-records.mjs",
+    "qa:supabase:memories": "node --env-file=.env scripts/verify-supabase-memories.mjs",
     "qa:supabase:auth": "node --env-file=.env scripts/verify-supabase-email-auth.mjs",
     "qa:supabase:account-deletion": "node --env-file=.env scripts/verify-supabase-account-deletion.mjs",
-    "qa:supabase": "pnpm qa:supabase:growth && pnpm qa:supabase:auth && pnpm qa:supabase:account-deletion",
+    "qa:supabase": "pnpm qa:supabase:growth && pnpm qa:supabase:memories && pnpm qa:supabase:auth && pnpm qa:supabase:account-deletion",
     "server:dh": "bash -lc 'set -a && source .env && set +a && cd ../darin-dh/script && exec .venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8000'"
   },
   "dependencies": {

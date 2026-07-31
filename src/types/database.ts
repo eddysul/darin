@@ -13,6 +13,10 @@ export type DbRelationshipLabel =
   | "할아버지"
   | "기타";
 export type MemberStatus = "pending" | "active" | "inactive";
+export type MemoryPrivacyType = "only_me" | "family_circle" | "tagged_family" | "selected_people";
+export type MemoryMediaType = "image" | "video";
+export type MemoryTagType = "baby" | "family_member" | "friend_baby" | "manual_guest";
+export type MemoryTagStatus = "approved" | "pending" | "rejected";
 
 export type CareLogPayload = {
   chip?: string;
@@ -119,6 +123,66 @@ export type GrowthRecordRow = {
   updated_at: string;
 };
 
+export type MemoryPostRow = {
+  id: string;
+  baby_id: string;
+  author_id: string;
+  caption: string | null;
+  privacy_type: MemoryPrivacyType;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type MemoryMediaRow = {
+  id: string;
+  memory_post_id: string;
+  baby_id: string;
+  storage_path: string;
+  media_type: MemoryMediaType;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+};
+
+export type MemoryTagRow = {
+  id: string;
+  memory_post_id: string;
+  tag_type: MemoryTagType;
+  baby_id: string | null;
+  tagged_user_id: string | null;
+  tagged_baby_id: string | null;
+  manual_label: string | null;
+  status: MemoryTagStatus;
+  created_by: string;
+  created_at: string;
+};
+
+export type MemorySelectedPersonRow = {
+  id: string;
+  memory_post_id: string;
+  user_id: string;
+  created_at: string;
+};
+
+export type MemoryCommentRow = {
+  id: string;
+  memory_post_id: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type MemoryReactionRow = {
+  id: string;
+  memory_post_id: string;
+  author_id: string;
+  reaction_type: string;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -161,6 +225,48 @@ export type Database = {
         Update: Partial<GrowthRecordRow>;
         Relationships: [];
       };
+      memory_posts: {
+        Row: MemoryPostRow;
+        Insert: Partial<MemoryPostRow> &
+          Pick<MemoryPostRow, "baby_id" | "author_id" | "privacy_type">;
+        Update: Partial<MemoryPostRow>;
+        Relationships: [];
+      };
+      memory_media: {
+        Row: MemoryMediaRow;
+        Insert: Partial<MemoryMediaRow> &
+          Pick<MemoryMediaRow, "memory_post_id" | "baby_id" | "storage_path">;
+        Update: Partial<MemoryMediaRow>;
+        Relationships: [];
+      };
+      memory_tags: {
+        Row: MemoryTagRow;
+        Insert: Partial<MemoryTagRow> &
+          Pick<MemoryTagRow, "memory_post_id" | "tag_type" | "created_by">;
+        Update: Partial<MemoryTagRow>;
+        Relationships: [];
+      };
+      memory_selected_people: {
+        Row: MemorySelectedPersonRow;
+        Insert: Partial<MemorySelectedPersonRow> &
+          Pick<MemorySelectedPersonRow, "memory_post_id" | "user_id">;
+        Update: Partial<MemorySelectedPersonRow>;
+        Relationships: [];
+      };
+      memory_comments: {
+        Row: MemoryCommentRow;
+        Insert: Partial<MemoryCommentRow> &
+          Pick<MemoryCommentRow, "memory_post_id" | "author_id" | "body">;
+        Update: Partial<MemoryCommentRow>;
+        Relationships: [];
+      };
+      memory_reactions: {
+        Row: MemoryReactionRow;
+        Insert: Partial<MemoryReactionRow> &
+          Pick<MemoryReactionRow, "memory_post_id" | "author_id" | "reaction_type">;
+        Update: Partial<MemoryReactionRow>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -175,6 +281,17 @@ export type Database = {
       growth_record_creator_unchanged: {
         Args: { p_id: string; p_created_by: string | null };
         Returns: boolean;
+      };
+      can_view_memory_post: { Args: { p_memory_post_id: string }; Returns: boolean };
+      can_manage_memory_post: { Args: { p_memory_post_id: string }; Returns: boolean };
+      can_delete_memory_post: { Args: { p_memory_post_id: string }; Returns: boolean };
+      can_interact_with_memory_post: {
+        Args: { p_memory_post_id: string };
+        Returns: boolean;
+      };
+      soft_delete_memory_post: {
+        Args: { p_memory_post_id: string };
+        Returns: undefined;
       };
       create_baby_with_owner: {
         Args: {
