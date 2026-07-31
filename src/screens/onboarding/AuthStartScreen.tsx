@@ -89,7 +89,7 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
     <>
       <OnboardingShell
         compact
-        scrollEnabled={authMode !== "login"}
+        scrollEnabled
         centerContent={authMode === "login"}
         title={recoveryMode ? "비밀번호 재설정" : "우리 아기의 기록을 시작해요"}
         subtitle={
