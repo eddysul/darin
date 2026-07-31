@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
   date: { color: colors.text, fontSize: 14, fontWeight: "800" },
   source: { color: colors.faint, fontSize: 10.5, marginTop: 3 },
   cardActions: { flexDirection: "row", gap: 6 },
-  smallButton: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi },
+  smallButton: { minWidth: 52, minHeight: 44, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, alignItems: "center", justifyContent: "center" },
   smallButtonText: { color: colors.text, fontSize: 11, fontWeight: "700" },
   deleteButton: { borderColor: colors.dangerSoft, backgroundColor: colors.dangerSoft },
   deleteText: { color: colors.dangerText, fontSize: 11, fontWeight: "700" },
