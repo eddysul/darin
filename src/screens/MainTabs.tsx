@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { BottomTabBarProps, BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "../LanguageContext";
@@ -15,7 +16,6 @@ import { BabyLogIcon, type TabIconKey } from "../components/babylog/BabyLogIcon"
 import { RecordDetailSheet, type RecordSheetPrefill } from "../components/babylog/RecordDetailSheet";
 import { useBabyLog } from "../context/BabyLogContext";
 import { getCategory } from "../constants/babyLogCategories";
-import { BabyProfileScreen } from "./BabyProfileScreen";
 import { BabyReportScreen } from "./tabs/BabyReportScreen";
 import { ConsultScreen } from "./tabs/ConsultScreen";
 import { DiaryScreen } from "./tabs/DiaryScreen";
@@ -29,6 +29,7 @@ import { isCustomCategoryKey } from "../types/logCategory";
 import { canAddLog, canDeleteLog, canEditLog } from "../types/family";
 import { ErrorBanner } from "../components/states/FeedbackStates";
 import { formatLogMeta } from "../utils/formatLog";
+import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 
 const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
   Record: "tabs.record",
@@ -37,19 +38,6 @@ const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
   Report: "tabs.overview",
   Consult: "tabs.consult",
   Menu: "tabs.menu",
-};
-
-export type MainTabParamList = {
-  Record: undefined;
-  Diary: {
-    openCompose?: boolean;
-    date?: string;
-    source?: string;
-  } | undefined;
-  Mic: undefined;
-  Report: undefined;
-  Consult: { initialQuestion?: string } | undefined;
-  Menu: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -244,11 +232,11 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 }
 
 function RecordTab() {
-  const { setProfileOpen } = useBabyLog();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <RecordScreen
-      onOpenProfile={() => setProfileOpen(true)}
+      onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
       }
@@ -257,11 +245,11 @@ function RecordTab() {
 }
 
 function DiaryTab() {
-  const { setProfileOpen } = useBabyLog();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <DiaryScreen
-      onOpenProfile={() => setProfileOpen(true)}
+      onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
       }
@@ -270,11 +258,11 @@ function DiaryTab() {
 }
 
 function ReportTab() {
-  const { setProfileOpen } = useBabyLog();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <BabyReportScreen
-      onOpenProfile={() => setProfileOpen(true)}
+      onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
       onOpenRecord={() => navigation.navigate("Record")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
@@ -284,19 +272,25 @@ function ReportTab() {
 }
 
 function ConsultTab() {
-  const { setProfileOpen } = useBabyLog();
-  return <ConsultScreen onOpenProfile={() => setProfileOpen(true)} />;
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  return <ConsultScreen onOpenProfile={() => rootNavigation?.navigate("BabyProfile")} />;
 }
 
 function MenuTab() {
-  const { setProfileOpen } = useBabyLog();
-  return <MenuScreen onOpenProfile={() => setProfileOpen(true)} />;
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  return (
+    <MenuScreen
+      onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenSettings={(page) => rootNavigation?.navigate("SettingsDetail", { page })}
+      onOpenGrowthRecords={() => rootNavigation?.navigate("GrowthRecords")}
+    />
+  );
 }
 
 export function MainTabs() {
   const {
-    profileOpen,
-    setProfileOpen,
     storageIssue,
     retryPersistence,
     dismissStorageIssue,
@@ -316,7 +310,6 @@ export function MainTabs() {
         <Tab.Screen name="Menu" component={MenuTab} />
         <Tab.Screen name="Consult" component={ConsultTab} />
       </Tab.Navigator>
-      <BabyProfileScreen visible={profileOpen} onClose={() => setProfileOpen(false)} />
       {storageIssue ? (
         <View style={[styles.storageBanner, { top: insets.top + 8 }]}>
           <ErrorBanner

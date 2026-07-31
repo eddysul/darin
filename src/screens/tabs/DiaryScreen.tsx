@@ -53,7 +53,7 @@ import {
 import { EmptyState } from "../../components/states/FeedbackStates";
 import { colors, radius } from "../../theme";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
-import type { MainTabParamList } from "../MainTabs";
+import type { MainTabParamList } from "../../navigation/types";
 
 type Props = {
   onOpenProfile: () => void;

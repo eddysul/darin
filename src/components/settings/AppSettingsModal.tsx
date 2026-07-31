@@ -36,7 +36,7 @@ export type SettingsPage =
   | "privacy"
   | "terms";
 
-const PAGE_TITLE: Record<SettingsPage, string> = {
+export const SETTINGS_PAGE_TITLES: Record<SettingsPage, string> = {
   account: "계정 설정",
   timers: "스탑워치 설정",
   categories: "기록 카테고리 설정",
@@ -52,9 +52,11 @@ const PAGE_TITLE: Record<SettingsPage, string> = {
 export function AppSettingsModal({
   page,
   onClose,
+  embedded = false,
 }: {
   page: SettingsPage | null;
   onClose: () => void;
+  embedded?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const { settings, setSettings } = useAppSettings();
@@ -178,16 +180,15 @@ export function AppSettingsModal({
     });
   };
 
-  return (
-    <Modal visible animationType="slide" onRequestClose={requestClose}>
-      <View style={styles.root}>
-        <NavigationHeader
-          title={PAGE_TITLE[page]}
+  const content = (
+    <View style={styles.root}>
+        {!embedded ? <NavigationHeader
+          title={SETTINGS_PAGE_TITLES[page]}
           onBack={page === "account" ? requestClose : onClose}
           leftLabel={page === "account" ? "취소" : undefined}
           rightLabel={page === "account" ? "저장" : undefined}
           onRightPress={page === "account" ? saveAccount : undefined}
-        />
+        /> : null}
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 24, 36) }]}
           keyboardShouldPersistTaps="handled"
@@ -346,6 +347,13 @@ export function AppSettingsModal({
           ) : null}
         </ScrollView>
       </View>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={requestClose}>
+      {content}
     </Modal>
   );
 }

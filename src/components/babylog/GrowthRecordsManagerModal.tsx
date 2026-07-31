@@ -7,7 +7,8 @@ import { formatWeight, lengthFromCm } from "../../utils/measurementFormat";
 import { BabyLogIcon } from "./BabyLogIcon";
 
 type Props = {
-  visible: boolean;
+  visible?: boolean;
+  embedded?: boolean;
   records: GrowthRecord[];
   weightUnit: WeightUnit;
   heightUnit: HeightUnit;
@@ -29,7 +30,8 @@ function displayDate(value: string): string {
 }
 
 export function GrowthRecordsManagerModal({
-  visible,
+  visible = true,
+  embedded = false,
   records,
   weightUnit,
   heightUnit,
@@ -53,14 +55,13 @@ export function GrowthRecordsManagerModal({
     );
   };
 
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} onDismiss={onDismiss}>
-      <View style={styles.root}>
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
+  const content = (
+    <View style={styles.root}>
+        {!embedded ? <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
           <Pressable style={styles.headerSide} onPress={onClose}><Text style={styles.closeText}>닫기</Text></Pressable>
           <Text style={styles.headerTitle}>성장 기록 관리</Text>
           <View style={styles.headerSide} />
-        </View>
+        </View> : null}
 
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 34, 46) }]} showsVerticalScrollIndicator={false}>
           <View style={styles.intro}>
@@ -107,6 +108,13 @@ export function GrowthRecordsManagerModal({
           ))}
         </ScrollView>
       </View>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose} onDismiss={onDismiss}>
+      {content}
     </Modal>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,13 +17,10 @@ import { BabyLogIcon, type MiscIconKey } from "../../components/babylog/BabyLogI
 import { BabyStickerVaultModal } from "../../components/babylog/BabyStickerVaultModal";
 import { DiaryReminderSettingsModal } from "../../components/babylog/DiaryReminderSettingsModal";
 import { QuickRecordEditorSheet } from "../../components/babylog/QuickRecordEditorSheet";
-import { GrowthRecordModal } from "../../components/babylog/GrowthRecordModal";
-import { GrowthRecordsManagerModal } from "../../components/babylog/GrowthRecordsManagerModal";
 import { ErrorState } from "../../components/states/FeedbackStates";
 import { QaDebugPanel } from "../../components/qa/QaDebugPanel";
 import {
   AppSettingsModal,
-  type SettingsPage,
 } from "../../components/settings/AppSettingsModal";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { useBabyLog } from "../../context/BabyLogContext";
@@ -31,7 +28,7 @@ import { useLogout } from "../../context/LogoutContext";
 import { AuthRepository } from "../../repositories/AuthRepository";
 import { colors, radius } from "../../theme";
 import type { DiaryReminderSettings } from "../../types/diaryReminder";
-import type { GrowthRecord } from "../../types/growthRecord";
+import type { SettingsDetailPage } from "../../navigation/types";
 import { DEFAULT_DIARY_REMINDER } from "../../types/diaryReminder";
 import {
   clearLocalAppData,
@@ -44,9 +41,13 @@ import {
   saveDiaryReminder,
 } from "../../utils/diaryReminderStore";
 
-type Props = { onOpenProfile: () => void };
+type Props = {
+  onOpenProfile: () => void;
+  onOpenSettings: (page: SettingsDetailPage) => void;
+  onOpenGrowthRecords: () => void;
+};
 
-export function MenuScreen({ onOpenProfile }: Props) {
+export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords }: Props) {
   const insets = useSafeAreaInsets();
   const logout = useLogout();
   const { settings, setSettings, resetSettings } = useAppSettings();
@@ -59,20 +60,12 @@ export function MenuScreen({ onOpenProfile }: Props) {
     quickRecords,
     setQuickRecords,
     clearAllUserData,
-    growthRecords,
-    addGrowthRecord,
-    updateGrowthRecord,
-    deleteGrowthRecord,
     rehydrateFromServer,
   } = useBabyLog();
-  const [settingsPage, setSettingsPage] = useState<SettingsPage | null>(null);
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const [quickRecordsOpen, setQuickRecordsOpen] = useState(false);
-  const [growthManagerOpen, setGrowthManagerOpen] = useState(false);
-  const [growthEditorOpen, setGrowthEditorOpen] = useState(false);
-  const [editingGrowthRecord, setEditingGrowthRecord] = useState<GrowthRecord | null>(null);
-  const growthNextModal = useRef<"editor" | "manager" | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLocal, setDeleteLocal] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -172,27 +165,27 @@ export function MenuScreen({ onOpenProfile }: Props) {
 
         <MenuSection title="알림">
           <MenuRow icon="bell" title="일기 알림 설정" subtitle="오늘 일기 리마인더" onPress={() => setReminderOpen(true)} />
-          <MenuRow icon="clock" title="수유/수면 알림 설정" subtitle="돌봄 간격 알림" onPress={() => setSettingsPage("careAlerts")} />
+          <MenuRow icon="clock" title="수유/수면 알림 설정" subtitle="돌봄 간격 알림" onPress={() => onOpenSettings("careAlerts")} />
         </MenuSection>
 
         <MenuSection title="기록 설정">
-          <MenuRow icon="interval" title="성장 기록 관리" subtitle="키·몸무게·머리둘레 기록" onPress={() => setGrowthManagerOpen(true)} />
-          <MenuRow icon="edit" title="기록 카테고리 설정" subtitle="표시·순서·기본 6개 관리" onPress={() => setSettingsPage("categories")} />
+          <MenuRow icon="interval" title="성장 기록 관리" subtitle="키·몸무게·머리둘레 기록" onPress={onOpenGrowthRecords} />
+          <MenuRow icon="edit" title="기록 카테고리 설정" subtitle="표시·순서·기본 6개 관리" onPress={() => onOpenSettings("categories")} />
           <MenuRow icon="sparkles" title="자주 쓰는 기록" subtitle="기본값 빠른 기록 관리" onPress={() => setQuickRecordsOpen(true)} />
-          <MenuRow icon="clock" title="스탑워치 설정" subtitle="타이머 종류와 복원 방식" onPress={() => setSettingsPage("timers")} />
-          <MenuRow icon="interval" title="단위 설정" subtitle="ml/oz·kg/lb·°C/°F·cm/inch" onPress={() => setSettingsPage("units")} />
-          <MenuRow icon="clock" title="시간 설정" subtitle="시간 표시·하루/주 시작·아기 나이" onPress={() => setSettingsPage("time")} />
+          <MenuRow icon="clock" title="스탑워치 설정" subtitle="타이머 종류와 복원 방식" onPress={() => onOpenSettings("timers")} />
+          <MenuRow icon="interval" title="단위 설정" subtitle="ml/oz·kg/lb·°C/°F·cm/inch" onPress={() => onOpenSettings("units")} />
+          <MenuRow icon="clock" title="시간 설정" subtitle="시간 표시·하루/주 시작·아기 나이" onPress={() => onOpenSettings("time")} />
         </MenuSection>
 
         <MenuSection title="꾸미기/성장책">
           <MenuRow icon="baby" title="내 아기 스티커" subtitle="스티커 만들기와 보관함" onPress={() => setStickerOpen(true)} />
-          <MenuRow icon="folder" title="성장책 설정" subtitle="날짜·작성자·기본 레이아웃" onPress={() => setSettingsPage("growthBook")} />
+          <MenuRow icon="folder" title="성장책 설정" subtitle="날짜·작성자·기본 레이아웃" onPress={() => onOpenSettings("growthBook")} />
         </MenuSection>
 
         <MenuSection title="구독/정책">
-          <MenuRow icon="check" title="결제/구독" subtitle="플랜과 구매 복원" onPress={() => setSettingsPage("billing")} />
-          <MenuRow icon="folder" title="개인정보처리방침" subtitle="수집·보관·삭제 안내" onPress={() => setSettingsPage("privacy")} />
-          <MenuRow icon="folder" title="이용약관" subtitle="서비스 이용과 AI 안내" onPress={() => setSettingsPage("terms")} />
+          <MenuRow icon="check" title="결제/구독" subtitle="플랜과 구매 복원" onPress={() => onOpenSettings("billing")} />
+          <MenuRow icon="folder" title="개인정보처리방침" subtitle="수집·보관·삭제 안내" onPress={() => onOpenSettings("privacy")} />
+          <MenuRow icon="folder" title="이용약관" subtitle="서비스 이용과 AI 안내" onPress={() => onOpenSettings("terms")} />
         </MenuSection>
 
         {__DEV__ ? <QaDebugPanel trigger="menu" /> : null}
@@ -201,7 +194,7 @@ export function MenuScreen({ onOpenProfile }: Props) {
           {AuthRepository.isAnonymousUser(authUser) ? (
             <MenuRow icon="profile" title="이메일 계정 연결" subtitle="현재 아기와 기록을 그대로 보호" onPress={() => setEmailAuthOpen(true)} />
           ) : null}
-          <MenuRow icon="profile" title="계정 설정" subtitle="이름·이메일·언어·관계" onPress={() => setSettingsPage("account")} />
+          <MenuRow icon="profile" title="계정 설정" subtitle="이름·이메일·언어·관계" onPress={() => setAccountSettingsOpen(true)} />
           <MenuRow icon="logout" title="로그아웃" subtitle="로그인 화면으로 이동" onPress={confirmLogout} disabled={loggingOut} />
           <MenuRow
             icon="trash"
@@ -216,7 +209,7 @@ export function MenuScreen({ onOpenProfile }: Props) {
         </MenuSection>
       </ScrollView>
 
-      <AppSettingsModal page={settingsPage} onClose={() => setSettingsPage(null)} />
+      <AppSettingsModal page={accountSettingsOpen ? "account" : null} onClose={() => setAccountSettingsOpen(false)} />
 
       <EmailAuthModal
         visible={emailAuthOpen}
@@ -260,49 +253,6 @@ export function MenuScreen({ onOpenProfile }: Props) {
         onClose={() => setStickerOpen(false)}
         onSaveSticker={addBabySticker}
         onDeleteSticker={deleteBabySticker}
-      />
-
-      <GrowthRecordsManagerModal
-        visible={growthManagerOpen}
-        records={growthRecords}
-        weightUnit={settings.units.weight}
-        heightUnit={settings.units.height}
-        onClose={() => setGrowthManagerOpen(false)}
-        onDismiss={() => {
-          if (growthNextModal.current !== "editor") return;
-          growthNextModal.current = null;
-          setGrowthEditorOpen(true);
-        }}
-        onAdd={() => {
-          setEditingGrowthRecord(null);
-          growthNextModal.current = "editor";
-          setGrowthManagerOpen(false);
-        }}
-        onEdit={(record) => {
-          setEditingGrowthRecord(record);
-          growthNextModal.current = "editor";
-          setGrowthManagerOpen(false);
-        }}
-        onDelete={deleteGrowthRecord}
-      />
-
-      <GrowthRecordModal
-        visible={growthEditorOpen}
-        record={editingGrowthRecord}
-        onClose={() => {
-          growthNextModal.current = "manager";
-          setGrowthEditorOpen(false);
-          setEditingGrowthRecord(null);
-        }}
-        onDismiss={() => {
-          if (growthNextModal.current !== "manager") return;
-          growthNextModal.current = null;
-          setGrowthManagerOpen(true);
-        }}
-        onSave={(draft, editId) => {
-          if (editId) updateGrowthRecord(editId, draft);
-          else addGrowthRecord(draft);
-        }}
       />
 
       <Modal visible={deleteOpen} transparent animationType="fade" onRequestClose={() => !deleting && setDeleteOpen(false)}>

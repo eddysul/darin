@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { DEFAULT_PARENT_PROFILE, useApp } from "./src/context/AppContext";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, type LinkingOptions } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { Alert, Linking, StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -16,6 +17,10 @@ import { InviteShareScreen } from "./src/screens/onboarding/InviteShareScreen";
 import { OnboardingFlow, type OnboardingResult } from "./src/screens/onboarding/OnboardingFlow";
 import { TermsConsentScreen } from "./src/screens/onboarding/TermsConsentScreen";
 import { MainTabs } from "./src/screens/MainTabs";
+import { BabyProfileScreen } from "./src/screens/BabyProfileScreen";
+import { GrowthRecordsManagerScreen } from "./src/screens/GrowthRecordsManagerScreen";
+import { AppSettingsModal, SETTINGS_PAGE_TITLES } from "./src/components/settings/AppSettingsModal";
+import type { RootStackParamList } from "./src/navigation/types";
 import { SplashScreen } from "./src/screens/SplashScreen";
 import {
   DEFAULT_CARE_SETUP,
@@ -46,6 +51,8 @@ type AppPhase =
   | "invite-share"
   | "main";
 
+const RootStack = createNativeStackNavigator<RootStackParamList>();
+
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -73,30 +80,60 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
     if (onboardingProfile) setProfile(onboardingProfile);
   }, [onboardingProfile, setProfile]);
 
-  const linking = {
+  const linking: LinkingOptions<RootStackParamList> = {
     prefixes: ["knanny://", "exp://"],
     config: {
       screens: {
-        Diary: {
-          path: "diary/compose",
-          parse: {
-            date: (value: string) => value,
-            source: (value: string) => value,
-            openCompose: (value: string) => value === "1" || value === "true",
+        MainTabs: {
+          screens: {
+            Diary: {
+              path: "diary/compose",
+              parse: {
+                date: (value: string) => value,
+                source: (value: string) => value,
+                openCompose: (value: string) => value === "1" || value === "true",
+              },
+            },
+            Record: "record",
+            Report: "report",
+            Consult: "consult",
+            Menu: "menu",
+            Mic: "mic",
           },
         },
-        Record: "record",
-        Report: "report",
-        Consult: "consult",
-        Menu: "menu",
-        Mic: "mic",
       },
     },
   };
 
   return (
     <NavigationContainer linking={linking}>
-      <MainTabs />
+      <RootStack.Navigator
+        screenOptions={{
+          headerTitleAlign: "center",
+          headerTintColor: colors.text,
+          headerStyle: { backgroundColor: colors.card },
+          headerShadowVisible: true,
+          headerBackButtonDisplayMode: "minimal",
+          gestureEnabled: true,
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      >
+        <RootStack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+        <RootStack.Screen name="BabyProfile" component={BabyProfileScreen} options={{ title: "아기 프로필" }} />
+        <RootStack.Screen
+          name="SettingsDetail"
+          options={({ route }) => ({ title: SETTINGS_PAGE_TITLES[route.params.page] })}
+        >
+          {({ route, navigation }) => (
+            <AppSettingsModal
+              page={route.params.page}
+              embedded
+              onClose={() => navigation.goBack()}
+            />
+          )}
+        </RootStack.Screen>
+        <RootStack.Screen name="GrowthRecords" component={GrowthRecordsManagerScreen} options={{ title: "성장 기록 관리" }} />
+      </RootStack.Navigator>
     </NavigationContainer>
   );
 }

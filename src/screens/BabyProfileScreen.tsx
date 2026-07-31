@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
 import { InviteFamilyModal } from "../components/babylog/InviteFamilyModal";
 import { EmptyState } from "../components/states/FeedbackStates";
@@ -14,16 +15,10 @@ import {
   type FamilyRole,
 } from "../types/family";
 import { colors, radius } from "../theme";
-import { NavigationHeader } from "../components/navigation/NavigationHeader";
-
-type Props = {
-  visible: boolean;
-  onClose: () => void;
-};
 
 const MEMBER_COLORS = [colors.amber, "#7c83fd", "#5CB87A", "#c98a54"];
 
-export function BabyProfileScreen({ visible, onClose }: Props) {
+export function BabyProfileScreen() {
   const {
     babyName,
     babyBirthMeta,
@@ -37,17 +32,15 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
     removeFamilyMember,
   } = useBabyLog();
   const { settings } = useAppSettings();
+  const insets = useSafeAreaInsets();
   const configuredAge = formatBabyAge(careSetup.child, settings.time.babyAge);
   const [inviteOpen, setInviteOpen] = useState(false);
   const allowInvite = canInvite(myFamilyRole);
   const allowManage = canManageMembers(myFamilyRole);
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={styles.root}>
-        <NavigationHeader title="아기 프로필" onBack={onClose} />
-
-        <ScrollView contentContainerStyle={styles.content}>
+    <View style={styles.root}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 24, 36) }]}>
           <View style={styles.babyCard}>
             <View style={styles.babyAvatar}>
               <BabyLogIcon kind="baby" size={32} color={colors.amber} />
@@ -137,14 +130,13 @@ export function BabyProfileScreen({ visible, onClose }: Props) {
             <Text style={styles.viewerHint}>초대 권한이 없어요. 관리자에게 요청해 주세요.</Text>
           )}
         </ScrollView>
-      </View>
 
       <InviteFamilyModal
         visible={inviteOpen}
         onClose={() => setInviteOpen(false)}
         onInvite={inviteFamilyMember}
       />
-    </Modal>
+    </View>
   );
 }
 
