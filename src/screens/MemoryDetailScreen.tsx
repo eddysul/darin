@@ -11,12 +11,12 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Image } from "expo-image";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
 import { MemoryEditModal } from "../components/memories/MemoryEditModal";
+import { MemoryMediaViewer } from "../components/memories/MemoryMediaViewer";
 import { memoryPrivacyLabel } from "../components/memories/MemoryPrivacyPicker";
 import { useBabyLog } from "../context/BabyLogContext";
 import type { RootStackParamList } from "../navigation/types";
@@ -44,6 +44,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    setImageUrl(""); // drop any previous signed URL before reminting
     try {
       const next = await MemoriesRepository.getBundleById(route.params.memoryPostId);
       if (!next) throw new Error("삭제되었거나 볼 수 없는 추억이에요.");
@@ -51,12 +52,14 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       const cover = next.media[0];
       setImageUrl(cover ? await MemoriesRepository.createSignedUrl(cover.storagePath) : "");
     } catch (cause) {
+      setBundle(null);
       setError(cause instanceof Error ? cause.message : "추억을 불러오지 못했어요.");
     } finally {
       setLoading(false);
     }
   }, [route.params.memoryPostId]);
 
+  // Always reload + remint signed URL on focus (TTL is short; do not keep stale media links).
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   useEffect(() => { void AuthRepository.getUser().then((user) => setUserId(user?.id ?? "")); }, []);
 
@@ -66,7 +69,8 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   };
 
   const isAuthor = bundle?.post.authorId === userId;
-  const canEdit = Boolean(isAuthor || myFamilyRole === "owner" || myFamilyRole === "admin" || myFamilyRole === "editor" || myFamilyRole === "caregiver");
+  // Matches RLS: author or baby admin (owner maps to admin). Editor/viewer manage UI stays hidden.
+  const canEdit = Boolean(isAuthor || myFamilyRole === "owner" || myFamilyRole === "admin");
   const canDelete = Boolean(isAuthor || myFamilyRole === "owner" || myFamilyRole === "admin");
   const myReaction = bundle?.reactions.find((reaction) => reaction.authorId === userId);
 
@@ -92,6 +96,20 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     try {
       if (myReaction) await MemoriesRepository.removeReaction(bundle.post.id);
       else await MemoriesRepository.setReaction({ memoryPostId: bundle.post.id, reactionType: "heart" });
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "반응을 저장하지 못했어요.");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const likeFromDoubleTap = async () => {
+    if (!bundle || working || myReaction) return;
+    setWorking(true);
+    setError("");
+    try {
+      await MemoriesRepository.setReaction({ memoryPostId: bundle.post.id, reactionType: "heart" });
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "반응을 저장하지 못했어요.");
@@ -126,18 +144,19 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     </View>
   );
 
-  const tagLabels = bundle.tags.map((tag) => {
-    if (tag.tagType === "baby") return babyName;
-    if (tag.tagType === "family_member" && tag.taggedUserId) return authorName(tag.taggedUserId);
-    return tag.manualLabel;
-  }).filter(Boolean);
+  const familyTagLabels = bundle.tags.flatMap((tag) => {
+    if (tag.tagType === "baby") return [babyName];
+    if (tag.tagType === "family_member" && tag.taggedUserId) return [authorName(tag.taggedUserId)];
+    return [];
+  });
+  const guestTagLabels = bundle.tags
+    .filter((tag) => tag.tagType === "manual_guest" && tag.manualLabel)
+    .map((tag) => tag.manualLabel as string);
 
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={92}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 26 }]} keyboardShouldPersistTaps="handled">
-        <View style={styles.imageWrap}>
-          {imageUrl ? <Image source={{ uri: imageUrl }} style={StyleSheet.absoluteFill} contentFit="contain" transition={150} /> : <BabyLogIcon kind="folder" size={40} color={colors.faint} />}
-        </View>
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
+        <MemoryMediaViewer media={bundle.media} imageUrl={imageUrl} onDoubleTap={() => void likeFromDoubleTap()} />
 
         <View style={styles.postCard}>
           <View style={styles.metaRow}>
@@ -148,8 +167,35 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
             </View>
             <Text style={styles.privacy}>{memoryPrivacyLabel(bundle.post.privacyType)}</Text>
           </View>
-          {bundle.post.caption ? <Text style={styles.caption}>{bundle.post.caption}</Text> : null}
-          {tagLabels.length ? <Text style={styles.tags}>{tagLabels.map((label) => `#${label}`).join("  ")}</Text> : null}
+          <View style={styles.actionRow}>
+            <Pressable style={styles.actionButton} onPress={() => void toggleReaction()} disabled={working}>
+              <Text style={[styles.actionHeart, myReaction && styles.actionHeartActive]}>{myReaction ? "♥" : "♡"}</Text>
+            </Pressable>
+            <View style={styles.actionButton}>
+              <BabyLogIcon kind="chat" size={20} color={colors.muted} />
+            </View>
+            <Text style={styles.actionCount}>좋아요 {bundle.reactions.length} · 댓글 {bundle.comments.length}</Text>
+          </View>
+          {bundle.post.caption ? (
+            <Text style={styles.caption}>
+              <Text style={styles.captionAuthor}>{authorName(bundle.post.authorId)} </Text>
+              {bundle.post.caption}
+            </Text>
+          ) : null}
+          {familyTagLabels.length ? (
+            <View style={styles.chipRow}>
+              {familyTagLabels.map((label) => (
+                <View key={`family-${label}`} style={styles.familyChip}><Text style={styles.familyChipText}>{label}</Text></View>
+              ))}
+            </View>
+          ) : null}
+          {guestTagLabels.length ? (
+            <View style={styles.chipRow}>
+              {guestTagLabels.map((label) => (
+                <View key={`guest-${label}`} style={styles.guestChip}><Text style={styles.guestChipText}>표시 · {label}</Text></View>
+              ))}
+            </View>
+          ) : null}
           {canEdit || canDelete ? (
             <View style={styles.ownerActions}>
               {canEdit ? <Pressable style={styles.smallButton} onPress={() => setEditOpen(true)}><Text style={styles.smallButtonText}>수정</Text></Pressable> : null}
@@ -157,11 +203,6 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
             </View>
           ) : null}
         </View>
-
-        <Pressable style={[styles.reaction, myReaction && styles.reactionActive]} onPress={() => void toggleReaction()} disabled={working}>
-          <Text style={styles.reactionHeart}>{myReaction ? "♥" : "♡"}</Text>
-          <Text style={[styles.reactionText, myReaction && styles.reactionTextActive]}>좋아요 {bundle.reactions.length}</Text>
-        </Pressable>
 
         <View style={styles.commentsCard}>
           <Text style={styles.sectionTitle}>댓글 {bundle.comments.length}</Text>
@@ -199,25 +240,29 @@ const styles = StyleSheet.create({
   outlineButton: { minHeight: 44, marginTop: 16, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
   outlineText: { color: colors.amber, fontWeight: "800" },
   content: { gap: 12 },
-  imageWrap: { width: "100%", aspectRatio: 1, backgroundColor: colors.cardHi, alignItems: "center", justifyContent: "center" },
   postCard: { marginHorizontal: 16, padding: 16, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   authorAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
   metaCopy: { flex: 1 },
   author: { color: colors.text, fontSize: 13.5, fontWeight: "800" },
   date: { color: colors.faint, fontSize: 10.5, marginTop: 2 },
-  privacy: { color: colors.amber, fontSize: 10.5, fontWeight: "700", backgroundColor: colors.amberSoft, paddingHorizontal: 8, paddingVertical: 5, borderRadius: radius.full, overflow: "hidden" },
-  caption: { color: colors.text, fontSize: 15, lineHeight: 23, marginTop: 15 },
-  tags: { color: colors.amber, fontSize: 12, fontWeight: "700", marginTop: 12 },
+  privacy: { color: colors.muted, fontSize: 11, fontWeight: "600", maxWidth: 110, textAlign: "right" },
+  actionRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 },
+  actionButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  actionHeart: { color: colors.muted, fontSize: 26, lineHeight: 30 },
+  actionHeartActive: { color: colors.amber },
+  actionCount: { flex: 1, color: colors.muted, fontSize: 12.5, fontWeight: "700" },
+  caption: { color: colors.text, fontSize: 15, lineHeight: 23, marginTop: 6 },
+  captionAuthor: { fontWeight: "800" },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
+  familyChip: { minHeight: 28, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
+  familyChipText: { color: colors.amber, fontSize: 11.5, fontWeight: "700" },
+  guestChip: { minHeight: 28, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  guestChipText: { color: colors.muted, fontSize: 11.5, fontWeight: "600" },
   ownerActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 13 },
-  smallButton: { minHeight: 44, minWidth: 56, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
+  smallButton: { minHeight: 44, minWidth: 64, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
   smallButtonText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   deleteText: { color: colors.dangerText, fontSize: 12, fontWeight: "700" },
-  reaction: { marginHorizontal: 16, minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
-  reactionActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  reactionHeart: { color: colors.amber, fontSize: 21 },
-  reactionText: { color: colors.muted, fontSize: 13, fontWeight: "700" },
-  reactionTextActive: { color: colors.amber },
   commentsCard: { marginHorizontal: 16, padding: 16, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   sectionTitle: { color: colors.text, fontSize: 15, fontWeight: "800", marginBottom: 8 },
   emptyComments: { color: colors.faint, fontSize: 12.5, paddingVertical: 12 },

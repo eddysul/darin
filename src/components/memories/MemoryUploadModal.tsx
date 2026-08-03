@@ -157,22 +157,33 @@ export function MemoryUploadModal({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeSafely}>
-      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+      >
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
           <Pressable style={styles.headerAction} onPress={closeSafely} disabled={saving}>
             <Text style={styles.cancel}>취소</Text>
           </Pressable>
-          <Text style={styles.title}>새 추억</Text>
+          <View style={styles.titleWrap}>
+            <Text style={styles.title}>오늘의 순간을 남겨요</Text>
+            <Text style={styles.subtitle}>아기의 사진과 짧은 이야기를 가족과 함께 나눠보세요.</Text>
+          </View>
           <Pressable style={styles.headerAction} onPress={() => void submit()} disabled={!canSubmit}>
             {saving ? <ActivityIndicator color={colors.amber} /> : <Text style={[styles.save, !canSubmit && styles.disabledText]}>올리기</Text>}
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
           <Pressable style={styles.photo} onPress={() => void pickImage()}>
             {image ? <Image source={{ uri: image.uri }} style={StyleSheet.absoluteFill} contentFit="cover" /> : (
               <View style={styles.photoEmpty}>
                 <Text style={styles.photoPlus}>＋</Text>
-                <Text style={styles.photoLabel}>사진 선택</Text>
+                <Text style={styles.photoLabel}>사진을 선택해 주세요</Text>
               </View>
             )}
           </Pressable>
@@ -184,7 +195,7 @@ export function MemoryUploadModal({
               style={styles.caption}
               value={caption}
               onChangeText={setCaption}
-              placeholder={`${babyName}의 오늘을 남겨보세요.`}
+              placeholder="오늘 어떤 순간이었나요?"
               placeholderTextColor={colors.faint}
               multiline
               maxLength={1200}
@@ -221,9 +232,11 @@ export function MemoryUploadModal({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  header: { minHeight: 58, paddingHorizontal: 14, paddingBottom: 10, flexDirection: "row", alignItems: "flex-end", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, backgroundColor: colors.card },
+  header: { minHeight: 74, paddingHorizontal: 14, paddingBottom: 10, flexDirection: "row", alignItems: "flex-end", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, backgroundColor: colors.card },
   headerAction: { minWidth: 64, minHeight: 44, justifyContent: "center" },
-  title: { flex: 1, textAlign: "center", color: colors.text, fontSize: 17, fontWeight: "800", paddingBottom: 12 },
+  titleWrap: { flex: 1, alignItems: "center", justifyContent: "flex-end", paddingBottom: 8 },
+  title: { textAlign: "center", color: colors.text, fontSize: 17, fontWeight: "800" },
+  subtitle: { color: colors.muted, fontSize: 10.5, textAlign: "center", marginTop: 2 },
   cancel: { color: colors.muted, fontSize: 15, fontWeight: "600" },
   save: { color: colors.amber, fontSize: 15, fontWeight: "800", textAlign: "right" },
   disabledText: { opacity: 0.4 },

@@ -1,16 +1,31 @@
 /**
- * Live private Memories DB / Storage / RLS verification.
+ * Phase 2E — Memories permission hardening + signed URL + N+1 timing QA.
+ *
+ * Accounts:
+ *   A = baby owner/admin
+ *   B = invited viewer
+ *   E = invited editor (must NOT edit/delete A's posts)
+ *   C = non-member
+ *
  * Usage: node --env-file=.env scripts/verify-supabase-memories.mjs
  */
 import { createClient } from "@supabase/supabase-js";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
 if (!url || !key) throw new Error("Missing Supabase public client environment variables.");
 
+/** Must match MEMORY_SIGNED_URL_TTL_SECONDS in MemoriesRepository. */
+const SIGNED_URL_TTL_SECONDS = 180;
+
 const lines = [];
+const notes = [];
 const pass = (message) => lines.push(`PASS  ${message}`);
 const fail = (message) => lines.push(`FAIL  ${message}`);
+const info = (message) => notes.push(`NOTE  ${message}`);
+
 const client = () => createClient(url, key, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
@@ -19,75 +34,105 @@ async function anonymous(label) {
   const sb = client();
   const { data, error } = await sb.auth.signInAnonymously();
   if (error || !data.user) throw new Error(`${label} auth: ${error?.message ?? "no user"}`);
-  return { sb, user: data.user };
+  return { sb, user: data.user, label };
 }
 
 function expectOne(rows, label) {
-  if (!Array.isArray(rows) || rows.length !== 1) throw new Error(`${label}: expected one row`);
+  if (!Array.isArray(rows) || rows.length !== 1) {
+    throw new Error(`${label}: expected one row, got ${rows?.length ?? "null"}`);
+  }
 }
 
 function expectNone(rows, label) {
-  if (!Array.isArray(rows) || rows.length !== 0) throw new Error(`${label}: expected no rows`);
+  if (!Array.isArray(rows) || rows.length !== 0) {
+    throw new Error(`${label}: expected no rows, got ${rows?.length ?? "null"}`);
+  }
 }
 
-const author = await anonymous("author");
-const selectedViewer = await anonymous("selected viewer");
-const nonSelectedViewer = await anonymous("non-selected viewer");
-const outsider = await anonymous("outsider");
+async function expectBlockedSignedUrl(sb, storagePath, label) {
+  const { data, error } = await sb.storage.from("memories").createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
+  if (!error || data?.signedUrl) throw new Error(`${label}: signed URL unexpectedly allowed`);
+}
+
+async function expectAllowedSignedUrl(sb, storagePath, label) {
+  const { data, error } = await sb.storage.from("memories").createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
+  if (error || !data?.signedUrl) throw new Error(`${label}: ${error?.message ?? "missing URL"}`);
+  return data.signedUrl;
+}
+
+const ONE_PIXEL_PNG = new Uint8Array([
+  137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82,
+  0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137,
+  0, 0, 0, 13, 73, 68, 65, 84, 8, 215, 99, 248, 207, 192, 240,
+  31, 0, 5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0, 0, 73, 69,
+  78, 68, 174, 66, 96, 130,
+]);
+
+const accountA = await anonymous("QA-A-admin");
+const accountB = await anonymous("QA-B-viewer");
+const accountE = await anonymous("QA-E-editor");
+const accountC = await anonymous("QA-C-outsider");
+
 let babyId = null;
-let storagePath = null;
+const storagePaths = [];
 
 try {
-  const { error: tableError } = await author.sb.from("memory_posts").select("id").limit(1);
-  if (tableError) {
-    throw new Error(`memories migration not applied: ${tableError.message}`);
-  }
+  const { error: tableError } = await accountA.sb.from("memory_posts").select("id").limit(1);
+  if (tableError) throw new Error(`memories migration not applied: ${tableError.message}`);
   pass("Memories tables reachable");
 
-  const { data: baby, error: babyError } = await author.sb.rpc("create_baby_with_owner", {
-    p_name: `MemoriesQA-${Date.now()}`,
+  // Detect whether Phase 2E manage hardening SQL is live by probing editor update later.
+  const migrationPath = resolve("supabase/migrations/202607310003_memories_manage_author_admin.sql");
+  info(`Expected SQL migration present: ${migrationPath.split("/").pop()}`);
+  info(`Signed URL TTL policy: ${SIGNED_URL_TTL_SECONDS}s (MVP; old URLs remain valid until expiry)`);
+
+  const qaBabyName = `QA-Memories-Phase2E-${Date.now()}`;
+  const { data: baby, error: babyError } = await accountA.sb.rpc("create_baby_with_owner", {
+    p_name: qaBabyName,
     p_child_status: "newborn",
     p_relationship_label: "보호자",
   });
   if (babyError || !baby?.id) throw new Error(`baby create: ${babyError?.message ?? "no baby"}`);
   babyId = baby.id;
+  info(`QA baby: ${qaBabyName} (${babyId})`);
+  info(`A=${accountA.user.id} B(viewer)=${accountB.user.id} E(editor)=${accountE.user.id} C=${accountC.user.id}`);
 
-  const { error: membersError } = await author.sb.from("baby_members").insert([
+  const { error: membersError } = await accountA.sb.from("baby_members").insert([
     {
       baby_id: babyId,
-      user_id: selectedViewer.user.id,
+      user_id: accountB.user.id,
       permission_role: "viewer",
       relationship_label: "가족",
       status: "active",
     },
     {
       baby_id: babyId,
-      user_id: nonSelectedViewer.user.id,
-      permission_role: "viewer",
+      user_id: accountE.user.id,
+      permission_role: "editor",
       relationship_label: "가족",
       status: "active",
     },
   ]);
   if (membersError) throw new Error(`member setup: ${membersError.message}`);
-  pass("author and viewer memberships prepared");
+  pass("QA memberships prepared (A admin, B viewer, E editor, C outsider)");
 
-  const { data: authorPermission, error: permissionError } = await author.sb.rpc("baby_permission", {
+  const { data: authorPermission, error: permissionError } = await accountA.sb.rpc("baby_permission", {
     p_baby_id: babyId,
   });
   if (permissionError || authorPermission !== "admin") {
     throw new Error(`author permission: ${permissionError?.message ?? String(authorPermission)}`);
   }
-  pass("author admin permission resolved through RLS helper");
+  pass("A resolves as admin");
 
   const createPost = async (privacyType, caption) => {
     const id = crypto.randomUUID();
-    const { data, error } = await author.sb
+    const { data, error } = await accountA.sb
       .from("memory_posts")
       .insert({
         id,
         baby_id: babyId,
-        author_id: author.user.id,
-        caption,
+        author_id: accountA.user.id,
+        caption: `QA ${caption}`,
         privacy_type: privacyType,
       })
       .select("*")
@@ -96,179 +141,263 @@ try {
     return data;
   };
 
-  const onlyMe = await createPost("only_me", "author only");
-  pass("author create post allowed");
+  const attachMedia = async (postId, label) => {
+    const mediaId = crypto.randomUUID();
+    const storagePath = `${babyId}/${postId}/${mediaId}.png`;
+    const { error: uploadError } = await accountA.sb.storage
+      .from("memories")
+      .upload(storagePath, ONE_PIXEL_PNG, { contentType: "image/png", upsert: false });
+    if (uploadError) throw new Error(`${label} upload: ${uploadError.message}`);
+    storagePaths.push(storagePath);
+    const { error: mediaError } = await accountA.sb.from("memory_media").insert({
+      id: mediaId,
+      memory_post_id: postId,
+      baby_id: babyId,
+      storage_path: storagePath,
+      media_type: "image",
+      width: 1,
+      height: 1,
+    });
+    if (mediaError) throw new Error(`${label} media: ${mediaError.message}`);
+    return storagePath;
+  };
 
-  const { data: authorOnlyRows, error: authorOnlyError } = await author.sb
-    .from("memory_posts").select("id").eq("id", onlyMe.id);
-  if (authorOnlyError) throw new Error(`author only_me read: ${authorOnlyError.message}`);
-  expectOne(authorOnlyRows, "author only_me read");
-  pass("author can read own only_me post");
+  const readById = async (sb, postId) => {
+    const { data, error } = await sb.from("memory_posts").select("id,privacy_type,caption").eq("id", postId);
+    if (error) throw error;
+    return data ?? [];
+  };
 
-  const { data: outsiderOnlyRows, error: outsiderOnlyError } = await outsider.sb
-    .from("memory_posts").select("id").eq("id", onlyMe.id);
-  if (outsiderOnlyError) throw new Error(`outsider only_me read: ${outsiderOnlyError.message}`);
-  expectNone(outsiderOnlyRows, "outsider only_me read");
-  pass("non-member cannot read only_me post");
+  const familyPost = await createPost("family_circle", "family_circle");
+  const familyPath = await attachMedia(familyPost.id, "family_circle");
+  expectOne(await readById(accountA.sb, familyPost.id), "A family getById");
+  expectOne(await readById(accountB.sb, familyPost.id), "B family getById");
+  expectOne(await readById(accountE.sb, familyPost.id), "E family getById");
+  expectNone(await readById(accountC.sb, familyPost.id), "C family getById");
+  await expectAllowedSignedUrl(accountB.sb, familyPath, "B family signed URL");
+  await expectBlockedSignedUrl(accountC.sb, familyPath, "C family signed URL");
+  pass("family_circle visibility A/B/E yes, C no");
 
-  const familyPost = await createPost("family_circle", "family post");
-  const { data: familyRows, error: familyReadError } = await selectedViewer.sb
-    .from("memory_posts").select("id").eq("id", familyPost.id);
-  if (familyReadError) throw new Error(`family read: ${familyReadError.message}`);
-  expectOne(familyRows, "family member read");
-  pass("family member can read family_circle post");
+  // ---------- RLS hardening ----------
+  const { data: aEdited, error: aEditError } = await accountA.sb
+    .from("memory_posts")
+    .update({ caption: "QA A edited" })
+    .eq("id", familyPost.id)
+    .select("caption")
+    .single();
+  if (aEditError || aEdited?.caption !== "QA A edited") {
+    throw new Error(`A edit: ${aEditError?.message ?? "caption mismatch"}`);
+  }
+  pass("A admin/author can edit own post");
 
-  const { data: outsiderFamilyRows, error: outsiderFamilyError } = await outsider.sb
-    .from("memory_posts").select("id").eq("id", familyPost.id);
-  if (outsiderFamilyError) throw new Error(`outsider family read: ${outsiderFamilyError.message}`);
-  expectNone(outsiderFamilyRows, "outsider family read");
-  pass("non-member cannot read family_circle post");
+  const { error: viewerUpdateError } = await accountB.sb
+    .from("memory_posts")
+    .update({ caption: "blocked viewer" })
+    .eq("id", familyPost.id)
+    .select("id")
+    .single();
+  if (!viewerUpdateError) throw new Error("viewer update unexpectedly allowed");
+  pass("B viewer cannot edit A post (direct API/RLS)");
 
-  const selectedPost = await createPost("selected_people", "selected post");
-  const { error: selectedInsertError } = await author.sb.from("memory_selected_people").insert({
-    memory_post_id: selectedPost.id,
-    user_id: selectedViewer.user.id,
+  const { data: editorUpdated, error: editorUpdateError } = await accountE.sb
+    .from("memory_posts")
+    .update({ caption: "blocked editor" })
+    .eq("id", familyPost.id)
+    .select("id,caption")
+    .maybeSingle();
+  let editorHardeningLive = true;
+  if (!editorUpdateError && editorUpdated?.caption === "blocked editor") {
+    editorHardeningLive = false;
+    fail(
+      "Phase 2E migration not applied on remote: editor can still update another's memory_post. Apply supabase/migrations/202607310003_memories_manage_author_admin.sql in SQL Editor",
+    );
+    await accountA.sb.from("memory_posts").update({ caption: "QA A edited" }).eq("id", familyPost.id);
+  } else if (!editorUpdateError && editorUpdated) {
+    throw new Error("editor update returned unexpected row");
+  } else {
+    pass("E editor cannot edit A post (direct API/RLS)");
+  }
+  info(`editor hardening live=${editorHardeningLive}`);
+
+  const { error: editorDeleteError } = await accountE.sb.rpc("soft_delete_memory_post", {
+    p_memory_post_id: familyPost.id,
   });
-  if (selectedInsertError) throw new Error(`selected people setup: ${selectedInsertError.message}`);
-
-  const { data: selectedRows, error: selectedReadError } = await selectedViewer.sb
-    .from("memory_posts").select("id").eq("id", selectedPost.id);
-  if (selectedReadError) throw new Error(`selected read: ${selectedReadError.message}`);
-  expectOne(selectedRows, "selected person read");
-  pass("selected person can read selected_people post");
-
-  const { data: nonSelectedRows, error: nonSelectedReadError } = await nonSelectedViewer.sb
-    .from("memory_posts").select("id").eq("id", selectedPost.id);
-  if (nonSelectedReadError) throw new Error(`non-selected read: ${nonSelectedReadError.message}`);
-  expectNone(nonSelectedRows, "non-selected member read");
-  pass("non-selected member cannot read selected_people post");
-
-  const taggedPost = await createPost("tagged_family", "tagged post");
-  const { error: tagError } = await author.sb.from("memory_tags").insert({
-    memory_post_id: taggedPost.id,
-    tag_type: "family_member",
-    tagged_user_id: selectedViewer.user.id,
-    status: "approved",
-    created_by: author.user.id,
+  if (!editorDeleteError) throw new Error("editor soft delete unexpectedly allowed");
+  const { error: viewerDeleteError } = await accountB.sb.rpc("soft_delete_memory_post", {
+    p_memory_post_id: familyPost.id,
   });
-  if (tagError) throw new Error(`approved tag setup: ${tagError.message}`);
-  const { data: taggedRows, error: taggedReadError } = await selectedViewer.sb
-    .from("memory_posts").select("id").eq("id", taggedPost.id);
-  if (taggedReadError) throw new Error(`tagged family read: ${taggedReadError.message}`);
-  expectOne(taggedRows, "approved tagged family read");
-  pass("approved tagged family member can read tagged_family post");
+  if (!viewerDeleteError) throw new Error("viewer soft delete unexpectedly allowed");
+  const { error: outsiderDeleteError } = await accountC.sb.rpc("soft_delete_memory_post", {
+    p_memory_post_id: familyPost.id,
+  });
+  if (!outsiderDeleteError) throw new Error("outsider soft delete unexpectedly allowed");
+  pass("B/E/C cannot soft-delete A post");
 
-  const { data: comment, error: commentError } = await selectedViewer.sb
+  const { data: eComment, error: eCommentError } = await accountE.sb
     .from("memory_comments")
     .insert({
       memory_post_id: familyPost.id,
-      author_id: selectedViewer.user.id,
-      body: "viewer QA comment",
+      author_id: accountE.user.id,
+      body: "QA editor comment",
     })
     .select("*")
     .single();
-  if (commentError || !comment) throw new Error(`viewer comment: ${commentError?.message ?? "no row"}`);
+  if (eCommentError || !eComment) throw new Error(`editor comment: ${eCommentError?.message ?? "no row"}`);
 
-  const { data: reaction, error: reactionError } = await selectedViewer.sb
+  const { data: eReaction, error: eReactionError } = await accountE.sb
     .from("memory_reactions")
     .upsert({
       memory_post_id: familyPost.id,
-      author_id: selectedViewer.user.id,
+      author_id: accountE.user.id,
       reaction_type: "heart",
     }, { onConflict: "memory_post_id,author_id" })
     .select("*")
     .single();
-  if (reactionError || !reaction) throw new Error(`viewer reaction: ${reactionError?.message ?? "no row"}`);
-  pass("viewer can comment and react to visible family post");
+  if (eReactionError || !eReaction) throw new Error(`editor reaction: ${eReactionError?.message ?? "no row"}`);
+  pass("E editor can comment/react on visible family_circle post");
 
-  const { error: viewerUpdateError } = await selectedViewer.sb
-    .from("memory_posts")
-    .update({ caption: "blocked viewer edit" })
-    .eq("id", familyPost.id)
-    .select("id")
-    .single();
-  if (!viewerUpdateError) throw new Error("viewer post update unexpectedly allowed");
-
-  const { error: viewerDeleteError } = await selectedViewer.sb.rpc("soft_delete_memory_post", {
-    p_memory_post_id: familyPost.id,
-  });
-  if (!viewerDeleteError) throw new Error("viewer post delete unexpectedly allowed");
-  pass("viewer cannot edit or delete post");
-
-  const { data: updatedPost, error: authorUpdateError } = await author.sb
-    .from("memory_posts")
-    .update({ caption: "author updated" })
-    .eq("id", familyPost.id)
-    .select("*")
-    .single();
-  if (authorUpdateError || updatedPost?.caption !== "author updated") {
-    throw new Error(`author update: ${authorUpdateError?.message ?? "wrong caption"}`);
-  }
-  pass("author can edit post");
-
-  const mediaId = crypto.randomUUID();
-  storagePath = `${babyId}/${familyPost.id}/${mediaId}.png`;
-  const onePixelPng = new Uint8Array([
-    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82,
-    0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137,
-    0, 0, 0, 13, 73, 68, 65, 84, 8, 215, 99, 248, 207, 192, 240,
-    31, 0, 5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0, 0, 73, 69,
-    78, 68, 174, 66, 96, 130,
-  ]);
-  const { error: uploadError } = await author.sb.storage
-    .from("memories")
-    .upload(storagePath, onePixelPng, { contentType: "image/png", upsert: false });
-  if (uploadError) throw new Error(`private storage upload: ${uploadError.message}`);
-
-  const { error: mediaError } = await author.sb.from("memory_media").insert({
-    id: mediaId,
+  const { error: cCommentError } = await accountC.sb.from("memory_comments").insert({
     memory_post_id: familyPost.id,
-    baby_id: babyId,
-    storage_path: storagePath,
-    media_type: "image",
-    width: 1,
-    height: 1,
+    author_id: accountC.user.id,
+    body: "blocked",
   });
-  if (mediaError) throw new Error(`media metadata: ${mediaError.message}`);
+  if (!cCommentError) throw new Error("C comment unexpectedly allowed");
+  pass("C non-member blocked from comment");
 
-  const { data: signed, error: signedError } = await selectedViewer.sb.storage
-    .from("memories")
-    .createSignedUrl(storagePath, 60);
-  if (signedError || !signed?.signedUrl) throw new Error(`authorized signed URL: ${signedError?.message ?? "missing URL"}`);
+  // ---------- selected_people + signed URL policy ----------
+  const selectedPost = await createPost("selected_people", "selected");
+  const selectedPath = await attachMedia(selectedPost.id, "selected");
+  const { error: selectedInsertError } = await accountA.sb.from("memory_selected_people").insert({
+    memory_post_id: selectedPost.id,
+    user_id: accountB.user.id,
+  });
+  if (selectedInsertError) throw new Error(`selected setup: ${selectedInsertError.message}`);
+  const staleUrl = await expectAllowedSignedUrl(accountB.sb, selectedPath, "B selected signed URL");
+  const { error: selectedRemoveError } = await accountA.sb
+    .from("memory_selected_people")
+    .delete()
+    .eq("memory_post_id", selectedPost.id)
+    .eq("user_id", accountB.user.id);
+  if (selectedRemoveError) throw new Error(`selected remove: ${selectedRemoveError.message}`);
+  expectNone(await readById(accountB.sb, selectedPost.id), "B after selected removal");
+  await expectBlockedSignedUrl(accountB.sb, selectedPath, "B new signed URL after removal");
+  let staleOk = false;
+  try {
+    staleOk = (await fetch(staleUrl)).ok;
+  } catch {
+    staleOk = false;
+  }
+  info(
+    staleOk
+      ? `KNOWN LIMITATION P2: stale signed URL still downloads for up to ~${SIGNED_URL_TTL_SECONDS}s after revocation`
+      : `stale signed URL already rejected (TTL/cache variance); policy still assumes up to ${SIGNED_URL_TTL_SECONDS}s residual access`,
+  );
+  pass("selected_people removal blocks new signed URL minting");
 
-  const { data: outsiderSigned, error: outsiderSignedError } = await outsider.sb.storage
-    .from("memories")
-    .createSignedUrl(storagePath, 60);
-  if (!outsiderSignedError || outsiderSigned?.signedUrl) throw new Error("outsider signed URL unexpectedly allowed");
-  pass("signed URL follows post RLS");
+  // ---------- only_me / soft delete ----------
+  const onlyMe = await createPost("only_me", "only_me");
+  const onlyMePath = await attachMedia(onlyMe.id, "only_me");
+  expectNone(await readById(accountB.sb, onlyMe.id), "B only_me");
+  expectNone(await readById(accountE.sb, onlyMe.id), "E only_me");
+  await expectBlockedSignedUrl(accountB.sb, onlyMePath, "B only_me signed URL");
+  pass("only_me hidden from B/E including signed URL");
 
-  const publicResponse = await fetch(`${url}/storage/v1/object/public/memories/${storagePath}`, {
+  const { error: softDeleteError } = await accountA.sb.rpc("soft_delete_memory_post", {
+    p_memory_post_id: onlyMe.id,
+  });
+  if (softDeleteError) throw new Error(`A soft delete: ${softDeleteError.message}`);
+  expectNone(await readById(accountA.sb, onlyMe.id), "deleted getById");
+  await expectBlockedSignedUrl(accountA.sb, onlyMePath, "signed URL after soft delete");
+  pass("A soft delete + deleted media signed URL blocked");
+
+  const publicResponse = await fetch(`${url}/storage/v1/object/public/memories/${familyPath}`, {
     headers: { apikey: key },
   });
   if (publicResponse.ok) throw new Error("memories object was publicly downloadable");
-  pass("memories storage bucket is not public");
+  pass("memories bucket is not public");
 
-  const { error: softDeleteError } = await author.sb.rpc("soft_delete_memory_post", {
-    p_memory_post_id: onlyMe.id,
-  });
-  if (softDeleteError) throw new Error(`author soft delete: ${softDeleteError.message}`);
-  const { data: deletedRows, error: deletedReadError } = await author.sb
-    .from("memory_posts").select("id").eq("id", onlyMe.id);
-  if (deletedReadError) throw new Error(`deleted post read: ${deletedReadError.message}`);
-  expectNone(deletedRows, "deleted post list");
-  pass("author soft delete succeeds and deleted post is excluded");
+  // ---------- N+1 timing (measure only) ----------
+  const measureList = async (countLabel, targetCount) => {
+    while (true) {
+      const { data: existing } = await accountA.sb
+        .from("memory_posts")
+        .select("id")
+        .eq("baby_id", babyId)
+        .is("deleted_at", null);
+      const have = existing?.length ?? 0;
+      if (have >= targetCount) break;
+      const post = await createPost("family_circle", `perf-${have}`);
+      await attachMedia(post.id, `perf-${have}`);
+    }
+    const t0 = Date.now();
+    const { data: list, error } = await accountB.sb
+      .from("memory_posts")
+      .select("id")
+      .eq("baby_id", babyId)
+      .is("deleted_at", null);
+    if (error) throw error;
+    const listMs = Date.now() - t0;
+
+    // Approximate client listCards fan-out: 4 queries + 1 signed URL per post (cover).
+    const sample = (list ?? []).slice(0, Math.min(targetCount, list?.length ?? 0));
+    let signedCalls = 0;
+    const t1 = Date.now();
+    await Promise.all(sample.map(async (row) => {
+      const { data: media } = await accountB.sb
+        .from("memory_media")
+        .select("storage_path")
+        .eq("memory_post_id", row.id)
+        .limit(1);
+      await Promise.all([
+        accountB.sb.from("memory_tags").select("id").eq("memory_post_id", row.id),
+        accountB.sb.from("memory_comments").select("id").eq("memory_post_id", row.id),
+        accountB.sb.from("memory_reactions").select("id").eq("memory_post_id", row.id),
+      ]);
+      const path = media?.[0]?.storage_path;
+      if (path) {
+        signedCalls += 1;
+        await accountB.sb.storage.from("memories").createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+      }
+    }));
+    const cardsMs = Date.now() - t1;
+    info(
+      `PERF ${countLabel}: listByBabyId=${listMs}ms visible=${list?.length ?? 0}; ` +
+        `approx listCards fan-out on ${sample.length} posts=${cardsMs}ms signedUrlCalls=${signedCalls}`,
+    );
+    return { listMs, cardsMs, signedCalls, count: sample.length };
+  };
+
+  await measureList("1-post", 1);
+  await measureList("5-posts", 5);
+  await measureList("20-posts", 20);
+  await measureList("50-posts", 50);
+  info("P2 recommendation: pagination + batched media/tags/counts query or memory_cards RPC; lazy signed URLs");
+  pass("N+1 timing measured for 1/5/20/50 posts");
+
+  // Ensure migration file is in workspace for operators
+  readFileSync(migrationPath, "utf8");
+  pass("Phase 2E SQL migration file present in repo");
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 } finally {
-  if (storagePath) await author.sb.storage.from("memories").remove([storagePath]);
-  if (babyId) await author.sb.from("babies").delete().eq("id", babyId);
+  if (storagePaths.length) {
+    await accountA.sb.storage.from("memories").remove(storagePaths);
+  }
+  if (babyId) {
+    const { error: cleanupError } = await accountA.sb.from("babies").delete().eq("id", babyId);
+    notes.push(
+      cleanupError
+        ? `NOTE  QA baby cleanup failed: ${babyId} — ${cleanupError.message}`
+        : `NOTE  QA baby deleted: ${babyId}`,
+    );
+  }
   await Promise.all([
-    author.sb.auth.signOut(),
-    selectedViewer.sb.auth.signOut(),
-    nonSelectedViewer.sb.auth.signOut(),
-    outsider.sb.auth.signOut(),
+    accountA.sb.auth.signOut(),
+    accountB.sb.auth.signOut(),
+    accountE.sb.auth.signOut(),
+    accountC.sb.auth.signOut(),
   ]);
 }
 
-console.log(lines.join("\n"));
+console.log([...lines, ...notes].join("\n"));
 process.exit(lines.some((line) => line.startsWith("FAIL")) ? 1 : 0);

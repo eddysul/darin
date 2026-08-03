@@ -12,12 +12,12 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  MessageCircle,
   FileText,
   FolderOpen,
   GlassWater,
   LogOut,
   Menu,
-  MessageCircle,
   Mic,
   Milk,
   Moon,
@@ -85,6 +85,7 @@ export type MiscIconKey =
   | "trash"
   | "bot"
   | "logout"
+  | "chat"
   | "settings";
 
 export const TAB_ICONS: Record<TabIconKey, IconComponent> = {
@@ -114,5 +115,6 @@ export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
   trash: Trash2,
   bot: Bot,
   logout: LogOut,
+  chat: MessageCircle,
   settings: Settings,
 };

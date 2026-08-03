@@ -30,6 +30,8 @@ const MEMORIES_BUCKET = "memories";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 const CAPTION_MAX_LENGTH = 1200;
 const COMMENT_MAX_LENGTH = 500;
+/** Short TTL so revoked viewers lose access soon. Known limitation: old URLs work until expiry. */
+export const MEMORY_SIGNED_URL_TTL_SECONDS = 180;
 
 export function memoryPostRowToModel(row: MemoryPostRow): MemoryPost {
   return {
@@ -339,8 +341,12 @@ export const MemoriesRepository = {
     if (error) throw error;
   },
 
-  async createSignedUrl(storagePath: string, expiresInSeconds = 3600): Promise<string> {
+  async createSignedUrl(
+    storagePath: string,
+    expiresInSeconds = MEMORY_SIGNED_URL_TTL_SECONDS,
+  ): Promise<string> {
     const sb = requireSupabase();
+    // Gate on memory_media SELECT RLS (can_view_memory_post) before minting a URL.
     const { data: media, error: mediaError } = await sb
       .from("memory_media")
       .select("id")

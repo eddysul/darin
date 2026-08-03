@@ -106,7 +106,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                     <BabyLogIcon kind="tab" tab="mic" size={24} color="#FFFFFF" strokeWidth={2.2} />
                   </LinearGradient>
                 </View>
-                <Text style={[styles.tabLabel, styles.centerLabel]}>{t("tabs.voice")}</Text>
+                <Text style={[styles.tabLabel, styles.centerLabel]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>{t("tabs.voice")}</Text>
               </Pressable>
             );
           }
@@ -114,7 +114,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           const tabIcon = TAB_ICONS[name as Exclude<keyof MainTabParamList, "Mic">];
 
           return (
-            <Pressable key={name} style={styles.tabItem} onPress={() => navigation.navigate(name)}>
+            <Pressable key={name} style={styles.tabItem} onPress={() => navigation.navigate(name)} accessibilityRole="button" accessibilityLabel={label}>
               <BabyLogIcon
                 kind="tab"
                 tab={tabIcon}
@@ -122,7 +122,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                 color={active ? colors.amber : colors.faint}
                 strokeWidth={active ? 2.2 : 1.8}
               />
-              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
+              <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>{label}</Text>
             </Pressable>
           );
         })}
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -3 },
     elevation: 10,
   },
-  tabItem: { flex: 1, alignItems: "center", gap: 4 },
+  tabItem: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "flex-start", gap: 4, paddingHorizontal: 2 },
   centerBtnWrap: {
     marginTop: -28,
     borderRadius: 31,

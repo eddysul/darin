@@ -94,7 +94,11 @@ export function MemoryEditModal({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeSafely}>
-      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+      >
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
           <Pressable style={styles.action} onPress={closeSafely} disabled={saving}><Text style={styles.cancel}>취소</Text></Pressable>
           <Text style={styles.title}>추억 수정</Text>
@@ -102,7 +106,11 @@ export function MemoryEditModal({
             {saving ? <ActivityIndicator color={colors.amber} /> : <Text style={styles.save}>저장</Text>}
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
           <View style={styles.field}>
             <Text style={styles.label}>짧은 이야기</Text>
             <TextInput style={styles.caption} value={caption} onChangeText={setCaption} multiline maxLength={1200} textAlignVertical="top" />
