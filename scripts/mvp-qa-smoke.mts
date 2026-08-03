@@ -53,6 +53,9 @@ import { familyRoleToPermission, recordedAtFromDateKeyTime } from "../src/utils/
 import { detectLocalCareLogMigrationCandidates } from "../src/utils/careLogsMigration";
 import { detectLocalGrowthRecordMigrationCandidates } from "../src/utils/growthRecordsMigration";
 import type { GrowthRecord } from "../src/types/growthRecord";
+import type { DiaryEntryRow } from "../src/types/database";
+import { diaryEntryRowToModel } from "../src/utils/diarySupabaseMappers";
+import { diaryServerMigrationFlagKey } from "../src/utils/diaryServerMigrationStore";
 import {
   readScopedWithLegacyMigration,
   scopedMigrationFlagKey,
@@ -63,6 +66,45 @@ import {
 
 const today = formatDateKey();
 const me = { id: "me", name: "Me", role: "editor" as const, status: "active" as const, isMe: true };
+
+// --- Diary server mapping and migration flags preserve account/baby isolation ---
+{
+  const accountA: LocalDataScope = { userId: "user-a", babyId: "baby-a" };
+  const accountB: LocalDataScope = { userId: "user-b", babyId: "baby-a" };
+  assert.notEqual(diaryServerMigrationFlagKey(accountA), diaryServerMigrationFlagKey(accountB));
+  const row: DiaryEntryRow = {
+    id: "00000000-0000-4000-8000-000000000001",
+    baby_id: "00000000-0000-4000-8000-000000000002",
+    author_id: "00000000-0000-4000-8000-000000000003",
+    entry_date: "2026-08-03",
+    title: null,
+    body: "서버 일기",
+    mood: "happy",
+    weather: "sunny",
+    tags: ["첫 목욕"],
+    included_in_growth_book: true,
+    client_generated_id: "local-diary-1",
+    metadata: {
+      dateLabel: "8월 3일 (월)",
+      careLogSummarySnapshot: "수유 3회",
+      momentSuggestionsUsed: ["feeding"],
+      milestoneTag: "첫 목욕",
+      stickerIds: ["sticker-1"],
+      authorName: "엄마",
+      authorRole: "editor",
+    },
+    created_at: "2026-08-03T01:00:00.000Z",
+    updated_at: "2026-08-03T01:00:00.000Z",
+    deleted_at: null,
+  };
+  const model = diaryEntryRowToModel(row, ["https://signed.example/diary.jpg"]);
+  assert.equal(model.comment, "서버 일기");
+  assert.equal(model.includedInGrowthBook, true);
+  assert.equal(model.careLogSummarySnapshot, "수유 3회");
+  assert.deepEqual(model.stickerIds, ["sticker-1"]);
+  assert.deepEqual(model.photos, ["https://signed.example/diary.jpg"]);
+  assert.equal(model.createdBy?.userId, row.author_id);
+}
 
 // --- Account/baby-scoped local storage never exposes legacy or another account's value ---
 {

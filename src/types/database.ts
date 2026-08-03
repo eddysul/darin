@@ -17,6 +17,7 @@ export type MemoryPrivacyType = "only_me" | "family_circle" | "tagged_family" | 
 export type MemoryMediaType = "image" | "video";
 export type MemoryTagType = "baby" | "family_member" | "friend_baby" | "manual_guest";
 export type MemoryTagStatus = "approved" | "pending" | "rejected";
+export type DiaryMediaType = "image";
 
 export type CareLogPayload = {
   chip?: string;
@@ -123,6 +124,35 @@ export type GrowthRecordRow = {
   updated_at: string;
 };
 
+export type DiaryEntryRow = {
+  id: string;
+  baby_id: string;
+  author_id: string;
+  entry_date: string;
+  title: string | null;
+  body: string | null;
+  mood: string | null;
+  weather: string | null;
+  tags: string[];
+  included_in_growth_book: boolean;
+  client_generated_id: string | null;
+  metadata: Json;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type DiaryMediaRow = {
+  id: string;
+  diary_entry_id: string;
+  baby_id: string;
+  storage_path: string;
+  media_type: DiaryMediaType;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+};
+
 export type MemoryPostRow = {
   id: string;
   baby_id: string;
@@ -225,6 +255,20 @@ export type Database = {
         Update: Partial<GrowthRecordRow>;
         Relationships: [];
       };
+      diary_entries: {
+        Row: DiaryEntryRow;
+        Insert: Partial<DiaryEntryRow> &
+          Pick<DiaryEntryRow, "baby_id" | "author_id" | "entry_date">;
+        Update: Partial<DiaryEntryRow>;
+        Relationships: [];
+      };
+      diary_media: {
+        Row: DiaryMediaRow;
+        Insert: Partial<DiaryMediaRow> &
+          Pick<DiaryMediaRow, "diary_entry_id" | "baby_id" | "storage_path">;
+        Update: Partial<DiaryMediaRow>;
+        Relationships: [];
+      };
       memory_posts: {
         Row: MemoryPostRow;
         Insert: Partial<MemoryPostRow> &
@@ -274,6 +318,13 @@ export type Database = {
       baby_permission: { Args: { p_baby_id: string }; Returns: PermissionRole };
       can_edit_care_logs: { Args: { p_baby_id: string }; Returns: boolean };
       can_edit_growth_records: { Args: { p_baby_id: string }; Returns: boolean };
+      can_create_diary_entry: { Args: { p_baby_id: string }; Returns: boolean };
+      can_manage_diary_entry: { Args: { p_diary_entry_id: string }; Returns: boolean };
+      can_view_diary_entry: { Args: { p_diary_entry_id: string }; Returns: boolean };
+      soft_delete_diary_entry: {
+        Args: { p_diary_entry_id: string };
+        Returns: undefined;
+      };
       care_log_creator_unchanged: {
         Args: { p_id: string; p_created_by: string | null };
         Returns: boolean;

@@ -30,6 +30,12 @@ import {
   resetDiaryEntriesMemory,
   saveDiaryEntries,
 } from "../utils/diaryStore";
+import {
+  bootstrapDiaryFromServer,
+  syncDiaryCreate,
+  syncDiaryDelete,
+  syncDiaryUpdate,
+} from "../utils/diaryServerSync";
 import { getChatHistory, hydrateChatHistory, saveChatHistory } from "../utils/chatHistoryStore";
 import { getFamilyMembers, hydrateFamilyMembers, saveFamilyMembers } from "../utils/familyMembersStore";
 import {
@@ -105,6 +111,10 @@ function migrateActorRole(role: string): FamilyRole {
     return role;
   }
   return "editor";
+}
+
+function sameLocalDataScope(left: LocalDataScope | null, right: LocalDataScope): boolean {
+  return isValidLocalDataScope(left) && localDataScopeId(left) === localDataScopeId(right);
 }
 
 function isoDaysAgo(n: number): string {
@@ -463,10 +473,17 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     }
     if (diaryOk) {
       const storedDiary = getDiaryEntries();
-      if (storedDiary !== null) {
-        const cleanedDiary = removeLegacySampleDiaries(storedDiary);
-        setDiaryEntries(cleanedDiary);
-        if (cleanedDiary.length !== storedDiary.length) void saveDiaryEntries(cleanedDiary, scope);
+      const localDiary = storedDiary === null ? [] : removeLegacySampleDiaries(storedDiary);
+      if (storedDiary !== null && localDiary.length !== storedDiary.length) {
+        void saveDiaryEntries(localDiary, scope);
+      }
+      const boot = await bootstrapDiaryFromServer(scope, localDiary);
+      if (hydrationRun !== storageHydrationRunRef.current) return false;
+      if (boot.usedServer && boot.entries !== null) {
+        setDiaryEntries(boot.entries);
+        void saveDiaryEntries(boot.entries, scope);
+      } else if (storedDiary !== null) {
+        setDiaryEntries(localDiary);
       }
       setDiaryHydrated(!!scope);
     }
@@ -749,52 +766,94 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const addDiary = useCallback(
     (entry: Omit<DiaryEntry, "id" | "createdAt" | "updatedAt"> & { createdAt?: string; updatedAt?: string }) => {
       const now = new Date().toISOString();
-      setDiaryEntries((prev) => [
-        {
-          ...entry,
-          id: createId(),
-          babyId: localDataScope?.babyId ?? entry.babyId,
-          dateKey: entry.dateKey || formatDateKey(),
-          photos: entry.photos ?? [],
-          includedInGrowthBook: entry.includedInGrowthBook ?? false,
-          stickerIds: entry.stickerIds ?? [],
-          momentSuggestionsUsed: entry.momentSuggestionsUsed ?? [],
-          weatherStamp: entry.weatherStamp ?? null,
-          moodStamp: entry.moodStamp ?? null,
-          milestoneTag: entry.milestoneTag ?? null,
-          customMilestoneTag: entry.customMilestoneTag ?? null,
-          careLogSummarySnapshot: entry.careLogSummarySnapshot ?? "",
-          source: entry.source ?? "manual",
-          draftStatus: "saved",
-          createdAt: entry.createdAt ?? now,
-          updatedAt: entry.updatedAt ?? now,
-        },
-        ...prev,
-      ]);
+      const scope = localDataScope;
+      const optimistic: DiaryEntry = {
+        ...entry,
+        id: createId(),
+        babyId: scope?.babyId ?? entry.babyId,
+        dateKey: entry.dateKey || formatDateKey(),
+        photos: entry.photos ?? [],
+        includedInGrowthBook: entry.includedInGrowthBook ?? false,
+        stickerIds: entry.stickerIds ?? [],
+        momentSuggestionsUsed: entry.momentSuggestionsUsed ?? [],
+        weatherStamp: entry.weatherStamp ?? null,
+        moodStamp: entry.moodStamp ?? null,
+        milestoneTag: entry.milestoneTag ?? null,
+        customMilestoneTag: entry.customMilestoneTag ?? null,
+        careLogSummarySnapshot: entry.careLogSummarySnapshot ?? "",
+        source: entry.source ?? "manual",
+        draftStatus: "saved",
+        createdAt: entry.createdAt ?? now,
+        updatedAt: entry.updatedAt ?? now,
+      };
+      setDiaryEntries((prev) => [optimistic, ...prev]);
+      void syncDiaryCreate(scope, optimistic).then((remote) => {
+        if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
+        if (remote) {
+          setDiaryEntries((current) => current.map((item) => item.id === optimistic.id ? remote : item));
+        } else if (isSupabaseConfigured()) {
+          setDiaryEntries((current) => current.filter((item) => item.id !== optimistic.id));
+        }
+      });
     },
-    [localDataScope?.babyId],
+    [localDataScope],
   );
 
   const updateDiary = useCallback((id: string, patch: Partial<Omit<DiaryEntry, "id">>) => {
     const now = new Date().toISOString();
-    setDiaryEntries((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, ...patch, updatedAt: patch.updatedAt ?? now } : d)),
-    );
-  }, []);
+    const scope = localDataScope;
+    const previous = diaryEntries.find((entry) => entry.id === id);
+    if (!previous) return;
+    const optimistic: DiaryEntry = { ...previous, ...patch, updatedAt: patch.updatedAt ?? now };
+    setDiaryEntries((current) => current.map((entry) => entry.id === id ? optimistic : entry));
+    void syncDiaryUpdate(scope, optimistic).then((remote) => {
+      if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
+      if (remote) {
+        setDiaryEntries((current) => current.map((entry) => entry.id === id ? remote : entry));
+      } else if (isSupabaseConfigured()) {
+        setDiaryEntries((current) => current.map((entry) => entry.id === id ? previous : entry));
+      }
+    });
+  }, [diaryEntries, localDataScope]);
 
   const deleteDiary = useCallback((id: string) => {
-    setDiaryEntries((prev) => prev.filter((d) => d.id !== id));
-  }, []);
+    const scope = localDataScope;
+    const index = diaryEntries.findIndex((entry) => entry.id === id);
+    const previous = index >= 0 ? diaryEntries[index] : undefined;
+    if (!previous) return;
+    setDiaryEntries((current) => current.filter((entry) => entry.id !== id));
+    void syncDiaryDelete(scope, id).then((deleted) => {
+      if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
+      if (!deleted && isSupabaseConfigured()) {
+        setDiaryEntries((current) => {
+          if (current.some((entry) => entry.id === id)) return current;
+          const restored = [...current];
+          restored.splice(Math.min(index, restored.length), 0, previous);
+          return restored;
+        });
+      }
+    });
+  }, [diaryEntries, localDataScope]);
 
   const toggleDiaryInGrowthBook = useCallback((id: string) => {
-    setDiaryEntries((prev) =>
-      prev.map((d) =>
-        d.id === id
-          ? { ...d, includedInGrowthBook: !d.includedInGrowthBook, updatedAt: new Date().toISOString() }
-          : d,
-      ),
-    );
-  }, []);
+    const scope = localDataScope;
+    const previous = diaryEntries.find((entry) => entry.id === id);
+    if (!previous) return;
+    const optimistic: DiaryEntry = {
+      ...previous,
+      includedInGrowthBook: !previous.includedInGrowthBook,
+      updatedAt: new Date().toISOString(),
+    };
+    setDiaryEntries((current) => current.map((entry) => entry.id === id ? optimistic : entry));
+    void syncDiaryUpdate(scope, optimistic).then((remote) => {
+      if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
+      if (remote) {
+        setDiaryEntries((current) => current.map((entry) => entry.id === id ? remote : entry));
+      } else if (isSupabaseConfigured()) {
+        setDiaryEntries((current) => current.map((entry) => entry.id === id ? previous : entry));
+      }
+    });
+  }, [diaryEntries, localDataScope]);
 
   const pushChat = useCallback((role: "user" | "ai", text: string, stickerId?: string) => {
     setChatHistory((prev) => [...prev, { id: createId(), role, text, stickerId }]);
