@@ -53,9 +53,53 @@ import { familyRoleToPermission, recordedAtFromDateKeyTime } from "../src/utils/
 import { detectLocalCareLogMigrationCandidates } from "../src/utils/careLogsMigration";
 import { detectLocalGrowthRecordMigrationCandidates } from "../src/utils/growthRecordsMigration";
 import type { GrowthRecord } from "../src/types/growthRecord";
+import {
+  readScopedWithLegacyMigration,
+  scopedMigrationFlagKey,
+  scopedStorageKey,
+  type LocalDataScope,
+  type ScopedStorageAdapter,
+} from "../src/utils/scopedLocalStorage";
 
 const today = formatDateKey();
 const me = { id: "me", name: "Me", role: "editor" as const, status: "active" as const, isMe: true };
+
+// --- Account/baby-scoped local storage never exposes legacy or another account's value ---
+{
+  const values = new Map<string, string>();
+  const storage: ScopedStorageAdapter = {
+    getItem: async (key) => values.get(key) ?? null,
+    setItem: async (key, value) => { values.set(key, value); },
+    removeItem: async (key) => { values.delete(key); },
+  };
+  const baseKey = "darin:test-diary";
+  const accountA: LocalDataScope = { userId: "user-a", babyId: "baby-a" };
+  const accountB: LocalDataScope = { userId: "user-b", babyId: "baby-b" };
+  values.set(baseKey, JSON.stringify([{ id: "legacy-a" }]));
+
+  const read = (scope: LocalDataScope) => readScopedWithLegacyMigration<Array<{ id: string }>>({
+    baseKey,
+    scope,
+    storage,
+    parse: (raw) => {
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed) ? parsed.filter((item): item is { id: string } =>
+        !!item && typeof item === "object" && typeof (item as { id?: unknown }).id === "string") : null;
+    },
+    serialize: JSON.stringify,
+    merge: (scoped, legacy) => scoped ?? legacy,
+  });
+
+  assert.deepEqual((await read(accountA)).value, [{ id: "legacy-a" }]);
+  assert.equal(values.has(baseKey), false);
+  assert.ok(values.has(scopedStorageKey(baseKey, accountA)));
+  assert.ok(values.has(scopedMigrationFlagKey(baseKey, accountA)));
+  assert.equal((await read(accountB)).value, null);
+
+  values.set(scopedStorageKey(baseKey, accountB), JSON.stringify([{ id: "account-b" }]));
+  assert.deepEqual((await read(accountB)).value, [{ id: "account-b" }]);
+  assert.deepEqual((await read(accountA)).value, [{ id: "legacy-a" }]);
+}
 
 function log(
   partial: Partial<BabyLogEntry> & Pick<BabyLogEntry, "id" | "cat" | "time">,

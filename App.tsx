@@ -353,7 +353,11 @@ function RootApp() {
       };
       setCareSetup(restoredSetup);
       applyParentSetup(restoredSetup);
-      await rehydrateFromServer();
+      if (authenticatedUser) {
+        await rehydrateFromServer({ userId: authenticatedUser.id, babyId: serverBaby.id });
+      } else {
+        await rehydrateFromServer();
+      }
       setPhase("main");
     } else {
       await resetCareSetup();

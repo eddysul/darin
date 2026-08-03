@@ -68,6 +68,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList, "Diary">>();
   const {
     diaryEntries,
+    localDataScope,
     addDiary,
     updateDiary,
     deleteDiary,
@@ -117,11 +118,11 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
 
   useEffect(() => {
     void (async () => {
-      await Promise.all([hydrateDiaryDraft(), hydrateDiaryReminder()]);
+      await Promise.all([hydrateDiaryDraft(localDataScope, true), hydrateDiaryReminder()]);
       setDraftMemory(getDiaryDraft());
       setReminder(getDiaryReminder());
     })();
-  }, []);
+  }, [localDataScope]);
 
   const openComposeFresh = useCallback(() => {
     if (!allowAdd) return;
@@ -281,7 +282,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
     } else if (!allowAdd) {
       return;
     }
-    void clearDiaryDraft(todayKey);
+    void clearDiaryDraft(localDataScope, todayKey);
     setDraftMemory(null);
     const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
     const now = new Date();
@@ -324,7 +325,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
     }
 
     addDiary({
-      babyId: "baby-1",
+      babyId: localDataScope?.babyId ?? "",
       date: dateLabel,
       dateKey: todayKey,
       photos: draft.photos,
@@ -493,14 +494,14 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
             updatedAt: new Date().toISOString(),
           };
           setDraftMemory(payload);
-          void saveDiaryDraft(payload);
+          void saveDiaryDraft(payload, localDataScope);
         }}
         onSave={(draft) => persistFromDraft(draft, composeFromPush ? "notification" : "manual")}
         onDelete={(id) => {
           const entry = diaryEntries.find((diary) => diary.id === id);
           if (!entry || !canDeleteLog(myFamilyRole, entry.createdBy, me)) return;
           deleteDiary(id);
-          void clearDiaryDraft(todayKey);
+          void clearDiaryDraft(localDataScope, todayKey);
           setDraftMemory(null);
         }}
       />
@@ -526,7 +527,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
       <GrowthBookEditorModal
         visible={editorOpen}
         babyName={babyName}
-        babyId="baby-1"
+        babyId={localDataScope?.babyId ?? ""}
         entries={diaryEntries}
         edit={growthBookEdit}
         me={me}

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CustomCategory } from "../types/logCategory";
 import { useApp } from "./AppContext";
 import type { BabyLogActor, BabyLogEntry, ChatMessage, DiaryEntry } from "../types/babyLog";
@@ -16,6 +16,7 @@ import { getQuickRecords, hydrateQuickRecords, saveQuickRecords } from "../utils
 import { getBabyLogs, hydrateBabyLogs, saveBabyLogs } from "../utils/babyLogsStore";
 import {
   bootstrapCareLogsFromServer,
+  ensureCareLogBabyId,
   syncCareLogCreate,
   syncCareLogDelete,
   syncCareLogUpdate,
@@ -23,13 +24,19 @@ import {
 import { clearSupabaseSync, getSupabaseSync, hydrateSupabaseSync } from "../utils/supabaseSyncStore";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { isSupabaseConfigured } from "../lib/supabase";
-import { getDiaryEntries, hydrateDiaryEntries, saveDiaryEntries } from "../utils/diaryStore";
+import {
+  getDiaryEntries,
+  hydrateDiaryEntries,
+  resetDiaryEntriesMemory,
+  saveDiaryEntries,
+} from "../utils/diaryStore";
 import { getChatHistory, hydrateChatHistory, saveChatHistory } from "../utils/chatHistoryStore";
 import { getFamilyMembers, hydrateFamilyMembers, saveFamilyMembers } from "../utils/familyMembersStore";
 import {
   ensureGrowthBookEdit,
   getGrowthBookEdit,
   hydrateGrowthBookEdit,
+  resetGrowthBookEditMemory,
   saveGrowthBookEdit,
 } from "../utils/growthBookStore";
 import {
@@ -57,7 +64,18 @@ import { clearGrowthRecordsMigrationState } from "../utils/growthRecordsMigratio
 import { formatDateKey, shiftDateKey } from "../utils/dateKey";
 import { actorFromFamily } from "../utils/logProvenance";
 import type { BabyLogSource } from "../types/babyLog";
-import { getDiaryDraft, saveDiaryDraft } from "../utils/diaryDraftStore";
+import {
+  clearDiaryDraft,
+  getDiaryDraft,
+  resetDiaryDraftMemory,
+  saveDiaryDraft,
+} from "../utils/diaryDraftStore";
+import {
+  isValidLocalDataScope,
+  localDataScopeId,
+  type LocalDataScope,
+} from "../utils/scopedLocalStorage";
+import { BabyRepository } from "../repositories/BabyRepository";
 import { getDiaryReminder, saveDiaryReminder } from "../utils/diaryReminderStore";
 import { saveCareSetup } from "../utils/careSetupStore";
 import {
@@ -249,6 +267,7 @@ type BabyLogContextValue = {
   setQuickRecords: (records: QuickRecord[] | ((prev: QuickRecord[]) => QuickRecord[])) => void;
   logs: BabyLogEntry[];
   diaryEntries: DiaryEntry[];
+  localDataScope: LocalDataScope | null;
   familyMembers: FamilyMember[];
   growthBookEdit: GrowthBookEdit;
   setGrowthBookEdit: (edit: GrowthBookEdit | ((prev: GrowthBookEdit) => GrowthBookEdit)) => void;
@@ -297,7 +316,7 @@ type BabyLogContextValue = {
   storageReady: boolean;
   storageIssue: StorageIssue | null;
   retryPersistence: () => Promise<void>;
-  rehydrateFromServer: () => Promise<void>;
+  rehydrateFromServer: (scope?: LocalDataScope) => Promise<void>;
   prepareForLogout: () => Promise<void>;
   dismissStorageIssue: () => void;
   clearAllUserData: () => Promise<void>;
@@ -318,10 +337,13 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const [logsHydrated, setLogsHydrated] = useState(false);
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
   const [diaryHydrated, setDiaryHydrated] = useState(false);
+  const [localDataScope, setLocalDataScope] = useState<LocalDataScope | null>(null);
+  const localDataScopeRef = useRef<LocalDataScope | null>(null);
+  const storageHydrationRunRef = useRef(0);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [familyHydrated, setFamilyHydrated] = useState(false);
   const [growthBookEdit, setGrowthBookEditState] = useState<GrowthBookEdit>(() =>
-    createEmptyGrowthBookEdit({ babyId: "baby-1", babyName: "" }),
+    createEmptyGrowthBookEdit({ babyId: "", babyName: "" }),
   );
   const [growthBookHydrated, setGrowthBookHydrated] = useState(false);
   const [babyStickers, setBabyStickers] = useState<BabySticker[]>([]);
@@ -338,20 +360,67 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => subscribeStorageIssues(setStorageIssue), []);
 
-  const hydrateStorageState = useCallback(async (force = false) => {
+  const resolveLocalDataScope = useCallback(async (
+    override?: LocalDataScope,
+  ): Promise<LocalDataScope | null> => {
+    if (isValidLocalDataScope(override)) return override;
+    if (!isSupabaseConfigured()) return null;
+    const session = await AuthRepository.getSession();
+    if (!session) return null;
+
+    await hydrateSupabaseSync();
+    const sync = getSupabaseSync();
+    if (sync.userId === session.user.id && sync.babyId) {
+      return { userId: session.user.id, babyId: sync.babyId };
+    }
+
+    const babies = await BabyRepository.listMyBabies();
+    if (babies[0]) return { userId: session.user.id, babyId: babies[0].id };
+    if (!hasSavedCareSetup) return null;
+    const babyId = await ensureCareLogBabyId();
+    return babyId ? { userId: session.user.id, babyId } : null;
+  }, [hasSavedCareSetup]);
+
+  const hydrateStorageState = useCallback(async (force = false, scopeOverride?: LocalDataScope) => {
+    const hydrationRun = ++storageHydrationRunRef.current;
+    let scope: LocalDataScope | null = null;
+    try {
+      scope = await resolveLocalDataScope(scopeOverride);
+    } catch {
+      // Without a verified auth+baby scope, account data must remain hidden.
+      scope = null;
+    }
+    if (hydrationRun !== storageHydrationRunRef.current) return false;
+
+    const previousScope = localDataScopeRef.current;
+    const previousScopeId = previousScope ? localDataScopeId(previousScope) : null;
+    const nextScopeId = scope ? localDataScopeId(scope) : null;
+    if (previousScopeId !== nextScopeId) {
+      setDiaryHydrated(false);
+      setGrowthBookHydrated(false);
+      setDiaryEntries([]);
+      setGrowthBookEditState(createEmptyGrowthBookEdit({ babyId: scope?.babyId ?? "", babyName: careSetup.child.childName }));
+      resetDiaryEntriesMemory();
+      resetGrowthBookEditMemory();
+      resetDiaryDraftMemory();
+      localDataScopeRef.current = scope;
+      setLocalDataScope(scope);
+    }
+
     const [customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, growthRecordsOk, syncOk] =
       await Promise.all([
       hydrateCustomCategories(force),
       hydrateQuickRecords(force),
       hydrateBabyLogs(force),
-      hydrateDiaryEntries(force),
+      hydrateDiaryEntries(scope, force),
       hydrateChatHistory(force),
       hydrateFamilyMembers(force),
-      hydrateGrowthBookEdit(force),
+      hydrateGrowthBookEdit(scope, force),
       hydrateBabyStickers(force),
       hydrateGrowthRecords(force),
       hydrateSupabaseSync(force),
     ]);
+    if (hydrationRun !== storageHydrationRunRef.current) return false;
     void syncOk;
 
     if (customOk) setCustomCategoriesState(getCustomCategories());
@@ -379,6 +448,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         hasSavedCareSetup,
         localLogs: nextLogs,
       });
+      if (hydrationRun !== storageHydrationRunRef.current) return false;
 
       if (boot.usedServer && boot.logs !== null) {
         setLogs(boot.logs);
@@ -396,9 +466,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       if (storedDiary !== null) {
         const cleanedDiary = removeLegacySampleDiaries(storedDiary);
         setDiaryEntries(cleanedDiary);
-        if (cleanedDiary.length !== storedDiary.length) void saveDiaryEntries(cleanedDiary);
+        if (cleanedDiary.length !== storedDiary.length) void saveDiaryEntries(cleanedDiary, scope);
       }
-      setDiaryHydrated(true);
+      setDiaryHydrated(!!scope);
     }
     if (chatOk) {
       const storedChat = getChatHistory();
@@ -419,14 +489,14 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       const storedDiary = getDiaryEntries();
       setGrowthBookEditState(
         storedDiary && containsLegacySampleDiary(storedDiary)
-          ? createEmptyGrowthBookEdit({ babyId: "baby-1", babyName: careSetup.child.childName })
+          ? createEmptyGrowthBookEdit({ babyId: scope?.babyId ?? "", babyName: careSetup.child.childName })
           : ensureGrowthBookEdit({
-              babyId: "baby-1",
+              babyId: scope?.babyId ?? "",
               babyName: careSetup.child.childName,
               existing: storedEdit,
             }),
       );
-      setGrowthBookHydrated(true);
+      setGrowthBookHydrated(!!scope);
     }
     if (stickersOk) {
       const storedStickers = getBabyStickers();
@@ -439,6 +509,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       const boot = hasSavedCareSetup
         ? await bootstrapGrowthRecordsFromServer(localGrowthRecords)
         : { usedServer: false, records: null, migrated: 0, migrationFailed: 0 };
+      if (hydrationRun !== storageHydrationRunRef.current) return false;
       if (boot.usedServer && boot.records !== null) {
         setGrowthRecords(boot.records);
         void saveGrowthRecords(boot.records);
@@ -455,7 +526,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     }
     setStorageReady(true);
     return allLoaded;
-  }, [careSetup, hasSavedCareSetup]);
+  }, [careSetup, hasSavedCareSetup, resolveLocalDataScope]);
 
   useEffect(() => {
     void hydrateStorageState();
@@ -469,8 +540,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!diaryHydrated) return;
-    void saveDiaryEntries(diaryEntries);
-  }, [diaryEntries, diaryHydrated]);
+    void saveDiaryEntries(diaryEntries, localDataScope);
+  }, [diaryEntries, diaryHydrated, localDataScope]);
 
   useEffect(() => {
     if (!chatHydrated) return;
@@ -484,8 +555,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!growthBookHydrated) return;
-    void saveGrowthBookEdit(growthBookEdit);
-  }, [growthBookEdit, growthBookHydrated]);
+    void saveGrowthBookEdit(growthBookEdit, localDataScope);
+  }, [growthBookEdit, growthBookHydrated, localDataScope]);
 
   useEffect(() => {
     if (!stickersHydrated) return;
@@ -682,7 +753,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         {
           ...entry,
           id: createId(),
-          babyId: entry.babyId || "baby-1",
+          babyId: localDataScope?.babyId ?? entry.babyId,
           dateKey: entry.dateKey || formatDateKey(),
           photos: entry.photos ?? [],
           includedInGrowthBook: entry.includedInGrowthBook ?? false,
@@ -701,7 +772,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         ...prev,
       ]);
     },
-    [],
+    [localDataScope?.babyId],
   );
 
   const updateDiary = useCallback((id: string, patch: Partial<Omit<DiaryEntry, "id">>) => {
@@ -731,7 +802,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   const clearAllUserData = useCallback(async () => {
     const emptyGrowthBook = createEmptyGrowthBookEdit({
-      babyId: "baby-1",
+      babyId: localDataScope?.babyId ?? "",
       babyName: display.babyName,
     });
     setLogs([]);
@@ -745,9 +816,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setQuickRecordsState([]);
     await Promise.all([
       saveBabyLogs([]),
-      saveDiaryEntries([]),
+      saveDiaryEntries([], localDataScope),
       saveFamilyMembers([]),
-      saveGrowthBookEdit(emptyGrowthBook),
+      saveGrowthBookEdit(emptyGrowthBook, localDataScope),
+      clearDiaryDraft(localDataScope),
       saveBabyStickers([]),
       saveGrowthRecords([]),
       clearGrowthRecordsMigrationState(),
@@ -757,7 +829,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       clearSupabaseSync(),
       isSupabaseConfigured() ? AuthRepository.signOut().catch(() => undefined) : Promise.resolve(),
     ]);
-  }, [display.babyName]);
+  }, [display.babyName, localDataScope]);
 
   const inviteFamilyMember = useCallback(
     (draft: {
@@ -885,16 +957,16 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     await Promise.all([
       saveCareSetup(careSetup),
       saveBabyLogs(logs),
-      saveDiaryEntries(diaryEntries),
+      saveDiaryEntries(diaryEntries, localDataScope),
       saveChatHistory(chatHistory),
       saveFamilyMembers(familyMembers),
-      saveGrowthBookEdit(growthBookEdit),
+      saveGrowthBookEdit(growthBookEdit, localDataScope),
       saveBabyStickers(babyStickers),
       saveGrowthRecords(growthRecords),
       saveQuickRecords(quickRecords),
       saveCustomCategories(customCategories),
       saveDiaryReminder(reminder),
-      ...(draft ? [saveDiaryDraft(draft)] : []),
+      ...(draft ? [saveDiaryDraft(draft, localDataScope)] : []),
     ]);
   }, [
     careSetup,
@@ -905,20 +977,36 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     growthBookEdit,
     hydrateStorageState,
     logs,
+    localDataScope,
     babyStickers,
     growthRecords,
     quickRecords,
     storageIssue,
   ]);
 
-  const rehydrateFromServer = useCallback(async () => {
-    await hydrateStorageState(true);
+  const rehydrateFromServer = useCallback(async (scope?: LocalDataScope) => {
+    await hydrateStorageState(true, scope);
   }, [hydrateStorageState]);
 
   const prepareForLogout = useCallback(async () => {
-    // Account-scoped local data must never leak into a different login. Diary,
-    // growth-book and family data are still local-only, so clear their cache on logout.
-    const emptyGrowthBook = createEmptyGrowthBookEdit({ babyId: "baby-1", babyName: "" });
+    storageHydrationRunRef.current += 1;
+    // Preserve account-scoped Diary/Growth Book data. Only clear their in-memory view;
+    // the next authenticated account hydrates its own user+baby keys.
+    const scope = localDataScopeRef.current;
+    if (scope) {
+      await Promise.all([
+        saveDiaryEntries(diaryEntries, scope),
+        saveGrowthBookEdit(growthBookEdit, scope),
+      ]);
+    }
+    setDiaryHydrated(false);
+    setGrowthBookHydrated(false);
+    localDataScopeRef.current = null;
+    setLocalDataScope(null);
+    resetDiaryEntriesMemory();
+    resetGrowthBookEditMemory();
+    resetDiaryDraftMemory();
+    const emptyGrowthBook = createEmptyGrowthBookEdit({ babyId: "", babyName: "" });
     setLogs([]);
     setDiaryEntries([]);
     setFamilyMembers([]);
@@ -928,15 +1016,13 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setChatHistory([DEFAULT_GREETING]);
     await Promise.all([
       saveBabyLogs([]),
-      saveDiaryEntries([]),
       saveFamilyMembers([]),
-      saveGrowthBookEdit(emptyGrowthBook),
       saveBabyStickers([]),
       saveGrowthRecords([]),
       saveChatHistory([DEFAULT_GREETING]),
       clearSupabaseSync(),
     ]);
-  }, []);
+  }, [diaryEntries, growthBookEdit]);
 
   const qaDebug = useMemo<BabyLogContextValue["qaDebug"]>(() => {
     if (!__DEV__) return null;
@@ -954,7 +1040,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setFamilyHydrated(true);
       await Promise.all([
         saveBabyLogs(sampleLogs),
-        saveDiaryEntries(SEED_DIARY),
+        saveDiaryEntries(SEED_DIARY, localDataScope),
         saveChatHistory([DEFAULT_GREETING]),
         saveFamilyMembers(SEED_FAMILY),
       ]);
@@ -983,7 +1069,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         await saveChatHistory(next);
       },
     };
-  }, [chatHistory, hydrateStorageState]);
+  }, [chatHistory, hydrateStorageState, localDataScope]);
 
   const value = useMemo(
     () => ({
@@ -998,6 +1084,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setQuickRecords,
       logs,
       diaryEntries,
+      localDataScope,
       familyMembers,
       growthBookEdit,
       setGrowthBookEdit,
@@ -1046,6 +1133,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setQuickRecords,
       logs,
       diaryEntries,
+      localDataScope,
       familyMembers,
       growthBookEdit,
       setGrowthBookEdit,

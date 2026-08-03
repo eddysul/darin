@@ -4,12 +4,20 @@ import type { DiaryDraft } from "../types/diaryReminder";
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
 import { qaStorage } from "./qaStorage";
+import {
+  isValidLocalDataScope,
+  localDataScopeId,
+  readScopedWithLegacyMigration,
+  scopedStorageKey,
+  type LocalDataScope,
+} from "./scopedLocalStorage";
 
 const KEY = STORAGE_KEYS.diaryDraft;
 
 let memory: DiaryDraft | null = null;
 let hydrated = false;
 let hydratePromise: Promise<void> | null = null;
+let activeScopeId: string | null = null;
 
 function migrateDraft(raw: unknown): DiaryDraft | null {
   if (typeof raw !== "object" || raw === null) return null;
@@ -58,18 +66,54 @@ function migrateDraft(raw: unknown): DiaryDraft | null {
   };
 }
 
-export async function hydrateDiaryDraft(): Promise<void> {
+function parseDraft(raw: string): DiaryDraft | null {
+  return migrateDraft(JSON.parse(raw) as unknown);
+}
+
+function latestDraft(scoped: DiaryDraft | null, legacy: DiaryDraft): DiaryDraft {
+  if (!scoped) return legacy;
+  return scoped.updatedAt >= legacy.updatedAt ? scoped : legacy;
+}
+
+export async function hydrateDiaryDraft(
+  scope: LocalDataScope | null,
+  force = false,
+): Promise<void> {
+  if (!isValidLocalDataScope(scope)) {
+    resetDiaryDraftMemory();
+    return;
+  }
+  const nextScopeId = localDataScopeId(scope);
+  if (activeScopeId !== nextScopeId) {
+    memory = null;
+    hydrated = false;
+    hydratePromise = null;
+    activeScopeId = nextScopeId;
+  }
+  if (force) {
+    hydrated = false;
+    hydratePromise = null;
+  }
   if (hydrated) return;
   if (!hydratePromise) {
+    const requestedScopeId = nextScopeId;
     hydratePromise = (async () => {
       try {
-        const raw = await qaStorage.getItem(KEY);
-        memory = raw ? migrateDraft(JSON.parse(raw) as unknown) : null;
+        const result = await readScopedWithLegacyMigration({
+          baseKey: KEY,
+          scope,
+          parse: parseDraft,
+          serialize: JSON.stringify,
+          merge: latestDraft,
+        });
+        if (activeScopeId !== requestedScopeId) return;
+        memory = result.value;
       } catch {
+        if (activeScopeId !== requestedScopeId) return;
         memory = null;
         reportStorageIssue("load", KEY);
       }
-      hydrated = true;
+      if (activeScopeId === requestedScopeId) hydrated = true;
     })();
   }
   await hydratePromise;
@@ -79,22 +123,42 @@ export function getDiaryDraft(): DiaryDraft | null {
   return memory;
 }
 
-export async function saveDiaryDraft(draft: DiaryDraft): Promise<void> {
+export async function saveDiaryDraft(
+  draft: DiaryDraft,
+  scope: LocalDataScope | null,
+): Promise<void> {
+  if (!isValidLocalDataScope(scope)) return;
+  const scopeId = localDataScopeId(scope);
+  if (activeScopeId !== scopeId) return;
   memory = draft;
   hydrated = true;
   try {
-    await qaStorage.setItem(KEY, JSON.stringify(draft));
+    await qaStorage.setItem(scopedStorageKey(KEY, scope), JSON.stringify(draft));
   } catch {
     reportStorageIssue("save", KEY);
   }
 }
 
-export async function clearDiaryDraft(dateKey?: string): Promise<void> {
+export async function clearDiaryDraft(
+  scope: LocalDataScope | null,
+  dateKey?: string,
+): Promise<void> {
+  if (!isValidLocalDataScope(scope)) {
+    resetDiaryDraftMemory();
+    return;
+  }
   if (dateKey && memory && memory.dateKey !== dateKey) return;
   memory = null;
   try {
-    await qaStorage.removeItem(KEY);
+    await qaStorage.removeItem(scopedStorageKey(KEY, scope));
   } catch {
     reportStorageIssue("delete", KEY);
   }
+}
+
+export function resetDiaryDraftMemory(): void {
+  memory = null;
+  hydrated = false;
+  hydratePromise = null;
+  activeScopeId = null;
 }
