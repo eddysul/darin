@@ -290,23 +290,22 @@
 		};
 		9E0BA1BAA86F1A037E989C10 /* Copy Hermes dSYM */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
-			inputFileListPaths = (
-			);
 			inputPaths = (
 				"${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/API/hermes/hermes.framework.dSYM",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework/Info.plist",
 			);
 			name = "Copy Hermes dSYM";
-			outputFileListPaths = (
-			);
 			outputPaths = (
 				"${DWARF_DSYM_FOLDER_PATH}/hermes.framework.dSYM",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nHERMES_DSYM=\"${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/API/hermes/hermes.framework.dSYM\"\nif [ \"${ACTION}\" = \"install\" ] && [ -d \"${HERMES_DSYM}\" ]; then\n  mkdir -p \"${DWARF_DSYM_FOLDER_PATH}\"\n  /usr/bin/ditto \"${HERMES_DSYM}\" \"${DWARF_DSYM_FOLDER_PATH}/hermes.framework.dSYM\"\nfi\n";
+			shellScript = "set -e\nHERMES_DSYM=\"${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/API/hermes/hermes.framework.dSYM\"\nHERMES_PLIST=\"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework/Info.plist\"\nif [ -f \"${HERMES_PLIST}\" ]; then\n  /usr/libexec/PlistBuddy -c \"Set :MinimumOSVersion ${IPHONEOS_DEPLOYMENT_TARGET}\" \"${HERMES_PLIST}\" 2>/dev/null || \\\n    /usr/libexec/PlistBuddy -c \"Add :MinimumOSVersion string ${IPHONEOS_DEPLOYMENT_TARGET}\" \"${HERMES_PLIST}\"\nfi\nif [ \"${ACTION}\" = \"install\" ] && [ -d \"${HERMES_DSYM}\" ]; then\n  mkdir -p \"${DWARF_DSYM_FOLDER_PATH}\"\n  /usr/bin/ditto \"${HERMES_DSYM}\" \"${DWARF_DSYM_FOLDER_PATH}/hermes.framework.dSYM\"\nfi\n";
+			showEnvVarsInLog = 0;
 		};
 		D2FB645F8FBD469269C4E235 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -343,25 +342,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Darin/Pods-Darin-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		9E0BA1BAA86F1A037E989C10 /* Copy Hermes dSYM */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework/hermes",
-				"${SRCROOT}/scripts/generate-hermes-dsym.sh",
-			);
-			name = "Copy Hermes dSYM";
-			outputPaths = (
-				"${DWARF_DSYM_FOLDER_PATH}/hermes.framework.dSYM",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/scripts/generate-hermes-dsym.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */

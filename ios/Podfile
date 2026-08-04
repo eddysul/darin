@@ -193,8 +193,10 @@ target 'Darin' do
         end
         hermes_dsym_phase ||= user_target.new_shell_script_build_phase('Copy Hermes dSYM')
         hermes_dsym_phase.shell_path = '/bin/sh'
+        hermes_dsym_phase.always_out_of_date = '1'
         hermes_dsym_phase.input_paths = [
-          '${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/API/hermes/hermes.framework.dSYM'
+          '${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/API/hermes/hermes.framework.dSYM',
+          '${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework/Info.plist'
         ]
         hermes_dsym_phase.output_paths = [
           '${DWARF_DSYM_FOLDER_PATH}/hermes.framework.dSYM'
@@ -202,6 +204,11 @@ target 'Darin' do
         hermes_dsym_phase.shell_script = <<~'SCRIPT'
           set -e
           HERMES_DSYM="${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/API/hermes/hermes.framework.dSYM"
+          HERMES_PLIST="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework/Info.plist"
+          if [ -f "${HERMES_PLIST}" ]; then
+            /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion ${IPHONEOS_DEPLOYMENT_TARGET}" "${HERMES_PLIST}" 2>/dev/null || \
+              /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string ${IPHONEOS_DEPLOYMENT_TARGET}" "${HERMES_PLIST}"
+          fi
           if [ "${ACTION}" = "install" ] && [ -d "${HERMES_DSYM}" ]; then
             mkdir -p "${DWARF_DSYM_FOLDER_PATH}"
             /usr/bin/ditto "${HERMES_DSYM}" "${DWARF_DSYM_FOLDER_PATH}/hermes.framework.dSYM"
