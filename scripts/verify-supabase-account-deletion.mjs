@@ -164,6 +164,16 @@ try {
   pass("contact RLS and empty/long message validation enforced");
   pass("export source allows member scope, blocks non-member and produces valid JSON");
 
+  console.log(`TARGET owner_email=${ownerEmail}`);
+  console.log(`TARGET owner_user_id=${ownerId}`);
+  console.log(`TARGET solo_baby_id=${soloBabyId}`);
+  console.log(`TARGET shared_baby_id=${sharedBabyId}`);
+  console.log(`PRESERVE member_user_id=${memberId}`);
+  if (process.env.ACCOUNT_SAFETY_PAUSE_BEFORE_DELETE === "1") {
+    console.log("PAUSED Verify the QA targets above, then press Enter to continue deletion.");
+    await new Promise((resolve) => process.stdin.once("data", resolve));
+  }
+
   const invalidConfirmation = await owner.functions.invoke("delete-account", {
     method: "POST",
     body: { confirmationText: "delete", userId: memberId },
