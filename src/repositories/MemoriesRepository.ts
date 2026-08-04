@@ -25,6 +25,7 @@ import type {
 } from "../types/memory";
 import { createId } from "../utils/id";
 import { AuthRepository } from "./AuthRepository";
+import { NotificationRepository } from "./NotificationRepository";
 
 const MEMORIES_BUCKET = "memories";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
@@ -297,7 +298,14 @@ export const MemoriesRepository = {
       .select("*")
       .single();
     if (error) throw error;
-    return memoryCommentRowToModel(data);
+    const comment = memoryCommentRowToModel(data);
+    void this.getById(input.memoryPostId).then((post) => post && NotificationRepository.sendPushToBabyMembers({
+      eventType: "memory_comment",
+      babyId: post.babyId,
+      targetId: comment.id,
+      routeData: { route: "memory", memoryPostId: input.memoryPostId, babyId: post.babyId },
+    })).catch(() => undefined);
+    return comment;
   },
 
   async deleteComment(commentId: string): Promise<void> {
@@ -327,7 +335,14 @@ export const MemoriesRepository = {
       .select("*")
       .single();
     if (error) throw error;
-    return memoryReactionRowToModel(data);
+    const reaction = memoryReactionRowToModel(data);
+    void this.getById(input.memoryPostId).then((post) => post && NotificationRepository.sendPushToBabyMembers({
+      eventType: "memory_reaction",
+      babyId: post.babyId,
+      targetId: `${input.memoryPostId}:${authorId}:${input.reactionType}`,
+      routeData: { route: "memory", memoryPostId: input.memoryPostId, babyId: post.babyId },
+    })).catch(() => undefined);
+    return reaction;
   },
 
   async removeReaction(memoryPostId: string): Promise<void> {

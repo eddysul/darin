@@ -21,6 +21,15 @@ export type DiaryMediaType = "image";
 export type GrowthBookStatus = "draft" | "ready" | "exported";
 export type GrowthBookPageType = "cover" | "diary" | "letter" | "rolling_paper" | "custom";
 export type GrowthBookCommentType = "page_comment" | "rolling_paper" | "letter";
+export type NotificationEventType =
+  | "memory_comment"
+  | "memory_reaction"
+  | "growth_book_comment"
+  | "growth_book_rolling_paper"
+  | "family_joined"
+  | "diary_reminder"
+  | "test";
+export type NotificationEventStatus = "pending" | "sent" | "failed" | "skipped";
 
 export type CareLogPayload = {
   chip?: string;
@@ -270,6 +279,54 @@ export type MemoryReactionRow = {
   created_at: string;
 };
 
+export type PushTokenRow = {
+  id: string;
+  user_id: string;
+  device_id: string;
+  expo_push_token: string;
+  platform: "ios" | "android";
+  app_version: string | null;
+  build_number: string | null;
+  last_seen_at: string;
+  disabled_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NotificationSettingsRow = {
+  id: string;
+  user_id: string;
+  baby_id: string | null;
+  diary_reminder_enabled: boolean;
+  diary_reminder_time: string;
+  timezone: string;
+  family_activity_enabled: boolean;
+  invite_activity_enabled: boolean;
+  quiet_hours_enabled: boolean;
+  quiet_hours_start: string;
+  quiet_hours_end: string;
+  show_preview: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NotificationEventRow = {
+  id: string;
+  recipient_id: string;
+  actor_id: string | null;
+  baby_id: string | null;
+  event_type: NotificationEventType;
+  title: string;
+  body: string;
+  data: Json;
+  dedupe_key: string | null;
+  status: NotificationEventStatus;
+  error_message: string | null;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -393,6 +450,24 @@ export type Database = {
         Insert: Partial<MemoryReactionRow> &
           Pick<MemoryReactionRow, "memory_post_id" | "author_id" | "reaction_type">;
         Update: Partial<MemoryReactionRow>;
+        Relationships: [];
+      };
+      push_tokens: {
+        Row: PushTokenRow;
+        Insert: Partial<PushTokenRow> & Pick<PushTokenRow, "user_id" | "device_id" | "expo_push_token" | "platform">;
+        Update: Partial<PushTokenRow>;
+        Relationships: [];
+      };
+      notification_settings: {
+        Row: NotificationSettingsRow;
+        Insert: Partial<NotificationSettingsRow> & Pick<NotificationSettingsRow, "user_id">;
+        Update: Partial<NotificationSettingsRow>;
+        Relationships: [];
+      };
+      notification_events: {
+        Row: NotificationEventRow;
+        Insert: Partial<NotificationEventRow> & Pick<NotificationEventRow, "recipient_id" | "event_type" | "title">;
+        Update: Partial<NotificationEventRow>;
         Relationships: [];
       };
     };

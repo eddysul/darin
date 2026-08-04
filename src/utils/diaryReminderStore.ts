@@ -77,7 +77,7 @@ export function formatNextReminderLabel(hour: number, minute: number, now = new 
 
 export function matchesReminderPreset(hour: number, minute: number): string | "custom" {
   if (hour === 20 && minute === 0) return "20";
+  if (hour === 20 && minute === 30) return "20:30";
   if (hour === 21 && minute === 0) return "21";
-  if (hour === 22 && minute === 0) return "22";
   return "custom";
 }

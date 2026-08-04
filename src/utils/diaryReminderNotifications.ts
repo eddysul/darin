@@ -12,28 +12,48 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export type ReminderPermissionStatus = "granted" | "denied" | "undetermined";
+export type ReminderPermissionStatus = "granted" | "denied" | "not_determined" | "unavailable";
 
 export async function getReminderPermissionStatus(): Promise<ReminderPermissionStatus> {
+  if (Platform.OS !== "ios" && Platform.OS !== "android") return "unavailable";
   try {
     const { status } = await Notifications.getPermissionsAsync();
     if (status === "granted") return "granted";
     if (status === "denied") return "denied";
-    return "undetermined";
+    return "not_determined";
   } catch {
-    return "undetermined";
+    return "unavailable";
   }
 }
 
 export async function requestReminderPermission(): Promise<ReminderPermissionStatus> {
+  if (Platform.OS !== "ios" && Platform.OS !== "android") return "unavailable";
   try {
     const current = await Notifications.getPermissionsAsync();
     if (current.status === "granted") return "granted";
     const asked = await Notifications.requestPermissionsAsync();
     if (asked.status === "granted") return "granted";
-    return asked.status === "denied" ? "denied" : "undetermined";
+    return asked.status === "denied" ? "denied" : "not_determined";
   } catch {
-    return "denied";
+    return "unavailable";
+  }
+}
+
+export async function sendDiaryNotificationPreview(babyName: string): Promise<boolean> {
+  const permission = await requestReminderPermission();
+  if (permission !== "granted") return false;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "오늘 하루 어땠나요?",
+        body: `자기 전 ${babyName}와의 순간을 남겨보세요.`,
+        data: { route: "diary", source: "notification", date: "today", openCompose: true },
+      },
+      trigger: null,
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
 

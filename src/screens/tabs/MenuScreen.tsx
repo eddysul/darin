@@ -40,6 +40,7 @@ import {
   hydrateDiaryReminder,
   saveDiaryReminder,
 } from "../../utils/diaryReminderStore";
+import { sendDiaryNotificationPreview } from "../../utils/diaryReminderNotifications";
 
 type Props = {
   onOpenProfile: () => void;
@@ -63,6 +64,7 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
     setQuickRecords,
     clearAllUserData,
     rehydrateFromServer,
+    localDataScope,
   } = useBabyLog();
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
@@ -169,7 +171,7 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
         </MenuSection>
 
         <MenuSection title="알림">
-          <MenuRow icon="bell" title="일기 알림 설정" subtitle="오늘 일기 리마인더" onPress={() => setReminderOpen(true)} />
+          <MenuRow icon="bell" title="알림 설정" subtitle="일기 리마인더와 가족 소식" onPress={() => setReminderOpen(true)} />
           <MenuRow icon="clock" title="수유/수면 알림 설정" subtitle="돌봄 간격 알림" onPress={() => onOpenSettings("careAlerts")} />
         </MenuSection>
 
@@ -237,11 +239,13 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
         visible={reminderOpen}
         value={reminder}
         babyName={babyName}
+        babyId={localDataScope?.babyId ?? null}
         onClose={() => setReminderOpen(false)}
         onSave={(next) => {
           setReminder(next);
           void saveDiaryReminder(next);
         }}
+        onTestNotification={() => void sendDiaryNotificationPreview(babyName)}
       />
 
       <QuickRecordEditorSheet

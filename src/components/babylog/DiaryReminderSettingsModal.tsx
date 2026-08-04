@@ -26,11 +26,15 @@ import {
   type ReminderPermissionStatus,
 } from "../../utils/diaryReminderNotifications";
 import { colors, radius } from "../../theme";
+import { NotificationRepository } from "../../repositories/NotificationRepository";
+import { AuthRepository } from "../../repositories/AuthRepository";
+import { registerCurrentPushToken } from "../../utils/pushNotifications";
 
 type Props = {
   visible: boolean;
   value: DiaryReminderSettings;
   babyName?: string;
+  babyId?: string | null;
   onClose: () => void;
   onSave: (settings: DiaryReminderSettings) => void;
   /** Prototype: simulate in-app push → open compose (deep-link path) */
@@ -55,6 +59,7 @@ export function DiaryReminderSettingsModal({
   visible,
   value,
   babyName = "아기",
+  babyId = null,
   onClose,
   onSave,
   onTestNotification,
@@ -64,11 +69,16 @@ export function DiaryReminderSettingsModal({
   const [hour, setHour] = useState(value.hour);
   const [minute, setMinute] = useState(value.minute);
   const [repeat, setRepeat] = useState<DiaryReminderRepeat>(value.repeat ?? "daily");
-  const [permission, setPermission] = useState<ReminderPermissionStatus>("undetermined");
+  const [permission, setPermission] = useState<ReminderPermissionStatus>("not_determined");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [draftHour, setDraftHour] = useState(value.hour);
   const [draftMinute, setDraftMinute] = useState(value.minute);
   const [busy, setBusy] = useState(false);
+  const [familyActivityEnabled, setFamilyActivityEnabled] = useState(value.familyActivityEnabled ?? true);
+  const [inviteActivityEnabled, setInviteActivityEnabled] = useState(value.inviteActivityEnabled ?? true);
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(value.quietHoursEnabled ?? false);
+  const [showPreview, setShowPreview] = useState(value.showPreview ?? true);
+  const [serverMessage, setServerMessage] = useState("");
 
   useEffect(() => {
     if (!visible) return;
@@ -76,9 +86,26 @@ export function DiaryReminderSettingsModal({
     setHour(value.hour);
     setMinute(value.minute);
     setRepeat(value.repeat ?? "daily");
+    setFamilyActivityEnabled(value.familyActivityEnabled ?? true);
+    setInviteActivityEnabled(value.inviteActivityEnabled ?? true);
+    setQuietHoursEnabled(value.quietHoursEnabled ?? false);
+    setShowPreview(value.showPreview ?? true);
+    setServerMessage("");
     setPickerOpen(false);
     void getReminderPermissionStatus().then(setPermission);
-  }, [visible, value]);
+    if (babyId) {
+      void NotificationRepository.getSettings(babyId).then((server) => {
+        if (!server) return;
+        setEnabled(server.diaryReminderEnabled);
+        setHour(server.diaryReminderHour);
+        setMinute(server.diaryReminderMinute);
+        setFamilyActivityEnabled(server.familyActivityEnabled);
+        setInviteActivityEnabled(server.inviteActivityEnabled);
+        setQuietHoursEnabled(server.quietHoursEnabled);
+        setShowPreview(server.showPreview);
+      }).catch(() => setServerMessage("서버 설정을 불러오지 못했어요. 기기 설정은 계속 사용할 수 있어요."));
+    }
+  }, [babyId, visible, value]);
 
   const presetId = matchesReminderPreset(hour, minute);
   const scheduleLabel = formatReminderTime(hour, minute);
@@ -97,6 +124,28 @@ export function DiaryReminderSettingsModal({
         body: previewBody,
       });
       onSave(next);
+      if (babyId) {
+        const user = await AuthRepository.getUser();
+        if (user) {
+          await NotificationRepository.updateSettings({
+            userId: user.id,
+            babyId,
+            diaryReminderEnabled: next.enabled,
+            diaryReminderHour: next.hour,
+            diaryReminderMinute: next.minute,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+            familyActivityEnabled: next.familyActivityEnabled ?? familyActivityEnabled,
+            inviteActivityEnabled: next.inviteActivityEnabled ?? inviteActivityEnabled,
+            quietHoursEnabled: next.quietHoursEnabled ?? quietHoursEnabled,
+            quietHoursStart: next.quietHoursStart ?? "22:00",
+            quietHoursEnd: next.quietHoursEnd ?? "07:00",
+            showPreview: next.showPreview ?? showPreview,
+          });
+          setServerMessage("설정이 저장됐어요.");
+        }
+      }
+    } catch {
+      setServerMessage("서버 설정 저장에 실패했어요. 연결을 확인하고 다시 시도해주세요.");
     } finally {
       setBusy(false);
     }
@@ -118,6 +167,7 @@ export function DiaryReminderSettingsModal({
         });
         return;
       }
+      void registerCurrentPushToken();
     } else {
       await cancelDiaryReminderNotifications();
     }
@@ -150,6 +200,12 @@ export function DiaryReminderSettingsModal({
       hour,
       minute,
       repeat,
+      familyActivityEnabled,
+      inviteActivityEnabled,
+      quietHoursEnabled,
+      quietHoursStart: value.quietHoursStart ?? "22:00",
+      quietHoursEnd: value.quietHoursEnd ?? "07:00",
+      showPreview,
     });
     onClose();
   };
@@ -161,7 +217,7 @@ export function DiaryReminderSettingsModal({
           <Pressable onPress={onClose} hitSlop={10}>
             <Text style={styles.headerBtn}>닫기</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>일기 알림</Text>
+          <Text style={styles.headerTitle}>알림 설정</Text>
           <Pressable onPress={() => void handleSaveAndClose()} hitSlop={10} disabled={busy}>
             <Text style={styles.saveBtn}>완료</Text>
           </Pressable>
@@ -172,8 +228,8 @@ export function DiaryReminderSettingsModal({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.heroCard}>
-            <Text style={styles.heroTitle}>일기 알림</Text>
-            <Text style={styles.heroBody}>매일 밤, 오늘의 순간을 잊지 않게 알려드릴게요.</Text>
+            <Text style={styles.heroTitle}>알림</Text>
+            <Text style={styles.heroBody}>필요한 순간만 다정하게 알려드릴게요.</Text>
             <View style={styles.toggleRow}>
               <Text style={styles.toggleLabel}>알림 켜기</Text>
               <Switch
@@ -184,6 +240,9 @@ export function DiaryReminderSettingsModal({
                 disabled={busy}
               />
             </View>
+            <Text style={styles.permissionStatus}>
+              권한 상태 · {permission === "granted" ? "허용됨" : permission === "denied" ? "거부됨" : permission === "unavailable" ? "사용 불가" : "아직 요청하지 않음"}
+            </Text>
           </View>
 
           <Text style={styles.sectionTitle}>언제 알려드릴까요?</Text>
@@ -283,6 +342,44 @@ export function DiaryReminderSettingsModal({
           </View>
           <Text style={styles.hint}>MVP에서는 매일 알림만 예약돼요.</Text>
 
+          <Text style={styles.sectionTitle}>가족 소식</Text>
+          <View style={styles.card}>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleCopy}>
+                <Text style={styles.toggleLabel}>댓글·반응 알림</Text>
+                <Text style={styles.toggleHint}>추억과 성장책에 가족이 남긴 소식</Text>
+              </View>
+              <Switch value={familyActivityEnabled} onValueChange={setFamilyActivityEnabled} trackColor={{ false: colors.border, true: colors.amber }} />
+            </View>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleCopy}>
+                <Text style={styles.toggleLabel}>가족 참여 알림</Text>
+                <Text style={styles.toggleHint}>초대한 가족이 참여했을 때</Text>
+              </View>
+              <Switch value={inviteActivityEnabled} onValueChange={setInviteActivityEnabled} trackColor={{ false: colors.border, true: colors.amber }} />
+            </View>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleCopy}>
+                <Text style={styles.toggleLabel}>알림 내용 미리보기</Text>
+                <Text style={styles.toggleHint}>잠금 화면에 안전한 요약만 표시</Text>
+              </View>
+              <Switch value={showPreview} onValueChange={setShowPreview} trackColor={{ false: colors.border, true: colors.amber }} />
+            </View>
+          </View>
+
+          <Text style={styles.sectionTitle}>방해 금지</Text>
+          <View style={styles.card}>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleCopy}>
+                <Text style={styles.toggleLabel}>조용한 시간</Text>
+                <Text style={styles.toggleHint}>밤 10시부터 오전 7시까지 가족 알림을 쉬어요.</Text>
+              </View>
+              <Switch value={quietHoursEnabled} onValueChange={setQuietHoursEnabled} trackColor={{ false: colors.border, true: colors.amber }} />
+            </View>
+          </View>
+
+          {serverMessage ? <Text style={styles.serverMessage}>{serverMessage}</Text> : null}
+
           <View style={styles.previewCard}>
             <Text style={styles.cardEyebrow}>알림 미리보기</Text>
             <Text style={styles.previewTitle}>오늘 하루 어땠나요?</Text>
@@ -335,7 +432,7 @@ export function DiaryReminderSettingsModal({
               void persist({ ...DEFAULT_DIARY_REMINDER, lastFiredDateKey: value.lastFiredDateKey });
             }}
           >
-            <Text style={styles.resetBtnText}>기본값으로 (매일 밤 10시)</Text>
+            <Text style={styles.resetBtnText}>기본값으로 (매일 밤 9시)</Text>
           </Pressable>
         </ScrollView>
 
@@ -439,6 +536,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   toggleLabel: { fontSize: 15, fontWeight: "700", color: colors.text },
+  toggleCopy: { flex: 1, paddingRight: 12 },
+  toggleHint: { marginTop: 3, fontSize: 11.5, lineHeight: 16, color: colors.faint },
+  serverMessage: { marginBottom: 14, textAlign: "center", fontSize: 12, color: colors.muted },
+  permissionStatus: { marginTop: 10, fontSize: 11.5, color: colors.faint },
   sectionTitle: {
     fontSize: 15,
     fontWeight: "800",

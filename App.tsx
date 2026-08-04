@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_PARENT_PROFILE, useApp } from "./src/context/AppContext";
-import { NavigationContainer, type LinkingOptions } from "@react-navigation/native";
+import { NavigationContainer, createNavigationContainerRef, type LinkingOptions } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
+import * as Notifications from "expo-notifications";
 import { Alert, Linking, StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppProvider } from "./src/context/AppContext";
@@ -44,6 +45,7 @@ import {
   hydrateTermsAccepted,
   saveTermsAccepted,
 } from "./src/utils/termsStore";
+import { registerCurrentPushToken, unregisterCurrentPushToken } from "./src/utils/pushNotifications";
 
 type AppPhase =
   | "splash"
@@ -54,6 +56,7 @@ type AppPhase =
   | "main";
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 export default function App() {
   return (
@@ -77,10 +80,51 @@ export default function App() {
 
 function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile | null }) {
   const { setProfile } = useApp();
+  const { localDataScope } = useBabyLog();
+  const pendingNotificationRoute = useRef<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     if (onboardingProfile) setProfile(onboardingProfile);
   }, [onboardingProfile, setProfile]);
+
+  useEffect(() => {
+    if (!localDataScope?.userId) return;
+    void registerCurrentPushToken();
+  }, [localDataScope?.userId]);
+
+  const openNotificationRoute = useCallback((data: Record<string, unknown>) => {
+    if (!navigationRef.isReady()) {
+      pendingNotificationRoute.current = data;
+      return;
+    }
+    pendingNotificationRoute.current = null;
+    if (data.route === "memory" && typeof data.memoryPostId === "string") {
+      navigationRef.navigate("MemoryDetail", { memoryPostId: data.memoryPostId });
+      return;
+    }
+    if (data.route === "growth_book") {
+      navigationRef.navigate("MainTabs", { screen: "Diary", params: { openGrowthBookVault: true } });
+      return;
+    }
+    if (data.route === "family") {
+      navigationRef.navigate("BabyProfile");
+      return;
+    }
+    navigationRef.navigate("MainTabs", {
+      screen: "Diary",
+      params: { openCompose: Boolean(data.openCompose), source: "notification" },
+    });
+  }, []);
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      openNotificationRoute(response.notification.request.content.data as Record<string, unknown>);
+    });
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) openNotificationRoute(response.notification.request.content.data as Record<string, unknown>);
+    });
+    return () => subscription.remove();
+  }, [openNotificationRoute]);
 
   const linking: LinkingOptions<RootStackParamList> = {
     prefixes: ["knanny://", "exp://"],
@@ -108,7 +152,14 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
   };
 
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer
+      linking={linking}
+      ref={navigationRef}
+      onReady={() => {
+        const pending = pendingNotificationRoute.current;
+        if (pending) openNotificationRoute(pending);
+      }}
+    >
       <RootStack.Navigator
         screenOptions={{
           headerTitleAlign: "center",
@@ -241,6 +292,7 @@ function RootApp() {
   const handleSplashComplete = useCallback(() => setSplashFinished(true), []);
 
   const handleLogout = useCallback(async () => {
+    await unregisterCurrentPushToken();
     await prepareForLogout();
     await clearSession();
     setHasAuthSession(false);

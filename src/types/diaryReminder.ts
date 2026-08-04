@@ -18,13 +18,25 @@ export type DiaryReminderSettings = {
   lastFiredDateKey?: string;
   /** MVP: only `daily` is scheduled; others are UI placeholders. */
   repeat?: DiaryReminderRepeat;
+  familyActivityEnabled?: boolean;
+  inviteActivityEnabled?: boolean;
+  quietHoursEnabled?: boolean;
+  quietHoursStart?: string;
+  quietHoursEnd?: string;
+  showPreview?: boolean;
 };
 
 export const DEFAULT_DIARY_REMINDER: DiaryReminderSettings = {
   enabled: true,
-  hour: 22,
+  hour: 21,
   minute: 0,
   repeat: "daily",
+  familyActivityEnabled: true,
+  inviteActivityEnabled: true,
+  quietHoursEnabled: false,
+  quietHoursStart: "22:00",
+  quietHoursEnd: "07:00",
+  showPreview: true,
 };
 
 export const REMINDER_PRESETS: Array<{
@@ -35,6 +47,6 @@ export const REMINDER_PRESETS: Array<{
   recommended?: boolean;
 }> = [
   { id: "20", label: "저녁 8시", hour: 20, minute: 0 },
-  { id: "21", label: "밤 9시", hour: 21, minute: 0 },
-  { id: "22", label: "밤 10시", hour: 22, minute: 0, recommended: true },
+  { id: "20:30", label: "저녁 8시 30분", hour: 20, minute: 30 },
+  { id: "21", label: "밤 9시", hour: 21, minute: 0, recommended: true },
 ];

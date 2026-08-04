@@ -22,6 +22,7 @@ import {
   mediaStorageRef,
 } from "../utils/growthBookSupabaseMappers";
 import { AuthRepository } from "./AuthRepository";
+import { NotificationRepository } from "./NotificationRepository";
 
 const BUCKET = "growth-book-media";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
@@ -259,6 +260,17 @@ export const GrowthBookRepository = {
       body: input.body.trim(), comment_type: input.commentType, metadata: input.metadata ?? {},
     }).select("*").single();
     if (error) throw error;
+    void NotificationRepository.sendPushToBabyMembers({
+      eventType: input.commentType === "rolling_paper" ? "growth_book_rolling_paper" : "growth_book_comment",
+      babyId: input.babyId,
+      targetId: data.id,
+      routeData: {
+        route: "growth_book",
+        growthBookId: input.growthBookId,
+        pageId: input.pageId ?? undefined,
+        babyId: input.babyId,
+      },
+    }).catch(() => undefined);
     return data;
   },
 
