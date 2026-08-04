@@ -5,4 +5,5 @@ export { FamilyRepository } from "./FamilyRepository";
 export { CareLogRepository } from "./CareLogRepository";
 export { GrowthRecordRepository } from "./GrowthRecordRepository";
 export { DiaryRepository } from "./DiaryRepository";
+export { GrowthBookRepository } from "./GrowthBookRepository";
 export { MemoriesRepository } from "./MemoriesRepository";

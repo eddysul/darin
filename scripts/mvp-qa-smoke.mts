@@ -53,9 +53,15 @@ import { familyRoleToPermission, recordedAtFromDateKeyTime } from "../src/utils/
 import { detectLocalCareLogMigrationCandidates } from "../src/utils/careLogsMigration";
 import { detectLocalGrowthRecordMigrationCandidates } from "../src/utils/growthRecordsMigration";
 import type { GrowthRecord } from "../src/types/growthRecord";
-import type { DiaryEntryRow } from "../src/types/database";
+import type { DiaryEntryRow, GrowthBookPageRow, GrowthBookRow } from "../src/types/database";
 import { diaryEntryRowToModel } from "../src/utils/diarySupabaseMappers";
 import { diaryServerMigrationFlagKey } from "../src/utils/diaryServerMigrationStore";
+import { growthBookServerMigrationFlagKey } from "../src/utils/growthBookServerMigrationStore";
+import {
+  growthBookRowsToEdit,
+  mediaStoragePath,
+  mediaStorageRef,
+} from "../src/utils/growthBookSupabaseMappers";
 import {
   readScopedWithLegacyMigration,
   scopedMigrationFlagKey,
@@ -66,6 +72,53 @@ import {
 
 const today = formatDateKey();
 const me = { id: "me", name: "Me", role: "editor" as const, status: "active" as const, isMe: true };
+
+// --- Growth Book server mapping preserves page content and scoped migration flags ---
+{
+  const accountA: LocalDataScope = { userId: "user-a", babyId: "baby-a" };
+  const accountB: LocalDataScope = { userId: "user-b", babyId: "baby-a" };
+  assert.notEqual(growthBookServerMigrationFlagKey(accountA), growthBookServerMigrationFlagKey(accountB));
+  const storagePath = "baby-a/book-a/page-a/photo.jpg";
+  assert.equal(mediaStoragePath(mediaStorageRef(storagePath)), storagePath);
+  const book: GrowthBookRow = {
+    id: "book-a", baby_id: "baby-a", title: "콩의 성장책", status: "draft", created_by: "user-a",
+    created_at: "2026-08-03T01:00:00.000Z", updated_at: "2026-08-03T01:00:00.000Z", deleted_at: null,
+  };
+  const pages: GrowthBookPageRow[] = [{
+    id: "cover-a", growth_book_id: "book-a", baby_id: "baby-a", page_type: "cover",
+    diary_entry_id: null, page_order: 0, layout_type: null,
+    content_json: { coverTitle: "서버 성장책", coverPhotoRef: mediaStorageRef(storagePath) },
+    created_by: "user-a", created_at: book.created_at, updated_at: book.updated_at, deleted_at: null,
+  }, {
+    id: "page-a", growth_book_id: "book-a", baby_id: "baby-a", page_type: "diary",
+    diary_entry_id: "diary-a", page_order: 1, layout_type: "three_left_large_right_top_medium_bottom_small",
+    content_json: {
+      diaryId: "diary-a", photos: [mediaStorageRef(storagePath)],
+      photoLayout: "three_left_large_right_top_medium_bottom_small", pageComment: "성장책 전용 코멘트",
+      pageStickers: [{ id: "ps-1", pageId: "diary-a", stickerId: "s-1", xRatio: 0.2, yRatio: 0.3,
+        widthRatio: 0.15, zIndex: 1, createdBy: "user-a", createdAt: book.created_at }],
+      rollingComments: [], commentStickers: [], stickerIds: [],
+    },
+    created_by: "user-a", created_at: book.created_at, updated_at: book.updated_at, deleted_at: null,
+  }];
+  const edit = await growthBookRowsToEdit({
+    book, pages, comments: [], babyName: "콩",
+    signedUrlForPath: async (path) => `https://signed.example/${path}`,
+  });
+  assert.equal(edit.coverTitle, "서버 성장책");
+  assert.equal(edit.coverPhotoUri, `https://signed.example/${storagePath}`);
+  assert.equal(edit.pages["diary-a"]?.pageComment, "성장책 전용 코멘트");
+  assert.equal(edit.pages["diary-a"]?.pageStickers?.[0]?.xRatio, 0.2);
+
+  const normalizedEdit = await growthBookRowsToEdit({
+    book: { ...book, title: "의 성장책" },
+    pages: [{ ...pages[0], content_json: { coverTitle: "의 성장책" } }],
+    comments: [],
+    babyName: "콩",
+    signedUrlForPath: async () => null,
+  });
+  assert.equal(normalizedEdit.coverTitle, "콩의 성장책");
+}
 
 // --- Diary server mapping and migration flags preserve account/baby isolation ---
 {

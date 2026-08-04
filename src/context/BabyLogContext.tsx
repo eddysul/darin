@@ -46,6 +46,10 @@ import {
   saveGrowthBookEdit,
 } from "../utils/growthBookStore";
 import {
+  bootstrapGrowthBookFromServer,
+  syncGrowthBookEdit,
+} from "../utils/growthBookServerSync";
+import {
   getBabyStickers,
   hydrateBabyStickers,
   saveBabyStickers,
@@ -87,9 +91,11 @@ import { saveCareSetup } from "../utils/careSetupStore";
 import {
   clearStorageIssue,
   getStorageIssue,
+  reportStorageIssue,
   subscribeStorageIssues,
   type StorageIssue,
 } from "../utils/storageIssues";
+import { STORAGE_KEYS } from "../utils/storageKeys";
 import {
   backupQaData,
   hasQaBackup,
@@ -350,6 +356,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const [localDataScope, setLocalDataScope] = useState<LocalDataScope | null>(null);
   const localDataScopeRef = useRef<LocalDataScope | null>(null);
   const storageHydrationRunRef = useRef(0);
+  const growthBookDirtyRef = useRef(false);
+  const growthBookSyncRunRef = useRef(0);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [familyHydrated, setFamilyHydrated] = useState(false);
   const [growthBookEdit, setGrowthBookEditState] = useState<GrowthBookEdit>(() =>
@@ -406,6 +414,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     const previousScopeId = previousScope ? localDataScopeId(previousScope) : null;
     const nextScopeId = scope ? localDataScopeId(scope) : null;
     if (previousScopeId !== nextScopeId) {
+      growthBookDirtyRef.current = false;
+      growthBookSyncRunRef.current += 1;
       setDiaryHydrated(false);
       setGrowthBookHydrated(false);
       setDiaryEntries([]);
@@ -504,15 +514,24 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     if (growthOk) {
       const storedEdit = getGrowthBookEdit();
       const storedDiary = getDiaryEntries();
-      setGrowthBookEditState(
-        storedDiary && containsLegacySampleDiary(storedDiary)
-          ? createEmptyGrowthBookEdit({ babyId: scope?.babyId ?? "", babyName: careSetup.child.childName })
-          : ensureGrowthBookEdit({
-              babyId: scope?.babyId ?? "",
-              babyName: careSetup.child.childName,
-              existing: storedEdit,
-            }),
-      );
+      const localEdit = storedDiary && containsLegacySampleDiary(storedDiary)
+        ? createEmptyGrowthBookEdit({ babyId: scope?.babyId ?? "", babyName: careSetup.child.childName })
+        : ensureGrowthBookEdit({
+            babyId: scope?.babyId ?? "",
+            babyName: careSetup.child.childName,
+            existing: storedEdit,
+          });
+      const growthBookBoot = await bootstrapGrowthBookFromServer({
+        scope,
+        babyName: careSetup.child.childName,
+        localEdit,
+        diaryOrder: (getDiaryEntries() ?? []).filter((entry) => entry.includedInGrowthBook).map((entry) => entry.id),
+      });
+      if (hydrationRun !== storageHydrationRunRef.current) return false;
+      const nextEdit = growthBookBoot.usedServer && growthBookBoot.edit ? growthBookBoot.edit : localEdit;
+      setGrowthBookEditState(nextEdit);
+      void saveGrowthBookEdit(nextEdit, scope);
+      growthBookDirtyRef.current = growthBookBoot.mediaFailed > 0;
       setGrowthBookHydrated(!!scope);
     }
     if (stickersOk) {
@@ -576,6 +595,24 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   }, [growthBookEdit, growthBookHydrated, localDataScope]);
 
   useEffect(() => {
+    if (!growthBookHydrated || !growthBookDirtyRef.current || !localDataScope) return;
+    const run = ++growthBookSyncRunRef.current;
+    const timer = setTimeout(() => {
+      void syncGrowthBookEdit({
+        scope: localDataScope,
+        babyName: careSetup.child.childName,
+        edit: growthBookEdit,
+        diaryOrder: diaryEntries.filter((entry) => entry.includedInGrowthBook).map((entry) => entry.id),
+      }).then((saved) => {
+        if (run !== growthBookSyncRunRef.current) return;
+        if (saved) growthBookDirtyRef.current = false;
+        else reportStorageIssue("save", STORAGE_KEYS.growthBookEdit);
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [careSetup.child.childName, diaryEntries, growthBookEdit, growthBookHydrated, localDataScope]);
+
+  useEffect(() => {
     if (!stickersHydrated) return;
     void saveBabyStickers(babyStickers);
   }, [babyStickers, stickersHydrated]);
@@ -587,6 +624,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   const setGrowthBookEdit = useCallback(
     (edit: GrowthBookEdit | ((prev: GrowthBookEdit) => GrowthBookEdit)) => {
+      growthBookDirtyRef.current = true;
       setGrowthBookEditState((prev) => (typeof edit === "function" ? edit(prev) : edit));
     },
     [],
@@ -1056,8 +1094,16 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       await Promise.all([
         saveDiaryEntries(diaryEntries, scope),
         saveGrowthBookEdit(growthBookEdit, scope),
+        ...(growthBookDirtyRef.current ? [syncGrowthBookEdit({
+          scope,
+          babyName: careSetup.child.childName,
+          edit: growthBookEdit,
+          diaryOrder: diaryEntries.filter((entry) => entry.includedInGrowthBook).map((entry) => entry.id),
+        })] : []),
       ]);
     }
+    growthBookDirtyRef.current = false;
+    growthBookSyncRunRef.current += 1;
     setDiaryHydrated(false);
     setGrowthBookHydrated(false);
     localDataScopeRef.current = null;
@@ -1081,7 +1127,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveChatHistory([DEFAULT_GREETING]),
       clearSupabaseSync(),
     ]);
-  }, [diaryEntries, growthBookEdit]);
+  }, [careSetup.child.childName, diaryEntries, growthBookEdit]);
 
   const qaDebug = useMemo<BabyLogContextValue["qaDebug"]>(() => {
     if (!__DEV__) return null;

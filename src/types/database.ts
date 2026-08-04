@@ -18,6 +18,9 @@ export type MemoryMediaType = "image" | "video";
 export type MemoryTagType = "baby" | "family_member" | "friend_baby" | "manual_guest";
 export type MemoryTagStatus = "approved" | "pending" | "rejected";
 export type DiaryMediaType = "image";
+export type GrowthBookStatus = "draft" | "ready" | "exported";
+export type GrowthBookPageType = "cover" | "diary" | "letter" | "rolling_paper" | "custom";
+export type GrowthBookCommentType = "page_comment" | "rolling_paper" | "letter";
 
 export type CareLogPayload = {
   chip?: string;
@@ -153,6 +156,60 @@ export type DiaryMediaRow = {
   created_at: string;
 };
 
+export type GrowthBookRow = {
+  id: string;
+  baby_id: string;
+  title: string | null;
+  status: GrowthBookStatus;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type GrowthBookPageRow = {
+  id: string;
+  growth_book_id: string;
+  baby_id: string;
+  page_type: GrowthBookPageType;
+  diary_entry_id: string | null;
+  page_order: number;
+  layout_type: string | null;
+  content_json: Json;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type GrowthBookMediaRow = {
+  id: string;
+  growth_book_id: string;
+  page_id: string | null;
+  baby_id: string;
+  storage_path: string;
+  media_type: "image";
+  width: number | null;
+  height: number | null;
+  created_by: string;
+  created_at: string;
+};
+
+export type GrowthBookCommentRow = {
+  id: string;
+  growth_book_id: string;
+  page_id: string | null;
+  diary_entry_id: string | null;
+  baby_id: string;
+  author_id: string;
+  body: string;
+  comment_type: GrowthBookCommentType;
+  metadata: Json;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
 export type MemoryPostRow = {
   id: string;
   baby_id: string;
@@ -269,6 +326,33 @@ export type Database = {
         Update: Partial<DiaryMediaRow>;
         Relationships: [];
       };
+      growth_books: {
+        Row: GrowthBookRow;
+        Insert: Partial<GrowthBookRow> & Pick<GrowthBookRow, "baby_id" | "created_by">;
+        Update: Partial<GrowthBookRow>;
+        Relationships: [];
+      };
+      growth_book_pages: {
+        Row: GrowthBookPageRow;
+        Insert: Partial<GrowthBookPageRow> &
+          Pick<GrowthBookPageRow, "growth_book_id" | "baby_id" | "page_type" | "page_order" | "created_by">;
+        Update: Partial<GrowthBookPageRow>;
+        Relationships: [];
+      };
+      growth_book_media: {
+        Row: GrowthBookMediaRow;
+        Insert: Partial<GrowthBookMediaRow> &
+          Pick<GrowthBookMediaRow, "growth_book_id" | "baby_id" | "storage_path" | "created_by">;
+        Update: Partial<GrowthBookMediaRow>;
+        Relationships: [];
+      };
+      growth_book_comments: {
+        Row: GrowthBookCommentRow;
+        Insert: Partial<GrowthBookCommentRow> &
+          Pick<GrowthBookCommentRow, "growth_book_id" | "baby_id" | "author_id" | "body">;
+        Update: Partial<GrowthBookCommentRow>;
+        Relationships: [];
+      };
       memory_posts: {
         Row: MemoryPostRow;
         Insert: Partial<MemoryPostRow> &
@@ -325,6 +409,11 @@ export type Database = {
         Args: { p_diary_entry_id: string };
         Returns: undefined;
       };
+      can_view_growth_book: { Args: { p_growth_book_id: string }; Returns: boolean };
+      can_edit_growth_book: { Args: { p_growth_book_id: string }; Returns: boolean };
+      can_view_growth_book_page: { Args: { p_page_id: string }; Returns: boolean };
+      soft_delete_growth_book: { Args: { p_growth_book_id: string }; Returns: undefined };
+      soft_delete_growth_book_page: { Args: { p_page_id: string }; Returns: undefined };
       care_log_creator_unchanged: {
         Args: { p_id: string; p_created_by: string | null };
         Returns: boolean;

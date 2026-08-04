@@ -138,6 +138,50 @@ export type GrowthBookEdit = {
   updatedAt: string;
 };
 
+export type GrowthBookServerBook = {
+  id: string;
+  babyId: string;
+  title: string | null;
+  status: "draft" | "ready" | "exported";
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GrowthBookServerPage = {
+  id: string;
+  growthBookId: string;
+  babyId: string;
+  pageType: "cover" | "diary" | "letter" | "rolling_paper" | "custom";
+  diaryEntryId: string | null;
+  pageOrder: number;
+  layoutType: string | null;
+  content: Record<string, unknown>;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GrowthBookServerMedia = {
+  id: string;
+  growthBookId: string;
+  pageId: string;
+  babyId: string;
+  storagePath: string;
+  signedUrl?: string;
+  width?: number;
+  height?: number;
+  createdBy: string;
+  createdAt: string;
+};
+
+export type GrowthBookMigrationResult = {
+  migrated: boolean;
+  pagesUploaded: number;
+  mediaUploaded: number;
+  mediaFailed: number;
+};
+
 export function formatGrowthAuthorLabel(
   relationshipLabel: RelationshipLabel | string,
   name: string,

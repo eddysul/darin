@@ -129,6 +129,12 @@ export function ensureGrowthBookEdit(input: {
   babyName: string;
   existing: GrowthBookEdit | null;
 }): GrowthBookEdit {
-  if (input.existing && input.existing.babyId === input.babyId) return input.existing;
+  if (input.existing && input.existing.babyId === input.babyId) {
+    const coverTitle = input.existing.coverTitle.trim();
+    if (!coverTitle || coverTitle === "의 성장책") {
+      return { ...input.existing, coverTitle: `${input.babyName}의 성장책` };
+    }
+    return input.existing;
+  }
   return createEmptyGrowthBookEdit(input);
 }
