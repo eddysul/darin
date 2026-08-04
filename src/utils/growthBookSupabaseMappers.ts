@@ -91,6 +91,7 @@ export function diaryPageContent(page: GrowthBookPageEdit, photoRefs: string[]):
     schemaVersion: 1,
     diaryId: page.diaryId,
     photos: photoRefs,
+    photosOverridden: page.photosOverridden ?? false,
     photoLayout: page.photoLayout,
     photoLayoutTuning: (page.photoLayoutTuning ?? null) as Json,
     pageComment: page.pageComment ?? null,
@@ -176,6 +177,7 @@ export async function growthBookRowsToEdit(input: {
     edit.pages[row.diary_entry_id!] = {
       diaryId: row.diary_entry_id!,
       photos: hasPhotoOverride ? photos : undefined,
+      photosOverridden: content.photosOverridden === true,
       photoLayout: (stringValue(content.photoLayout) ?? row.layout_type ?? "single_large") as GrowthBookPageEdit["photoLayout"],
       photoLayoutTuning: record(content.photoLayoutTuning) as GrowthBookPageEdit["photoLayoutTuning"],
       pageComment: content.pageComment === null ? undefined : stringValue(content.pageComment),

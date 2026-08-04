@@ -271,6 +271,7 @@ export function GrowthBookEditorModal({
         {pageMode === "edit" && activePage.pageType === "diary" && activeEntry ? (
           <PageEditor
             key={activeEntry.id}
+            babyId={babyId}
             babyName={babyName}
             entry={activeEntry}
             edit={edit}
@@ -683,6 +684,7 @@ function PageList({
 }
 
 function PageEditor({
+  babyId,
   babyName,
   entry,
   edit,
@@ -693,6 +695,7 @@ function PageEditor({
   navigation,
   onPatch,
 }: {
+  babyId: string;
   babyName: string;
   entry: DiaryEntry;
   edit: GrowthBookEdit;
@@ -752,6 +755,7 @@ function PageEditor({
     upsertPage({
       ...pageEdit,
       photos: nextPhotos.slice(0, 4),
+      photosOverridden: true,
     });
   };
 
@@ -1089,6 +1093,7 @@ function PageEditor({
       <BabyStickerVaultModal
         embedded
         visible={stickerPickerOpen}
+        babyId={babyId}
         babyName={babyName}
         stickers={babyStickers}
         createdBy={logAuthor.userId}

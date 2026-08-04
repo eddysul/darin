@@ -11,7 +11,12 @@ import {
   weeklyTrend,
 } from "../src/utils/reportAggregates";
 import { buildCareLogDailySummary, buildDiaryMomentSuggestions } from "../src/utils/diaryMomentSuggestions";
-import { buildGrowthBookPages, estimateGrowthBookPageCount } from "../src/utils/growthBookPages";
+import {
+  buildGrowthBookPages,
+  estimateGrowthBookPageCount,
+  resolvePageEdit,
+  resolvePagePhotos,
+} from "../src/utils/growthBookPages";
 import { filterDiaries, resolveDiaryComposeTarget } from "../src/utils/diaryToday";
 import { buildVoiceSession } from "../src/utils/voiceToBabyLog";
 import { buildBabyLogConsultPrompt, buildCareContextPack } from "../src/utils/babyLogAIContext";
@@ -119,6 +124,31 @@ const me = { id: "me", name: "Me", role: "editor" as const, status: "active" as 
   assert.equal(edit.pages["diary-a"]?.pageStickers?.[0]?.xRatio, 0.2);
   assert.equal(edit.pages["diary-a"]?.rollingComments.length, 1);
   assert.equal(edit.pages["diary-a"]?.rollingComments[0]?.id, "roll-1");
+
+  const diaryWithNewPhoto: DiaryEntry = {
+    id: "diary-a",
+    babyId: "baby-a",
+    date: "8월 3일",
+    dateKey: "2026-08-03",
+    photos: ["https://signed.example/diary-photo.jpg"],
+    comment: "사진이 나중에 추가된 일기",
+    weatherStamp: "sun",
+    moodStamp: "love",
+    milestoneTag: null,
+    customMilestoneTag: null,
+    includedInGrowthBook: true,
+    createdAt: book.created_at,
+    updatedAt: book.updated_at,
+    source: "manual",
+    draftStatus: "saved",
+  };
+  const legacyEmptyPage = resolvePageEdit("diary-a", diaryWithNewPhoto, {
+    ...edit,
+    pages: { ...edit.pages, "diary-a": { ...edit.pages["diary-a"]!, photos: [], photosOverridden: false } },
+  });
+  assert.deepEqual(resolvePagePhotos(diaryWithNewPhoto, legacyEmptyPage), diaryWithNewPhoto.photos);
+  const intentionallyEmptyPage = { ...legacyEmptyPage, photos: [], photosOverridden: true };
+  assert.deepEqual(resolvePagePhotos(diaryWithNewPhoto, intentionallyEmptyPage), []);
 
   const normalizedEdit = await growthBookRowsToEdit({
     book: { ...book, title: "의 성장책" },

@@ -89,12 +89,14 @@ export function resolvePageEdit(
   edit: GrowthBookEdit | null | undefined,
 ): GrowthBookPageEdit {
   const existing = edit?.pages?.[diaryId];
-  const photos = existing?.photos ?? diary.photos ?? [];
+  const hasExplicitPhotos = existing?.photosOverridden === true || (existing?.photos?.length ?? 0) > 0;
+  const photos = hasExplicitPhotos ? existing?.photos ?? [] : diary.photos ?? [];
   const legacyStickerIds = Array.isArray(existing?.stickerIds) ? existing.stickerIds : [];
   const photoLayout = normalizePhotoLayout(existing?.photoLayout ?? existing?.layout, photos.length);
   return {
     diaryId,
     photos,
+    photosOverridden: existing?.photosOverridden,
     photoLayout,
     photoLayoutTuning: existing?.photoLayoutTuning,
     layout: existing?.layout,

@@ -108,6 +108,8 @@ export type GrowthBookPageEdit = {
   diaryId: string;
   /** When set, replaces diary photos for this growth-book page. */
   photos?: string[];
+  /** Distinguishes an intentional empty photo selection from an older empty snapshot. */
+  photosOverridden?: boolean;
   photoLayout: PhotoLayout;
   photoLayoutTuning?: PhotoLayoutTuning;
   /** @deprecated numeric layout saved by older growth-book drafts. */
