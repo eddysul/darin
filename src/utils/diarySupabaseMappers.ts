@@ -68,8 +68,10 @@ function fallbackDateLabel(dateKey: string): string {
 export function diaryEntryRowToModel(row: DiaryEntryRow, photos: string[] = []): DiaryEntry {
   const metadata = metadataObject(row.metadata);
   const createdBy: BabyLogActor = {
-    userId: row.author_id,
-    name: typeof metadata.authorName === "string" && metadata.authorName.trim() ? metadata.authorName : "가족",
+    userId: row.author_id ?? "deleted-user",
+    name: row.author_id === null
+      ? "탈퇴한 사용자"
+      : typeof metadata.authorName === "string" && metadata.authorName.trim() ? metadata.authorName : "가족",
     role: validRole(metadata.authorRole) ? metadata.authorRole : "editor",
   };
   const migrated = migrateDiaryEntry({

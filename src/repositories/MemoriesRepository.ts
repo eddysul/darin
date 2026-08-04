@@ -38,7 +38,7 @@ export function memoryPostRowToModel(row: MemoryPostRow): MemoryPost {
   return {
     id: row.id,
     babyId: row.baby_id,
-    authorId: row.author_id,
+    authorId: row.author_id ?? "deleted-user",
     caption: row.caption ?? undefined,
     privacyType: row.privacy_type,
     createdAt: row.created_at,
@@ -64,7 +64,7 @@ export function memoryCommentRowToModel(row: MemoryCommentRow): MemoryComment {
   return {
     id: row.id,
     memoryPostId: row.memory_post_id,
-    authorId: row.author_id,
+    authorId: row.author_id ?? "deleted-user",
     body: row.body,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -92,7 +92,7 @@ export function memoryTagRowToModel(row: MemoryTagRow): MemoryTag {
     taggedBabyId: row.tagged_baby_id ?? undefined,
     manualLabel: row.manual_label ?? undefined,
     status: row.status,
-    createdBy: row.created_by,
+    createdBy: row.created_by ?? "deleted-user",
     createdAt: row.created_at,
   };
 }

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -74,6 +75,7 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
   const [deleteLocal, setDeleteLocal] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
   const [emailAuthOpen, setEmailAuthOpen] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
@@ -102,7 +104,9 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
         style: "destructive",
         onPress: () => {
           setLoggingOut(true);
-          void Promise.resolve(logout()).finally(() => setLoggingOut(false));
+          void Promise.resolve(logout())
+            .catch(() => Alert.alert("로그아웃하지 못했어요", "네트워크 연결을 확인하고 다시 시도해주세요."))
+            .finally(() => setLoggingOut(false));
         },
       },
     ]);
@@ -117,7 +121,11 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
     setDeleting(true);
     setDeleteError("");
     try {
-      const result = await deleteServerAccount();
+      if (deleteConfirmation.trim() !== "삭제") {
+        setDeleteError("계속하려면 ‘삭제’를 정확히 입력해주세요.");
+        return;
+      }
+      const result = await deleteServerAccount(deleteConfirmation.trim());
       if (result.localOnly && !deleteLocal) {
         setDeleteOpen(false);
         Alert.alert(
@@ -190,11 +198,17 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
           <MenuRow icon="folder" title="성장책 설정" subtitle="날짜·작성자·기본 레이아웃" onPress={() => onOpenSettings("growthBook")} />
         </MenuSection>
 
-        <MenuSection title="구독/정책">
+        <MenuSection title="구독">
           <MenuRow icon="check" title="결제/구독" subtitle="플랜과 구매 복원" onPress={() => onOpenSettings("billing")} />
+        </MenuSection>
+
+        <MenuSection title="데이터/정책">
+          <MenuRow icon="folder" title="데이터 내보내기" subtitle="현재 아기 기록을 JSON으로 공유" onPress={() => onOpenSettings("dataExport")} />
           <MenuRow icon="folder" title="개인정보처리방침" subtitle="수집·보관·삭제 안내" onPress={() => onOpenSettings("privacy")} />
-          <MenuRow icon="folder" title="이용약관" subtitle="서비스 이용과 AI 안내" onPress={() => onOpenSettings("terms")} />
-          <MenuRow icon="edit" title="문의하기" subtitle="고객지원 및 문의 안내" onPress={() => onOpenSettings("privacy")} />
+          <MenuRow icon="folder" title="이용약관" subtitle="무료 beta 서비스 이용 안내" onPress={() => onOpenSettings("terms")} />
+          <MenuRow icon="check" title="Medical Disclaimer" subtitle="의료·AI 안내의 참고 범위" onPress={() => onOpenSettings("medical")} />
+          <MenuRow icon="folder" title="데이터 보존 및 삭제" subtitle="공유·탈퇴·로컬 cache 처리" onPress={() => onOpenSettings("retention")} />
+          <MenuRow icon="edit" title="문의하기" subtitle="앱 내 문의 또는 이메일" onPress={() => onOpenSettings("contact")} />
         </MenuSection>
 
         {__DEV__ ? <QaDebugPanel trigger="menu" /> : null}
@@ -210,8 +224,18 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
             title="계정 삭제"
             subtitle="서버 계정과 로컬 데이터 삭제"
             onPress={() => {
-              setDeleteError("");
-              setDeleteOpen(true);
+              Alert.alert(
+                "계정 삭제 안내",
+                "계정을 삭제하면 개인 설정과 알림 토큰이 삭제됩니다. 공유 중인 아기 기록은 다른 가족의 권한과 데이터 소유 상태에 따라 일부 보존될 수 있어요.",
+                [
+                  { text: "취소", style: "cancel" },
+                  { text: "계속", style: "destructive", onPress: () => {
+                    setDeleteError("");
+                    setDeleteConfirmation("");
+                    setDeleteOpen(true);
+                  } },
+                ],
+              );
             }}
             danger
           />
@@ -272,7 +296,7 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
             <Text style={styles.deleteTitle}>계정을 삭제할까요?</Text>
             <Text style={styles.deleteBody}>
               {hasServerDeletion
-                ? "서버 계정과 가족 공유 연결에서 제거됩니다. 삭제한 서버 데이터는 복구할 수 없어요."
+                ? "계정을 삭제하면 이 계정으로 로그인할 수 없으며, 개인 설정과 알림 토큰이 삭제됩니다. 가족과 공유 중인 아기 기록은 다른 가족 구성원의 접근 권한과 데이터 소유 상태에 따라 일부 보존될 수 있습니다."
                 : authUser && !AuthRepository.isAnonymousUser(authUser)
                   ? "이메일 계정의 안전한 서버 삭제 API가 아직 필요합니다. 현재는 계정을 삭제하지 않습니다."
                   : "익명 계정은 선택한 경우에만 이 기기의 로컬 데이터를 삭제합니다."}
@@ -289,6 +313,18 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
                 ? "계속하면 가족 공유에서 나가고 계정 삭제 요청을 전송합니다."
                 : "로컬 데이터 삭제가 꺼져 있으면 어떤 데이터도 삭제하지 않습니다."}
             </Text>
+            <View style={styles.confirmationField}>
+              <Text style={styles.deleteOptionTitle}>확인을 위해 ‘삭제’를 입력해주세요.</Text>
+              <TextInput
+                value={deleteConfirmation}
+                onChangeText={setDeleteConfirmation}
+                placeholder="삭제"
+                placeholderTextColor={colors.faint}
+                editable={!deleting}
+                autoCapitalize="none"
+                style={styles.confirmationInput}
+              />
+            </View>
             {deleteError ? (
               <ErrorState
                 title="계정을 삭제하지 못했어요"
@@ -301,7 +337,11 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
               <Pressable style={styles.cancelButton} onPress={() => setDeleteOpen(false)} disabled={deleting}>
                 <Text style={styles.cancelText}>취소</Text>
               </Pressable>
-              <Pressable style={styles.confirmDeleteButton} onPress={performDelete} disabled={deleting}>
+              <Pressable
+                style={[styles.confirmDeleteButton, deleteConfirmation.trim() !== "삭제" && styles.disabled]}
+                onPress={performDelete}
+                disabled={deleting || deleteConfirmation.trim() !== "삭제"}
+              >
                 {deleting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.confirmDeleteText}>최종 삭제</Text>}
               </Pressable>
             </View>
@@ -382,6 +422,8 @@ const styles = StyleSheet.create({
   deleteOptionTitle: { color: colors.text, fontSize: 13, fontWeight: "800" },
   deleteOptionMeta: { color: colors.faint, fontSize: 11, marginTop: 3 },
   deleteWarning: { marginTop: 13, color: colors.dangerText, fontSize: 11.5, lineHeight: 17 },
+  confirmationField: { marginTop: 14, gap: 8 },
+  confirmationInput: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundSecondary, paddingHorizontal: 14, color: colors.text, fontSize: 15 },
   deleteActions: { flexDirection: "row", gap: 9, marginTop: 18 },
   cancelButton: { flex: 1, minHeight: 46, borderRadius: 14, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   cancelText: { color: colors.muted, fontSize: 14, fontWeight: "800" },

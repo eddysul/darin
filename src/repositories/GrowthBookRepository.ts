@@ -206,7 +206,7 @@ export const GrowthBookRepository = {
     return {
       id: data.id, growthBookId: data.growth_book_id, pageId: data.page_id!, babyId: data.baby_id,
       storagePath: data.storage_path, width: data.width ?? undefined, height: data.height ?? undefined,
-      createdBy: data.created_by, createdAt: data.created_at,
+      createdBy: data.created_by ?? createdBy, createdAt: data.created_at,
     };
   },
 

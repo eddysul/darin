@@ -40,7 +40,7 @@ export function growthBookRowToModel(row: GrowthBookRow): GrowthBookServerBook {
     babyId: row.baby_id,
     title: row.title,
     status: row.status,
-    createdBy: row.created_by,
+    createdBy: row.created_by ?? "deleted-user",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -56,7 +56,7 @@ export function growthBookPageRowToModel(row: GrowthBookPageRow): GrowthBookServ
     pageOrder: row.page_order,
     layoutType: row.layout_type,
     content: record(row.content_json),
-    createdBy: row.created_by,
+    createdBy: row.created_by ?? "deleted-user",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -111,8 +111,8 @@ function commentRowToRolling(row: GrowthBookCommentRow): GrowthBookComment {
   return {
     id: stringValue(metadata.clientId) ?? row.id,
     pageId: stringValue(metadata.clientPageId) ?? row.diary_entry_id ?? row.page_id ?? "",
-    authorId: stringValue(metadata.clientAuthorId) ?? row.author_id,
-    authorName: stringValue(metadata.authorName) ?? "가족",
+    authorId: row.author_id === null ? "deleted-user" : stringValue(metadata.clientAuthorId) ?? row.author_id,
+    authorName: row.author_id === null ? "탈퇴한 사용자" : stringValue(metadata.authorName) ?? "가족",
     authorRelationshipLabel: relationship(metadata.authorRelationshipLabel),
     text: row.body,
     stickerIds: Array.isArray(metadata.stickerIds)
@@ -128,8 +128,8 @@ function commentRowToLetter(row: GrowthBookCommentRow, growthBookId: string): Gr
   return {
     id: stringValue(metadata.clientId) ?? row.id,
     growthBookId,
-    authorId: stringValue(metadata.clientAuthorId) ?? row.author_id,
-    authorName: stringValue(metadata.authorName) ?? "가족",
+    authorId: row.author_id === null ? "deleted-user" : stringValue(metadata.clientAuthorId) ?? row.author_id,
+    authorName: row.author_id === null ? "탈퇴한 사용자" : stringValue(metadata.authorName) ?? "가족",
     authorRelationshipLabel: relationship(metadata.authorRelationshipLabel),
     text: row.body,
     createdAt: row.created_at,

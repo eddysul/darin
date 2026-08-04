@@ -139,7 +139,7 @@ export type GrowthRecordRow = {
 export type DiaryEntryRow = {
   id: string;
   baby_id: string;
-  author_id: string;
+  author_id: string | null;
   entry_date: string;
   title: string | null;
   body: string | null;
@@ -170,7 +170,7 @@ export type GrowthBookRow = {
   baby_id: string;
   title: string | null;
   status: GrowthBookStatus;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -185,7 +185,7 @@ export type GrowthBookPageRow = {
   page_order: number;
   layout_type: string | null;
   content_json: Json;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -200,7 +200,7 @@ export type GrowthBookMediaRow = {
   media_type: "image";
   width: number | null;
   height: number | null;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
 };
 
@@ -210,7 +210,7 @@ export type GrowthBookCommentRow = {
   page_id: string | null;
   diary_entry_id: string | null;
   baby_id: string;
-  author_id: string;
+  author_id: string | null;
   body: string;
   comment_type: GrowthBookCommentType;
   metadata: Json;
@@ -222,7 +222,7 @@ export type GrowthBookCommentRow = {
 export type MemoryPostRow = {
   id: string;
   baby_id: string;
-  author_id: string;
+  author_id: string | null;
   caption: string | null;
   privacy_type: MemoryPrivacyType;
   created_at: string;
@@ -250,7 +250,7 @@ export type MemoryTagRow = {
   tagged_baby_id: string | null;
   manual_label: string | null;
   status: MemoryTagStatus;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
 };
 
@@ -264,7 +264,7 @@ export type MemorySelectedPersonRow = {
 export type MemoryCommentRow = {
   id: string;
   memory_post_id: string;
-  author_id: string;
+  author_id: string | null;
   body: string;
   created_at: string;
   updated_at: string;
@@ -325,6 +325,21 @@ export type NotificationEventRow = {
   sent_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ContactRequestCategory = "bug" | "account" | "data" | "family" | "feedback" | "other";
+
+export type ContactRequestRow = {
+  id: string;
+  user_id: string | null;
+  email: string | null;
+  category: ContactRequestCategory | null;
+  message: string;
+  app_version: string | null;
+  build_number: string | null;
+  device_info: Json | null;
+  status: "open" | "in_progress" | "closed";
+  created_at: string;
 };
 
 export type Database = {
@@ -468,6 +483,12 @@ export type Database = {
         Row: NotificationEventRow;
         Insert: Partial<NotificationEventRow> & Pick<NotificationEventRow, "recipient_id" | "event_type" | "title">;
         Update: Partial<NotificationEventRow>;
+        Relationships: [];
+      };
+      contact_requests: {
+        Row: ContactRequestRow;
+        Insert: Partial<ContactRequestRow> & Pick<ContactRequestRow, "user_id" | "message">;
+        Update: Partial<ContactRequestRow>;
         Relationships: [];
       };
     };

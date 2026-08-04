@@ -12,12 +12,12 @@ export function hasAccountDeletionApi(): boolean {
  * Delete the authenticated server account when a production API is configured.
  * Local/demo builds have no server identity, so the caller can still complete local deletion.
  */
-export async function deleteServerAccount(): Promise<AccountDeletionResult> {
+export async function deleteServerAccount(confirmationText: string): Promise<AccountDeletionResult> {
   const sb = getSupabase();
   if (sb) {
     const { data, error } = await sb.functions.invoke<{ deleted?: boolean; error?: string }>(
       "delete-account",
-      { method: "POST" },
+      { method: "POST", body: { confirmationText } },
     );
     if (error) throw new Error(`계정 삭제 요청 실패: ${error.message}`);
     if (!data?.deleted) throw new Error(data?.error ?? "계정 삭제 응답을 확인하지 못했어요.");
