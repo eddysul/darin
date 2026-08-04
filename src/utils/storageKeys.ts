@@ -19,7 +19,7 @@ export const STORAGE_KEYS = {
   termsAccepted: "darin:terms-accepted",
   /** Supabase sync pointers (babyId / userId) — not secrets. */
   supabaseSync: "darin:supabase-sync",
-  /** Local device auth fallback when Anonymous is disabled. */
+  /** Legacy fallback credential key. Read/write is forbidden; cleanup only. */
   supabaseDeviceAuth: "darin:supabase-device-auth",
   /** Email verification/linking flow metadata. Never stores a password. */
   pendingEmailAuth: "darin:pending-email-auth",

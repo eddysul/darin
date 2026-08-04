@@ -3,12 +3,10 @@ import type { Session, User } from "@supabase/supabase-js";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
 import { getSupabase, isSupabaseConfigured, requireSupabase } from "../lib/supabase";
-import { createId } from "../utils/id";
 import { STORAGE_KEYS } from "../utils/storageKeys";
 
 WebBrowser.maybeCompleteAuthSession();
 
-type DeviceAuth = { email: string; password: string };
 type PendingEmailAuth = { email: string; flow: "anonymous_upgrade" | "signup" };
 
 export type EmailAuthResult = {
@@ -42,23 +40,9 @@ let lastAuthError: string | null = null;
 let lastAuthErrorAt = 0;
 const AUTH_ERROR_COOLDOWN_MS = 60_000;
 
-async function loadDeviceAuth(): Promise<DeviceAuth | null> {
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEYS.supabaseDeviceAuth);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as DeviceAuth;
-    if (typeof parsed.email === "string" && typeof parsed.password === "string") return parsed;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-async function saveDeviceAuth(creds: DeviceAuth): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEYS.supabaseDeviceAuth, JSON.stringify(creds));
-}
-
-async function clearDeviceAuth(): Promise<void> {
+async function clearLegacyDeviceAuth(): Promise<void> {
+  // Older builds persisted a generated fallback password in AsyncStorage.
+  // Remove it on every auth transition; credentials must never be stored there.
   await AsyncStorage.removeItem(STORAGE_KEYS.supabaseDeviceAuth);
 }
 
@@ -101,40 +85,6 @@ function rememberAuthError(message: string): never {
   lastAuthError = message;
   lastAuthErrorAt = Date.now();
   throw new Error(message);
-}
-
-async function ensureDeviceSession(): Promise<Session> {
-  const sb = requireSupabase();
-  const existingCreds = await loadDeviceAuth();
-  if (existingCreds) {
-    const { data, error } = await sb.auth.signInWithPassword(existingCreds);
-    if (!error && data.session) return data.session;
-    // Stale creds — clear and fall through to one signup attempt.
-    await clearDeviceAuth();
-  }
-
-  if (lastAuthError && Date.now() - lastAuthErrorAt < AUTH_ERROR_COOLDOWN_MS) {
-    throw new Error(lastAuthError);
-  }
-
-  const email = `device.${createId().replace(/-/g, "")}@darin-device.local`;
-  const password = `${createId()}${createId()}`;
-  const { data, error } = await sb.auth.signUp({ email, password });
-  if (error) {
-    rememberAuthError(
-      /rate limit/i.test(error.message)
-        ? "email rate limit exceeded — enable Anonymous sign-ins (Auth → Providers), wait ~1 min, reload"
-        : error.message,
-    );
-  }
-  if (!data.session) {
-    rememberAuthError(
-      "Email confirmation is required. Enable Anonymous sign-ins, or turn off Confirm email in Supabase Auth.",
-    );
-  }
-  await saveDeviceAuth({ email, password });
-  lastAuthError = null;
-  return data.session!;
 }
 
 export const AuthRepository = {
@@ -201,7 +151,7 @@ export const AuthRepository = {
         const passwordResult = await sb.auth.updateUser({ password: input.password });
         if (passwordResult.error) throw passwordResult.error;
         await clearPendingEmailAuth();
-        await clearDeviceAuth();
+        await clearLegacyDeviceAuth();
         return {
           status: "authenticated",
           user: passwordResult.data.user,
@@ -269,7 +219,7 @@ export const AuthRepository = {
     });
     if (error) throw error;
     if (!data.session) throw new Error("로그인 세션을 만들지 못했어요.");
-    await Promise.all([clearDeviceAuth(), clearPendingEmailAuth()]);
+    await Promise.all([clearLegacyDeviceAuth(), clearPendingEmailAuth()]);
     return data.session;
   },
 
@@ -324,7 +274,7 @@ export const AuthRepository = {
       }
     }
 
-    await Promise.all([clearDeviceAuth(), clearPendingEmailAuth()]);
+    await Promise.all([clearLegacyDeviceAuth(), clearPendingEmailAuth()]);
     return {
       user: session.user,
       email: session.user.email ?? "",
@@ -395,7 +345,7 @@ export const AuthRepository = {
       user = updated.data.user;
     }
 
-    await Promise.all([clearDeviceAuth(), clearPendingEmailAuth()]);
+    await Promise.all([clearLegacyDeviceAuth(), clearPendingEmailAuth()]);
     return {
       user,
       email: user.email ?? credential.email ?? "",
@@ -499,12 +449,14 @@ export const AuthRepository = {
    * Ensure there is an auth session.
    * 1) Existing session
    * 2) Anonymous (preferred for MVP)
-   * 3) One-shot device email/password (only if Anonymous unavailable)
+   * If Anonymous Auth is unavailable, fail safely and let the account login UI
+   * recover instead of creating credentials in unencrypted local storage.
    */
   async ensureSession(): Promise<Session> {
     const sb = requireSupabase();
     const existing = await this.getSession();
     if (existing) {
+      await clearLegacyDeviceAuth();
       lastAuthError = null;
       return existing;
     }
@@ -520,19 +472,9 @@ export const AuthRepository = {
         return data.session;
       }
 
-      const anonymousDisabled =
-        Boolean(error) && /anonymous|disabled/i.test(error?.message ?? "");
-      if (error && !anonymousDisabled) {
-        console.warn("[supabase] anonymous sign-in failed:", error.message);
-      }
-      if (anonymousDisabled) {
-        console.warn(
-          "[supabase] Anonymous is disabled. Enable Auth → Providers → Anonymous (recommended).",
-        );
-      }
-
-      // Only if Anonymous truly unavailable — and never while rate-limited cooldown holds.
-      return ensureDeviceSession();
+      await clearLegacyDeviceAuth();
+      const message = error?.message ?? "Anonymous authentication is unavailable.";
+      return rememberAuthError(message);
     })().finally(() => {
       inFlight = null;
     });
@@ -544,7 +486,7 @@ export const AuthRepository = {
     const sb = getSupabase();
     lastAuthError = null;
     lastAuthErrorAt = 0;
-    await clearDeviceAuth();
+    await clearLegacyDeviceAuth();
     if (!sb) return;
     const { error } = await sb.auth.signOut();
     if (error) throw error;
