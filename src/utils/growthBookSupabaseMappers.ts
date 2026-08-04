@@ -108,7 +108,7 @@ export function letterPageContent(letters: GrowthBookLetter[]): Record<string, J
 function commentRowToRolling(row: GrowthBookCommentRow): GrowthBookComment {
   const metadata = record(row.metadata);
   return {
-    id: row.id,
+    id: stringValue(metadata.clientId) ?? row.id,
     pageId: stringValue(metadata.clientPageId) ?? row.diary_entry_id ?? row.page_id ?? "",
     authorId: stringValue(metadata.clientAuthorId) ?? row.author_id,
     authorName: stringValue(metadata.authorName) ?? "가족",
@@ -125,7 +125,7 @@ function commentRowToRolling(row: GrowthBookCommentRow): GrowthBookComment {
 function commentRowToLetter(row: GrowthBookCommentRow, growthBookId: string): GrowthBookLetter {
   const metadata = record(row.metadata);
   return {
-    id: row.id,
+    id: stringValue(metadata.clientId) ?? row.id,
     growthBookId,
     authorId: stringValue(metadata.clientAuthorId) ?? row.author_id,
     authorName: stringValue(metadata.authorName) ?? "가족",

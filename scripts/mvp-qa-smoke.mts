@@ -53,7 +53,7 @@ import { familyRoleToPermission, recordedAtFromDateKeyTime } from "../src/utils/
 import { detectLocalCareLogMigrationCandidates } from "../src/utils/careLogsMigration";
 import { detectLocalGrowthRecordMigrationCandidates } from "../src/utils/growthRecordsMigration";
 import type { GrowthRecord } from "../src/types/growthRecord";
-import type { DiaryEntryRow, GrowthBookPageRow, GrowthBookRow } from "../src/types/database";
+import type { DiaryEntryRow, GrowthBookCommentRow, GrowthBookPageRow, GrowthBookRow } from "../src/types/database";
 import { diaryEntryRowToModel } from "../src/utils/diarySupabaseMappers";
 import { diaryServerMigrationFlagKey } from "../src/utils/diaryServerMigrationStore";
 import { growthBookServerMigrationFlagKey } from "../src/utils/growthBookServerMigrationStore";
@@ -97,18 +97,28 @@ const me = { id: "me", name: "Me", role: "editor" as const, status: "active" as 
       photoLayout: "three_left_large_right_top_medium_bottom_small", pageComment: "성장책 전용 코멘트",
       pageStickers: [{ id: "ps-1", pageId: "diary-a", stickerId: "s-1", xRatio: 0.2, yRatio: 0.3,
         widthRatio: 0.15, zIndex: 1, createdBy: "user-a", createdAt: book.created_at }],
-      rollingComments: [], commentStickers: [], stickerIds: [],
+      rollingComments: [{ id: "roll-1", pageId: "diary-a", authorId: "user-a", authorName: "엄마",
+        authorRelationshipLabel: "엄마", text: "서버 롤링페이퍼", createdAt: book.created_at }],
+      commentStickers: [], stickerIds: [],
     },
     created_by: "user-a", created_at: book.created_at, updated_at: book.updated_at, deleted_at: null,
   }];
+  const comments: GrowthBookCommentRow[] = [{
+    id: "server-comment-a", growth_book_id: "book-a", page_id: "page-a", diary_entry_id: "diary-a",
+    baby_id: "baby-a", author_id: "user-a", body: "서버 롤링페이퍼", comment_type: "rolling_paper",
+    metadata: { clientId: "roll-1", clientAuthorId: "user-a", authorName: "엄마", authorRelationshipLabel: "엄마" },
+    created_at: book.created_at, updated_at: book.updated_at, deleted_at: null,
+  }];
   const edit = await growthBookRowsToEdit({
-    book, pages, comments: [], babyName: "콩",
+    book, pages, comments, babyName: "콩",
     signedUrlForPath: async (path) => `https://signed.example/${path}`,
   });
   assert.equal(edit.coverTitle, "서버 성장책");
   assert.equal(edit.coverPhotoUri, `https://signed.example/${storagePath}`);
   assert.equal(edit.pages["diary-a"]?.pageComment, "성장책 전용 코멘트");
   assert.equal(edit.pages["diary-a"]?.pageStickers?.[0]?.xRatio, 0.2);
+  assert.equal(edit.pages["diary-a"]?.rollingComments.length, 1);
+  assert.equal(edit.pages["diary-a"]?.rollingComments[0]?.id, "roll-1");
 
   const normalizedEdit = await growthBookRowsToEdit({
     book: { ...book, title: "의 성장책" },
