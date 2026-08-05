@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -13,7 +14,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { MemoryUploadModal } from "../../components/memories/MemoryUploadModal";
-import { memoryPrivacyLabel } from "../../components/memories/MemoryPrivacyPicker";
+import { memoryPrivacyPresentation } from "../../components/memories/memoryPresentation";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { MemoriesRepository } from "../../repositories/MemoriesRepository";
 import type { MemoryCard } from "../../types/memory";
@@ -36,15 +37,90 @@ const FILTERS: Array<{ key: MemoryFilter; label: string }> = [
   { key: "tagged", label: "태그됨" },
 ];
 
+const EMPTY_COPY: Record<MemoryFilter, { title: string; description: string }> = {
+  all: { title: "첫 번째 순간을 남겨보세요", description: "사진 한 장과 짧은 이야기로 오늘을 가족과 나눠보세요." },
+  family_circle: { title: "가족에게 공개된 순간이 아직 없어요", description: "함께 보고 싶은 오늘의 순간을 남겨보세요." },
+  only_me: { title: "나만 간직한 순간이 아직 없어요", description: "조용히 보관하고 싶은 사진과 이야기를 남겨보세요." },
+  tagged: { title: "태그된 순간이 아직 없어요", description: "가족이 태그한 순간이 생기면 여기에 모여요." },
+};
+
+type FeedCardProps = {
+  item: MemoryCard;
+  authorName: string;
+  expanded: boolean;
+  onToggleCaption: () => void;
+  onOpen: () => void;
+};
+
+const MemoryFeedCard = memo(function MemoryFeedCard({
+  item,
+  authorName,
+  expanded,
+  onToggleCaption,
+  onOpen,
+}: FeedCardProps) {
+  const privacy = memoryPrivacyPresentation(item.post.privacyType);
+  const createdAt = new Date(item.post.createdAt);
+  const caption = item.post.caption?.trim() ?? "";
+
+  return (
+    <View style={[styles.card, { borderColor: privacy.accent }]}>
+      <Pressable style={styles.thumbnail} onPress={onOpen} accessibilityRole="button" accessibilityLabel="추억 상세 보기">
+        {item.coverUrl ? (
+          <Image source={{ uri: item.coverUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+        ) : (
+          <BabyLogIcon kind="folder" size={32} color={colors.faint} />
+        )}
+        <View style={[styles.privacyBadge, { backgroundColor: privacy.soft }]}>
+          <Text style={[styles.privacyIcon, { color: privacy.accent }]}>{privacy.icon}</Text>
+          <Text style={[styles.privacyText, { color: privacy.accent }]}>{privacy.label}</Text>
+        </View>
+      </Pressable>
+      <View style={styles.cardBody}>
+        <Pressable onPress={onOpen} accessibilityRole="button">
+          <View style={styles.metaRow}>
+            <View style={[styles.authorAvatar, { backgroundColor: privacy.soft }]}>
+              <BabyLogIcon kind="profile" size={15} color={privacy.accent} />
+            </View>
+            <View style={styles.metaCopy}>
+              <Text style={styles.author}>{authorName}</Text>
+              <Text style={styles.meta}>
+                {createdAt.toLocaleDateString("ko-KR", { month: "long", day: "numeric" })} · {createdAt.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}
+              </Text>
+            </View>
+          </View>
+          {caption ? (
+            <Text style={styles.caption} numberOfLines={expanded ? undefined : 3}>{caption}</Text>
+          ) : null}
+        </Pressable>
+        {caption.length > 72 ? (
+          <Pressable style={styles.moreButton} onPress={onToggleCaption} hitSlop={8}>
+            <Text style={styles.moreText}>{expanded ? "접기" : "더 보기"}</Text>
+          </Pressable>
+        ) : null}
+        <View style={styles.reactionRow}>
+          <Pressable style={styles.reactionButton} onPress={onOpen} accessibilityLabel={`좋아요 ${item.reactionCount}개`}>
+            <Text style={styles.heart}>♡</Text><Text style={styles.reactionText}>{item.reactionCount}</Text>
+          </Pressable>
+          <Pressable style={styles.reactionButton} onPress={onOpen} accessibilityLabel={`댓글 ${item.commentCount}개`}>
+            <BabyLogIcon kind="chat" size={19} color={colors.muted} /><Text style={styles.reactionText}>{item.commentCount}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+});
+
 export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
   const insets = useSafeAreaInsets();
-  const { babyName, familyMembers, myFamilyRole, logAuthor, storageReady } = useBabyLog();
+  const { babyName, careSetup, familyMembers, myFamilyRole, logAuthor, storageReady } = useBabyLog();
   const [cards, setCards] = useState<MemoryCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [filter, setFilter] = useState<MemoryFilter>("all");
+  const [expandedCaptions, setExpandedCaptions] = useState<Set<string>>(() => new Set());
   const babyId = getSupabaseSync().babyId;
   const canCreate = myFamilyRole !== "viewer";
   const serverFamilyMembers = useMemo(
@@ -55,16 +131,19 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
     () => familyMembers.filter((member) => member.status === "active" && !member.isMe),
     [familyMembers],
   );
+  const togetherDays = useMemo(() => {
+    if (!careSetup.child.birthDate) return null;
+    const startedAt = new Date(`${careSetup.child.birthDate}T00:00:00`).getTime();
+    if (!Number.isFinite(startedAt) || startedAt > Date.now()) return null;
+    return Math.max(1, Math.floor((Date.now() - startedAt) / 86_400_000) + 1);
+  }, [careSetup.child.birthDate]);
   const filteredCards = useMemo(() => cards.filter((card) => {
     if (filter === "all") return true;
     if (filter === "family_circle") return card.post.privacyType === "family_circle";
     if (filter === "only_me") return card.post.privacyType === "only_me";
-    return card.tags.some((tag) =>
-      tag.tagType === "baby" ||
-      tag.taggedUserId === logAuthor.userId ||
-      tag.taggedUserId === card.post.authorId,
-    );
+    return card.post.privacyType === "tagged_family" || card.tags.some((tag) => tag.taggedUserId === logAuthor.userId);
   }), [cards, filter, logAuthor.userId]);
+  const emptyCopy = EMPTY_COPY[filter];
 
   const load = useCallback(async (refresh = false) => {
     if (!storageReady) return;
@@ -120,7 +199,8 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
       <View style={styles.familySection}>
         <View style={styles.paperPlane}><Text style={styles.paperPlaneText}>✈</Text></View>
         <View style={styles.familyCopy}>
-          <Text style={styles.familyTitle}>베베로그</Text>
+          <Text style={styles.familyTitle}>{babyName}네 가족</Text>
+          <Text style={styles.familySummary}>가족 {activeFamilyMembers.length + 1}명 · {togetherDays ? `함께 ${togetherDays}일` : "함께 기록 중"}</Text>
           {activeFamilyMembers.length === 0 ? (
             <Text style={styles.familyHint}>아직 초대된 가족이 없어요.</Text>
           ) : (
@@ -134,23 +214,21 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
             </View>
           )}
         </View>
-        {activeFamilyMembers.length === 0 ? (
-          <Pressable style={styles.inviteButton} onPress={onOpenSettings}>
-            <Text style={styles.inviteText}>가족 초대하기</Text>
-          </Pressable>
-        ) : null}
+        <Pressable style={styles.inviteButton} onPress={onOpenSettings}>
+          <Text style={styles.inviteText}>가족 초대</Text>
+        </Pressable>
       </View>
 
-      <View style={styles.filterRow}>
-        {FILTERS.map((item) => {
-          const active = filter === item.key;
-          return (
-            <Pressable key={item.key} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setFilter(item.key)}>
-              <Text style={[styles.filterText, active && styles.filterTextActive]}>{item.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          {FILTERS.map((item) => {
+            const active = filter === item.key;
+            return (
+              <Pressable key={item.key} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setFilter(item.key)}>
+                <Text style={[styles.filterText, active && styles.filterTextActive]}>{item.label}</Text>
+              </Pressable>
+            );
+          })}
+      </ScrollView>
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={colors.amber} /><Text style={styles.centerCopy}>가족 추억을 불러오는 중…</Text></View>
@@ -163,29 +241,29 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
       ) : filteredCards.length === 0 ? (
         <View style={styles.center}>
           <View style={styles.emptyIcon}><BabyLogIcon kind="sparkles" size={34} color={colors.amber} /></View>
-          <Text style={styles.emptyTitle}>첫 번째 순간을 남겨보세요</Text>
-          <Text style={styles.emptyCopy}>오늘의 사진 한 장과 짧은 이야기를{`\n`}가족과 함께 나눌 수 있어요.</Text>
-          {canCreate ? <Pressable style={styles.primaryButton} onPress={() => setUploadOpen(true)}><Text style={styles.primaryText}>첫 순간 올리기</Text></Pressable> : null}
+          <Text style={styles.emptyTitle}>{emptyCopy.title}</Text>
+          <Text style={styles.emptyCopy}>{emptyCopy.description}</Text>
+          {canCreate && filter !== "tagged" ? <Pressable style={styles.primaryButton} onPress={() => setUploadOpen(true)}><Text style={styles.primaryText}>{filter === "all" ? "첫 순간 올리기" : "순간 올리기"}</Text></Pressable> : null}
         </View>
       ) : (
         <FlatList
           data={filteredCards}
           keyExtractor={(item) => item.post.id}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          contentContainerStyle={[styles.grid, { paddingBottom: insets.bottom + 28 }]}
+          contentContainerStyle={[styles.feed, { paddingBottom: insets.bottom + 28 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.amber} />}
           renderItem={({ item }) => (
-            <Pressable style={styles.card} onPress={() => onOpenDetail(item.post.id)}>
-              <View style={styles.thumbnail}>
-                {item.coverUrl ? <Image source={{ uri: item.coverUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} /> : <BabyLogIcon kind="folder" size={28} color={colors.faint} />}
-                <View style={styles.privacyBadge}><Text style={styles.privacyText}>{memoryPrivacyLabel(item.post.privacyType)}</Text></View>
-              </View>
-              <View style={styles.cardBody}>
-                <Text style={styles.meta}>{authorName(item.post.authorId)} · {new Date(item.post.createdAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</Text>
-                <Text style={styles.counts}>♡ {item.reactionCount}  댓글 {item.commentCount}</Text>
-              </View>
-            </Pressable>
+            <MemoryFeedCard
+              item={item}
+              authorName={authorName(item.post.authorId)}
+              expanded={expandedCaptions.has(item.post.id)}
+              onOpen={() => onOpenDetail(item.post.id)}
+              onToggleCaption={() => setExpandedCaptions((current) => {
+                const next = new Set(current);
+                if (next.has(item.post.id)) next.delete(item.post.id);
+                else next.add(item.post.id);
+                return next;
+              })}
+            />
           )}
         />
       )}
@@ -216,7 +294,8 @@ const styles = StyleSheet.create({
   paperPlane: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
   paperPlaneText: { color: colors.amber, fontSize: 18, fontWeight: "800" },
   familyCopy: { flex: 1 },
-  familyTitle: { color: colors.text, fontSize: 13, fontWeight: "800", marginBottom: 6 },
+  familyTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  familySummary: { color: colors.muted, fontSize: 11.5, marginTop: 2, marginBottom: 7 },
   familyHint: { color: colors.muted, fontSize: 12.5 },
   familyChips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   familyChip: { minHeight: 30, maxWidth: 92, paddingHorizontal: 8, borderRadius: radius.full, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 4 },
@@ -224,7 +303,7 @@ const styles = StyleSheet.create({
   familyChipText: { color: colors.muted, fontSize: 11.5, fontWeight: "700", flexShrink: 1 },
   inviteButton: { minHeight: 36, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
   inviteText: { color: colors.amber, fontSize: 11.5, fontWeight: "800" },
-  filterRow: { flexDirection: "row", paddingHorizontal: 16, gap: 8, marginBottom: 8 },
+  filterRow: { flexDirection: "row", paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
   filterChip: { minHeight: 36, paddingHorizontal: 12, borderRadius: radius.full, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   filterChipActive: { backgroundColor: colors.amber, borderColor: colors.amber },
   filterText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
@@ -239,14 +318,23 @@ const styles = StyleSheet.create({
   primaryText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   secondaryButton: { minHeight: 44, marginTop: 18, paddingHorizontal: 18, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
   secondaryText: { color: colors.amber, fontSize: 13, fontWeight: "800" },
-  grid: { paddingHorizontal: 16, paddingTop: 4 },
-  row: { gap: 12, marginBottom: 12 },
-  // Fixed half-width so a lone card does not stretch full row.
-  card: { width: "48%", minWidth: 0, borderRadius: 20, overflow: "hidden", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
-  thumbnail: { aspectRatio: 0.8, alignItems: "center", justifyContent: "center", backgroundColor: colors.cardHi },
-  privacyBadge: { position: "absolute", left: 8, bottom: 8, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, backgroundColor: "rgba(46,42,38,0.55)" },
-  privacyText: { color: "#FFFFFF", fontSize: 9.5, fontWeight: "600" },
-  cardBody: { padding: 10 },
-  meta: { color: colors.faint, fontSize: 9.5, marginTop: 5 },
-  counts: { color: colors.muted, fontSize: 10.5, marginTop: 6 },
+  feed: { paddingHorizontal: 16, paddingTop: 4, gap: 14 },
+  card: { width: "100%", minWidth: 0, borderRadius: 22, overflow: "hidden", backgroundColor: colors.card, borderWidth: 1.25 },
+  thumbnail: { width: "100%", aspectRatio: 4 / 3, alignItems: "center", justifyContent: "center", backgroundColor: colors.cardHi },
+  privacyBadge: { position: "absolute", left: 12, top: 12, minHeight: 28, paddingHorizontal: 9, borderRadius: radius.full, flexDirection: "row", alignItems: "center", gap: 4 },
+  privacyIcon: { fontSize: 11, fontWeight: "900" },
+  privacyText: { fontSize: 10.5, fontWeight: "800" },
+  cardBody: { paddingHorizontal: 14, paddingVertical: 13 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  authorAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  metaCopy: { flex: 1 },
+  author: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  meta: { color: colors.faint, fontSize: 10.5, marginTop: 2 },
+  caption: { color: colors.text, fontSize: 14, lineHeight: 21, marginTop: 11 },
+  moreButton: { alignSelf: "flex-start", minHeight: 32, justifyContent: "center", marginTop: 2 },
+  moreText: { color: colors.amber, fontSize: 12, fontWeight: "800" },
+  reactionRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  reactionButton: { minWidth: 54, minHeight: 44, paddingHorizontal: 5, flexDirection: "row", alignItems: "center", gap: 5 },
+  heart: { color: colors.muted, fontSize: 25, lineHeight: 27 },
+  reactionText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
 });

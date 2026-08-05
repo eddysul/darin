@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -18,11 +19,13 @@ import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
 import { MemoryEditModal } from "../components/memories/MemoryEditModal";
 import { MemoryMediaViewer } from "../components/memories/MemoryMediaViewer";
 import { memoryPrivacyLabel } from "../components/memories/MemoryPrivacyPicker";
+import { memoryPrivacyPresentation } from "../components/memories/memoryPresentation";
 import { useBabyLog } from "../context/BabyLogContext";
 import type { RootStackParamList } from "../navigation/types";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { MemoriesRepository } from "../repositories/MemoriesRepository";
 import type { MemoryPostBundle } from "../types/memory";
+import { memberRelationshipLabel } from "../types/family";
 import { colors, radius } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MemoryDetail">;
@@ -39,12 +42,13 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [editOpen, setEditOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const serverFamilyMembers = useMemo(() => familyMembers.filter((member) => UUID_PATTERN.test(member.id)), [familyMembers]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     setError("");
-    setImageUrl(""); // drop any previous signed URL before reminting
+    if (showSpinner) setImageUrl(""); // drop stale URL when entering; keep current media stable during inline mutations
     try {
       const next = await MemoriesRepository.getBundleById(route.params.memoryPostId);
       if (!next) throw new Error("삭제되었거나 볼 수 없는 추억이에요.");
@@ -55,7 +59,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       setBundle(null);
       setError(cause instanceof Error ? cause.message : "추억을 불러오지 못했어요.");
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, [route.params.memoryPostId]);
 
@@ -66,6 +70,12 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const authorName = (id: string) => {
     if (id === logAuthor.userId || id === userId) return logAuthor.name;
     return familyMembers.find((member) => member.id === id)?.name ?? "가족";
+  };
+
+  const commentAuthorLabel = (id: string) => {
+    if (id === logAuthor.userId || id === userId) return `나 · ${logAuthor.name}`;
+    const member = familyMembers.find((item) => item.id === id);
+    return member ? `${memberRelationshipLabel(member)} · ${member.name}` : "가족";
   };
 
   const isAuthor = bundle?.post.authorId === userId;
@@ -81,7 +91,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     try {
       await MemoriesRepository.addComment({ memoryPostId: bundle.post.id, body: comment });
       setComment("");
-      await load();
+      await load(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "댓글을 남기지 못했어요.");
     } finally {
@@ -96,7 +106,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     try {
       if (myReaction) await MemoriesRepository.removeReaction(bundle.post.id);
       else await MemoriesRepository.setReaction({ memoryPostId: bundle.post.id, reactionType: "heart" });
-      await load();
+      await load(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "반응을 저장하지 못했어요.");
     } finally {
@@ -110,7 +120,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     setError("");
     try {
       await MemoriesRepository.setReaction({ memoryPostId: bundle.post.id, reactionType: "heart" });
-      await load();
+      await load(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "반응을 저장하지 못했어요.");
     } finally {
@@ -152,28 +162,31 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const guestTagLabels = bundle.tags
     .filter((tag) => tag.tagType === "manual_guest" && tag.manualLabel)
     .map((tag) => tag.manualLabel as string);
+  const privacy = memoryPrivacyPresentation(bundle.post.privacyType);
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
         <MemoryMediaViewer media={bundle.media} imageUrl={imageUrl} onDoubleTap={() => void likeFromDoubleTap()} />
 
-        <View style={styles.postCard}>
+        <View style={[styles.postCard, { borderColor: privacy.accent }]}>
           <View style={styles.metaRow}>
             <View style={styles.authorAvatar}><BabyLogIcon kind="profile" size={17} color={colors.amber} /></View>
             <View style={styles.metaCopy}>
               <Text style={styles.author}>{authorName(bundle.post.authorId)}</Text>
               <Text style={styles.date}>{new Date(bundle.post.createdAt).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })}</Text>
             </View>
-            <Text style={styles.privacy}>{memoryPrivacyLabel(bundle.post.privacyType)}</Text>
+            <View style={[styles.privacyBadge, { backgroundColor: privacy.soft }]}>
+              <Text style={[styles.privacyBadgeText, { color: privacy.accent }]}>{privacy.icon} {memoryPrivacyLabel(bundle.post.privacyType)}</Text>
+            </View>
           </View>
           <View style={styles.actionRow}>
             <Pressable style={styles.actionButton} onPress={() => void toggleReaction()} disabled={working}>
               <Text style={[styles.actionHeart, myReaction && styles.actionHeartActive]}>{myReaction ? "♥" : "♡"}</Text>
             </Pressable>
-            <View style={styles.actionButton}>
+            <Pressable style={styles.actionButton} onPress={() => setCommentsOpen(true)} accessibilityLabel="댓글 열기">
               <BabyLogIcon kind="chat" size={20} color={colors.muted} />
-            </View>
+            </Pressable>
             <Text style={styles.actionCount}>좋아요 {bundle.reactions.length} · 댓글 {bundle.comments.length}</Text>
           </View>
           {bundle.post.caption ? (
@@ -204,30 +217,51 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
           ) : null}
         </View>
 
-        <View style={styles.commentsCard}>
-          <Text style={styles.sectionTitle}>댓글 {bundle.comments.length}</Text>
-          {bundle.comments.length === 0 ? <Text style={styles.emptyComments}>아직 댓글이 없어요.</Text> : bundle.comments.map((item) => {
-            const mayDelete = item.authorId === userId || canDelete;
-            return (
-              <View key={item.id} style={styles.commentRow}>
-                <View style={styles.commentCopy}><Text style={styles.commentAuthor}>{authorName(item.authorId)}</Text><Text style={styles.commentBody}>{item.body}</Text></View>
-                {mayDelete ? <Pressable style={styles.commentDelete} onPress={() => {
-                  if (working) return;
-                  setWorking(true);
-                  void MemoriesRepository.deleteComment(item.id).then(load).catch((cause) => setError(cause instanceof Error ? cause.message : "댓글을 삭제하지 못했어요.")).finally(() => setWorking(false));
-                }}><Text style={styles.commentDeleteText}>삭제</Text></Pressable> : null}
-              </View>
-            );
-          })}
-          <View style={styles.composer}>
-            <TextInput style={styles.commentInput} value={comment} onChangeText={setComment} placeholder="가족에게 댓글 남기기" placeholderTextColor={colors.faint} maxLength={500} multiline />
-            <Pressable style={[styles.send, (!comment.trim() || working) && styles.disabled]} onPress={() => void submitComment()} disabled={!comment.trim() || working}><Text style={styles.sendText}>등록</Text></Pressable>
-          </View>
-        </View>
+        <Pressable style={styles.commentsSummary} onPress={() => setCommentsOpen(true)}>
+          <BabyLogIcon kind="chat" size={18} color={colors.amber} />
+          <Text style={styles.commentsSummaryText}>{bundle.comments.length ? `댓글 ${bundle.comments.length}개 보기` : "첫 댓글 남기기"}</Text>
+        </Pressable>
         {error ? <Text style={styles.inlineError}>{error}</Text> : null}
       </ScrollView>
 
       <MemoryEditModal visible={editOpen} bundle={bundle} familyMembers={serverFamilyMembers} onClose={() => setEditOpen(false)} onSaved={() => void load()} />
+
+      <Modal visible={commentsOpen} transparent animationType="slide" onRequestClose={() => setCommentsOpen(false)}>
+        <KeyboardAvoidingView style={styles.sheetOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setCommentsOpen(false)} />
+          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>댓글 {bundle.comments.length}</Text>
+              <Pressable style={styles.sheetClose} onPress={() => setCommentsOpen(false)} accessibilityLabel="댓글 닫기"><Text style={styles.sheetCloseText}>닫기</Text></Pressable>
+            </View>
+            <ScrollView style={styles.commentList} contentContainerStyle={styles.commentListContent} keyboardShouldPersistTaps="handled">
+              {bundle.comments.length === 0 ? <Text style={styles.emptyComments}>아직 댓글이 없어요. 가족에게 첫 마음을 남겨보세요.</Text> : bundle.comments.map((item) => {
+                const mayDelete = item.authorId === userId || canDelete;
+                return (
+                  <View key={item.id} style={styles.commentRow}>
+                    <View style={styles.commentAvatar}><BabyLogIcon kind="profile" size={14} color={colors.amber} /></View>
+                    <View style={styles.commentCopy}>
+                      <View style={styles.commentMeta}><Text style={styles.commentAuthor}>{commentAuthorLabel(item.authorId)}</Text><Text style={styles.commentDate}>{new Date(item.createdAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</Text></View>
+                      <Text style={styles.commentBody}>{item.body}</Text>
+                    </View>
+                    {mayDelete ? <Pressable style={styles.commentDelete} onPress={() => {
+                      if (working) return;
+                      setWorking(true);
+                      void MemoriesRepository.deleteComment(item.id).then(() => load(false)).catch((cause) => setError(cause instanceof Error ? cause.message : "댓글을 삭제하지 못했어요.")).finally(() => setWorking(false));
+                    }}><Text style={styles.commentDeleteText}>삭제</Text></Pressable> : null}
+                  </View>
+                );
+              })}
+            </ScrollView>
+            {error ? <Text style={styles.sheetError}>{error}</Text> : null}
+            <View style={styles.composer}>
+              <TextInput style={styles.commentInput} value={comment} onChangeText={setComment} placeholder="가족에게 댓글 남기기" placeholderTextColor={colors.faint} maxLength={500} multiline />
+              {comment.trim() ? <Pressable style={[styles.send, working && styles.disabled]} onPress={() => void submitComment()} disabled={working}><Text style={styles.sendText}>보내기</Text></Pressable> : null}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -246,7 +280,8 @@ const styles = StyleSheet.create({
   metaCopy: { flex: 1 },
   author: { color: colors.text, fontSize: 13.5, fontWeight: "800" },
   date: { color: colors.faint, fontSize: 10.5, marginTop: 2 },
-  privacy: { color: colors.muted, fontSize: 11, fontWeight: "600", maxWidth: 110, textAlign: "right" },
+  privacyBadge: { minHeight: 28, maxWidth: 116, paddingHorizontal: 9, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
+  privacyBadgeText: { fontSize: 10.5, fontWeight: "800", textAlign: "right" },
   actionRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 },
   actionButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   actionHeart: { color: colors.muted, fontSize: 26, lineHeight: 30 },
@@ -263,17 +298,31 @@ const styles = StyleSheet.create({
   smallButton: { minHeight: 44, minWidth: 64, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
   smallButtonText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   deleteText: { color: colors.dangerText, fontSize: 12, fontWeight: "700" },
-  commentsCard: { marginHorizontal: 16, padding: 16, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
-  sectionTitle: { color: colors.text, fontSize: 15, fontWeight: "800", marginBottom: 8 },
-  emptyComments: { color: colors.faint, fontSize: 12.5, paddingVertical: 12 },
-  commentRow: { minHeight: 52, flexDirection: "row", alignItems: "flex-start", gap: 8, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  commentsSummary: { minHeight: 52, marginHorizontal: 16, paddingHorizontal: 16, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 8 },
+  commentsSummaryText: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  sheetOverlay: { flex: 1, justifyContent: "flex-end" },
+  sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(46,42,38,0.32)" },
+  sheet: { maxHeight: "82%", minHeight: 350, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: colors.card, paddingHorizontal: 16 },
+  sheetHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: colors.border, alignSelf: "center", marginTop: 9, marginBottom: 5 },
+  sheetHeader: { minHeight: 52, flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  sheetTitle: { flex: 1, color: colors.text, fontSize: 16, fontWeight: "800", textAlign: "center", marginLeft: 44 },
+  sheetClose: { width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" },
+  sheetCloseText: { color: colors.amber, fontSize: 12.5, fontWeight: "800" },
+  commentList: { flexGrow: 0 },
+  commentListContent: { paddingVertical: 8 },
+  emptyComments: { color: colors.faint, fontSize: 12.5, lineHeight: 19, paddingVertical: 34, textAlign: "center" },
+  commentRow: { minHeight: 62, flexDirection: "row", alignItems: "flex-start", gap: 9, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  commentAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
   commentCopy: { flex: 1 },
+  commentMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
   commentAuthor: { color: colors.text, fontSize: 11.5, fontWeight: "800" },
+  commentDate: { color: colors.faint, fontSize: 10 },
   commentBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 2 },
   commentDelete: { minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
   commentDeleteText: { color: colors.faint, fontSize: 10.5 },
-  composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 14 },
-  commentInput: { flex: 1, minHeight: 44, maxHeight: 100, borderRadius: 14, backgroundColor: colors.cardHi, color: colors.text, paddingHorizontal: 12, paddingVertical: 11, fontSize: 13 },
+  sheetError: { color: colors.dangerText, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: 9, fontSize: 11.5, marginBottom: 8 },
+  composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  commentInput: { flex: 1, minHeight: 46, maxHeight: 100, borderRadius: 16, backgroundColor: colors.cardHi, color: colors.text, paddingHorizontal: 13, paddingVertical: 12, fontSize: 13 },
   send: { minWidth: 54, minHeight: 44, borderRadius: 14, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
   sendText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
   disabled: { opacity: 0.45 },
