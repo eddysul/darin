@@ -9,6 +9,8 @@ export type FamilyMember = {
   id: string;
   name: string;
   emoji?: string;
+  /** Signed URL for profile avatar when available (short-lived). */
+  avatarUrl?: string;
   /** App permission (관리자 / 편집 가능 / 보기만 가능). */
   role: FamilyRole;
   /** User-facing relationship (엄마 / 아빠 / 시터…). Independent of `role`. */

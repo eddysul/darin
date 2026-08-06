@@ -57,11 +57,13 @@ export const BabyRepository = {
     babyId: string,
     patch: Partial<{
       name: string;
+      nickname: string | null;
       birthDate: string | null;
       dueDate: string | null;
       childStatus: string;
       gender: string | null;
       photoUrl: string | null;
+      avatarStoragePath: string | null;
       gestationalAgeWeeks: number | null;
       birthWeight: string | null;
       specialNotes: string | null;
@@ -72,11 +74,13 @@ export const BabyRepository = {
       .from("babies")
       .update({
         name: patch.name,
+        nickname: patch.nickname,
         birth_date: patch.birthDate,
         due_date: patch.dueDate,
         child_status: patch.childStatus,
         gender: patch.gender,
         photo_url: patch.photoUrl,
+        avatar_storage_path: patch.avatarStoragePath,
         gestational_age_weeks: patch.gestationalAgeWeeks,
         birth_weight: patch.birthWeight,
         special_notes: patch.specialNotes,

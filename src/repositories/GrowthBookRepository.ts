@@ -23,6 +23,7 @@ import {
 } from "../utils/growthBookSupabaseMappers";
 import { AuthRepository } from "./AuthRepository";
 import { NotificationRepository } from "./NotificationRepository";
+import { ProfileRepository } from "./ProfileRepository";
 
 const BUCKET = "growth-book-media";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
@@ -288,13 +289,18 @@ export const GrowthBookRepository = {
   async hydrate(babyId: string, babyName: string): Promise<GrowthBookEdit | null> {
     const book = await this.getBookByBabyId(babyId);
     if (!book) return null;
-    const [pages, comments] = await Promise.all([this.listPageRows(book.id), this.listComments(book.id)]);
+    const [pages, comments, profiles] = await Promise.all([
+      this.listPageRows(book.id),
+      this.listComments(book.id),
+      ProfileRepository.listDisplayProfilesForBaby(babyId).catch(() => []),
+    ]);
+    const authorNamesByUserId = new Map(profiles.map((profile) => [profile.userId, profile.displayName]));
     const row = {
       id: book.id, baby_id: book.babyId, title: book.title, status: book.status,
       created_by: book.createdBy, created_at: book.createdAt, updated_at: book.updatedAt, deleted_at: null,
     };
     return growthBookRowsToEdit({
-      book: row, pages, comments, babyName,
+      book: row, pages, comments, babyName, authorNamesByUserId,
       signedUrlForPath: async (path) => {
         try { return await this.createSignedUrl(path); } catch { return null; }
       },

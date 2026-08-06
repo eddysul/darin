@@ -25,6 +25,7 @@ import { colors, radius } from "../../theme";
 
 type Props = {
   onOpenSettings: () => void;
+  onOpenFamily?: () => void;
   onOpenDetail: (memoryPostId: string) => void;
 };
 
@@ -131,7 +132,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
   );
 });
 
-export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
+export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: Props) {
   const insets = useSafeAreaInsets();
   const { babyName, careSetup, familyMembers, myFamilyRole, logAuthor, storageReady } = useBabyLog();
   const [cards, setCards] = useState<MemoryCard[]>([]);
@@ -198,7 +199,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
 
   const authorName = (authorId: string) => {
     if (authorId === logAuthor.userId) return logAuthor.name;
-    return familyMembers.find((member) => member.id === authorId)?.name ?? "가족";
+    return familyMembers.find((member) => member.id === authorId)?.name ?? "탈퇴한 사용자";
   };
 
   const toggleSave = useCallback(async (card: MemoryCard) => {
@@ -243,7 +244,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
         </View>
       </View>
 
-      <View style={styles.familySection}>
+      <Pressable style={styles.familySection} onPress={onOpenFamily} accessibilityRole="button" accessibilityLabel="가족 구성원 관리">
         <View style={styles.paperPlane}><Text style={styles.paperPlaneText}>✈</Text></View>
         <View style={styles.familyCopy}>
           <Text style={styles.familyTitle}>{babyName}네 가족</Text>
@@ -261,10 +262,10 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
             </View>
           )}
         </View>
-        <Pressable style={styles.inviteButton} onPress={onOpenSettings}>
+        <Pressable style={styles.inviteButton} onPress={onOpenFamily ?? onOpenSettings}>
           <Text style={styles.inviteText}>가족 초대</Text>
         </Pressable>
-      </View>
+      </Pressable>
 
       <ScrollView
         horizontal

@@ -31,6 +31,9 @@ export function toDbRelationshipLabel(
     시터: "시터",
     할머니: "할머니",
     할아버지: "할아버지",
+    이모: "이모",
+    삼촌: "삼촌",
+    친구: "친구",
     기타: "기타",
   };
   if (!label) return "가족";

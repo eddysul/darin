@@ -21,6 +21,7 @@ import { MainTabs } from "./src/screens/MainTabs";
 import { BabyProfileScreen } from "./src/screens/BabyProfileScreen";
 import { GrowthRecordsManagerScreen } from "./src/screens/GrowthRecordsManagerScreen";
 import { MemoryDetailScreen } from "./src/screens/MemoryDetailScreen";
+import { MyProfileScreen } from "./src/screens/MyProfileScreen";
 import { SettingsHomeScreen } from "./src/screens/SettingsHomeScreen";
 import { AppSettingsModal, SETTINGS_PAGE_TITLES } from "./src/components/settings/AppSettingsModal";
 import type { RootStackParamList } from "./src/navigation/types";
@@ -38,6 +39,7 @@ import { colors } from "./src/theme";
 import { resolvePostSplashPhase } from "./src/utils/appStartup";
 import { AuthRepository } from "./src/repositories/AuthRepository";
 import { BabyRepository } from "./src/repositories/BabyRepository";
+import { BabyProfileRepository } from "./src/repositories/BabyProfileRepository";
 import { ProfileRepository } from "./src/repositories/ProfileRepository";
 import { FamilyRepository } from "./src/repositories/FamilyRepository";
 import {
@@ -173,6 +175,7 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
       >
         <RootStack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
         <RootStack.Screen name="BabyProfile" component={BabyProfileScreen} options={{ title: "아기 프로필" }} />
+        <RootStack.Screen name="MyProfile" component={MyProfileScreen} options={{ title: "내 프로필" }} />
         <RootStack.Screen name="SettingsHome" component={SettingsHomeScreen} options={{ title: "설정" }} />
         <RootStack.Screen
           name="SettingsDetail"
@@ -364,9 +367,11 @@ function RootApp() {
     const babies = await BabyRepository.listMyBabies();
     const serverBaby = babies[0];
     if (serverBaby) {
-      const [serverProfile, members] = await Promise.all([
-        ProfileRepository.getMyProfile(),
+      const [displayProfile, babyProfile, members, familyDisplays] = await Promise.all([
+        ProfileRepository.getMyDisplayProfile().catch(() => null),
+        BabyProfileRepository.getBabyProfile(serverBaby.id).catch(() => null),
         FamilyRepository.listMembers(serverBaby.id),
+        FamilyRepository.listMembersAsFamily(serverBaby.id).catch(() => [] as Awaited<ReturnType<typeof FamilyRepository.listMembersAsFamily>>),
       ]);
       const authenticatedUser = payload.user ?? (await AuthRepository.getUser());
       const me = members.find((member) => member.user_id === authenticatedUser?.id);
@@ -380,31 +385,38 @@ function RootApp() {
       const childStatus: ChildStatus = ["unborn", "newborn", "infant"].includes(serverBaby.child_status)
         ? (serverBaby.child_status as ChildStatus)
         : "newborn";
-      const gender: ChildGender = ["girl", "boy", "unknown"].includes(serverBaby.gender ?? "")
-        ? (serverBaby.gender as ChildGender)
+      const gender: ChildGender = ["girl", "boy", "unknown"].includes(babyProfile?.gender ?? serverBaby.gender ?? "")
+        ? ((babyProfile?.gender ?? serverBaby.gender) as ChildGender)
         : "unknown";
       const restoredSetup: CareSetup = {
         parent: {
-          parentName: serverProfile?.display_name || name || "나",
-          relationshipToChild: relationshipMap[me?.relationship_label ?? ""] ?? "guardian",
+          parentName: displayProfile?.displayName || name || "나",
+          nickname: displayProfile?.nickname,
+          relationshipToChild: relationshipMap[me?.relationship_label ?? displayProfile?.defaultRelation ?? ""] ?? "guardian",
           postpartumStatus: careSetup.parent.postpartumStatus,
-          preferredLanguage: serverProfile?.preferred_language === "en" ? "en" : "ko",
+          preferredLanguage: careSetup.parent.preferredLanguage,
+          avatarUri: displayProfile?.avatarUrl,
         },
         child: {
-          childName: serverBaby.name,
-          birthDate: serverBaby.birth_date ?? undefined,
+          childName: babyProfile?.name || serverBaby.name,
+          nickname: babyProfile?.nickname,
+          birthDate: babyProfile?.birthDate ?? serverBaby.birth_date ?? undefined,
           dueDate: serverBaby.due_date ?? undefined,
           childStatus,
           gender,
-          photoUri: serverBaby.photo_url ?? undefined,
+          photoUri: babyProfile?.avatarUrl ?? babyProfile?.photoUrl ?? serverBaby.photo_url ?? undefined,
           gestationalAgeWeeks: serverBaby.gestational_age_weeks ?? undefined,
           birthWeight: serverBaby.birth_weight ?? undefined,
-          specialNotes: serverBaby.special_notes ?? undefined,
+          specialNotes: babyProfile?.note ?? serverBaby.special_notes ?? undefined,
         },
         preferences: hasSavedCareSetup ? careSetup.preferences : DEFAULT_CARE_SETUP.preferences,
       };
       setCareSetup(restoredSetup);
       applyParentSetup(restoredSetup);
+      if (familyDisplays.length) {
+        const { saveFamilyMembers } = await import("./src/utils/familyMembersStore");
+        await saveFamilyMembers(familyDisplays);
+      }
       if (authenticatedUser) {
         await rehydrateFromServer({ userId: authenticatedUser.id, babyId: serverBaby.id });
       } else {

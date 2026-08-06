@@ -20,6 +20,7 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   BabyProfile: undefined;
+  MyProfile: undefined;
   SettingsHome: undefined;
   SettingsDetail: { page: SettingsDetailPage };
   GrowthRecords: undefined;

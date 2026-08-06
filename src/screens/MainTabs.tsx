@@ -291,6 +291,7 @@ function MemoriesTab() {
   return (
     <MemoriesScreen
       onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+      onOpenFamily={() => rootNavigation?.navigate("BabyProfile")}
       onOpenDetail={(memoryPostId) => rootNavigation?.navigate("MemoryDetail", { memoryPostId })}
     />
   );

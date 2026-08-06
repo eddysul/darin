@@ -19,6 +19,7 @@ import { Image } from "expo-image";
 import { Bookmark } from "lucide-react-native";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
 import { BabyStickerVaultModal } from "../components/babylog/BabyStickerVaultModal";
+import { ProfileAvatar } from "../components/profile/ProfileAvatar";
 import { MemoryEditModal } from "../components/memories/MemoryEditModal";
 import { MemoryMediaViewer } from "../components/memories/MemoryMediaViewer";
 import { memoryPrivacyLabel } from "../components/memories/MemoryPrivacyPicker";
@@ -76,13 +77,15 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
 
   const authorName = (id: string) => {
     if (id === logAuthor.userId || id === userId) return logAuthor.name;
-    return familyMembers.find((member) => member.id === id)?.name ?? "가족";
+    return familyMembers.find((member) => member.id === id)?.name ?? "탈퇴한 사용자";
   };
+
+  const authorAvatar = (id: string) => familyMembers.find((member) => member.id === id)?.avatarUrl;
 
   const commentAuthorLabel = (id: string) => {
     if (id === logAuthor.userId || id === userId) return `나 · ${logAuthor.name}`;
     const member = familyMembers.find((item) => item.id === id);
-    return member ? `${memberRelationshipLabel(member)} · ${member.name}` : "가족";
+    return member ? `${memberRelationshipLabel(member)} · ${member.name}` : "탈퇴한 사용자";
   };
 
   const isAuthor = bundle?.post.authorId === userId;
@@ -229,7 +232,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
 
         <View style={[styles.postCard, { borderColor: privacy.accent }]}>
           <View style={styles.metaRow}>
-            <View style={styles.authorAvatar}><BabyLogIcon kind="profile" size={17} color={colors.amber} /></View>
+            <ProfileAvatar uri={authorAvatar(bundle.post.authorId)} size={38} />
             <View style={styles.metaCopy}>
               <Text style={styles.author}>{authorName(bundle.post.authorId)}</Text>
               <Text style={styles.date}>{new Date(bundle.post.createdAt).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })}</Text>
@@ -301,7 +304,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
                 const mayDelete = item.authorId === userId || canDelete;
                 return (
                   <View key={item.id} style={styles.commentRow}>
-                    <View style={styles.commentAvatar}><BabyLogIcon kind="profile" size={14} color={colors.amber} /></View>
+                    <ProfileAvatar uri={authorAvatar(item.authorId)} size={30} />
                     <View style={styles.commentCopy}>
                       <View style={styles.commentMeta}><Text style={styles.commentAuthor}>{commentAuthorLabel(item.authorId)}</Text><Text style={styles.commentDate}>{new Date(item.createdAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</Text></View>
                       {item.commentType === "sticker" ? (

@@ -41,6 +41,9 @@ export type RelationshipLabel =
   | "시터"
   | "할머니"
   | "할아버지"
+  | "이모"
+  | "삼촌"
+  | "친구"
   | "가족"
   | "기타";
 
@@ -51,6 +54,9 @@ export const RELATIONSHIP_LABELS: RelationshipLabel[] = [
   "시터",
   "할머니",
   "할아버지",
+  "이모",
+  "삼촌",
+  "친구",
   "가족",
   "기타",
 ];

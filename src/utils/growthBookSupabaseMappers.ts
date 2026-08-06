@@ -106,13 +106,23 @@ export function letterPageContent(letters: GrowthBookLetter[]): Record<string, J
   return { schemaVersion: 1, letters: letters as unknown as Json };
 }
 
-function commentRowToRolling(row: GrowthBookCommentRow): GrowthBookComment {
+function resolveAuthorName(
+  authorId: string | null,
+  metadataName: string | undefined,
+  liveNames?: Map<string, string>,
+): string {
+  if (authorId === null) return "탈퇴한 사용자";
+  return liveNames?.get(authorId) ?? metadataName ?? "가족";
+}
+
+function commentRowToRolling(row: GrowthBookCommentRow, liveNames?: Map<string, string>): GrowthBookComment {
   const metadata = record(row.metadata);
+  const authorId = row.author_id === null ? null : stringValue(metadata.clientAuthorId) ?? row.author_id;
   return {
     id: stringValue(metadata.clientId) ?? row.id,
     pageId: stringValue(metadata.clientPageId) ?? row.diary_entry_id ?? row.page_id ?? "",
-    authorId: row.author_id === null ? "deleted-user" : stringValue(metadata.clientAuthorId) ?? row.author_id,
-    authorName: row.author_id === null ? "탈퇴한 사용자" : stringValue(metadata.authorName) ?? "가족",
+    authorId: authorId === null ? "deleted-user" : authorId,
+    authorName: resolveAuthorName(row.author_id, stringValue(metadata.authorName), liveNames),
     authorRelationshipLabel: relationship(metadata.authorRelationshipLabel),
     text: row.body,
     stickerIds: Array.isArray(metadata.stickerIds)
@@ -123,13 +133,14 @@ function commentRowToRolling(row: GrowthBookCommentRow): GrowthBookComment {
   };
 }
 
-function commentRowToLetter(row: GrowthBookCommentRow, growthBookId: string): GrowthBookLetter {
+function commentRowToLetter(row: GrowthBookCommentRow, growthBookId: string, liveNames?: Map<string, string>): GrowthBookLetter {
   const metadata = record(row.metadata);
+  const authorId = row.author_id === null ? null : stringValue(metadata.clientAuthorId) ?? row.author_id;
   return {
     id: stringValue(metadata.clientId) ?? row.id,
     growthBookId,
-    authorId: row.author_id === null ? "deleted-user" : stringValue(metadata.clientAuthorId) ?? row.author_id,
-    authorName: row.author_id === null ? "탈퇴한 사용자" : stringValue(metadata.authorName) ?? "가족",
+    authorId: authorId === null ? "deleted-user" : authorId,
+    authorName: resolveAuthorName(row.author_id, stringValue(metadata.authorName), liveNames),
     authorRelationshipLabel: relationship(metadata.authorRelationshipLabel),
     text: row.body,
     createdAt: row.created_at,
@@ -143,6 +154,7 @@ export async function growthBookRowsToEdit(input: {
   comments: GrowthBookCommentRow[];
   babyName: string;
   signedUrlForPath: (storagePath: string) => Promise<string | null>;
+  authorNamesByUserId?: Map<string, string>;
 }): Promise<GrowthBookEdit> {
   const edit = createEmptyGrowthBookEdit({ babyId: input.book.baby_id, babyName: input.babyName });
   edit.id = input.book.id;
@@ -197,12 +209,12 @@ export async function growthBookRowsToEdit(input: {
   }
   for (const row of input.comments.filter((comment) => comment.deleted_at === null)) {
     if (row.comment_type === "letter") {
-      const letter = commentRowToLetter(row, input.book.id);
+      const letter = commentRowToLetter(row, input.book.id, input.authorNamesByUserId);
       edit.letters = [...edit.letters.filter((item) => item.id !== letter.id), letter];
     } else if (row.comment_type === "rolling_paper" && row.diary_entry_id) {
       const page = edit.pages[row.diary_entry_id];
       if (page && pagesById.has(row.page_id ?? "")) {
-        const comment = commentRowToRolling(row);
+        const comment = commentRowToRolling(row, input.authorNamesByUserId);
         page.rollingComments = [...page.rollingComments.filter((item) => item.id !== comment.id), comment];
       }
     }

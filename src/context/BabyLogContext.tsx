@@ -23,6 +23,7 @@ import {
 } from "../utils/careLogServerSync";
 import { clearSupabaseSync, getSupabaseSync, hydrateSupabaseSync } from "../utils/supabaseSyncStore";
 import { AuthRepository } from "../repositories/AuthRepository";
+import { FamilyRepository } from "../repositories/FamilyRepository";
 import { isSupabaseConfigured } from "../lib/supabase";
 import {
   getDiaryEntries,
@@ -510,6 +511,18 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         const cleanedFamily = removeLegacySampleFamily(storedFamily);
         setFamilyMembers(cleanedFamily);
         if (cleanedFamily.length !== storedFamily.length) void saveFamilyMembers(cleanedFamily);
+      }
+      if (scope?.babyId && isSupabaseConfigured()) {
+        try {
+          const serverFamily = await FamilyRepository.listMembersAsFamily(scope.babyId);
+          if (hydrationRun !== storageHydrationRunRef.current) return false;
+          if (serverFamily.length) {
+            setFamilyMembers(serverFamily);
+            void saveFamilyMembers(serverFamily);
+          }
+        } catch {
+          // Keep local family cache when co-member profile join is unavailable.
+        }
       }
       setFamilyHydrated(true);
     }

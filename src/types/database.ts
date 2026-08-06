@@ -11,6 +11,9 @@ export type DbRelationshipLabel =
   | "시터"
   | "할머니"
   | "할아버지"
+  | "이모"
+  | "삼촌"
+  | "친구"
   | "기타";
 export type MemberStatus = "pending" | "active" | "inactive";
 export type MemoryPrivacyType = "only_me" | "family_circle" | "friend_circle" | "tagged_family" | "selected_people";
@@ -57,7 +60,10 @@ export type CareLogPayload = {
 export type ProfileRow = {
   id: string;
   display_name: string;
+  nickname: string | null;
   avatar_url: string | null;
+  avatar_storage_path: string | null;
+  default_relation: string | null;
   preferred_language: string;
   created_at: string;
   updated_at: string;
@@ -66,11 +72,13 @@ export type ProfileRow = {
 export type BabyRow = {
   id: string;
   name: string;
+  nickname: string | null;
   birth_date: string | null;
   due_date: string | null;
   child_status: string;
   gender: string | null;
   photo_url: string | null;
+  avatar_storage_path: string | null;
   gestational_age_weeks: number | null;
   birth_weight: string | null;
   special_notes: string | null;
@@ -85,6 +93,7 @@ export type BabyMemberRow = {
   user_id: string;
   permission_role: PermissionRole;
   relationship_label: DbRelationshipLabel;
+  display_name_override: string | null;
   status: MemberStatus;
   created_at: string;
   updated_at: string;

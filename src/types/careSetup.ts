@@ -22,14 +22,17 @@ export type LogCategoryGroup =
 
 export type ParentProfile = {
   parentName: string;
+  nickname?: string;
   relationshipToChild: RelationshipToChild;
   postpartumStatus: PostpartumStatus;
   birthRecoveryNote?: string;
   preferredLanguage: PreferredLanguage;
+  avatarUri?: string;
 };
 
 export type ChildProfile = {
   childName: string;
+  nickname?: string;
   birthDate?: string;
   dueDate?: string;
   childStatus: ChildStatus;

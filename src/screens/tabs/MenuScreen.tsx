@@ -45,13 +45,14 @@ import { sendDiaryNotificationPreview } from "../../utils/diaryReminderNotificat
 
 type Props = {
   onOpenProfile: () => void;
+  onOpenMyProfile?: () => void;
   onOpenSettings: (page: SettingsDetailPage) => void;
   onOpenGrowthRecords: () => void;
   onOpenGrowthBookStorage?: () => void;
   embedded?: boolean;
 };
 
-export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords, onOpenGrowthBookStorage, embedded = false }: Props) {
+export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenSettings, onOpenGrowthRecords, onOpenGrowthBookStorage, embedded = false }: Props) {
   const insets = useSafeAreaInsets();
   const logout = useLogout();
   const { settings, setSettings, resetSettings } = useAppSettings();
@@ -173,7 +174,7 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
         <Text style={styles.subtitle}>계정과 기록 방식을 한 곳에서 관리해요.</Text>
 
         <MenuSection title="아기/가족">
-          <MenuRow icon="baby" title="아기 프로필" subtitle="아기 정보와 기본 설정" onPress={onOpenProfile} />
+          <MenuRow icon="baby" title="아기 프로필" subtitle="사진·이름·별명·생년월일 관리" onPress={onOpenProfile} />
           <MenuRow icon="family" title="가족 공유" subtitle="구성원 역할과 활성 상태 관리" onPress={onOpenProfile} />
           <MenuRow icon="folder" title="초대코드 관리" subtitle="초대 코드·링크 생성 및 수락" onPress={onOpenProfile} />
         </MenuSection>
@@ -217,7 +218,13 @@ export function MenuScreen({ onOpenProfile, onOpenSettings, onOpenGrowthRecords,
           {AuthRepository.isAnonymousUser(authUser) ? (
             <MenuRow icon="profile" title="이메일 계정 연결" subtitle="현재 아기와 기록을 그대로 보호" onPress={() => setEmailAuthOpen(true)} />
           ) : null}
-          <MenuRow icon="profile" title="계정 설정" subtitle="이름·이메일·언어·관계" onPress={() => setAccountSettingsOpen(true)} />
+          <MenuRow
+            icon="profile"
+            title="내 프로필"
+            subtitle="사진·표시 이름·닉네임·관계"
+            onPress={() => (onOpenMyProfile ? onOpenMyProfile() : setAccountSettingsOpen(true))}
+          />
+          <MenuRow icon="profile" title="계정 설정" subtitle="이메일·언어 등 계정 옵션" onPress={() => setAccountSettingsOpen(true)} />
           <MenuRow icon="logout" title="로그아웃" subtitle="로그인 화면으로 이동" onPress={confirmLogout} disabled={loggingOut} />
           <MenuRow
             icon="trash"
