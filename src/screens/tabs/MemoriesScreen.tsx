@@ -266,7 +266,12 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
         </Pressable>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      <ScrollView
+        horizontal
+        style={styles.filterScroller}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+      >
           {FILTERS.map((item) => {
             const active = filter === item.key;
             return (
@@ -352,7 +357,8 @@ const styles = StyleSheet.create({
   familyChipText: { color: colors.muted, fontSize: 11.5, fontWeight: "700", flexShrink: 1 },
   inviteButton: { minHeight: 36, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
   inviteText: { color: colors.amber, fontSize: 11.5, fontWeight: "800" },
-  filterRow: { flexDirection: "row", paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
+  filterScroller: { flexGrow: 0, flexShrink: 0 },
+  filterRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
   filterChip: { minHeight: 36, paddingHorizontal: 12, borderRadius: radius.full, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   filterChipActive: { backgroundColor: colors.amber, borderColor: colors.amber },
   filterText: { color: colors.muted, fontSize: 12, fontWeight: "700" },

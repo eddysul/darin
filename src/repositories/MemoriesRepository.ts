@@ -358,12 +358,14 @@ export const MemoriesRepository = {
     const userId = await requireUserId();
     const post = await this.getById(memoryPostId);
     if (!post) throw new Error("저장할 수 없는 추억이에요.");
-    const { error } = await sb.from("memory_saves").upsert({
+    const { error } = await sb.from("memory_saves").insert({
       memory_post_id: memoryPostId,
       baby_id: post.babyId,
       user_id: userId,
-    }, { onConflict: "memory_post_id,user_id" });
-    if (error) throw error;
+    });
+    // Saves are immutable under RLS (insert/delete only). Treat a duplicate
+    // self-save as idempotent without requiring an UPDATE policy.
+    if (error && error.code !== "23505") throw error;
   },
 
   async unsaveMemoryPost(memoryPostId: string): Promise<void> {
