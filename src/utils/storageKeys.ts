@@ -12,6 +12,7 @@ export const STORAGE_KEYS = {
   quickRecords: "darin:quick-records",
   growthBookEdit: "darin:growth-book-edit",
   babyStickers: "darin:baby-stickers",
+  babyStickersMigration: "darin:baby-stickers-server-migration:v1",
   growthRecords: "darin:growth-records",
   growthRecordsMigration: "darin:growth-records-migration",
   activeTimers: "darin:active-timers",

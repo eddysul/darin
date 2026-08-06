@@ -2,12 +2,20 @@ import type { BabySticker } from "../types/babySticker";
 import { qaStorage } from "./qaStorage";
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
+import {
+  isValidLocalDataScope,
+  localDataScopeId,
+  readScopedWithLegacyMigration,
+  scopedStorageKey,
+  type LocalDataScope,
+} from "./scopedLocalStorage";
 
 const STORAGE_KEY = STORAGE_KEYS.babyStickers;
 
 let memory: BabySticker[] | null = null;
 let hydrated = false;
 let hydratePromise: Promise<boolean> | null = null;
+let activeScopeId: string | null = null;
 
 function isSticker(item: unknown): item is BabySticker {
   if (typeof item !== "object" || item === null) return false;
@@ -39,17 +47,38 @@ function normalize(raw: unknown): BabySticker[] {
   }));
 }
 
-export async function hydrateBabyStickers(force = false): Promise<boolean> {
+export async function hydrateBabyStickers(scope: LocalDataScope | null, force = false): Promise<boolean> {
+  if (!isValidLocalDataScope(scope)) {
+    resetBabyStickersMemory();
+    return true;
+  }
+  const nextScopeId = localDataScopeId(scope);
+  if (activeScopeId !== nextScopeId) {
+    resetBabyStickersMemory();
+    activeScopeId = nextScopeId;
+  }
   if (force) {
     hydrated = false;
     hydratePromise = null;
   }
   if (hydrated) return true;
   if (!hydratePromise) {
+    const requestedScopeId = nextScopeId;
     hydratePromise = (async () => {
       try {
-        const raw = await qaStorage.getItem(STORAGE_KEY);
-        memory = raw ? normalize(JSON.parse(raw)) : null;
+        const result = await readScopedWithLegacyMigration({
+          baseKey: STORAGE_KEY,
+          scope,
+          parse: (raw) => normalize(JSON.parse(raw)),
+          serialize: JSON.stringify,
+          merge: (scoped, legacy) => {
+            const byId = new Map(legacy.map((item) => [item.id, { ...item, babyId: scope.babyId }]));
+            for (const item of scoped ?? []) byId.set(item.id, item);
+            return [...byId.values()];
+          },
+        });
+        if (activeScopeId !== requestedScopeId) return false;
+        memory = result.value;
         hydrated = true;
         return true;
       } catch {
@@ -65,12 +94,20 @@ export function getBabyStickers(): BabySticker[] | null {
   return memory;
 }
 
-export async function saveBabyStickers(stickers: BabySticker[]): Promise<void> {
+export async function saveBabyStickers(stickers: BabySticker[], scope: LocalDataScope | null): Promise<void> {
+  if (!isValidLocalDataScope(scope) || activeScopeId !== localDataScopeId(scope)) return;
   memory = stickers;
   hydrated = true;
   try {
-    await qaStorage.setItem(STORAGE_KEY, JSON.stringify(stickers));
+    await qaStorage.setItem(scopedStorageKey(STORAGE_KEY, scope), JSON.stringify(stickers));
   } catch {
     reportStorageIssue("save", STORAGE_KEY);
   }
+}
+
+export function resetBabyStickersMemory(): void {
+  memory = null;
+  hydrated = false;
+  hydratePromise = null;
+  activeScopeId = null;
 }

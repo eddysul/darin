@@ -13,7 +13,9 @@ export type DbRelationshipLabel =
   | "할아버지"
   | "기타";
 export type MemberStatus = "pending" | "active" | "inactive";
-export type MemoryPrivacyType = "only_me" | "family_circle" | "tagged_family" | "selected_people";
+export type MemoryPrivacyType = "only_me" | "family_circle" | "friend_circle" | "tagged_family" | "selected_people";
+export type MemoryFriendStatus = "pending" | "active" | "revoked";
+export type MemoryCommentType = "text" | "sticker";
 export type MemoryMediaType = "image" | "video";
 export type MemoryTagType = "baby" | "family_member" | "friend_baby" | "manual_guest";
 export type MemoryTagStatus = "approved" | "pending" | "rejected";
@@ -261,11 +263,45 @@ export type MemorySelectedPersonRow = {
   created_at: string;
 };
 
+export type MemoryFriendRow = {
+  id: string;
+  baby_id: string;
+  user_id: string;
+  invited_by: string | null;
+  status: MemoryFriendStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MemorySaveRow = {
+  id: string;
+  memory_post_id: string;
+  baby_id: string;
+  user_id: string;
+  created_at: string;
+};
+
+export type BabyStickerRow = {
+  id: string;
+  baby_id: string;
+  created_by: string | null;
+  label: string;
+  storage_path: string;
+  source: string | null;
+  metadata: Json;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
 export type MemoryCommentRow = {
   id: string;
   memory_post_id: string;
   author_id: string | null;
   body: string;
+  comment_type: MemoryCommentType;
+  sticker_id: string | null;
+  sticker_label: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -453,6 +489,24 @@ export type Database = {
         Update: Partial<MemorySelectedPersonRow>;
         Relationships: [];
       };
+      memory_friends: {
+        Row: MemoryFriendRow;
+        Insert: Partial<MemoryFriendRow> & Pick<MemoryFriendRow, "baby_id" | "user_id" | "invited_by">;
+        Update: Partial<MemoryFriendRow>;
+        Relationships: [];
+      };
+      memory_saves: {
+        Row: MemorySaveRow;
+        Insert: Partial<MemorySaveRow> & Pick<MemorySaveRow, "memory_post_id" | "baby_id" | "user_id">;
+        Update: Partial<MemorySaveRow>;
+        Relationships: [];
+      };
+      baby_stickers: {
+        Row: BabyStickerRow;
+        Insert: Partial<BabyStickerRow> & Pick<BabyStickerRow, "baby_id" | "created_by" | "label" | "storage_path">;
+        Update: Partial<BabyStickerRow>;
+        Relationships: [];
+      };
       memory_comments: {
         Row: MemoryCommentRow;
         Insert: Partial<MemoryCommentRow> &
@@ -523,6 +577,12 @@ export type Database = {
       can_delete_memory_post: { Args: { p_memory_post_id: string }; Returns: boolean };
       can_interact_with_memory_post: {
         Args: { p_memory_post_id: string };
+        Returns: boolean;
+      };
+      is_memory_friend: { Args: { p_baby_id: string }; Returns: boolean };
+      can_view_baby_sticker: { Args: { p_sticker_id: string }; Returns: boolean };
+      can_use_baby_sticker_on_post: {
+        Args: { p_sticker_id: string; p_memory_post_id: string };
         Returns: boolean;
       };
       soft_delete_memory_post: {

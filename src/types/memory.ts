@@ -1,8 +1,10 @@
 export type MemoryPrivacyType =
   | "only_me"
   | "family_circle"
+  | "friend_circle"
   | "tagged_family"
   | "selected_people";
+export type MemoryCommentType = "text" | "sticker";
 
 export type MemoryMediaType = "image" | "video";
 export type MemoryTagType = "baby" | "family_member" | "friend_baby" | "manual_guest";
@@ -48,6 +50,10 @@ export type MemoryComment = {
   memoryPostId: string;
   authorId: string;
   body: string;
+  commentType: MemoryCommentType;
+  stickerId?: string;
+  stickerLabel?: string;
+  stickerImageUrl?: string;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -77,6 +83,7 @@ export type MemoryCard = {
   tags: MemoryTag[];
   commentCount: number;
   reactionCount: number;
+  isSaved: boolean;
 };
 
 export type MemoryTagDraft =
@@ -127,6 +134,13 @@ export type AddMemoryCommentInput = {
   id?: string;
   memoryPostId: string;
   body: string;
+};
+
+export type AddMemoryStickerCommentInput = {
+  id?: string;
+  memoryPostId: string;
+  stickerId: string;
+  stickerLabel: string;
 };
 
 export type SetMemoryReactionInput = {

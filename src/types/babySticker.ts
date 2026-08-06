@@ -40,6 +40,10 @@ export type BabySticker = {
   faceImageUri: string;
   cutoutImageUri: string;
   finalStickerImageUri: string;
+  /** Private Supabase object path when this sticker is server-backed. */
+  storagePath?: string;
+  /** True when the current display URI came from a short-lived signed URL. */
+  serverBacked?: boolean;
   /** circular = round crop; personCutout = Vision person segmentation (iOS). */
   cutoutMode: StickerCutoutMode;
   stickerType: StickerType;

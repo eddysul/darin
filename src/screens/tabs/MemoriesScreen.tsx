@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { Bookmark } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
@@ -28,20 +29,24 @@ type Props = {
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-type MemoryFilter = "all" | "family_circle" | "only_me" | "tagged";
+type MemoryFilter = "all" | "family_circle" | "friend_circle" | "only_me" | "tagged" | "saved";
 
 const FILTERS: Array<{ key: MemoryFilter; label: string }> = [
   { key: "all", label: "전체" },
   { key: "family_circle", label: "가족 공개" },
+  { key: "friend_circle", label: "친구 공개" },
   { key: "only_me", label: "나만 보기" },
   { key: "tagged", label: "태그됨" },
+  { key: "saved", label: "저장됨" },
 ];
 
 const EMPTY_COPY: Record<MemoryFilter, { title: string; description: string }> = {
   all: { title: "첫 번째 순간을 남겨보세요", description: "사진 한 장과 짧은 이야기로 오늘을 가족과 나눠보세요." },
   family_circle: { title: "가족에게 공개된 순간이 아직 없어요", description: "함께 보고 싶은 오늘의 순간을 남겨보세요." },
+  friend_circle: { title: "친구에게 보여줄 순간이 아직 없어요", description: "초대된 친구와 나누고 싶은 순간을 남겨보세요." },
   only_me: { title: "나만 간직한 순간이 아직 없어요", description: "조용히 보관하고 싶은 사진과 이야기를 남겨보세요." },
   tagged: { title: "태그된 순간이 아직 없어요", description: "가족이 태그한 순간이 생기면 여기에 모여요." },
+  saved: { title: "저장한 순간이 아직 없어요", description: "다시 보고 싶은 순간의 저장 아이콘을 눌러보세요." },
 };
 
 type FeedCardProps = {
@@ -50,6 +55,8 @@ type FeedCardProps = {
   expanded: boolean;
   onToggleCaption: () => void;
   onOpen: () => void;
+  onToggleSave: () => void;
+  saveWorking: boolean;
 };
 
 const MemoryFeedCard = memo(function MemoryFeedCard({
@@ -58,6 +65,8 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
   expanded,
   onToggleCaption,
   onOpen,
+  onToggleSave,
+  saveWorking,
 }: FeedCardProps) {
   const privacy = memoryPrivacyPresentation(item.post.privacyType);
   const createdAt = new Date(item.post.createdAt);
@@ -105,6 +114,17 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
           <Pressable style={styles.reactionButton} onPress={onOpen} accessibilityLabel={`댓글 ${item.commentCount}개`}>
             <BabyLogIcon kind="chat" size={19} color={colors.muted} /><Text style={styles.reactionText}>{item.commentCount}</Text>
           </Pressable>
+          <View style={styles.reactionSpacer} />
+          <Pressable
+            style={styles.saveButton}
+            onPress={onToggleSave}
+            disabled={saveWorking}
+            accessibilityRole="button"
+            accessibilityLabel={item.isSaved ? "저장 취소" : "추억 저장"}
+            accessibilityState={{ selected: item.isSaved, disabled: saveWorking }}
+          >
+            <Bookmark size={20} color={item.isSaved ? colors.amber : colors.muted} fill={item.isSaved ? colors.amber : "transparent"} />
+          </Pressable>
         </View>
       </View>
     </View>
@@ -121,6 +141,8 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [filter, setFilter] = useState<MemoryFilter>("all");
   const [expandedCaptions, setExpandedCaptions] = useState<Set<string>>(() => new Set());
+  const [savingPostIds, setSavingPostIds] = useState<Set<string>>(() => new Set());
+  const savingPostIdsRef = useRef<Set<string>>(new Set());
   const babyId = getSupabaseSync().babyId;
   const canCreate = myFamilyRole !== "viewer";
   const serverFamilyMembers = useMemo(
@@ -140,7 +162,9 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
   const filteredCards = useMemo(() => cards.filter((card) => {
     if (filter === "all") return true;
     if (filter === "family_circle") return card.post.privacyType === "family_circle";
+    if (filter === "friend_circle") return card.post.privacyType === "friend_circle";
     if (filter === "only_me") return card.post.privacyType === "only_me";
+    if (filter === "saved") return card.isSaved;
     return card.post.privacyType === "tagged_family" || card.tags.some((tag) => tag.taggedUserId === logAuthor.userId);
   }), [cards, filter, logAuthor.userId]);
   const emptyCopy = EMPTY_COPY[filter];
@@ -176,6 +200,29 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
     if (authorId === logAuthor.userId) return logAuthor.name;
     return familyMembers.find((member) => member.id === authorId)?.name ?? "가족";
   };
+
+  const toggleSave = useCallback(async (card: MemoryCard) => {
+    if (savingPostIdsRef.current.has(card.post.id)) return;
+    const nextSaved = !card.isSaved;
+    savingPostIdsRef.current.add(card.post.id);
+    setSavingPostIds((current) => new Set(current).add(card.post.id));
+    setCards((current) => current.map((item) => item.post.id === card.post.id ? { ...item, isSaved: nextSaved } : item));
+    setError("");
+    try {
+      if (nextSaved) await MemoriesRepository.saveMemoryPost(card.post.id);
+      else await MemoriesRepository.unsaveMemoryPost(card.post.id);
+    } catch (cause) {
+      setCards((current) => current.map((item) => item.post.id === card.post.id ? { ...item, isSaved: card.isSaved } : item));
+      setError(cause instanceof Error ? cause.message : "저장 상태를 바꾸지 못했어요.");
+    } finally {
+      setSavingPostIds((current) => {
+        const next = new Set(current);
+        next.delete(card.post.id);
+        return next;
+      });
+      savingPostIdsRef.current.delete(card.post.id);
+    }
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -257,6 +304,8 @@ export function MemoriesScreen({ onOpenSettings, onOpenDetail }: Props) {
               authorName={authorName(item.post.authorId)}
               expanded={expandedCaptions.has(item.post.id)}
               onOpen={() => onOpenDetail(item.post.id)}
+              onToggleSave={() => void toggleSave(item)}
+              saveWorking={savingPostIds.has(item.post.id)}
               onToggleCaption={() => setExpandedCaptions((current) => {
                 const next = new Set(current);
                 if (next.has(item.post.id)) next.delete(item.post.id);
@@ -335,6 +384,8 @@ const styles = StyleSheet.create({
   moreText: { color: colors.amber, fontSize: 12, fontWeight: "800" },
   reactionRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
   reactionButton: { minWidth: 54, minHeight: 44, paddingHorizontal: 5, flexDirection: "row", alignItems: "center", gap: 5 },
+  reactionSpacer: { flex: 1 },
+  saveButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   heart: { color: colors.muted, fontSize: 25, lineHeight: 27 },
   reactionText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
 });

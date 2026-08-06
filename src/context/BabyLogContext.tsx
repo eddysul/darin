@@ -52,8 +52,10 @@ import {
 import {
   getBabyStickers,
   hydrateBabyStickers,
+  resetBabyStickersMemory,
   saveBabyStickers,
 } from "../utils/babyStickersStore";
+import { BabyStickerRepository } from "../repositories/BabyStickerRepository";
 import type { GrowthBookEdit } from "../types/growthBook";
 import type { BabySticker } from "../types/babySticker";
 import type { GrowthRecord, GrowthRecordDraft } from "../types/growthRecord";
@@ -288,8 +290,8 @@ type BabyLogContextValue = {
   growthBookEdit: GrowthBookEdit;
   setGrowthBookEdit: (edit: GrowthBookEdit | ((prev: GrowthBookEdit) => GrowthBookEdit)) => void;
   babyStickers: BabySticker[];
-  addBabySticker: (sticker: BabySticker) => void;
-  deleteBabySticker: (id: string) => void;
+  addBabySticker: (sticker: BabySticker) => Promise<BabySticker>;
+  deleteBabySticker: (id: string) => Promise<void>;
   growthRecords: GrowthRecord[];
   addGrowthRecord: (draft: GrowthRecordDraft) => GrowthRecord;
   updateGrowthRecord: (id: string, draft: GrowthRecordDraft) => void;
@@ -423,6 +425,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       resetDiaryEntriesMemory();
       resetGrowthBookEditMemory();
       resetDiaryDraftMemory();
+      resetBabyStickersMemory();
       localDataScopeRef.current = scope;
       setLocalDataScope(scope);
     }
@@ -436,7 +439,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       hydrateChatHistory(force),
       hydrateFamilyMembers(force),
       hydrateGrowthBookEdit(scope, force),
-      hydrateBabyStickers(force),
+      hydrateBabyStickers(scope, force),
       hydrateGrowthRecords(force),
       hydrateSupabaseSync(force),
     ]);
@@ -536,8 +539,18 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     }
     if (stickersOk) {
       const storedStickers = getBabyStickers();
-      if (storedStickers !== null) setBabyStickers(storedStickers);
-      setStickersHydrated(true);
+      let nextStickers = storedStickers ?? [];
+      if (scope) {
+        try {
+          nextStickers = await BabyStickerRepository.uploadLocalBabyStickersMigration(scope, nextStickers);
+        } catch {
+          // Keep the scoped local originals and retry migration on the next hydrate.
+        }
+      }
+      if (hydrationRun !== storageHydrationRunRef.current) return false;
+      setBabyStickers(nextStickers);
+      void saveBabyStickers(nextStickers, scope);
+      setStickersHydrated(!!scope);
     }
     if (growthRecordsOk) {
       const storedGrowthRecords = getGrowthRecords();
@@ -614,8 +627,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!stickersHydrated) return;
-    void saveBabyStickers(babyStickers);
-  }, [babyStickers, stickersHydrated]);
+    void saveBabyStickers(babyStickers, localDataScope);
+  }, [babyStickers, localDataScope, stickersHydrated]);
 
   useEffect(() => {
     if (!growthRecordsHydrated) return;
@@ -630,13 +643,33 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const addBabySticker = useCallback((sticker: BabySticker) => {
+  const addBabySticker = useCallback(async (sticker: BabySticker): Promise<BabySticker> => {
     setBabyStickers((prev) => [sticker, ...prev.filter((item) => item.id !== sticker.id)]);
+    const scope = localDataScopeRef.current;
+    if (!scope || sticker.babyId !== scope.babyId) return sticker;
+    try {
+      const remote = await BabyStickerRepository.uploadSticker(sticker);
+      if (sameLocalDataScope(localDataScopeRef.current, scope)) {
+        setBabyStickers((prev) => [remote, ...prev.filter((item) => item.id !== remote.id)]);
+      }
+      return remote;
+    } catch (error) {
+      // Local asset remains intact and migration will retry later, but callers
+      // must not treat a local-only sticker as ready for a server comment.
+      throw error;
+    }
   }, []);
 
-  const deleteBabySticker = useCallback((id: string) => {
+  const deleteBabySticker = useCallback(async (id: string): Promise<void> => {
+    const previous = babyStickers.find((item) => item.id === id);
     setBabyStickers((prev) => prev.filter((item) => item.id !== id));
-  }, []);
+    if (!previous?.serverBacked) return;
+    try {
+      await BabyStickerRepository.deleteSticker(id);
+    } catch {
+      if (previous) setBabyStickers((prev) => [previous, ...prev.filter((item) => item.id !== id)]);
+    }
+  }, [babyStickers]);
 
   const me = useMemo(() => familyMembers.find((m) => m.isMe) ?? familyMembers[0], [familyMembers]);
   const myFamilyRole: FamilyRole = me?.role ?? "owner";
@@ -917,7 +950,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveFamilyMembers([]),
       saveGrowthBookEdit(emptyGrowthBook, localDataScope),
       clearDiaryDraft(localDataScope),
-      saveBabyStickers([]),
+      saveBabyStickers([], localDataScope),
       saveGrowthRecords([]),
       clearGrowthRecordsMigrationState(),
       saveChatHistory([]),
@@ -1058,7 +1091,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveChatHistory(chatHistory),
       saveFamilyMembers(familyMembers),
       saveGrowthBookEdit(growthBookEdit, localDataScope),
-      saveBabyStickers(babyStickers),
+      saveBabyStickers(babyStickers, localDataScope),
       saveGrowthRecords(growthRecords),
       saveQuickRecords(quickRecords),
       saveCustomCategories(customCategories),
@@ -1111,6 +1144,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     resetDiaryEntriesMemory();
     resetGrowthBookEditMemory();
     resetDiaryDraftMemory();
+    resetBabyStickersMemory();
     const emptyGrowthBook = createEmptyGrowthBookEdit({ babyId: "", babyName: "" });
     setLogs([]);
     setDiaryEntries([]);
@@ -1122,7 +1156,6 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     await Promise.all([
       saveBabyLogs([]),
       saveFamilyMembers([]),
-      saveBabyStickers([]),
       saveGrowthRecords([]),
       saveChatHistory([DEFAULT_GREETING]),
       clearSupabaseSync(),

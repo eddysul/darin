@@ -5,10 +5,12 @@ import type {
   MemoryPostRow,
   MemoryReactionRow,
   MemorySelectedPersonRow,
+  MemorySaveRow,
   MemoryTagRow,
 } from "../types/database";
 import type {
   AddMemoryCommentInput,
+  AddMemoryStickerCommentInput,
   AddMemoryMediaInput,
   CreateMemoryPostInput,
   CreateMemoryWithImageInput,
@@ -25,6 +27,7 @@ import type {
 } from "../types/memory";
 import { createId } from "../utils/id";
 import { AuthRepository } from "./AuthRepository";
+import { BabyStickerRepository } from "./BabyStickerRepository";
 import { NotificationRepository } from "./NotificationRepository";
 
 const MEMORIES_BUCKET = "memories";
@@ -66,6 +69,9 @@ export function memoryCommentRowToModel(row: MemoryCommentRow): MemoryComment {
     memoryPostId: row.memory_post_id,
     authorId: row.author_id ?? "deleted-user",
     body: row.body,
+    commentType: row.comment_type ?? "text",
+    stickerId: row.sticker_id ?? undefined,
+    stickerLabel: row.sticker_label ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? undefined,
@@ -278,7 +284,19 @@ export const MemoriesRepository = {
       .is("deleted_at", null)
       .order("created_at", { ascending: true });
     if (error) throw error;
-    return (data ?? []).map(memoryCommentRowToModel);
+    const comments = (data ?? []).map(memoryCommentRowToModel);
+    const stickerIds = comments.flatMap((comment) => comment.commentType === "sticker" && comment.stickerId ? [comment.stickerId] : []);
+    if (!stickerIds.length) return comments;
+    try {
+      const stickers = await BabyStickerRepository.listByIds(stickerIds);
+      const imageById = new Map(stickers.map((sticker) => [sticker.id, sticker.finalStickerImageUri]));
+      return comments.map((comment) => comment.stickerId
+        ? { ...comment, stickerImageUrl: imageById.get(comment.stickerId) }
+        : comment);
+    } catch {
+      // Text comments and sticker labels stay usable if an image URL refresh fails.
+      return comments;
+    }
   },
 
   async addComment(input: AddMemoryCommentInput): Promise<MemoryComment> {
@@ -294,6 +312,9 @@ export const MemoriesRepository = {
         memory_post_id: input.memoryPostId,
         author_id: authorId,
         body,
+        comment_type: "text",
+        sticker_id: null,
+        sticker_label: null,
       })
       .select("*")
       .single();
@@ -306,6 +327,75 @@ export const MemoriesRepository = {
       routeData: { route: "memory", memoryPostId: input.memoryPostId, babyId: post.babyId },
     })).catch(() => undefined);
     return comment;
+  },
+
+  async addStickerComment(input: AddMemoryStickerCommentInput): Promise<MemoryComment> {
+    const stickerLabel = input.stickerLabel.trim() || "아기 스티커";
+    const sb = requireSupabase();
+    const authorId = await requireUserId();
+    const { data, error } = await sb.from("memory_comments").insert({
+      id: input.id ?? createId(),
+      memory_post_id: input.memoryPostId,
+      author_id: authorId,
+      body: stickerLabel,
+      comment_type: "sticker",
+      sticker_id: input.stickerId,
+      sticker_label: stickerLabel,
+    }).select("*").single();
+    if (error) throw error;
+    const comment = memoryCommentRowToModel(data);
+    void this.getById(input.memoryPostId).then((post) => post && NotificationRepository.sendPushToBabyMembers({
+      eventType: "memory_comment",
+      babyId: post.babyId,
+      targetId: comment.id,
+      routeData: { route: "memory", memoryPostId: input.memoryPostId, babyId: post.babyId },
+    })).catch(() => undefined);
+    return comment;
+  },
+
+  async saveMemoryPost(memoryPostId: string): Promise<void> {
+    const sb = requireSupabase();
+    const userId = await requireUserId();
+    const post = await this.getById(memoryPostId);
+    if (!post) throw new Error("저장할 수 없는 추억이에요.");
+    const { error } = await sb.from("memory_saves").upsert({
+      memory_post_id: memoryPostId,
+      baby_id: post.babyId,
+      user_id: userId,
+    }, { onConflict: "memory_post_id,user_id" });
+    if (error) throw error;
+  },
+
+  async unsaveMemoryPost(memoryPostId: string): Promise<void> {
+    const sb = requireSupabase();
+    const userId = await requireUserId();
+    const { error } = await sb.from("memory_saves").delete().eq("memory_post_id", memoryPostId).eq("user_id", userId);
+    if (error) throw error;
+  },
+
+  async listSavedPostIds(babyId: string): Promise<string[]> {
+    const sb = requireSupabase();
+    const userId = await requireUserId();
+    const { data, error } = await sb.from("memory_saves").select("memory_post_id").eq("baby_id", babyId).eq("user_id", userId);
+    if (error) throw error;
+    return ((data ?? []) as Pick<MemorySaveRow, "memory_post_id">[]).map((row) => row.memory_post_id);
+  },
+
+  async listSavedMemoryPosts(babyId: string): Promise<MemoryPost[]> {
+    const savedIds = await this.listSavedPostIds(babyId);
+    if (!savedIds.length) return [];
+    const sb = requireSupabase();
+    const { data, error } = await sb.from("memory_posts").select("*").eq("baby_id", babyId).in("id", savedIds).is("deleted_at", null).order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(memoryPostRowToModel);
+  },
+
+  async isSaved(memoryPostId: string): Promise<boolean> {
+    const sb = requireSupabase();
+    const userId = await requireUserId();
+    const { data, error } = await sb.from("memory_saves").select("id").eq("memory_post_id", memoryPostId).eq("user_id", userId).maybeSingle();
+    if (error) throw error;
+    return Boolean(data);
   },
 
   async deleteComment(commentId: string): Promise<void> {
@@ -435,7 +525,8 @@ export const MemoriesRepository = {
   },
 
   async listCardsByBabyId(babyId: string): Promise<MemoryCard[]> {
-    const posts = await this.listByBabyId(babyId);
+    const [posts, savedPostIds] = await Promise.all([this.listByBabyId(babyId), this.listSavedPostIds(babyId)]);
+    const saved = new Set(savedPostIds);
     return Promise.all(posts.map(async (post) => {
       const [media, tags, comments, reactions] = await Promise.all([
         this.listMedia(post.id),
@@ -452,6 +543,7 @@ export const MemoriesRepository = {
         tags,
         commentCount: comments.length,
         reactionCount: reactions.length,
+        isSaved: saved.has(post.id),
       };
     }));
   },

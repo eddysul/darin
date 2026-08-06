@@ -6,6 +6,7 @@
  *   B = invited viewer
  *   E = invited editor (must NOT edit/delete A's posts)
  *   C = non-member
+ *   F = explicitly invited Memories-only friend (not a baby_member)
  *
  * Usage: node --env-file=.env scripts/verify-supabase-memories.mjs
  */
@@ -72,9 +73,11 @@ const accountA = await anonymous("QA-A-admin");
 const accountB = await anonymous("QA-B-viewer");
 const accountE = await anonymous("QA-E-editor");
 const accountC = await anonymous("QA-C-outsider");
+const accountF = await anonymous("QA-F-memory-friend");
 
 let babyId = null;
 const storagePaths = [];
+const stickerStoragePaths = [];
 
 try {
   const { error: tableError } = await accountA.sb.from("memory_posts").select("id").limit(1);
@@ -82,7 +85,7 @@ try {
   pass("Memories tables reachable");
 
   // Detect whether Phase 2E manage hardening SQL is live by probing editor update later.
-  const migrationPath = resolve("supabase/migrations/202607310003_memories_manage_author_admin.sql");
+  const migrationPath = resolve("supabase/migrations/202608060001_memories_v2b.sql");
   info(`Expected SQL migration present: ${migrationPath.split("/").pop()}`);
   info(`Signed URL TTL policy: ${SIGNED_URL_TTL_SECONDS}s (MVP; old URLs remain valid until expiry)`);
 
@@ -95,7 +98,7 @@ try {
   if (babyError || !baby?.id) throw new Error(`baby create: ${babyError?.message ?? "no baby"}`);
   babyId = baby.id;
   info(`QA baby: ${qaBabyName} (${babyId})`);
-  info(`A=${accountA.user.id} B(viewer)=${accountB.user.id} E(editor)=${accountE.user.id} C=${accountC.user.id}`);
+  info(`A=${accountA.user.id} B(viewer)=${accountB.user.id} E(editor)=${accountE.user.id} C=${accountC.user.id} F(friend)=${accountF.user.id}`);
 
   const { error: membersError } = await accountA.sb.from("baby_members").insert([
     {
@@ -115,6 +118,21 @@ try {
   ]);
   if (membersError) throw new Error(`member setup: ${membersError.message}`);
   pass("QA memberships prepared (A admin, B viewer, E editor, C outsider)");
+
+  const { error: friendSetupError } = await accountA.sb.from("memory_friends").insert({
+    baby_id: babyId,
+    user_id: accountF.user.id,
+    invited_by: accountA.user.id,
+    status: "active",
+  });
+  if (friendSetupError) throw new Error(`Memories friend setup: ${friendSetupError.message}`);
+  const { data: friendBabyMemberships, error: friendMembershipError } = await accountF.sb
+    .from("baby_members")
+    .select("baby_id")
+    .eq("baby_id", babyId);
+  if (friendMembershipError) throw friendMembershipError;
+  expectNone(friendBabyMemberships, "F baby membership isolation");
+  pass("F is Memories-only friend and receives no baby_members access");
 
   const { data: authorPermission, error: permissionError } = await accountA.sb.rpc("baby_permission", {
     p_baby_id: babyId,
@@ -177,6 +195,91 @@ try {
   await expectAllowedSignedUrl(accountB.sb, familyPath, "B family signed URL");
   await expectBlockedSignedUrl(accountC.sb, familyPath, "C family signed URL");
   pass("family_circle visibility A/B/E yes, C no");
+
+  // ---------- Memories V2B: friend_circle ----------
+  const friendPost = await createPost("friend_circle", "friend_circle");
+  const friendPath = await attachMedia(friendPost.id, "friend_circle");
+  expectOne(await readById(accountA.sb, friendPost.id), "A friend post");
+  expectOne(await readById(accountF.sb, friendPost.id), "F invited friend post");
+  expectNone(await readById(accountB.sb, friendPost.id), "B family-only account on friend post");
+  expectNone(await readById(accountC.sb, friendPost.id), "C non-member friend post");
+  await expectAllowedSignedUrl(accountF.sb, friendPath, "F friend post signed URL");
+  await expectBlockedSignedUrl(accountC.sb, friendPath, "C friend post signed URL");
+  pass("friend_circle visible only to author + explicit Memories friend; not public/non-member");
+
+  // ---------- Memories V2B: private saves ----------
+  const saveRow = async (account, post) => account.sb.from("memory_saves").insert({
+    memory_post_id: post.id,
+    baby_id: babyId,
+    user_id: account.user.id,
+  });
+  const { error: ownSaveError } = await saveRow(accountA, familyPost);
+  if (ownSaveError) throw new Error(`A own save: ${ownSaveError.message}`);
+  const { error: visibleSaveError } = await saveRow(accountB, familyPost);
+  if (visibleSaveError) throw new Error(`B visible save: ${visibleSaveError.message}`);
+  const { error: outsiderSaveError } = await saveRow(accountC, familyPost);
+  if (!outsiderSaveError) throw new Error("C outsider save unexpectedly allowed");
+  const { data: aSaves, error: aSavesError } = await accountA.sb.from("memory_saves").select("user_id,memory_post_id").eq("baby_id", babyId);
+  if (aSavesError) throw aSavesError;
+  if (aSaves?.length !== 1 || aSaves[0].user_id !== accountA.user.id) throw new Error("A can inspect another user's save");
+  const { data: bSaves, error: bSavesError } = await accountB.sb.from("memory_saves").select("user_id,memory_post_id").eq("baby_id", babyId);
+  if (bSavesError) throw bSavesError;
+  if (bSaves?.length !== 1 || bSaves[0].user_id !== accountB.user.id) throw new Error("B own save list mismatch");
+  pass("save own/visible allowed; outsider denied; save lists isolated per user");
+
+  // ---------- Memories V2B: private baby stickers + sticker comments ----------
+  const stickerId = crypto.randomUUID();
+  const stickerPath = `${babyId}/${stickerId}.png`;
+  const { error: stickerUploadError } = await accountA.sb.storage
+    .from("baby-stickers")
+    .upload(stickerPath, ONE_PIXEL_PNG, { contentType: "image/png", upsert: false });
+  if (stickerUploadError) throw new Error(`sticker upload: ${stickerUploadError.message}`);
+  stickerStoragePaths.push(stickerPath);
+  const { error: stickerInsertError } = await accountA.sb.from("baby_stickers").insert({
+    id: stickerId,
+    baby_id: babyId,
+    created_by: accountA.user.id,
+    label: "QA 아기 스티커",
+    storage_path: stickerPath,
+    source: "qa",
+    metadata: { cutoutMode: "circular" },
+  });
+  if (stickerInsertError) throw new Error(`sticker insert: ${stickerInsertError.message}`);
+  const { data: bStickerRows, error: bStickerReadError } = await accountB.sb.from("baby_stickers").select("id").eq("id", stickerId);
+  if (bStickerReadError) throw bStickerReadError;
+  expectOne(bStickerRows, "B member sticker read");
+  const { data: cStickerRows, error: cStickerReadError } = await accountC.sb.from("baby_stickers").select("id").eq("id", stickerId);
+  if (cStickerReadError) throw cStickerReadError;
+  expectNone(cStickerRows, "C sticker read");
+  const { data: fStickerRows, error: fStickerReadError } = await accountF.sb.from("baby_stickers").select("id").eq("id", stickerId);
+  if (fStickerReadError) throw fStickerReadError;
+  expectNone(fStickerRows, "F unused sticker browse");
+  const { data: stickerComment, error: stickerCommentError } = await accountB.sb.from("memory_comments").insert({
+    memory_post_id: familyPost.id,
+    author_id: accountB.user.id,
+    body: "QA 아기 스티커",
+    comment_type: "sticker",
+    sticker_id: stickerId,
+    sticker_label: "QA 아기 스티커",
+  }).select("id,comment_type,sticker_id").single();
+  if (stickerCommentError || stickerComment?.sticker_id !== stickerId) throw new Error(`sticker comment create: ${stickerCommentError?.message ?? "mismatch"}`);
+  const { data: aStickerComments, error: aStickerCommentsError } = await accountA.sb.from("memory_comments").select("id,comment_type,sticker_id").eq("id", stickerComment.id);
+  if (aStickerCommentsError) throw aStickerCommentsError;
+  expectOne(aStickerComments, "A sticker comment read");
+  const { error: outsiderStickerCommentError } = await accountC.sb.from("memory_comments").insert({
+    memory_post_id: familyPost.id,
+    author_id: accountC.user.id,
+    body: "blocked sticker",
+    comment_type: "sticker",
+    sticker_id: stickerId,
+    sticker_label: "blocked sticker",
+  });
+  if (!outsiderStickerCommentError) throw new Error("C sticker comment unexpectedly allowed");
+  const { data: memberStickerUrl, error: memberStickerUrlError } = await accountB.sb.storage.from("baby-stickers").createSignedUrl(stickerPath, SIGNED_URL_TTL_SECONDS);
+  if (memberStickerUrlError || !memberStickerUrl?.signedUrl) throw new Error(`B sticker signed URL: ${memberStickerUrlError?.message ?? "missing URL"}`);
+  const { data: outsiderStickerUrl, error: outsiderStickerUrlError } = await accountC.sb.storage.from("baby-stickers").createSignedUrl(stickerPath, SIGNED_URL_TTL_SECONDS);
+  if (!outsiderStickerUrlError || outsiderStickerUrl?.signedUrl) throw new Error("C sticker signed URL unexpectedly allowed");
+  pass("baby sticker member read + sticker comment pass; outsider table/storage/comment denied");
 
   // ---------- RLS hardening ----------
   const { data: aEdited, error: aEditError } = await accountA.sb
@@ -383,6 +486,9 @@ try {
   if (storagePaths.length) {
     await accountA.sb.storage.from("memories").remove(storagePaths);
   }
+  if (stickerStoragePaths.length) {
+    await accountA.sb.storage.from("baby-stickers").remove(stickerStoragePaths);
+  }
   if (babyId) {
     const { error: cleanupError } = await accountA.sb.from("babies").delete().eq("id", babyId);
     notes.push(
@@ -396,6 +502,7 @@ try {
     accountB.sb.auth.signOut(),
     accountE.sb.auth.signOut(),
     accountC.sb.auth.signOut(),
+    accountF.sb.auth.signOut(),
   ]);
 }
 

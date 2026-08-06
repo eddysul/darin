@@ -14,6 +14,12 @@ const PRESENTATION: Record<MemoryPrivacyType, MemoryPrivacyPresentation> = {
     accent: "#5E9E8C",
     soft: "#EAF5F1",
   },
+  friend_circle: {
+    label: "친구 공개",
+    icon: "◇",
+    accent: "#6795B5",
+    soft: "#E9F3F9",
+  },
   only_me: {
     label: "나만 보기",
     icon: "♙",

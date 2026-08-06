@@ -46,8 +46,8 @@ type Props = {
   /** Render as overlay inside a parent Modal (avoids iOS nested-Modal failures). */
   embedded?: boolean;
   onClose: () => void;
-  onSaveSticker: (sticker: BabySticker) => void;
-  onDeleteSticker: (id: string) => void;
+  onSaveSticker: (sticker: BabySticker) => void | Promise<unknown>;
+  onDeleteSticker: (id: string) => void | Promise<unknown>;
   onPickSticker?: (sticker: BabySticker) => void;
 };
 
@@ -191,10 +191,17 @@ export function BabyStickerVaultModal({
         createdAt: now,
         updatedAt: now,
       };
-      onSaveSticker(sticker);
+      // Wait for server-backed callers before a newly-created sticker can be
+      // selected as a comment. Local assets remain intact if upload fails.
+      await onSaveSticker(sticker);
       setMode("vault");
       setDraft(null);
       if (pickMode) onPickSticker?.(sticker);
+    } catch {
+      Alert.alert(
+        "서버 동기화가 필요해요",
+        "스티커 원본은 이 기기에 남아 있어요. 네트워크 연결 후 다시 시도해주세요.",
+      );
     } finally {
       setSaving(false);
     }

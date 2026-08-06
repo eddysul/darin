@@ -8,6 +8,7 @@ export const MEMORY_PRIVACY_OPTIONS: Array<{
   description: string;
 }> = [
   { value: "family_circle", label: "가족 공개", description: "초대된 가족이 볼 수 있어요." },
+  { value: "friend_circle", label: "친구 공개", description: "Memories에 초대된 친구가 볼 수 있어요." },
   { value: "only_me", label: "나만 보기", description: "나만 볼 수 있어요." },
   { value: "tagged_family", label: "태그된 가족만", description: "태그된 가족만 볼 수 있어요." },
   { value: "selected_people", label: "선택한 사람만", description: "선택한 사람만 볼 수 있어요." },

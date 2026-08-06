@@ -15,7 +15,10 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Image } from "expo-image";
+import { Bookmark } from "lucide-react-native";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
+import { BabyStickerVaultModal } from "../components/babylog/BabyStickerVaultModal";
 import { MemoryEditModal } from "../components/memories/MemoryEditModal";
 import { MemoryMediaViewer } from "../components/memories/MemoryMediaViewer";
 import { memoryPrivacyLabel } from "../components/memories/MemoryPrivacyPicker";
@@ -24,7 +27,8 @@ import { useBabyLog } from "../context/BabyLogContext";
 import type { RootStackParamList } from "../navigation/types";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { MemoriesRepository } from "../repositories/MemoriesRepository";
-import type { MemoryPostBundle } from "../types/memory";
+import type { BabySticker } from "../types/babySticker";
+import type { MemoryComment, MemoryPostBundle } from "../types/memory";
 import { memberRelationshipLabel } from "../types/family";
 import { colors, radius } from "../theme";
 
@@ -33,7 +37,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 export function MemoryDetailScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const { babyName, familyMembers, myFamilyRole, logAuthor } = useBabyLog();
+  const { babyName, familyMembers, myFamilyRole, logAuthor, babyStickers, addBabySticker, deleteBabySticker } = useBabyLog();
   const [bundle, setBundle] = useState<MemoryPostBundle | null>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [userId, setUserId] = useState("");
@@ -43,6 +47,8 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const [error, setError] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [stickerVaultOpen, setStickerVaultOpen] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   const serverFamilyMembers = useMemo(() => familyMembers.filter((member) => UUID_PATTERN.test(member.id)), [familyMembers]);
 
   const load = useCallback(async (showSpinner = true) => {
@@ -53,6 +59,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       const next = await MemoriesRepository.getBundleById(route.params.memoryPostId);
       if (!next) throw new Error("삭제되었거나 볼 수 없는 추억이에요.");
       setBundle(next);
+      setIsSaved(await MemoriesRepository.isSaved(next.post.id));
       const cover = next.media[0];
       setImageUrl(cover ? await MemoriesRepository.createSignedUrl(cover.storagePath) : "");
     } catch (cause) {
@@ -94,6 +101,57 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       await load(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "댓글을 남기지 못했어요.");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const submitStickerComment = async (sticker: BabySticker) => {
+    if (!bundle || working) return;
+    const tempId = `optimistic-${Date.now()}`;
+    const optimistic: MemoryComment = {
+      id: tempId,
+      memoryPostId: bundle.post.id,
+      authorId: userId,
+      body: sticker.label,
+      commentType: "sticker",
+      stickerId: sticker.id,
+      stickerLabel: sticker.label,
+      stickerImageUrl: sticker.finalStickerImageUri,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setStickerVaultOpen(false);
+    setBundle((current) => current ? { ...current, comments: [...current.comments, optimistic] } : current);
+    setWorking(true);
+    setError("");
+    try {
+      await MemoriesRepository.addStickerComment({
+        memoryPostId: bundle.post.id,
+        stickerId: sticker.id,
+        stickerLabel: sticker.label,
+      });
+      await load(false);
+    } catch (cause) {
+      setBundle((current) => current ? { ...current, comments: current.comments.filter((item) => item.id !== tempId) } : current);
+      setError(cause instanceof Error ? cause.message : "스티커 댓글을 남기지 못했어요.");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const toggleSave = async () => {
+    if (!bundle || working) return;
+    const previous = isSaved;
+    setIsSaved(!previous);
+    setWorking(true);
+    setError("");
+    try {
+      if (previous) await MemoriesRepository.unsaveMemoryPost(bundle.post.id);
+      else await MemoriesRepository.saveMemoryPost(bundle.post.id);
+    } catch (cause) {
+      setIsSaved(previous);
+      setError(cause instanceof Error ? cause.message : "저장 상태를 바꾸지 못했어요.");
     } finally {
       setWorking(false);
     }
@@ -188,6 +246,9 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
               <BabyLogIcon kind="chat" size={20} color={colors.muted} />
             </Pressable>
             <Text style={styles.actionCount}>좋아요 {bundle.reactions.length} · 댓글 {bundle.comments.length}</Text>
+            <Pressable style={styles.actionButton} onPress={() => void toggleSave()} disabled={working} accessibilityLabel={isSaved ? "저장 취소" : "추억 저장"}>
+              <Bookmark size={20} color={isSaved ? colors.amber : colors.muted} fill={isSaved ? colors.amber : "transparent"} />
+            </Pressable>
           </View>
           {bundle.post.caption ? (
             <Text style={styles.caption}>
@@ -243,7 +304,12 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
                     <View style={styles.commentAvatar}><BabyLogIcon kind="profile" size={14} color={colors.amber} /></View>
                     <View style={styles.commentCopy}>
                       <View style={styles.commentMeta}><Text style={styles.commentAuthor}>{commentAuthorLabel(item.authorId)}</Text><Text style={styles.commentDate}>{new Date(item.createdAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</Text></View>
-                      <Text style={styles.commentBody}>{item.body}</Text>
+                      {item.commentType === "sticker" ? (
+                        <View style={styles.stickerComment}>
+                          {item.stickerImageUrl ? <Image source={{ uri: item.stickerImageUrl }} style={styles.stickerCommentImage} contentFit="contain" /> : null}
+                          <Text style={styles.stickerCommentLabel}>{item.stickerLabel ?? item.body}</Text>
+                        </View>
+                      ) : <Text style={styles.commentBody}>{item.body}</Text>}
                     </View>
                     {mayDelete ? <Pressable style={styles.commentDelete} onPress={() => {
                       if (working) return;
@@ -255,11 +321,42 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
               })}
             </ScrollView>
             {error ? <Text style={styles.sheetError}>{error}</Text> : null}
+            {babyStickers.length ? (
+              <View style={styles.stickerBarBlock}>
+                <Text style={styles.stickerBarTitle}>내 아기 스티커</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stickerBar} keyboardShouldPersistTaps="handled">
+                  {babyStickers.map((sticker) => (
+                    <Pressable key={sticker.id} style={styles.stickerChoice} onPress={() => void submitStickerComment(sticker)} disabled={working} accessibilityLabel={`${sticker.label} 스티커 댓글 보내기`}>
+                      <Image source={{ uri: sticker.finalStickerImageUri }} style={styles.stickerChoiceImage} contentFit="contain" />
+                      <Text style={styles.stickerChoiceLabel} numberOfLines={1}>{sticker.label}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : (
+              <View style={styles.stickerEmpty}>
+                <Text style={styles.stickerEmptyText}>아직 만든 아기 스티커가 없어요.</Text>
+                <Pressable style={styles.stickerCreateButton} onPress={() => setStickerVaultOpen(true)}><Text style={styles.stickerCreateText}>스티커 만들기</Text></Pressable>
+              </View>
+            )}
             <View style={styles.composer}>
               <TextInput style={styles.commentInput} value={comment} onChangeText={setComment} placeholder="가족에게 댓글 남기기" placeholderTextColor={colors.faint} maxLength={500} multiline />
               {comment.trim() ? <Pressable style={[styles.send, working && styles.disabled]} onPress={() => void submitComment()} disabled={working}><Text style={styles.sendText}>보내기</Text></Pressable> : null}
             </View>
           </View>
+          <BabyStickerVaultModal
+            visible={stickerVaultOpen}
+            embedded
+            pickMode
+            babyId={bundle.post.babyId}
+            babyName={babyName}
+            stickers={babyStickers}
+            createdBy={userId}
+            onClose={() => setStickerVaultOpen(false)}
+            onSaveSticker={addBabySticker}
+            onDeleteSticker={deleteBabySticker}
+            onPickSticker={(sticker) => void submitStickerComment(sticker)}
+          />
         </KeyboardAvoidingView>
       </Modal>
     </KeyboardAvoidingView>
@@ -308,7 +405,7 @@ const styles = StyleSheet.create({
   sheetTitle: { flex: 1, color: colors.text, fontSize: 16, fontWeight: "800", textAlign: "center", marginLeft: 44 },
   sheetClose: { width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" },
   sheetCloseText: { color: colors.amber, fontSize: 12.5, fontWeight: "800" },
-  commentList: { flexGrow: 0 },
+  commentList: { flexGrow: 0, flexShrink: 1 },
   commentListContent: { paddingVertical: 8 },
   emptyComments: { color: colors.faint, fontSize: 12.5, lineHeight: 19, paddingVertical: 34, textAlign: "center" },
   commentRow: { minHeight: 62, flexDirection: "row", alignItems: "flex-start", gap: 9, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
@@ -318,9 +415,22 @@ const styles = StyleSheet.create({
   commentAuthor: { color: colors.text, fontSize: 11.5, fontWeight: "800" },
   commentDate: { color: colors.faint, fontSize: 10 },
   commentBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 2 },
+  stickerComment: { alignSelf: "flex-start", marginTop: 5, alignItems: "center" },
+  stickerCommentImage: { width: 72, height: 72 },
+  stickerCommentLabel: { color: colors.muted, fontSize: 10.5, fontWeight: "700", marginTop: 2, maxWidth: 100 },
   commentDelete: { minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
   commentDeleteText: { color: colors.faint, fontSize: 10.5 },
   sheetError: { color: colors.dangerText, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: 9, fontSize: 11.5, marginBottom: 8 },
+  stickerBarBlock: { paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  stickerBarTitle: { color: colors.text, fontSize: 11.5, fontWeight: "800", marginBottom: 5 },
+  stickerBar: { gap: 8, paddingRight: 12 },
+  stickerChoice: { width: 70, minHeight: 78, alignItems: "center", justifyContent: "center", borderRadius: radius.md, backgroundColor: colors.cardHi, paddingVertical: 5 },
+  stickerChoiceImage: { width: 48, height: 48 },
+  stickerChoiceLabel: { color: colors.muted, fontSize: 9.5, fontWeight: "700", maxWidth: 62, marginTop: 2 },
+  stickerEmpty: { minHeight: 54, paddingVertical: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8 },
+  stickerEmptyText: { flex: 1, color: colors.faint, fontSize: 11.5 },
+  stickerCreateButton: { minHeight: 40, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  stickerCreateText: { color: colors.amber, fontSize: 11, fontWeight: "800" },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   commentInput: { flex: 1, minHeight: 46, maxHeight: 100, borderRadius: 16, backgroundColor: colors.cardHi, color: colors.text, paddingHorizontal: 13, paddingVertical: 12, fontSize: 13 },
   send: { minWidth: 54, minHeight: 44, borderRadius: 14, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
