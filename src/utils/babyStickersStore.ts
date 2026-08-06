@@ -47,6 +47,20 @@ function normalize(raw: unknown): BabySticker[] {
   }));
 }
 
+/** Avoid persisting short-lived signed URLs / large local image blobs for server-backed stickers. */
+function toPersistedStickers(stickers: BabySticker[]): BabySticker[] {
+  return stickers.map((sticker) => {
+    if (!sticker.serverBacked || !sticker.storagePath) return sticker;
+    return {
+      ...sticker,
+      originalImageUri: "",
+      faceImageUri: "",
+      cutoutImageUri: "",
+      finalStickerImageUri: "",
+    };
+  });
+}
+
 export async function hydrateBabyStickers(scope: LocalDataScope | null, force = false): Promise<boolean> {
   if (!isValidLocalDataScope(scope)) {
     resetBabyStickersMemory();
@@ -98,10 +112,16 @@ export async function saveBabyStickers(stickers: BabySticker[], scope: LocalData
   if (!isValidLocalDataScope(scope) || activeScopeId !== localDataScopeId(scope)) return;
   memory = stickers;
   hydrated = true;
+  const key = scopedStorageKey(STORAGE_KEY, scope);
+  const payload = JSON.stringify(toPersistedStickers(stickers));
   try {
-    await qaStorage.setItem(scopedStorageKey(STORAGE_KEY, scope), JSON.stringify(stickers));
-  } catch {
-    reportStorageIssue("save", STORAGE_KEY);
+    await qaStorage.setItem(key, payload);
+  } catch (error) {
+    // Keep in-memory originals. Server remains source of truth for migrated stickers.
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.warn("[babyStickersStore] local cache save failed", error);
+    }
+    reportStorageIssue("save", STORAGE_KEY, "local_cache");
   }
 }
 

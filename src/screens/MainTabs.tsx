@@ -323,7 +323,9 @@ export function MainTabs() {
             message={
               storageIssue.operation === "load"
                 ? "저장된 데이터를 불러오지 못했어요. 다시 시도해 주세요."
-                : "변경사항을 기기에 저장하지 못했어요. 앱을 닫기 전에 다시 시도해 주세요."
+                : storageIssue.severity === "critical"
+                  ? "변경사항을 기기에 저장하지 못했어요. 앱을 닫기 전에 다시 시도해 주세요."
+                  : "오프라인 저장을 완료하지 못했어요. 다시 불러오면 서버 기록을 확인할 수 있어요."
             }
             actionLabel="재시도"
             onAction={() => void retryPersistence()}

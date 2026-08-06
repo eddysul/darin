@@ -181,12 +181,27 @@ export const BabyStickerRepository = {
 
   async uploadLocalBabyStickersMigration(scope: LocalDataScope, local: BabySticker[]): Promise<BabySticker[]> {
     const flagKey = scopedStorageKey(STORAGE_KEYS.babyStickersMigration, scope);
-    const completed = await qaStorage.getItem(flagKey);
+    let completed: string | null = null;
+    try {
+      completed = await qaStorage.getItem(flagKey);
+    } catch (error) {
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.warn("[BabyStickerRepository] migration flag read failed", error);
+      }
+    }
     if (!completed) {
       for (const sticker of local.filter((item) => item.babyId === scope.babyId && !item.serverBacked)) {
         await this.uploadSticker(sticker, "local_migration");
       }
-      await qaStorage.setItem(flagKey, JSON.stringify({ migratedAt: new Date().toISOString() }));
+      try {
+        await qaStorage.setItem(flagKey, JSON.stringify({ migratedAt: new Date().toISOString() }));
+      } catch (error) {
+        // Uploads already succeeded; keep local originals and retry the flag later.
+        // Do not surface this as a scary "device save" failure banner.
+        if (typeof __DEV__ !== "undefined" && __DEV__) {
+          console.warn("[BabyStickerRepository] migration flag write failed", error);
+        }
+      }
     }
     return this.listByBabyId(scope.babyId);
   },

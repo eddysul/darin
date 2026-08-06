@@ -93,7 +93,6 @@ import { saveCareSetup } from "../utils/careSetupStore";
 import {
   clearStorageIssue,
   getStorageIssue,
-  reportStorageIssue,
   subscribeStorageIssues,
   type StorageIssue,
 } from "../utils/storageIssues";
@@ -618,8 +617,15 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         diaryOrder: diaryEntries.filter((entry) => entry.includedInGrowthBook).map((entry) => entry.id),
       }).then((saved) => {
         if (run !== growthBookSyncRunRef.current) return;
-        if (saved) growthBookDirtyRef.current = false;
-        else reportStorageIssue("save", STORAGE_KEYS.growthBookEdit);
+        if (saved) {
+          growthBookDirtyRef.current = false;
+          return;
+        }
+        // Server sync failure is not a device AsyncStorage failure — keep dirty for retry
+        // and avoid the global "기기에 저장하지 못했어요" banner.
+        if (typeof __DEV__ !== "undefined" && __DEV__) {
+          console.warn("[BabyLogContext] growth book server sync deferred; will retry while dirty");
+        }
       });
     }, 500);
     return () => clearTimeout(timer);
