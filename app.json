@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.darin.childcare",
-      "buildNumber": "6",
+      "buildNumber": "8",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
