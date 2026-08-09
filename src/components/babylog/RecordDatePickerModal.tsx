@@ -61,24 +61,23 @@ export function RecordDatePickerModal({
             </View>
           </View>
           <View style={styles.grid}>
-            {WEEKDAYS.map((weekday) => <Text key={weekday} style={styles.weekday}>{weekday}</Text>)}
+            {WEEKDAYS.map((weekday) => <View key={weekday} style={styles.weekdayCell}><Text style={styles.weekday}>{weekday}</Text></View>)}
             {days.map((day, index) => {
-              if (!day) return <View key={`empty-${index}`} style={styles.day} />;
+              if (!day) return <View key={`empty-${index}`} style={styles.dayCell} />;
               const key = formatDateKey(day, "midnight");
               const disabled = key < earliestKey || key > latestKey;
               const active = key === selectedDateKey;
               return (
-                <Pressable
+                <CalendarDayCell
                   key={key}
-                  style={[styles.day, active && styles.dayActive, disabled && styles.disabled]}
-                  disabled={disabled}
+                  label={String(day.getDate())}
+                  isSelected={active}
+                  isDisabled={disabled}
                   onPress={() => {
                     onSelect(key);
                     onClose();
                   }}
-                >
-                  <Text style={[styles.dayText, active && styles.dayTextActive]}>{day.getDate()}</Text>
-                </Pressable>
+                />
               );
             })}
           </View>
@@ -86,6 +85,23 @@ export function RecordDatePickerModal({
         </View>
       </View>
     </Modal>
+  );
+}
+
+function CalendarDayCell({ label, isSelected, isDisabled, onPress }: { label: string; isSelected: boolean; isDisabled: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      style={[styles.dayCell, isDisabled && styles.disabled]}
+      disabled={isDisabled}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}일`}
+      accessibilityState={{ selected: isSelected, disabled: isDisabled }}
+    >
+      <View style={[styles.dayPill, isSelected && styles.dayPillSelected]}>
+        <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{label}</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -99,12 +115,14 @@ const styles = StyleSheet.create({
   arrow: { width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, backgroundColor: colors.cardHi },
   arrowText: { color: colors.text, fontSize: 23 },
   yearArrowText: { color: colors.muted, fontSize: 17, fontWeight: "800" },
-  grid: { flexDirection: "row", flexWrap: "wrap" },
-  weekday: { width: "14.2857%", textAlign: "center", color: colors.faint, fontSize: 11, fontWeight: "700", paddingVertical: 6 },
-  day: { width: "14.2857%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 999 },
-  dayActive: { backgroundColor: colors.amber },
-  dayText: { color: colors.text, fontSize: 13, fontWeight: "600" },
-  dayTextActive: { color: "#fff", fontWeight: "800" },
+  grid: { width: 44 * 7, alignSelf: "center", flexDirection: "row", flexWrap: "wrap" },
+  weekdayCell: { width: 44, height: 28, alignItems: "center", justifyContent: "center" },
+  weekday: { color: colors.faint, fontSize: 11, lineHeight: 16, fontWeight: "700", textAlign: "center", includeFontPadding: false },
+  dayCell: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  dayPill: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  dayPillSelected: { backgroundColor: colors.amber },
+  dayText: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600", textAlign: "center", includeFontPadding: false },
+  dayTextSelected: { color: "#fff", fontWeight: "800" },
   disabled: { opacity: 0.25 },
   close: { minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.full, backgroundColor: colors.cardHi },
   closeText: { color: colors.text, fontWeight: "800" },
