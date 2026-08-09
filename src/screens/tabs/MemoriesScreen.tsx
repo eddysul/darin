@@ -265,7 +265,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
           )}
         </View>
         <Pressable style={styles.inviteButton} onPress={onOpenFamily}>
-          <Text style={styles.inviteText}>가족 초대</Text>
+          <Text style={styles.inviteText}>가족·친구 초대</Text>
         </Pressable>
       </Pressable>
 

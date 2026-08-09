@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -33,16 +32,30 @@ import { colors, radius } from "../theme";
 type InvitePreview = NonNullable<Awaited<ReturnType<typeof FamilyRepository.previewInviteCode>>>;
 
 const INVITE_LABELS: Record<InviteType, string> = {
-  family: "가족/보호자로 초대하기",
-  baby_friend: "우리 아기 순간에 초대하기",
+  family: "가족 초대",
+  baby_friend: "아기 친구 초대",
   darin_friend: "다린 친구 맺기",
 };
 
 const INVITE_DESCRIPTIONS: Record<InviteType, string> = {
-  family: "기록과 일기를 함께 남길 수 있어요.",
-  baby_friend: "친구 공개 순간만 볼 수 있어요. 기록과 일기는 볼 수 없어요.",
+  family: "기록과 성장책을 함께 볼 수 있어요.",
+  baby_friend: "추억과 친구 공개 포스트를 함께 나눠요.",
   darin_friend: "앱 안에서 친구로 연결돼요. 아기 기록은 공유되지 않아요.",
 };
+
+const INVITE_PERMISSION_COPY: Record<InviteType, string> = {
+  family: "관리자 또는 편집 가능 권한으로 기록·일기·성장책을 함께 관리해요.",
+  baby_friend: "친구 공개 Memories만 볼 수 있고 기록·일기·성장책은 볼 수 없어요.",
+  darin_friend: "친구 관계만 연결되며 어떤 아기 기록도 자동으로 공유되지 않아요.",
+};
+
+const INVITE_ICON: Record<InviteType, string> = {
+  family: "●●",
+  baby_friend: "♡",
+  darin_friend: "●●",
+};
+
+type ShareTab = "create" | "enter" | "people";
 
 function inviteMessage(type: InviteType, code: string, babyName: string): string {
   const intro =
@@ -65,10 +78,11 @@ export function FamilyShareScreen() {
   const { babyName, myFamilyRole, familyMembers, rehydrateFromServer } = useBabyLog();
   const babyId = getSupabaseSync().babyId;
   const isAdmin = myFamilyRole === "owner" || myFamilyRole === "admin";
-  const [inviteType, setInviteType] = useState<InviteType>("darin_friend");
+  const [activeTab, setActiveTab] = useState<ShareTab>("create");
+  const [inviteType, setInviteType] = useState<InviteType>(() => (isAdmin ? "family" : "darin_friend"));
   const [role, setRole] = useState<"admin" | "editor">("editor");
   const [relation, setRelation] = useState("가족");
-  const [createdCode, setCreatedCode] = useState("");
+  const [createdCodes, setCreatedCodes] = useState<Partial<Record<InviteType, string>>>({});
   const [code, setCode] = useState("");
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [displayName, setDisplayName] = useState("");
@@ -77,7 +91,7 @@ export function FamilyShareScreen() {
   const [babyFriends, setBabyFriends] = useState<BabyMemoryFriendDisplay[]>([]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
-  const [inviteChooserOpen, setInviteChooserOpen] = useState(false);
+  const createdCode = createdCodes[inviteType] ?? "";
 
   const refresh = useCallback(async () => {
     const [profile, friends] = await Promise.all([
@@ -106,7 +120,6 @@ export function FamilyShareScreen() {
 
   const chooseType = (next: InviteType) => {
     setInviteType(next);
-    setCreatedCode("");
     setError("");
     setRelation(next === "family" ? "가족" : "친구");
   };
@@ -126,7 +139,7 @@ export function FamilyShareScreen() {
         role,
         relationshipLabel: inviteType === "family" ? relation : "친구",
       });
-      setCreatedCode(invite.code);
+      setCreatedCodes((current) => ({ ...current, [inviteType]: invite.code }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "초대코드를 만들지 못했어요.");
     } finally {
@@ -240,289 +253,311 @@ export function FamilyShareScreen() {
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
       >
-        <View style={styles.card}>
-          <Text style={styles.title}>가족·친구 공유</Text>
-          <Text style={styles.description}>가족 권한, 아기 친구 공개, 다린 친구 관계를 각각 안전하게 관리해요.</Text>
-          <Text style={styles.count}>함께 기록하는 가족 {activeFamily.length}명</Text>
-          {activeFamily.slice(0, 8).map((member) => (
-            <Text key={member.id} style={styles.person} numberOfLines={1}>
-              {member.name}{member.realName ? ` · ${member.realName}` : ""} · {member.relationshipLabel ?? "가족"} · {FAMILY_ROLE_LABELS[member.role]}
-            </Text>
-          ))}
+        <View style={styles.headerCopy}>
+          <Text style={styles.title}>가족·친구 초대</Text>
+          <Text style={styles.headerSubtitle}>가족과 친구를 안전하게 연결해요.</Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>초대코드 생성</Text>
+        <View style={[styles.card, styles.summaryCard]}>
+          <View style={styles.summaryIcon}><Text style={styles.summaryIconText}>✈</Text></View>
+          <View style={styles.summaryCopy}>
+            <Text style={styles.summaryTitle}>{babyName}네 가족</Text>
+            <Text style={styles.summaryMeta}>가족 {activeFamily.length}명 · 함께 기록 중</Text>
+            <Text style={styles.summaryHint} numberOfLines={2}>
+              {activeFamily.length <= 1 ? "아직 초대된 가족이 없어요." : `${activeFamily.length - 1}명의 가족과 연결되어 있어요.`}
+            </Text>
+          </View>
           <Pressable
             testID="friend-add-button"
-            style={styles.friendAddButton}
-            onPress={() => setInviteChooserOpen(true)}
+            style={styles.summaryButton}
+            onPress={() => setActiveTab("create")}
             accessibilityRole="button"
-            accessibilityLabel="친구 추가"
+            accessibilityLabel="가족·친구 초대"
           >
-            <Text style={styles.friendAddText}>친구 추가</Text>
-            <Text style={styles.friendAddArrow}>›</Text>
+            <Text style={styles.summaryButtonText}>가족·친구 초대</Text>
           </Pressable>
-          <View style={styles.selectedInvite}>
-            <Text style={styles.selectedInviteLabel}>선택한 초대</Text>
-            <Text style={styles.selectedInviteTitle}>{INVITE_LABELS[inviteType]}</Text>
-            <Text style={styles.description}>{INVITE_DESCRIPTIONS[inviteType]}</Text>
-          </View>
-          {inviteType === "family" ? (
-            <>
-              <View style={styles.chips}>
-                {(["admin", "editor"] as const).map((value) => (
-                  <Pressable
-                    key={value}
-                    style={[styles.chip, role === value && styles.chipActive]}
-                    onPress={() => setRole(value)}
-                  >
-                    <Text style={[styles.chipText, role === value && styles.chipTextActive]}>
-                      {value === "admin" ? "관리자" : "편집 가능"}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={styles.permissionHint}>
-                관리자는 구성원과 초대를 관리할 수 있고, 편집 가능은 기록을 추가·수정할 수 있어요.
-              </Text>
-            </>
-          ) : null}
-          <Pressable style={[styles.primary, working && styles.disabled]} onPress={() => void createInvite()} disabled={working}>
-            {working ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>초대코드 생성</Text>}
-          </Pressable>
-
-          {createdCode ? (
-            <View style={styles.codeBox}>
-              <Text style={styles.code}>{createdCode}</Text>
-              <Text style={styles.description}>상대방이 다린에서 이 코드를 입력하면 연결돼요.</Text>
-              <View style={styles.actionRow}>
-                <Pressable style={styles.secondary} onPress={() => void copyCode()}>
-                  <Text style={styles.secondaryText}>코드 복사</Text>
-                </Pressable>
-                <Pressable style={styles.kakaoButton} onPress={() => void shareToKakao()}>
-                  <Text style={styles.kakaoText}>카카오톡으로 공유</Text>
-                </Pressable>
-              </View>
-              <Pressable style={styles.shareSheetButton} onPress={() => void openShareSheet()}>
-                <Text style={styles.secondaryText}>다른 앱으로 공유</Text>
-              </Pressable>
-              <Text style={styles.fallbackText}>카카오톡이 없거나 선택되지 않으면 iOS 공유 시트에서 다른 앱을 선택할 수 있어요.</Text>
-            </View>
-          ) : null}
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>초대코드 입력</Text>
-          <TextInput
-            style={styles.input}
-            value={code}
-            onChangeText={(value) => {
-              setCode(value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 16));
-              setPreview(null);
-              setError("");
-            }}
-            placeholder="DARIN-XXXXXXXXXX"
-            placeholderTextColor={colors.faint}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            returnKeyType="done"
-            onSubmitEditing={() => void inspectInvite()}
-          />
-          <Pressable
-            style={[styles.primary, (!code.trim() || working) && styles.disabled]}
-            onPress={() => void inspectInvite()}
-            disabled={!code.trim() || working}
-          >
-            <Text style={styles.primaryText}>초대 정보 확인</Text>
-          </Pressable>
+        <View style={styles.hubCard}>
+          <View style={styles.tabs} accessibilityRole="tablist">
+            {([
+              ["create", "초대 만들기"],
+              ["enter", "초대코드 입력"],
+              ["people", "연결된 친구"],
+            ] as const).map(([value, label]) => (
+              <Pressable
+                key={value}
+                style={[styles.tab, activeTab === value && styles.tabActive]}
+                onPress={() => {
+                  setActiveTab(value);
+                  setError("");
+                }}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === value }}
+              >
+                <Text style={[styles.tabText, activeTab === value && styles.tabTextActive]} numberOfLines={1}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
 
-          {preview ? (
-            <View style={styles.preview}>
-              <Text style={styles.previewTitle}>{previewTitle(preview)}</Text>
-              <Text style={styles.description}>초대한 사람: {preview.inviter_name}</Text>
-              <Text style={styles.permissionHint}>{INVITE_DESCRIPTIONS[preview.invite_type]}</Text>
-              <Text style={styles.fieldLabel}>닉네임</Text>
-              <Text style={styles.fieldHelp}>앱에서 주로 보이는 이름이에요.</Text>
-              <TextInput
-                style={styles.input}
-                value={displayName}
-                onChangeText={setDisplayName}
-                placeholder="예: 콩이맘, 준이아빠"
-                placeholderTextColor={colors.faint}
-                maxLength={40}
-              />
-              <Text style={styles.fieldLabel}>이름</Text>
-              <Text style={styles.fieldHelp}>친구와 가족이 확인할 수 있는 이름이에요.</Text>
-              <TextInput
-                style={styles.input}
-                value={realName}
-                onChangeText={setRealName}
-                placeholder="예: 김민지, 이원준"
-                placeholderTextColor={colors.faint}
-                maxLength={40}
-              />
-              {preview.invite_type === "family" ? (
-                <>
-                  <Text style={styles.fieldLabel}>아기와의 관계</Text>
+          {activeTab === "create" ? (
+            <View style={styles.tabBody}>
+              <Text style={styles.sectionTitle}>누구를 초대할까요?</Text>
+              {(["family", "baby_friend", "darin_friend"] as InviteType[]).map((type) => {
+                const disabled = type !== "darin_friend" && !isAdmin;
+                return (
+                  <Pressable
+                    key={type}
+                    testID={`invite-choice-${type}`}
+                    style={[styles.inviteOption, inviteType === type && styles.inviteOptionActive, disabled && styles.disabled]}
+                    disabled={disabled}
+                    onPress={() => chooseType(type)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: inviteType === type, disabled }}
+                  >
+                    <View style={[styles.optionIcon, inviteType === type && styles.optionIconActive]}>
+                      <Text style={[styles.optionIconText, inviteType === type && styles.optionIconTextActive]}>{INVITE_ICON[type]}</Text>
+                    </View>
+                    <View style={styles.optionCopy}>
+                      <Text style={styles.optionTitle}>{INVITE_LABELS[type]}</Text>
+                      <Text style={styles.optionDescription}>{INVITE_DESCRIPTIONS[type]}</Text>
+                      {disabled ? <Text style={styles.adminHint}>아기 관리자만 선택할 수 있어요.</Text> : null}
+                    </View>
+                    <Text style={[styles.optionArrow, inviteType === type && styles.optionArrowActive]}>›</Text>
+                  </Pressable>
+                );
+              })}
+
+              <Text style={styles.permissionHint}>{INVITE_PERMISSION_COPY[inviteType]}</Text>
+              {inviteType === "family" ? (
+                <View style={styles.roleArea}>
+                  <Text style={styles.fieldLabel}>가족 권한</Text>
                   <View style={styles.chips}>
-                    {PROFILE_RELATION_OPTIONS.map((value) => (
-                      <Pressable
-                        key={value}
-                        style={[styles.chip, relation === value && styles.chipActive]}
-                        onPress={() => setRelation(value)}
-                      >
-                        <Text style={[styles.chipText, relation === value && styles.chipTextActive]}>{value}</Text>
+                    {(["admin", "editor"] as const).map((value) => (
+                      <Pressable key={value} style={[styles.chip, role === value && styles.chipActive]} onPress={() => setRole(value)}>
+                        <Text style={[styles.chipText, role === value && styles.chipTextActive]}>{value === "admin" ? "관리자" : "편집 가능"}</Text>
                       </Pressable>
                     ))}
                   </View>
-                </>
-              ) : null}
-              <Pressable
-                style={[styles.primary, (!displayName.trim() || !realName.trim() || working) && styles.disabled]}
-                onPress={() => void acceptInvite()}
-                disabled={!displayName.trim() || !realName.trim() || working}
-              >
-                <Text style={styles.primaryText}>초대 수락</Text>
-              </Pressable>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>다린 친구</Text>
-          <Text style={styles.description}>친구 관계만으로는 아기 기록을 볼 수 없어요.</Text>
-          {darinFriends.length ? (
-            darinFriends.map((friend) => (
-              <View key={friend.friendshipId} style={styles.friendRow}>
-                <View style={styles.friendCopy}>
-                  <Text style={styles.person}>{friend.displayName}</Text>
-                  {friend.realName ? <Text style={styles.nickname}>{friend.realName} · 친구</Text> : null}
+                  <Text style={styles.permissionHint}>관리자는 구성원과 초대를 관리하고, 편집 가능은 기록을 추가·수정할 수 있어요.</Text>
                 </View>
-                {isAdmin && babyId ? (
-                  <Pressable
-                    style={[styles.friendAction, babyFriendIds.has(friend.userId) && styles.disabled]}
-                    disabled={babyFriendIds.has(friend.userId) || working}
-                    onPress={() => void addFriendToBaby(friend)}
-                  >
-                    <Text style={styles.friendActionText}>
-                      {babyFriendIds.has(friend.userId) ? "아기 친구 연결됨" : "이 아기 친구로 초대"}
-                    </Text>
+              ) : null}
+
+              <View style={styles.sendSection}>
+                <Text style={styles.sectionTitle}>초대 보내기</Text>
+                {createdCode ? (
+                  <>
+                    <View style={styles.codePill}><Text style={styles.code} numberOfLines={1} adjustsFontSizeToFit>{createdCode}</Text></View>
+                    <View style={styles.actionRow}>
+                      <Pressable style={styles.secondary} onPress={() => void copyCode()} accessibilityLabel="초대코드 복사">
+                        <Text style={styles.secondaryText}>▣  복사</Text>
+                      </Pressable>
+                      <Pressable style={styles.shareButton} onPress={() => void shareToKakao()} accessibilityLabel="초대코드 공유하기">
+                        <Text style={styles.shareButtonText}>⌯  공유하기</Text>
+                      </Pressable>
+                    </View>
+                    <Text style={styles.shareHelper}>카카오톡 또는 공유하기로 바로 보낼 수 있어요.</Text>
+                  </>
+                ) : (
+                  <Pressable style={[styles.primary, working && styles.disabled]} onPress={() => void createInvite()} disabled={working}>
+                    {working ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>초대코드 생성</Text>}
+                  </Pressable>
+                )}
+                {createdCode ? (
+                  <Pressable style={styles.regenerateButton} onPress={() => void createInvite()} disabled={working}>
+                    <Text style={styles.regenerateText}>새 코드 만들기</Text>
                   </Pressable>
                 ) : null}
               </View>
-            ))
-          ) : (
-            <Text style={styles.empty}>아직 다린 친구가 없어요. ‘친구 추가’에서 다린 친구 초대를 선택해 보세요.</Text>
-          )}
-          {babyFriends.length ? (
-            <Text style={styles.permissionHint}>현재 {babyName}의 친구 공개 연결 {babyFriends.length}명</Text>
-          ) : null}
-        </View>
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-      </ScrollView>
-
-      <Modal visible={inviteChooserOpen} transparent animationType="slide" onRequestClose={() => setInviteChooserOpen(false)}>
-        <View style={styles.chooserOverlay}>
-          <Pressable style={styles.chooserBackdrop} onPress={() => setInviteChooserOpen(false)} accessibilityLabel="친구 추가 닫기" />
-          <View style={[styles.chooserSheet, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-            <View style={styles.chooserHandle} />
-            <View style={styles.chooserHeader}>
-              <View style={styles.chooserHeaderSpacer} />
-              <Text style={styles.chooserTitle}>어떻게 초대할까요?</Text>
-              <Pressable style={styles.chooserClose} onPress={() => setInviteChooserOpen(false)}><Text style={styles.chooserCloseText}>닫기</Text></Pressable>
             </View>
-            {(["darin_friend", "baby_friend", "family"] as InviteType[]).map((type) => {
-              const disabled = type !== "darin_friend" && !isAdmin;
-              return (
-                <Pressable
-                  key={type}
-                  testID={`invite-choice-${type}`}
-                  style={[styles.chooserOption, inviteType === type && styles.chooserOptionSelected, disabled && styles.disabled]}
-                  disabled={disabled}
-                  onPress={() => {
-                    chooseType(type);
-                    setInviteChooserOpen(false);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: inviteType === type, disabled }}
-                >
-                  <View style={styles.chooserCopy}>
-                    <Text style={styles.chooserOptionTitle}>{INVITE_LABELS[type]}</Text>
-                    <Text style={styles.chooserOptionBody}>{INVITE_DESCRIPTIONS[type]}</Text>
-                    {disabled ? <Text style={styles.chooserAdminHint}>아기 관리자만 선택할 수 있어요.</Text> : null}
+          ) : null}
+
+          {activeTab === "enter" ? (
+            <View style={styles.tabBody}>
+              <Text style={styles.sectionTitle}>초대코드 입력</Text>
+              <Text style={styles.description}>받은 코드를 입력하면 연결 정보와 권한을 먼저 확인할 수 있어요.</Text>
+              <TextInput
+                style={styles.input}
+                value={code}
+                onChangeText={(value) => {
+                  setCode(value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 16));
+                  setPreview(null);
+                  setError("");
+                }}
+                placeholder="DARIN-XXXXXXXX"
+                placeholderTextColor={colors.faint}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={() => void inspectInvite()}
+              />
+              <Pressable style={[styles.primary, (!code.trim() || working) && styles.disabled]} onPress={() => void inspectInvite()} disabled={!code.trim() || working}>
+                {working ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>초대 정보 확인</Text>}
+              </Pressable>
+
+              {preview ? (
+                <View style={styles.preview}>
+                  <Text style={styles.previewTitle}>{previewTitle(preview)}</Text>
+                  <Text style={styles.description}>초대한 사람: {preview.inviter_name}</Text>
+                  <Text style={styles.permissionHint}>{INVITE_PERMISSION_COPY[preview.invite_type]}</Text>
+                  <Text style={styles.fieldLabel}>닉네임</Text>
+                  <Text style={styles.fieldHelp}>앱에서 주로 보이는 이름이에요.</Text>
+                  <TextInput style={styles.input} value={displayName} onChangeText={setDisplayName} placeholder="예: 콩이맘, 준이아빠" placeholderTextColor={colors.faint} maxLength={40} />
+                  <Text style={styles.fieldLabel}>이름</Text>
+                  <Text style={styles.fieldHelp}>친구와 가족이 확인할 수 있는 이름이에요.</Text>
+                  <TextInput style={styles.input} value={realName} onChangeText={setRealName} placeholder="예: 김민지, 이원준" placeholderTextColor={colors.faint} maxLength={40} />
+                  {preview.invite_type === "family" ? (
+                    <>
+                      <Text style={styles.fieldLabel}>아기와의 관계</Text>
+                      <View style={styles.chips}>
+                        {PROFILE_RELATION_OPTIONS.map((value) => (
+                          <Pressable key={value} style={[styles.chip, relation === value && styles.chipActive]} onPress={() => setRelation(value)}>
+                            <Text style={[styles.chipText, relation === value && styles.chipTextActive]}>{value}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </>
+                  ) : null}
+                  <Pressable style={[styles.primary, (!displayName.trim() || !realName.trim() || working) && styles.disabled]} onPress={() => void acceptInvite()} disabled={!displayName.trim() || !realName.trim() || working}>
+                    <Text style={styles.primaryText}>초대 수락</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {activeTab === "people" ? (
+            <View style={styles.tabBody}>
+              <Text style={styles.sectionTitle}>연결된 사람</Text>
+              <Text style={styles.permissionHint}>친구 관계만으로는 아기 기록을 볼 수 없어요.</Text>
+
+              <View style={styles.peopleSection}>
+                <Text style={styles.peopleTitle}>가족</Text>
+                {activeFamily.length ? activeFamily.map((member) => (
+                  <View key={member.id} style={styles.personRow}>
+                    <View style={styles.personAvatar}><Text style={styles.personAvatarText}>{member.name.slice(0, 1)}</Text></View>
+                    <View style={styles.friendCopy}>
+                      <Text style={styles.person}>{member.name}</Text>
+                      <Text style={styles.nickname}>{member.realName ? `${member.realName} · ` : ""}{member.relationshipLabel ?? "가족"} · {FAMILY_ROLE_LABELS[member.role]}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.chooserOptionArrow}>›</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                )) : <Text style={styles.empty}>아직 초대된 가족이 없어요.</Text>}
+              </View>
+
+              <View style={styles.peopleSection}>
+                <Text style={styles.peopleTitle}>아기 친구</Text>
+                {babyFriends.length ? babyFriends.map((friend) => (
+                  <View key={friend.membershipId} style={styles.personRow}>
+                    <View style={styles.personAvatar}><Text style={styles.personAvatarText}>{friend.displayName.slice(0, 1)}</Text></View>
+                    <View style={styles.friendCopy}>
+                      <Text style={styles.person}>{friend.displayName}</Text>
+                      <Text style={styles.nickname}>{friend.realName ? `${friend.realName} · ` : ""}친구 공개 연결됨</Text>
+                    </View>
+                  </View>
+                )) : <Text style={styles.empty}>아직 아기 친구가 없어요.</Text>}
+              </View>
+
+              <View style={styles.peopleSection}>
+                <Text style={styles.peopleTitle}>다린 친구</Text>
+                {darinFriends.length ? darinFriends.map((friend) => (
+                  <View key={friend.friendshipId} style={styles.friendRow}>
+                    <View style={styles.personAvatar}><Text style={styles.personAvatarText}>{friend.displayName.slice(0, 1)}</Text></View>
+                    <View style={styles.friendCopy}>
+                      <Text style={styles.person}>{friend.displayName}</Text>
+                      <Text style={styles.nickname}>{friend.realName ? `${friend.realName} · ` : ""}다린 친구</Text>
+                    </View>
+                    {isAdmin && babyId ? (
+                      <Pressable style={[styles.friendAction, babyFriendIds.has(friend.userId) && styles.disabled]} disabled={babyFriendIds.has(friend.userId) || working} onPress={() => void addFriendToBaby(friend)}>
+                        <Text style={styles.friendActionText}>{babyFriendIds.has(friend.userId) ? "아기 친구 연결됨" : "아기 친구로 초대"}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                )) : <Text style={styles.empty}>아직 다린 친구가 없어요.</Text>}
+              </View>
+            </View>
+          ) : null}
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
-      </Modal>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 16, gap: 14 },
-  card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: 16, gap: 11 },
-  title: { fontSize: 21, fontWeight: "900", color: colors.text },
+  content: { padding: 16, gap: 16 },
+  headerCopy: { alignItems: "center", gap: 4, paddingVertical: 2 },
+  title: { fontSize: 23, fontWeight: "900", color: colors.text, textAlign: "center" },
+  headerSubtitle: { fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 20 },
+  card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: 16 },
+  summaryCard: { minHeight: 116, flexDirection: "row", alignItems: "center", gap: 12 },
+  summaryIcon: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
+  summaryIconText: { color: colors.amber, fontSize: 26, fontWeight: "900" },
+  summaryCopy: { flex: 1, minWidth: 0, gap: 3 },
+  summaryTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
+  summaryMeta: { color: colors.muted, fontSize: 12.5, lineHeight: 18 },
+  summaryHint: { color: colors.faint, fontSize: 11.5, lineHeight: 17 },
+  summaryButton: { minHeight: 44, maxWidth: 118, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
+  summaryButtonText: { color: colors.amber, fontSize: 12, fontWeight: "900", textAlign: "center" },
+  hubCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: 12, gap: 16 },
+  tabs: { flexDirection: "row", gap: 6 },
+  tab: { flex: 1, minWidth: 0, minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, backgroundColor: colors.card },
+  tabActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  tabText: { color: colors.muted, fontSize: 11.5, fontWeight: "800", textAlign: "center" },
+  tabTextActive: { color: colors.amber },
+  tabBody: { gap: 12, paddingHorizontal: 2, paddingBottom: 2 },
   sectionTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
   description: { fontSize: 13, color: colors.muted, lineHeight: 19 },
   permissionHint: { fontSize: 12, color: colors.faint, lineHeight: 18 },
   fieldHelp: { fontSize: 11.5, color: colors.faint, lineHeight: 17, marginTop: -5 },
-  count: { fontSize: 13, color: colors.amber, fontWeight: "800" },
   person: { fontSize: 14, color: colors.text, fontWeight: "700" },
-  nickname: { fontSize: 11.5, color: colors.muted },
+  nickname: { fontSize: 11.5, color: colors.muted, lineHeight: 17 },
+  inviteOption: { minHeight: 86, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11 },
+  inviteOptionActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  optionIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.cardHi, alignItems: "center", justifyContent: "center" },
+  optionIconActive: { backgroundColor: "rgba(232,145,138,0.24)" },
+  optionIconText: { color: colors.muted, fontSize: 14, fontWeight: "900", letterSpacing: -2 },
+  optionIconTextActive: { color: colors.amber },
+  optionCopy: { flex: 1, minWidth: 0, gap: 3 },
+  optionTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  optionDescription: { color: colors.muted, fontSize: 11.5, lineHeight: 17 },
+  optionArrow: { color: colors.faint, fontSize: 25 },
+  optionArrowActive: { color: colors.amber },
+  adminHint: { color: colors.faint, fontSize: 10.5, fontWeight: "700" },
+  roleArea: { gap: 8, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { minHeight: 38, paddingHorizontal: 11, justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderRadius: radius.full },
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   chipText: { fontSize: 12, fontWeight: "700", color: colors.muted },
   chipTextActive: { color: colors.amber },
-  friendAddButton: { minHeight: 48, paddingHorizontal: 15, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberSoft, flexDirection: "row", alignItems: "center", gap: 12 },
-  friendAddText: { flex: 1, color: colors.amber, fontSize: 15, fontWeight: "900" },
-  friendAddArrow: { color: colors.amber, fontSize: 24, lineHeight: 26 },
-  selectedInvite: { gap: 4, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
-  selectedInviteLabel: { color: colors.faint, fontSize: 10.5, fontWeight: "800" },
-  selectedInviteTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
   primary: { minHeight: 48, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
   primaryText: { color: "#fff", fontWeight: "800" },
-  codeBox: { gap: 9, padding: 13, borderRadius: radius.md, backgroundColor: colors.amberSoft },
-  code: { fontSize: 20, fontWeight: "900", letterSpacing: 1, color: colors.text },
+  sendSection: { gap: 10, marginTop: 4, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border },
+  codePill: { minHeight: 64, paddingHorizontal: 14, borderRadius: radius.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft, borderWidth: 1, borderColor: "rgba(232,145,138,0.32)" },
+  code: { fontSize: 20, fontWeight: "900", letterSpacing: 1, color: colors.amber, textAlign: "center" },
   actionRow: { flexDirection: "row", gap: 8 },
-  secondary: { minHeight: 44, flex: 1, borderRadius: radius.md, backgroundColor: colors.cardHi, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  secondary: { minHeight: 48, flex: 1, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   secondaryText: { color: colors.text, fontSize: 12, fontWeight: "800" },
-  kakaoButton: { minHeight: 44, flex: 1.3, borderRadius: radius.md, backgroundColor: "#FEE500", alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  kakaoText: { color: "#191919", fontSize: 12, fontWeight: "800" },
-  shareSheetButton: { minHeight: 42, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
-  fallbackText: { fontSize: 10.5, color: colors.faint, lineHeight: 16 },
+  shareButton: { minHeight: 48, flex: 1.15, borderRadius: radius.md, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  shareButtonText: { color: "#fff", fontSize: 12, fontWeight: "900" },
+  shareHelper: { color: colors.faint, fontSize: 11.5, lineHeight: 17, textAlign: "center" },
+  regenerateButton: { minHeight: 40, alignItems: "center", justifyContent: "center" },
+  regenerateText: { color: colors.amber, fontSize: 12, fontWeight: "800" },
   input: { width: "100%", minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, color: colors.text, backgroundColor: colors.cardHi, fontSize: 15 },
-  preview: { gap: 10, paddingTop: 6 },
+  preview: { gap: 10, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
   previewTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
   fieldLabel: { fontSize: 12, fontWeight: "800", color: colors.muted, marginTop: 2 },
-  friendRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 5 },
+  peopleSection: { gap: 9, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card },
+  peopleTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  personRow: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 },
+  personAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
+  personAvatarText: { color: colors.amber, fontSize: 14, fontWeight: "900" },
+  friendRow: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8 },
   friendCopy: { flex: 1, minWidth: 0 },
-  friendAction: { minHeight: 36, maxWidth: 150, paddingHorizontal: 10, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  friendAction: { minHeight: 36, maxWidth: 118, paddingHorizontal: 8, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
   friendActionText: { color: colors.amber, fontSize: 10.5, fontWeight: "800", textAlign: "center" },
   empty: { color: colors.faint, fontSize: 12, lineHeight: 18 },
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12.5 },
   disabled: { opacity: 0.48 },
-  chooserOverlay: { flex: 1, justifyContent: "flex-end" },
-  chooserBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(43,31,24,0.42)" },
-  chooserSheet: { paddingHorizontal: 16, paddingTop: 10, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: colors.background, gap: 10 },
-  chooserHandle: { alignSelf: "center", width: 38, height: 4, marginBottom: 4, borderRadius: 2, backgroundColor: colors.border },
-  chooserHeader: { minHeight: 44, flexDirection: "row", alignItems: "center" },
-  chooserHeaderSpacer: { width: 52 },
-  chooserTitle: { flex: 1, textAlign: "center", color: colors.text, fontSize: 17, fontWeight: "900" },
-  chooserClose: { width: 52, minHeight: 44, alignItems: "center", justifyContent: "center" },
-  chooserCloseText: { color: colors.amber, fontSize: 13, fontWeight: "800" },
-  chooserOption: { minHeight: 78, paddingHorizontal: 14, paddingVertical: 12, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 12 },
-  chooserOptionSelected: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  chooserCopy: { flex: 1, minWidth: 0 },
-  chooserOptionTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
-  chooserOptionBody: { marginTop: 4, color: colors.muted, fontSize: 11.5, lineHeight: 17 },
-  chooserAdminHint: { marginTop: 4, color: colors.faint, fontSize: 10.5, fontWeight: "700" },
-  chooserOptionArrow: { color: colors.faint, fontSize: 24 },
 });

@@ -240,7 +240,7 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
       >
         <RootStack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
         <RootStack.Screen name="BabyProfile" component={BabyProfileScreen} options={{ title: "아기 프로필" }} />
-        <RootStack.Screen name="FamilyShare" component={FamilyShareScreen} options={{ title: "가족·친구 공유" }} />
+        <RootStack.Screen name="FamilyShare" component={FamilyShareScreen} options={{ title: "가족·친구 초대" }} />
         <RootStack.Screen name="MyProfile" component={MyProfileScreen} options={{ title: "내 프로필" }} />
         <RootStack.Screen name="SettingsHome" component={SettingsHomeScreen} options={{ title: "설정" }} />
         <RootStack.Screen
