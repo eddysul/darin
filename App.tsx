@@ -244,13 +244,19 @@ function RootApp() {
       try {
         const result = await AuthRepository.handleAuthUrl(url);
         if (!result) return;
+        if (result.status === "cancelled") return;
+        if (result.status === "error") {
+          Alert.alert("인증을 완료하지 못했어요", "로그인을 다시 시도해주세요.");
+          return;
+        }
         setHasAuthSession(true);
-        if (result === "recovery") {
+        if (result.mode === "recovery") {
           setAuthRecovery(true);
           setPhase("auth");
         }
       } catch (error) {
-        Alert.alert("인증 링크를 열지 못했어요", error instanceof Error ? error.message : "링크를 다시 요청해주세요.");
+        if (__DEV__) console.warn("[Auth] Callback handling crashed", error);
+        Alert.alert("인증 링크를 열지 못했어요", "링크를 다시 요청해주세요.");
       }
     };
     void Linking.getInitialURL().then((url) => {

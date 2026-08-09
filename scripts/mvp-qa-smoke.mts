@@ -34,6 +34,7 @@ import {
   subscribeStorageIssues,
 } from "../src/utils/storageIssues";
 import { resolvePostSplashPhase } from "../src/utils/appStartup";
+import { parseAuthCallback } from "../src/utils/authCallback";
 import {
   EMPTY_QA_FAULT_STATE,
   armQaFault,
@@ -77,6 +78,33 @@ import {
 
 const today = formatDateKey();
 const me = { id: "me", name: "Me", role: "editor" as const, status: "active" as const, isMe: true };
+
+// --- Auth callbacks never report success without credentials ---
+{
+  const cancelled = parseAuthCallback(
+    "knanny://auth/callback?error=access_denied&error_description=User%20cancelled",
+  );
+  assert.equal(cancelled.status, "cancelled");
+
+  const missing = parseAuthCallback("knanny://auth/callback");
+  assert.deepEqual(missing, { status: "error", reason: "missing_credentials" });
+
+  const incomplete = parseAuthCallback("knanny://auth/callback#access_token=only-one-token");
+  assert.deepEqual(incomplete, { status: "error", reason: "incomplete_tokens" });
+
+  const exchange = parseAuthCallback("knanny://auth/callback?code=pkce-code");
+  assert.deepEqual(exchange, { status: "exchange", mode: "confirmed", code: "pkce-code" });
+
+  const recovery = parseAuthCallback(
+    "knanny://auth/reset-password#access_token=a&refresh_token=r&type=recovery",
+  );
+  assert.deepEqual(recovery, {
+    status: "tokens",
+    mode: "recovery",
+    accessToken: "a",
+    refreshToken: "r",
+  });
+}
 
 // --- Growth Book server mapping preserves page content and scoped migration flags ---
 {

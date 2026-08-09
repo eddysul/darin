@@ -3,6 +3,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
 import { getSupabase, isSupabaseConfigured, requireSupabase } from "../lib/supabase";
+import { parseAuthCallback, type AuthCallbackMode } from "../utils/authCallback";
 import { STORAGE_KEYS } from "../utils/storageKeys";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -16,23 +17,16 @@ export type EmailAuthResult = {
   needsPasswordAfterConfirmation: boolean;
 };
 
+export type AuthCallbackResult =
+  | { status: "success"; mode: AuthCallbackMode }
+  | { status: "cancelled" }
+  | { status: "error" };
+
 function authRedirectUrl(path: "callback" | "reset-password"): string {
   // TestFlight/standalone builds do not always expose an Expo manifest to
   // expo-linking. The native URL scheme is part of Info.plist, so use it
   // directly instead of asking expo-linking to infer it at runtime.
   return `knanny://auth/${path}`;
-}
-
-function authRedirectPath(url: URL): "/auth/callback" | "/auth/reset-password" | null {
-  const scheme = url.protocol.toLowerCase();
-  if (!["knanny:", "exp:", "exps:", "http:", "https:"].includes(scheme)) return null;
-
-  const rawPath =
-    scheme === "knanny:" ? `/${url.hostname}${url.pathname}` : url.pathname.replace(/^\/--/, "");
-  const path = rawPath.replace(/\/+$/, "");
-  if (path === "/auth/callback") return "/auth/callback";
-  if (path === "/auth/reset-password") return "/auth/reset-password";
-  return null;
 }
 
 let inFlight: Promise<Session> | null = null;
@@ -255,7 +249,11 @@ export const AuthRepository = {
     if (browserResult.type !== "success" || !("url" in browserResult) || !browserResult.url) {
       return null;
     }
-    await this.handleAuthUrl(browserResult.url);
+    const callback = await this.handleAuthUrl(browserResult.url);
+    if (callback?.status === "cancelled") return null;
+    if (!callback || callback.status === "error") {
+      throw new Error("Google 로그인에 실패했어요. 다시 시도해주세요.");
+    }
     const session = await this.getSession();
     if (!session?.user) throw new Error("Google 로그인 세션을 만들지 못했어요.");
 
@@ -315,7 +313,11 @@ export const AuthRepository = {
     if (browserResult.type !== "success" || !("url" in browserResult) || !browserResult.url) {
       return null;
     }
-    await this.handleAuthUrl(browserResult.url);
+    const callback = await this.handleAuthUrl(browserResult.url);
+    if (callback?.status === "cancelled") return null;
+    if (!callback || callback.status === "error") {
+      throw new Error("카카오 로그인에 실패했어요. 다시 시도해주세요.");
+    }
     const session = await this.getSession();
     if (!session?.user) throw new Error("카카오 로그인 세션을 만들지 못했어요.");
 
@@ -481,28 +483,46 @@ export const AuthRepository = {
     return data.user;
   },
 
-  /** Accept PKCE or token-style Supabase confirmation/recovery redirects. */
-  async handleAuthUrl(url: string): Promise<"recovery" | "confirmed" | null> {
-    const parsed = new URL(url);
-    const redirectPath = authRedirectPath(parsed);
-    if (!redirectPath) return null;
-    const sb = requireSupabase();
-    const hash = new URLSearchParams(parsed.hash.replace(/^#/, ""));
-    const code = parsed.searchParams.get("code");
-    const accessToken = parsed.searchParams.get("access_token") ?? hash.get("access_token");
-    const refreshToken = parsed.searchParams.get("refresh_token") ?? hash.get("refresh_token");
-    const type = parsed.searchParams.get("type") ?? hash.get("type");
-
-    if (code) {
-      const { error } = await sb.auth.exchangeCodeForSession(code);
-      if (error) throw error;
-    } else if (accessToken && refreshToken) {
-      const { error } = await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-      if (error) throw error;
+  /** Accept only callbacks that produce and verify a real Supabase session. */
+  async handleAuthUrl(url: string): Promise<AuthCallbackResult | null> {
+    const parsed = parseAuthCallback(url);
+    if (parsed.status === "ignored") return null;
+    if (parsed.status === "cancelled") {
+      if (__DEV__ && parsed.errorDescription) {
+        console.info("[Auth] OAuth callback cancelled", parsed.errorDescription);
+      }
+      return { status: "cancelled" };
     }
-    return type === "recovery" || redirectPath === "/auth/reset-password"
-      ? "recovery"
-      : "confirmed";
+    if (parsed.status === "error") {
+      if (__DEV__) {
+        console.warn("[Auth] OAuth callback rejected", {
+          reason: parsed.reason,
+          errorCode: parsed.errorCode,
+          errorDescription: parsed.errorDescription,
+        });
+      }
+      return { status: "error" };
+    }
+
+    const sb = requireSupabase();
+    const authResult =
+      parsed.status === "exchange"
+        ? await sb.auth.exchangeCodeForSession(parsed.code)
+        : await sb.auth.setSession({
+            access_token: parsed.accessToken,
+            refresh_token: parsed.refreshToken,
+          });
+    if (authResult.error) {
+      if (__DEV__) console.warn("[Auth] Supabase session exchange failed", authResult.error.message);
+      return { status: "error" };
+    }
+
+    const { data, error } = await sb.auth.getSession();
+    if (error || !data.session) {
+      if (__DEV__) console.warn("[Auth] Supabase callback produced no session", error?.message);
+      return { status: "error" };
+    }
+    return { status: "success", mode: parsed.mode };
   },
 
   /**
