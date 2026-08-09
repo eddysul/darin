@@ -112,9 +112,10 @@ export function QuickRecordsBar({
           disabled={disabled}
           style={[styles.addChip, disabled && styles.disabled]}
           onPress={openCreate}
+          accessibilityRole="button"
+          accessibilityLabel="새로 추가"
         >
-          <BabyLogIcon kind="new" size={17} color={colors.amber} strokeWidth={2} />
-          <Text style={styles.addLabel}>+ 추가</Text>
+          <Text style={styles.addLabel}>새로 추가</Text>
         </Pressable>
       </ScrollView>
 
@@ -182,8 +183,9 @@ const styles = StyleSheet.create({
   iconWrap: { width: 24, height: 24, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   label: { fontSize: 12, fontWeight: "700", color: colors.text, maxWidth: 110 },
   addChip: {
-    minWidth: 72,
+    minWidth: 78,
     height: 40,
+    paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
     borderStyle: "dashed",
@@ -191,7 +193,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
-    gap: 4,
     backgroundColor: colors.amberSoft,
   },
   addLabel: { fontSize: 12, color: colors.amber, fontWeight: "700" },

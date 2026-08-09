@@ -184,8 +184,8 @@ export function QuickRecordEditorSheet({
               {mode === "form" ? (editId ? "빠른 기록 수정" : "빠른 기록 추가") : "자주 쓰는 기록"}
             </Text>
             {mode === "list" ? (
-              <Pressable onPress={openCreateForm}>
-                <Text style={styles.link}>추가</Text>
+              <Pressable onPress={openCreateForm} accessibilityRole="button" accessibilityLabel="새로 추가">
+                <Text style={styles.link}>새로 추가</Text>
               </Pressable>
             ) : (
               <Pressable

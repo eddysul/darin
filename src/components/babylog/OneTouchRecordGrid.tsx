@@ -59,10 +59,16 @@ export function OneTouchRecordGrid({
           <Text style={styles.title}>빠르게 기록하기</Text>
           <Text style={styles.subtitle}>짧게 탭 · 길게 눌러 상세</Text>
         </View>
-        <Pressable style={styles.countBadge} onPress={() => setExpanded((value) => !value)}>
-          <BabyLogIcon kind="edit" size={13} color={colors.text} />
-          <Text style={styles.countBadgeText}>{expanded ? "접기" : "새로 추가"}</Text>
-        </Pressable>
+        {extra.length > 0 ? (
+          <Pressable
+            style={styles.countBadge}
+            onPress={() => setExpanded((value) => !value)}
+            accessibilityRole="button"
+            accessibilityLabel={expanded ? "카테고리 접기" : "더 보기"}
+          >
+            <Text style={styles.countBadgeText}>{expanded ? "접기" : "더 보기"}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {expanded ? (
@@ -108,24 +114,25 @@ export function OneTouchRecordGrid({
               onInteractionChange={onInteractionChange}
             />
           ))}
-          <Pressable
-            style={({ pressed }) => [styles.expandTile, pressed && styles.pressed]}
-            onPress={() => setExpanded(true)}
-            accessibilityRole="button"
-            accessibilityLabel="더 많은 빠른 기록 펼치기"
-          >
-            <View style={styles.expandIconWrap}>
-              <BabyLogIcon kind="new" size={20} color={colors.amber} strokeWidth={2.2} />
-            </View>
-            <Text style={styles.expandTileLabel}>펼치기</Text>
-          </Pressable>
+          {extra.length > 0 ? (
+            <Pressable
+              style={({ pressed }) => [styles.expandTile, pressed && styles.pressed]}
+              onPress={() => setExpanded(true)}
+              accessibilityRole="button"
+              accessibilityLabel="더 보기"
+            >
+              <Text style={styles.expandTileLabel}>더 보기</Text>
+            </Pressable>
+          ) : null}
         </ScrollView>
       )}
 
-      {expanded ? (
+      {expanded && extra.length > 0 ? (
         <Pressable
           style={({ pressed }) => [styles.collapseButton, pressed && styles.expandPressed]}
           onPress={() => setExpanded(false)}
+          accessibilityRole="button"
+          accessibilityLabel="접기"
         >
           <Text style={styles.expandText}>접기</Text>
         </Pressable>
@@ -306,18 +313,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.amberSoft,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 6,
     paddingVertical: 10,
   },
-  expandIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-    backgroundColor: "rgba(255,255,255,0.7)",
-  },
-  expandTileLabel: { fontSize: 11, fontWeight: "800", color: colors.amber },
+  expandTileLabel: { fontSize: 11, fontWeight: "800", color: colors.amber, textAlign: "center" },
   collapseButton: {
     marginTop: 10,
     minHeight: 36,
