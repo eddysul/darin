@@ -34,6 +34,8 @@ import {
   subscribeStorageIssues,
 } from "../src/utils/storageIssues";
 import { resolvePostSplashPhase } from "../src/utils/appStartup";
+import { canSubmitUserProfile, isUserProfileComplete, resolveAuthenticatedRoute } from "../src/utils/profileCompletion";
+import { parseInviteCodeFromUrl } from "../src/utils/inviteCode";
 import { completeAuthCallback, parseAuthCallback } from "../src/utils/authCallback";
 import { formatIsoDateInput, isValidBirthDate } from "../src/utils/dateInput";
 import { formatClockInput, isValidClockInput } from "../src/utils/timeInput";
@@ -415,7 +417,7 @@ function log(
       hasSavedCareSetup: true,
       termsAccepted: true,
     }),
-    "main",
+    "postAuth",
   );
   assert.equal(
     resolvePostSplashPhase({
@@ -453,6 +455,44 @@ function log(
     }),
     "auth",
   );
+}
+
+// --- Every provider shares the same server-profile completion gate ---
+{
+  assert.equal(isUserProfileComplete(null), false);
+  assert.equal(isUserProfileComplete({ display_name: "", default_relation: "엄마" }), false);
+  assert.equal(isUserProfileComplete({ display_name: "민지", default_relation: " " }), false);
+  assert.equal(isUserProfileComplete({ display_name: "user@example.com", default_relation: "보호자" }), false);
+  assert.equal(isUserProfileComplete({ display_name: "민지", default_relation: "엄마" }), true);
+  assert.equal(canSubmitUserProfile("민지", null), false);
+  assert.equal(canSubmitUserProfile("", "엄마"), false);
+  assert.equal(canSubmitUserProfile("민지", "엄마"), true);
+
+  for (const provider of ["email", "apple", "google", "kakao"] as const) {
+    void provider;
+    assert.equal(
+      resolveAuthenticatedRoute({ profileComplete: false, hasPendingInvite: false, hasBaby: false }),
+      "profileSetup",
+    );
+  }
+  assert.equal(
+    resolveAuthenticatedRoute({ profileComplete: false, hasPendingInvite: true, hasBaby: true }),
+    "profileSetup",
+  );
+  assert.equal(
+    resolveAuthenticatedRoute({ profileComplete: true, hasPendingInvite: true, hasBaby: true }),
+    "invite",
+  );
+  assert.equal(
+    resolveAuthenticatedRoute({ profileComplete: true, hasPendingInvite: false, hasBaby: false }),
+    "babySetup",
+  );
+  assert.equal(
+    resolveAuthenticatedRoute({ profileComplete: true, hasPendingInvite: false, hasBaby: true }),
+    "main",
+  );
+  assert.equal(parseInviteCodeFromUrl("knanny://invite/DARIN-ABC123"), "DARIN-ABC123");
+  assert.equal(parseInviteCodeFromUrl("knanny://invite?code=darin-xyz789"), "DARIN-XYZ789");
 }
 
 // --- Data connection: add / update / delete Care Log → derived summaries ---

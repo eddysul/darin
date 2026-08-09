@@ -15,6 +15,10 @@ import { VoiceRecordingProvider } from "./src/context/VoiceRecordingContext";
 import { LanguageProvider, useLanguage } from "./src/LanguageContext";
 import { AuthStartScreen } from "./src/screens/onboarding/AuthStartScreen";
 import { OnboardingFlow, type OnboardingResult } from "./src/screens/onboarding/OnboardingFlow";
+import {
+  ProfileSetupScreen,
+  type ProfileSetupInitial,
+} from "./src/screens/onboarding/ProfileSetupScreen";
 import { TermsConsentScreen } from "./src/screens/onboarding/TermsConsentScreen";
 import { MainTabs } from "./src/screens/MainTabs";
 import { BabyProfileScreen } from "./src/screens/BabyProfileScreen";
@@ -34,9 +38,19 @@ import {
   type RelationshipToChild,
 } from "./src/types/careSetup";
 import type { UserProfile } from "./src/types/profile";
+import type { BabyRow } from "./src/types/database";
+import type { RelationshipLabel } from "./src/types/growthBook";
+import { RELATIONSHIP_LABELS } from "./src/types/growthBook";
 import { WebAppShell } from "./src/components/WebAppShell";
 import { colors } from "./src/theme";
 import { resolvePostSplashPhase } from "./src/utils/appStartup";
+import { isUserProfileComplete, resolveAuthenticatedRoute } from "./src/utils/profileCompletion";
+import {
+  clearPendingInvite,
+  hydratePendingInvite,
+  parseInviteCodeFromUrl,
+  savePendingInvite,
+} from "./src/utils/pendingInviteStore";
 import { AuthRepository } from "./src/repositories/AuthRepository";
 import { BabyRepository } from "./src/repositories/BabyRepository";
 import { FamilyRepository } from "./src/repositories/FamilyRepository";
@@ -53,11 +67,36 @@ type AppPhase =
   | "splash"
   | "terms"
   | "auth"
+  | "profileSetup"
   | "setup"
   | "main";
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+function relationshipLabel(value?: string | null): RelationshipLabel | undefined {
+  return RELATIONSHIP_LABELS.includes(value as RelationshipLabel)
+    ? (value as RelationshipLabel)
+    : undefined;
+}
+
+function relationshipToCareValue(value?: string | null): RelationshipToChild {
+  if (value === "엄마") return "mom";
+  if (value === "아빠") return "dad";
+  if (value === "시터") return "sitter";
+  if (["가족", "할머니", "할아버지", "이모", "삼촌"].includes(value ?? "")) return "family";
+  return "guardian";
+}
+
+function authProfileName(user: Awaited<ReturnType<typeof AuthRepository.getUser>>, supplied?: string): string {
+  const metadata = user?.user_metadata;
+  const candidate = supplied?.trim()
+    || [metadata?.display_name, metadata?.full_name, metadata?.name, metadata?.nickname]
+      .find((value) => typeof value === "string" && value.trim())?.trim()
+    || "";
+  if (!candidate || candidate.includes("@") || candidate === user?.email) return "";
+  return candidate;
+}
 
 export default function App() {
   return (
@@ -212,6 +251,11 @@ function RootApp() {
   const [hasAuthSession, setHasAuthSession] = useState(false);
   const [authRecovery, setAuthRecovery] = useState(false);
   const [onboardingVersion, setOnboardingVersion] = useState(0);
+  const [profileSetupInitial, setProfileSetupInitial] = useState<ProfileSetupInitial>({});
+  const [onboardingRelation, setOnboardingRelation] = useState<RelationshipLabel | undefined>();
+  const [onboardingInviteCode, setOnboardingInviteCode] = useState("");
+  const [onboardingStartsWithBaby, setOnboardingStartsWithBaby] = useState(false);
+  const startupRouting = useRef(false);
 
   useEffect(() => {
     void hydrateTermsAccepted().then(() => {
@@ -223,15 +267,7 @@ function RootApp() {
   useEffect(() => {
     let active = true;
     void AuthRepository.getSession()
-      .then(async (session) => {
-        if (session) {
-          try {
-            const babies = await BabyRepository.listMyBabies();
-            if (babies.length === 0) await resetCareSetup();
-          } catch {
-            // Keep the local cache on transient network/RLS failures.
-          }
-        }
+      .then((session) => {
         if (active) setHasAuthSession(Boolean(session));
       })
       .finally(() => {
@@ -240,6 +276,11 @@ function RootApp() {
 
     const handleUrl = async (url: string) => {
       try {
+        const inviteCode = parseInviteCodeFromUrl(url);
+        if (inviteCode) {
+          await savePendingInvite(inviteCode);
+          return;
+        }
         const result = await AuthRepository.handleAuthUrl(url);
         if (!result) return;
         if (result.status === "cancelled") return;
@@ -265,7 +306,7 @@ function RootApp() {
       active = false;
       subscription.remove();
     };
-  }, [resetCareSetup]);
+  }, []);
 
   const applyParentSetup = useCallback(
     (setup: CareSetup) => {
@@ -307,8 +348,143 @@ function RootApp() {
     setHasAuthSession(false);
     setOnboardingProfile(null);
     setAuthName("");
+    setOnboardingInviteCode("");
+    setOnboardingStartsWithBaby(false);
+    startupRouting.current = false;
     setPhase(getTermsAccepted() ? "auth" : "terms");
   }, [clearSession, prepareForLogout]);
+
+  const restoreWorkspace = useCallback(async (serverBaby: BabyRow, fallbackName = "") => {
+    const [displayProfile, babyProfile, members, familyDisplays, authenticatedUser] = await Promise.all([
+      ProfileRepository.getMyDisplayProfile(),
+      BabyProfileRepository.getBabyProfile(serverBaby.id).catch(() => null),
+      FamilyRepository.listMembers(serverBaby.id),
+      FamilyRepository.listMembersAsFamily(serverBaby.id).catch(() => [] as Awaited<ReturnType<typeof FamilyRepository.listMembersAsFamily>>),
+      AuthRepository.getUser(),
+    ]);
+    const me = members.find((member) => member.user_id === authenticatedUser?.id);
+    const childStatus: ChildStatus = ["unborn", "newborn", "infant"].includes(serverBaby.child_status)
+      ? (serverBaby.child_status as ChildStatus)
+      : "newborn";
+    const gender: ChildGender = ["girl", "boy", "unknown"].includes(babyProfile?.gender ?? serverBaby.gender ?? "")
+      ? ((babyProfile?.gender ?? serverBaby.gender) as ChildGender)
+      : "unknown";
+    const restoredSetup: CareSetup = {
+      parent: {
+        parentName: displayProfile?.displayName || fallbackName || "나",
+        nickname: displayProfile?.nickname,
+        relationshipToChild: relationshipToCareValue(
+          me?.relationship_label ?? displayProfile?.defaultRelation,
+        ),
+        postpartumStatus: careSetup.parent.postpartumStatus,
+        preferredLanguage: careSetup.parent.preferredLanguage,
+        avatarUri: displayProfile?.avatarUrl,
+      },
+      child: {
+        childName: babyProfile?.name || serverBaby.name,
+        nickname: babyProfile?.nickname,
+        birthDate: babyProfile?.birthDate ?? serverBaby.birth_date ?? undefined,
+        dueDate: serverBaby.due_date ?? undefined,
+        childStatus,
+        gender,
+        photoUri: babyProfile?.avatarUrl ?? babyProfile?.photoUrl ?? serverBaby.photo_url ?? undefined,
+        gestationalAgeWeeks: serverBaby.gestational_age_weeks ?? undefined,
+        birthWeight: serverBaby.birth_weight ?? undefined,
+        specialNotes: babyProfile?.note ?? serverBaby.special_notes ?? undefined,
+      },
+      preferences: hasSavedCareSetup ? careSetup.preferences : DEFAULT_CARE_SETUP.preferences,
+    };
+    setCareSetup(restoredSetup);
+    applyParentSetup(restoredSetup);
+    if (familyDisplays.length) {
+      const { saveFamilyMembers } = await import("./src/utils/familyMembersStore");
+      await saveFamilyMembers(familyDisplays);
+    }
+    if (authenticatedUser) {
+      await rehydrateFromServer({ userId: authenticatedUser.id, babyId: serverBaby.id });
+    } else {
+      await rehydrateFromServer();
+    }
+    setOnboardingInviteCode("");
+    setOnboardingStartsWithBaby(false);
+    setPhase("main");
+  }, [applyParentSetup, careSetup, hasSavedCareSetup, rehydrateFromServer, setCareSetup]);
+
+  const routeAuthenticatedSession = useCallback(async (input?: {
+    name?: string;
+    preferredBabyId?: string | null;
+  }) => {
+    const session = await AuthRepository.getSession();
+    if (!session?.user) {
+      setHasAuthSession(false);
+      setPhase("auth");
+      return;
+    }
+    setHasAuthSession(true);
+
+    const pendingCode = await hydratePendingInvite();
+    let pendingRelation: RelationshipLabel | undefined;
+    let validPendingCode = pendingCode ?? "";
+    if (pendingCode) {
+      try {
+        const preview = await FamilyRepository.previewInviteCode(pendingCode);
+        if (!preview?.is_valid) {
+          await clearPendingInvite();
+          validPendingCode = "";
+        } else {
+          pendingRelation = relationshipLabel(preview.relation);
+        }
+      } catch {
+        // Keep a pending code across a transient preview failure. The invite
+        // screen will show the retryable error without accepting it early.
+      }
+    }
+
+    const profile = await ProfileRepository.getMyProfile().catch(() => null);
+    const profileComplete = isUserProfileComplete(profile);
+    const providerName = authProfileName(session.user, input?.name);
+    const relation = relationshipLabel(profile?.default_relation) ?? pendingRelation;
+    const displayName = profile?.display_name?.trim() || providerName;
+    const avatarUrl = profile?.avatar_storage_path
+      ? await ProfileRepository.createProfileAvatarSignedUrl(profile.avatar_storage_path).catch(() => undefined)
+      : profile?.avatar_url ?? undefined;
+    setAuthName(displayName);
+    setOnboardingRelation(relation);
+    setOnboardingInviteCode(validPendingCode);
+
+    if (!profileComplete) {
+      setProfileSetupInitial({
+        displayName,
+        nickname: profile?.nickname ?? undefined,
+        relation,
+        avatarUrl,
+      });
+      setPhase("profileSetup");
+      return;
+    }
+
+    const babies = await BabyRepository.listMyBabies();
+    const route = resolveAuthenticatedRoute({
+      profileComplete,
+      hasPendingInvite: Boolean(validPendingCode),
+      hasBaby: babies.length > 0,
+    });
+    if (route === "invite") {
+      setOnboardingStartsWithBaby(false);
+      setOnboardingVersion((value) => value + 1);
+      setPhase("setup");
+      return;
+    }
+    if (route === "babySetup") {
+      await resetCareSetup();
+      setOnboardingStartsWithBaby(true);
+      setOnboardingVersion((value) => value + 1);
+      setPhase("setup");
+      return;
+    }
+    const serverBaby = babies.find((baby) => baby.id === input?.preferredBabyId) ?? babies[0];
+    if (serverBaby) await restoreWorkspace(serverBaby, displayName);
+  }, [resetCareSetup, restoreWorkspace]);
 
   useEffect(() => {
     if (phase !== "splash") return;
@@ -322,14 +498,17 @@ function RootApp() {
       termsAccepted,
     });
     if (!nextPhase) return;
-    if (nextPhase === "main") {
-      applyParentSetup(careSetup);
-      setPhase("main");
-    } else {
-      setPhase(nextPhase);
+    if (nextPhase === "postAuth") {
+      if (startupRouting.current) return;
+      startupRouting.current = true;
+      void routeAuthenticatedSession().catch(() => {
+        setProfileSetupInitial({ displayName: careSetup.parent.parentName || "" });
+        setPhase("profileSetup");
+      });
+      return;
     }
+    setPhase(nextPhase);
   }, [
-    applyParentSetup,
     careSetup,
     careSetupReady,
     hasSavedCareSetup,
@@ -339,6 +518,7 @@ function RootApp() {
     termsReady,
     authReady,
     hasAuthSession,
+    routeAuthenticatedSession,
   ]);
 
   const handleTermsAccept = useCallback((marketingOptIn: boolean) => {
@@ -349,17 +529,8 @@ function RootApp() {
   }, []);
 
   const handleAuthenticated = useCallback(async (payload: { name?: string; email?: string; provider: "email" | "google" | "apple" | "kakao"; user?: { id: string } }) => {
-    const name = payload.name?.trim() || "";
     setHasAuthSession(true);
     setAuthRecovery(false);
-    setAuthName(name);
-    if (name) {
-      setProfile({
-        ...DEFAULT_PARENT_PROFILE,
-        name,
-        role: "parent",
-      });
-    }
     if (
       (payload.provider === "email" || payload.provider === "google" || payload.provider === "apple" || payload.provider === "kakao") &&
       payload.email
@@ -369,80 +540,20 @@ function RootApp() {
         account: { ...current.account, email: payload.email!, loginMethod: payload.provider },
       }));
     }
-    const babies = await BabyRepository.listMyBabies();
-    const serverBaby = babies[0];
-    if (serverBaby) {
-      const [displayProfile, babyProfile, members, familyDisplays] = await Promise.all([
-        ProfileRepository.getMyDisplayProfile().catch(() => null),
-        BabyProfileRepository.getBabyProfile(serverBaby.id).catch(() => null),
-        FamilyRepository.listMembers(serverBaby.id),
-        FamilyRepository.listMembersAsFamily(serverBaby.id).catch(() => [] as Awaited<ReturnType<typeof FamilyRepository.listMembersAsFamily>>),
-      ]);
-      const authenticatedUser = payload.user ?? (await AuthRepository.getUser());
-      const me = members.find((member) => member.user_id === authenticatedUser?.id);
-      const relationshipMap: Record<string, RelationshipToChild> = {
-        "엄마": "mom",
-        "아빠": "dad",
-        "보호자": "guardian",
-        "가족": "family",
-        "시터": "sitter",
-      };
-      const childStatus: ChildStatus = ["unborn", "newborn", "infant"].includes(serverBaby.child_status)
-        ? (serverBaby.child_status as ChildStatus)
-        : "newborn";
-      const gender: ChildGender = ["girl", "boy", "unknown"].includes(babyProfile?.gender ?? serverBaby.gender ?? "")
-        ? ((babyProfile?.gender ?? serverBaby.gender) as ChildGender)
-        : "unknown";
-      const restoredSetup: CareSetup = {
-        parent: {
-          parentName: displayProfile?.displayName || name || "나",
-          nickname: displayProfile?.nickname,
-          relationshipToChild: relationshipMap[me?.relationship_label ?? displayProfile?.defaultRelation ?? ""] ?? "guardian",
-          postpartumStatus: careSetup.parent.postpartumStatus,
-          preferredLanguage: careSetup.parent.preferredLanguage,
-          avatarUri: displayProfile?.avatarUrl,
-        },
-        child: {
-          childName: babyProfile?.name || serverBaby.name,
-          nickname: babyProfile?.nickname,
-          birthDate: babyProfile?.birthDate ?? serverBaby.birth_date ?? undefined,
-          dueDate: serverBaby.due_date ?? undefined,
-          childStatus,
-          gender,
-          photoUri: babyProfile?.avatarUrl ?? babyProfile?.photoUrl ?? serverBaby.photo_url ?? undefined,
-          gestationalAgeWeeks: serverBaby.gestational_age_weeks ?? undefined,
-          birthWeight: serverBaby.birth_weight ?? undefined,
-          specialNotes: babyProfile?.note ?? serverBaby.special_notes ?? undefined,
-        },
-        preferences: hasSavedCareSetup ? careSetup.preferences : DEFAULT_CARE_SETUP.preferences,
-      };
-      setCareSetup(restoredSetup);
-      applyParentSetup(restoredSetup);
-      if (familyDisplays.length) {
-        const { saveFamilyMembers } = await import("./src/utils/familyMembersStore");
-        await saveFamilyMembers(familyDisplays);
-      }
-      if (authenticatedUser) {
-        await rehydrateFromServer({ userId: authenticatedUser.id, babyId: serverBaby.id });
-      } else {
-        await rehydrateFromServer();
-      }
-      setPhase("main");
-    } else {
-      await resetCareSetup();
-      setPhase("setup");
-    }
-  }, [applyParentSetup, careSetup, hasSavedCareSetup, rehydrateFromServer, resetCareSetup, setCareSetup, setProfile, setSettings]);
+    await routeAuthenticatedSession({ name: payload.name });
+  }, [routeAuthenticatedSession, setSettings]);
 
   const handleSetupComplete = useCallback(
     async (result: OnboardingResult) => {
       if (result.mode === "join") {
+        let accepted: Awaited<ReturnType<typeof FamilyRepository.acceptInviteCode>>;
         try {
-          await FamilyRepository.acceptInviteCode({
+          accepted = await FamilyRepository.acceptInviteCode({
             code: result.code,
             displayName: result.myName,
             relation: result.relationshipLabel,
           });
+          await clearPendingInvite();
           await rehydrateFromServer();
         } catch (cause) {
           Alert.alert("초대를 수락하지 못했어요", cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요.");
@@ -452,39 +563,20 @@ function RootApp() {
           Alert.alert(
             "초대 수락 완료",
             result.inviteType === "baby_friend"
-              ? "친구 공개 순간에 연결됐어요. 내 아기 설정을 이어서 완료해 주세요."
-              : "다린 친구로 연결됐어요. 내 아기 설정을 이어서 완료해 주세요.",
+              ? "친구 공개 순간에 연결됐어요."
+              : "다린 친구로 연결됐어요.",
           );
-          setAuthName(result.myName);
-          setOnboardingVersion((value) => value + 1);
-          setPhase("setup");
-          return;
         }
-        const setup: CareSetup = {
-          ...DEFAULT_CARE_SETUP,
-          parent: {
-            ...DEFAULT_CARE_SETUP.parent,
-            parentName: result.myName,
-            relationshipToChild: result.relationship,
-            preferredLanguage: "ko",
-          },
-          child: {
-            ...DEFAULT_CARE_SETUP.child,
-            childName: result.babyName,
-            childStatus: "newborn",
-          },
-          preferences: {
-            ...DEFAULT_CARE_SETUP.preferences,
-            familySharingEnabled: true,
-          },
-        };
-        enterMain(setup, result.myName);
+        await routeAuthenticatedSession({
+          name: result.myName,
+          preferredBabyId: accepted?.baby_id ?? null,
+        });
         return;
       }
 
       enterMain(result.setup, result.setup.parent.parentName);
     },
-    [applyParentSetup, enterMain, rehydrateFromServer, setCareSetup],
+    [enterMain, rehydrateFromServer, routeAuthenticatedSession],
   );
 
   return (
@@ -495,8 +587,22 @@ function RootApp() {
         {phase === "splash" && <SplashScreen onComplete={handleSplashComplete} />}
         {phase === "terms" && <TermsConsentScreen onAccept={handleTermsAccept} />}
         {phase === "auth" && <AuthStartScreen recoveryMode={authRecovery} onAuthenticated={handleAuthenticated} />}
+        {phase === "profileSetup" && (
+          <ProfileSetupScreen
+            initial={profileSetupInitial}
+            onComplete={() => routeAuthenticatedSession()}
+          />
+        )}
         {phase === "setup" && (
-          <OnboardingFlow key={onboardingVersion} initialName={authName} onComplete={handleSetupComplete} />
+          <OnboardingFlow
+            key={onboardingVersion}
+            initialName={authName}
+            initialRelation={onboardingRelation}
+            initialInviteCode={onboardingInviteCode}
+            skipProfileStep
+            startAtBabySetup={onboardingStartsWithBaby}
+            onComplete={handleSetupComplete}
+          />
         )}
       </View>
     </LogoutProvider>

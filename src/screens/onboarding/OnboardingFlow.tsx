@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Linking, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
@@ -44,6 +44,10 @@ export type OnboardingResult =
 
 type Props = {
   initialName?: string;
+  initialRelation?: RelationshipLabel;
+  initialInviteCode?: string;
+  skipProfileStep?: boolean;
+  startAtBabySetup?: boolean;
   onComplete: (result: OnboardingResult) => void;
 };
 
@@ -59,16 +63,34 @@ type Step =
 
 type InvitePreview = { code: string; babyName: string; ownerName: string; inviteType: InviteType };
 
-export function OnboardingFlow({ initialName = "", onComplete }: Props) {
-  const [step, setStep] = useState<Step>("about");
+function relationshipFromLabel(label?: RelationshipLabel): RelationshipToChild {
+  if (label === "엄마") return "mom";
+  if (label === "아빠") return "dad";
+  if (label === "시터") return "sitter";
+  if (label === "가족" || label === "할머니" || label === "할아버지" || label === "이모" || label === "삼촌") return "family";
+  return "guardian";
+}
+
+export function OnboardingFlow({
+  initialName = "",
+  initialRelation,
+  initialInviteCode = "",
+  skipProfileStep = false,
+  startAtBabySetup = false,
+  onComplete,
+}: Props) {
+  const [step, setStep] = useState<Step>(
+    initialInviteCode ? "invite" : startAtBabySetup ? "born" : skipProfileStep ? "connect" : "about",
+  );
   const [setup, setSetup] = useState<CareSetup>(() => ({
     ...DEFAULT_CARE_SETUP,
     parent: {
       ...DEFAULT_CARE_SETUP.parent,
       parentName: initialName,
+      relationshipToChild: relationshipFromLabel(initialRelation),
     },
   }));
-  const [inviteCode, setInviteCode] = useState("");
+  const [inviteCode, setInviteCode] = useState(initialInviteCode);
   const [inviteError, setInviteError] = useState("");
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
 
@@ -97,7 +119,31 @@ export function OnboardingFlow({ initialName = "", onComplete }: Props) {
   const feedingLabel =
     FEEDING_OPTIONS.find((o) => o.value === setup.preferences.defaultFeedingMethod)?.label ??
     "아직 모름";
-  const relationshipLabel = relationshipToLabel(setup.parent.relationshipToChild);
+  const relationshipLabel = initialRelation ?? relationshipToLabel(setup.parent.relationshipToChild);
+
+  const previewInvite = useCallback(async () => {
+    try {
+      const row = await FamilyRepository.previewInviteCode(inviteCode);
+      if (!row || !row.is_valid) {
+        throw new Error(row?.invalid_reason === "expired" ? "만료된 초대코드예요." : "유효하지 않은 초대코드예요.");
+      }
+      setInvitePreview({
+        code: inviteCode.trim().toUpperCase(),
+        babyName: row.baby_name ?? "",
+        ownerName: row.inviter_name,
+        inviteType: row.invite_type,
+      });
+      setInviteError("");
+      setStep("invite-confirm");
+    } catch (cause) {
+      setInviteError(cause instanceof Error ? cause.message : "초대 정보를 확인하지 못했어요.");
+    }
+  }, [inviteCode]);
+
+  useEffect(() => {
+    if (!initialInviteCode) return;
+    void previewInvite();
+  }, [initialInviteCode, previewInvite]);
 
   const pickPhoto = async () => {
     try {
@@ -222,17 +268,7 @@ export function OnboardingFlow({ initialName = "", onComplete }: Props) {
         subtitle="가족이 공유한 6자리 코드를 입력하세요."
         primaryLabel="코드 확인"
         primaryDisabled={!inviteCode.trim()}
-        onPrimary={() => { void FamilyRepository.previewInviteCode(inviteCode).then((row) => {
-          if (!row || !row.is_valid) throw new Error(row?.invalid_reason === "expired" ? "만료된 초대코드예요." : "유효하지 않은 초대코드예요.");
-          setInvitePreview({
-            code: inviteCode.trim().toUpperCase(),
-            babyName: row.baby_name ?? "",
-            ownerName: row.inviter_name,
-            inviteType: row.invite_type,
-          });
-          setInviteError("");
-          setStep("invite-confirm");
-        }).catch((cause) => setInviteError(cause instanceof Error ? cause.message : "초대 정보를 확인하지 못했어요.")); }}
+        onPrimary={() => void previewInvite()}
         secondaryLabel="뒤로"
         onSecondary={() => setStep("connect")}
       >

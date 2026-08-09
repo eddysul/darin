@@ -24,6 +24,8 @@ export const STORAGE_KEYS = {
   supabaseDeviceAuth: "darin:supabase-device-auth",
   /** Email verification/linking flow metadata. Never stores a password. */
   pendingEmailAuth: "darin:pending-email-auth",
+  /** Invite code retained across OAuth/browser round-trips until accept. */
+  pendingInvite: "darin:pending-invite",
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

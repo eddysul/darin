@@ -9,6 +9,7 @@ export const PROFILE_RELATION_OPTIONS: RelationshipLabel[] = [
   "할아버지",
   "이모",
   "삼촌",
+  "시터",
   "친구",
   "가족",
   "기타",

@@ -62,7 +62,7 @@ export const ProfileRepository = {
       id: session.user.id,
       display_name: input.displayName.trim(),
       preferred_language: input.preferredLanguage ?? "ko",
-      avatar_url: input.avatarUrl ?? null,
+      avatar_url: input.avatarUrl === undefined ? undefined : input.avatarUrl,
       nickname: input.nickname === undefined ? undefined : (input.nickname?.trim() || null),
       default_relation: input.defaultRelation === undefined ? undefined : input.defaultRelation,
       avatar_storage_path:
