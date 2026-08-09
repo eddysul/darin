@@ -19,7 +19,7 @@ type Props = {
   onAuthenticated: (payload: {
     name?: string;
     email?: string;
-    provider: "email" | "google" | "apple";
+    provider: "email" | "google" | "apple" | "kakao";
     user?: User;
   }) => void | Promise<void>;
 };
@@ -29,9 +29,39 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
   const [authMode, setAuthMode] = useState<EmailAuthMode>(
     recoveryMode ? "reset-password" : "login",
   );
-  const [socialBusy, setSocialBusy] = useState<"apple" | "google" | null>(null);
+  const [socialBusy, setSocialBusy] = useState<"apple" | "google" | "kakao" | null>(null);
   const [socialError, setSocialError] = useState("");
-  const hasSocialLogin = authProviderFlags.apple.visible || authProviderFlags.google.visible;
+  const hasSocialLogin =
+    authProviderFlags.kakao.visible ||
+    authProviderFlags.apple.visible ||
+    authProviderFlags.google.visible;
+
+  const continueWithKakao = async () => {
+    if (socialBusy) return;
+    setSocialError("");
+    setSocialBusy("kakao");
+    try {
+      const result = await AuthRepository.signInWithKakao();
+      if (!result) return;
+      await onAuthenticated({
+        provider: "kakao",
+        user: result.user,
+        email: result.email,
+        name: result.name,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "카카오 로그인에 실패했어요.";
+      setSocialError(
+        /provider is not enabled|unsupported provider/i.test(message)
+          ? "Supabase에서 카카오 로그인을 먼저 활성화해주세요."
+          : /manual linking/i.test(message)
+            ? "Supabase의 Allow manual linking 설정을 활성화해주세요."
+            : message,
+      );
+    } finally {
+      setSocialBusy(null);
+    }
+  };
 
   const continueWithApple = async () => {
     if (socialBusy) return;
@@ -117,6 +147,16 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
                 </View>
 
                 <View style={styles.socialGroup}>
+                  {authProviderFlags.kakao.visible ? (
+                    <SocialLoginButton
+                      label="카카오로 계속하기"
+                      symbol="K"
+                      tone="kakao"
+                      enabled={authProviderFlags.kakao.enabled}
+                      busy={socialBusy === "kakao"}
+                      onPress={() => void continueWithKakao()}
+                    />
+                  ) : null}
                   {authProviderFlags.apple.visible ? (
                     <SocialLoginButton
                       label="Apple로 계속하기"
@@ -165,27 +205,33 @@ function SocialLoginButton({
   symbol,
   enabled,
   busy = false,
+  tone = "default",
   onPress,
 }: {
   label: string;
   symbol: string;
   enabled: boolean;
   busy?: boolean;
+  tone?: "default" | "kakao";
   onPress?: () => void;
 }) {
   return (
     <Pressable
-      style={[styles.socialButton, !enabled && styles.socialButtonDisabled]}
+      style={[
+        styles.socialButton,
+        tone === "kakao" && styles.kakaoButton,
+        !enabled && styles.socialButtonDisabled,
+      ]}
       disabled={!enabled || busy}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: !enabled || busy, busy }}
     >
-      <Text style={styles.socialSymbol}>{symbol}</Text>
-      <Text style={styles.socialLabel}>{label}</Text>
+      <Text style={[styles.socialSymbol, tone === "kakao" && styles.kakaoText]}>{symbol}</Text>
+      <Text style={[styles.socialLabel, tone === "kakao" && styles.kakaoText]}>{label}</Text>
       <View style={styles.trailingSpacer}>
-        {busy ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+        {busy ? <ActivityIndicator size="small" color={tone === "kakao" ? "#191919" : colors.primary} /> : null}
       </View>
     </Pressable>
   );
@@ -208,6 +254,8 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   socialButtonDisabled: { opacity: 0.58 },
+  kakaoButton: { backgroundColor: "#FEE500", borderColor: "#FEE500" },
+  kakaoText: { color: "#191919" },
   socialSymbol: { width: 28, color: colors.text, fontSize: 18, fontWeight: "800" },
   socialLabel: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800", textAlign: "center" },
   trailingSpacer: { width: 28, alignItems: "center", justifyContent: "center" },

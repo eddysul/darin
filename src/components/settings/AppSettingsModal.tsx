@@ -613,7 +613,7 @@ function SecondaryButton({ label, onPress }: { label: string; onPress: () => voi
 }
 
 function loginMethodLabel(method: string) {
-  return { apple: "Apple", google: "Google", email: "이메일", demo: "데모 계정" }[method] ?? method;
+  return { apple: "Apple", google: "Google", kakao: "카카오", email: "이메일", demo: "데모 계정" }[method] ?? method;
 }
 
 const styles = StyleSheet.create({

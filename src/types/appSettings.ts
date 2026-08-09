@@ -12,7 +12,7 @@ export type ClockFormat = "12h" | "24h";
 export type DayStart = "midnight" | "04:00";
 export type WeekStart = "sunday" | "monday";
 export type BabyAgeFormat = "days" | "monthsDays" | "weeks";
-export type LoginMethod = "apple" | "google" | "email" | "demo";
+export type LoginMethod = "apple" | "google" | "kakao" | "email" | "demo";
 
 export type AppSettings = {
   timers: {

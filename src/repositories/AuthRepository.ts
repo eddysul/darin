@@ -70,7 +70,7 @@ function isEmailConfirmed(user: User | null | undefined): boolean {
 
 function socialDisplayName(user: User): string | undefined {
   const metadata = user.user_metadata;
-  const value = metadata?.full_name ?? metadata?.name ?? metadata?.display_name;
+  const value = metadata?.full_name ?? metadata?.name ?? metadata?.display_name ?? metadata?.nickname;
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
@@ -271,6 +271,66 @@ export const AuthRepository = {
       if (identitiesError) throw identitiesError;
       if (!identities.identities.some((identity) => identity.provider === "google")) {
         throw new Error("Google 계정 연결 완료를 확인하지 못했어요. 다시 시도해주세요.");
+      }
+    }
+
+    await Promise.all([clearLegacyDeviceAuth(), clearPendingEmailAuth()]);
+    return {
+      user: session.user,
+      email: session.user.email ?? "",
+      name: socialDisplayName(session.user),
+      linkedAnonymousUser: linkAnonymous,
+    };
+  },
+
+  /**
+   * Kakao OAuth through Supabase. The Kakao REST key and client secret stay in
+   * Supabase; the app only opens the provider URL and receives its own callback.
+   * Anonymous users are linked in place to preserve their existing RLS records.
+   */
+  async signInWithKakao(): Promise<{
+    user: User;
+    email: string;
+    name?: string;
+    linkedAnonymousUser: boolean;
+  } | null> {
+    const sb = requireSupabase();
+    const previousSession = await this.getSession();
+    const linkAnonymous = Boolean(previousSession && isAnonymousUser(previousSession.user));
+    const redirectTo = authRedirectUrl("callback");
+    const credentials = {
+      provider: "kakao" as const,
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true,
+      },
+    };
+    const oauth = linkAnonymous
+      ? await sb.auth.linkIdentity(credentials)
+      : await sb.auth.signInWithOAuth(credentials);
+    if (oauth.error) throw oauth.error;
+    if (!oauth.data.url) throw new Error("카카오 로그인 주소를 만들지 못했어요.");
+
+    const browserResult = await WebBrowser.openAuthSessionAsync(oauth.data.url, redirectTo);
+    if (browserResult.type !== "success" || !("url" in browserResult) || !browserResult.url) {
+      return null;
+    }
+    await this.handleAuthUrl(browserResult.url);
+    const session = await this.getSession();
+    if (!session?.user) throw new Error("카카오 로그인 세션을 만들지 못했어요.");
+
+    if (linkAnonymous && previousSession && session.user.id !== previousSession.user.id) {
+      await sb.auth.setSession({
+        access_token: previousSession.access_token,
+        refresh_token: previousSession.refresh_token,
+      });
+      throw new Error("기존 기록 계정과 카카오 계정을 안전하게 연결하지 못했어요.");
+    }
+    if (linkAnonymous) {
+      const { data: identities, error: identitiesError } = await sb.auth.getUserIdentities();
+      if (identitiesError) throw identitiesError;
+      if (!identities.identities.some((identity) => identity.provider === "kakao")) {
+        throw new Error("카카오 계정 연결 완료를 확인하지 못했어요. 다시 시도해주세요.");
       }
     }
 

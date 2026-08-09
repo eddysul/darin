@@ -345,7 +345,7 @@ function RootApp() {
     setPhase("auth");
   }, []);
 
-  const handleAuthenticated = useCallback(async (payload: { name?: string; email?: string; provider: "email" | "google" | "apple"; user?: { id: string } }) => {
+  const handleAuthenticated = useCallback(async (payload: { name?: string; email?: string; provider: "email" | "google" | "apple" | "kakao"; user?: { id: string } }) => {
     const name = payload.name?.trim() || "";
     setHasAuthSession(true);
     setAuthRecovery(false);
@@ -358,7 +358,7 @@ function RootApp() {
       });
     }
     if (
-      (payload.provider === "email" || payload.provider === "google" || payload.provider === "apple") &&
+      (payload.provider === "email" || payload.provider === "google" || payload.provider === "apple" || payload.provider === "kakao") &&
       payload.email
     ) {
       setSettings((current) => ({
