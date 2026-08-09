@@ -40,6 +40,7 @@ export type OnboardingResult =
       babyName: string;
       ownerName: string;
       myName: string;
+      myRealName: string;
       relationship: RelationshipToChild;
       relationshipLabel: RelationshipLabel;
       inviteType: InviteType;
@@ -313,6 +314,7 @@ export function OnboardingFlow({
             babyName: invitePreview.babyName,
             ownerName: invitePreview.ownerName,
             myName: setup.parent.parentName.trim(),
+            myRealName: setup.parent.nickname?.trim() ?? "",
             relationship: setup.parent.relationshipToChild,
             relationshipLabel,
             inviteType: invitePreview.inviteType,

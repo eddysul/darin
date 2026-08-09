@@ -459,83 +459,54 @@ function log(
 
 // --- Every provider shares the same server-profile completion gate ---
 {
+  const completeProfile = {
+    display_name: "콩이맘",
+    nickname: "김민지",
+    default_relation: "엄마",
+    residence_country: "KR",
+    preferred_language: "system",
+    guardian_birth_date: "1990-05-15",
+  };
   assert.equal(isUserProfileComplete(null), false);
-  assert.equal(
-    isUserProfileComplete({
-      display_name: "",
-      default_relation: "엄마",
-      residence_country: "KR",
-      preferred_language: "ko",
-    }),
-    false,
-  );
-  assert.equal(
-    isUserProfileComplete({
-      display_name: "민지",
-      default_relation: " ",
-      residence_country: "KR",
-      preferred_language: "ko",
-    }),
-    false,
-  );
-  assert.equal(
-    isUserProfileComplete({
-      display_name: "user@example.com",
-      default_relation: "보호자",
-      residence_country: "US",
-      preferred_language: "en",
-    }),
-    false,
-  );
-  assert.equal(
-    isUserProfileComplete({
-      display_name: "민지",
-      default_relation: "엄마",
-      preferred_language: "ko",
-    }),
-    false,
-  );
-  assert.equal(
-    isUserProfileComplete({
-      display_name: "민지",
-      default_relation: "엄마",
-      residence_country: "KR",
-    }),
-    false,
-  );
-  assert.equal(
-    isUserProfileComplete({
-      display_name: "민지",
-      default_relation: "엄마",
-      residence_country: "KR",
-      preferred_language: "system",
-    }),
-    true,
-  );
+  assert.equal(isUserProfileComplete({ ...completeProfile, display_name: "" }), false);
+  assert.equal(isUserProfileComplete({ ...completeProfile, display_name: "user@example.com" }), false);
+  assert.equal(isUserProfileComplete({ ...completeProfile, nickname: "" }), false);
+  assert.equal(isUserProfileComplete({ ...completeProfile, nickname: "user@example.com" }), false);
+  assert.equal(isUserProfileComplete({ ...completeProfile, default_relation: " " }), false);
+  assert.equal(isUserProfileComplete({ ...completeProfile, residence_country: null }), false);
+  assert.equal(isUserProfileComplete({ ...completeProfile, preferred_language: null }), false);
+  assert.equal(isUserProfileComplete({ ...completeProfile, guardian_birth_date: null }), false);
+  assert.equal(isUserProfileComplete(completeProfile), true);
   assert.equal(
     canSubmitUserProfile({
       displayName: "민지",
+      realName: "김민지",
       relation: null,
       residenceCountry: "KR",
       preferredLanguage: "ko",
+      guardianBirthDate: "1990-05-15",
     }),
     false,
   );
   assert.equal(
     canSubmitUserProfile({
       displayName: "",
+      realName: "김민지",
       relation: "엄마",
       residenceCountry: "KR",
       preferredLanguage: "ko",
+      guardianBirthDate: "1990-05-15",
     }),
     false,
   );
   assert.equal(
     canSubmitUserProfile({
-      displayName: "민지",
+      displayName: "콩이맘",
+      realName: "김민지",
       relation: "엄마",
       residenceCountry: "KR",
       preferredLanguage: "system",
+      guardianBirthDate: "1990-05-15",
     }),
     true,
   );

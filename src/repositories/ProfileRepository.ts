@@ -90,7 +90,8 @@ export const ProfileRepository = {
     const sb = requireSupabase();
     const session = await AuthRepository.ensureSession();
     const name = input.displayName.trim();
-    if (!name) throw new Error("표시 이름을 입력해 주세요.");
+    if (!name) throw new Error("닉네임을 입력해 주세요.");
+    if (!input.nickname?.trim()) throw new Error("이름을 입력해 주세요.");
 
     const patch: Partial<ProfileRow> = {
       display_name: name,
@@ -98,6 +99,8 @@ export const ProfileRepository = {
       default_relation: input.defaultRelation
         ? toDbRelationshipLabel(input.defaultRelation)
         : null,
+      residence_country: input.residenceCountry,
+      guardian_birth_date: input.guardianBirthDate,
       updated_at: new Date().toISOString(),
     };
     if (input.preferredLanguage) patch.preferred_language = input.preferredLanguage;

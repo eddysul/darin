@@ -7,7 +7,10 @@ export type FamilyMemberStatus = "active" | "pending" | "inactive";
 
 export type FamilyMember = {
   id: string;
+  /** Primary app nickname from profiles.display_name. */
   name: string;
+  /** Confirmed name from the legacy profiles.nickname column. */
+  realName?: string;
   emoji?: string;
   /** Signed URL for profile avatar when available (short-lived). */
   avatarUrl?: string;

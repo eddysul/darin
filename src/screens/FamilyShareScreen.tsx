@@ -72,7 +72,7 @@ export function FamilyShareScreen() {
   const [code, setCode] = useState("");
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [displayName, setDisplayName] = useState("");
-  const [nickname, setNickname] = useState("");
+  const [realName, setRealName] = useState("");
   const [darinFriends, setDarinFriends] = useState<DarinFriendDisplay[]>([]);
   const [babyFriends, setBabyFriends] = useState<BabyMemoryFriendDisplay[]>([]);
   const [working, setWorking] = useState(false);
@@ -87,7 +87,7 @@ export function FamilyShareScreen() {
     ]);
     if (profile) {
       setDisplayName((current) => current || profile.display_name || "");
-      setNickname((current) => current || profile.nickname || "");
+      setRealName((current) => current || profile.nickname || "");
       setRelation((current) =>
         current === "가족" && profile.default_relation ? profile.default_relation : current,
       );
@@ -184,14 +184,14 @@ export function FamilyShareScreen() {
   };
 
   const acceptInvite = async () => {
-    if (!preview || !displayName.trim() || working) return;
+    if (!preview || !displayName.trim() || !realName.trim() || working) return;
     setWorking(true);
     setError("");
     try {
       const accepted = await FamilyRepository.acceptInviteCode({
         code,
         displayName: displayName.trim(),
-        nickname: nickname.trim(),
+        nickname: realName.trim(),
         relation,
       });
       await refresh();
@@ -246,7 +246,7 @@ export function FamilyShareScreen() {
           <Text style={styles.count}>함께 기록하는 가족 {activeFamily.length}명</Text>
           {activeFamily.slice(0, 8).map((member) => (
             <Text key={member.id} style={styles.person} numberOfLines={1}>
-              {member.name} · {member.relationshipLabel ?? "가족"} · {FAMILY_ROLE_LABELS[member.role]}
+              {member.name}{member.realName ? ` · ${member.realName}` : ""} · {member.relationshipLabel ?? "가족"} · {FAMILY_ROLE_LABELS[member.role]}
             </Text>
           ))}
         </View>
@@ -342,21 +342,23 @@ export function FamilyShareScreen() {
               <Text style={styles.previewTitle}>{previewTitle(preview)}</Text>
               <Text style={styles.description}>초대한 사람: {preview.inviter_name}</Text>
               <Text style={styles.permissionHint}>{INVITE_DESCRIPTIONS[preview.invite_type]}</Text>
-              <Text style={styles.fieldLabel}>표시 이름</Text>
+              <Text style={styles.fieldLabel}>닉네임</Text>
+              <Text style={styles.fieldHelp}>앱에서 주로 보이는 이름이에요.</Text>
               <TextInput
                 style={styles.input}
                 value={displayName}
                 onChangeText={setDisplayName}
-                placeholder="다른 사람에게 보일 이름"
+                placeholder="예: 콩이맘, 준이아빠"
                 placeholderTextColor={colors.faint}
                 maxLength={40}
               />
-              <Text style={styles.fieldLabel}>닉네임</Text>
+              <Text style={styles.fieldLabel}>이름</Text>
+              <Text style={styles.fieldHelp}>친구와 가족이 확인할 수 있는 이름이에요.</Text>
               <TextInput
                 style={styles.input}
-                value={nickname}
-                onChangeText={setNickname}
-                placeholder="선택 사항"
+                value={realName}
+                onChangeText={setRealName}
+                placeholder="예: 김민지, 이원준"
                 placeholderTextColor={colors.faint}
                 maxLength={40}
               />
@@ -377,9 +379,9 @@ export function FamilyShareScreen() {
                 </>
               ) : null}
               <Pressable
-                style={[styles.primary, (!displayName.trim() || working) && styles.disabled]}
+                style={[styles.primary, (!displayName.trim() || !realName.trim() || working) && styles.disabled]}
                 onPress={() => void acceptInvite()}
-                disabled={!displayName.trim() || working}
+                disabled={!displayName.trim() || !realName.trim() || working}
               >
                 <Text style={styles.primaryText}>초대 수락</Text>
               </Pressable>
@@ -395,7 +397,7 @@ export function FamilyShareScreen() {
               <View key={friend.friendshipId} style={styles.friendRow}>
                 <View style={styles.friendCopy}>
                   <Text style={styles.person}>{friend.displayName}</Text>
-                  {friend.nickname ? <Text style={styles.nickname}>{friend.nickname}</Text> : null}
+                  {friend.realName ? <Text style={styles.nickname}>{friend.realName} · 친구</Text> : null}
                 </View>
                 {isAdmin && babyId ? (
                   <Pressable
@@ -470,6 +472,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
   description: { fontSize: 13, color: colors.muted, lineHeight: 19 },
   permissionHint: { fontSize: 12, color: colors.faint, lineHeight: 18 },
+  fieldHelp: { fontSize: 11.5, color: colors.faint, lineHeight: 17, marginTop: -5 },
   count: { fontSize: 13, color: colors.amber, fontWeight: "800" },
   person: { fontSize: 14, color: colors.text, fontWeight: "700" },
   nickname: { fontSize: 11.5, color: colors.muted },

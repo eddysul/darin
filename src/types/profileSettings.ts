@@ -41,6 +41,8 @@ export type UpdateMyProfileInput = {
   nickname?: string | null;
   defaultRelation?: RelationshipLabel | DbRelationshipLabel | null;
   preferredLanguage?: string;
+  residenceCountry?: string | null;
+  guardianBirthDate?: string | null;
   clearAvatar?: boolean;
 };
 
@@ -64,6 +66,7 @@ export type FamilyMemberDisplay = {
   membershipId: string;
   userId: string;
   displayName: string;
+  realName?: string;
   nickname?: string;
   relation: RelationshipLabel;
   role: PermissionRole;

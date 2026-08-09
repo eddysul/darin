@@ -37,7 +37,7 @@ import {
 
 export type ProfileSetupInitial = {
   displayName?: string;
-  nickname?: string;
+  realName?: string;
   relation?: RelationshipLabel;
   avatarUrl?: string;
   residenceCountry?: ResidenceCountry;
@@ -65,8 +65,8 @@ export function ProfileSetupScreen({
   const { applyOwnerFromSetup } = useBabyLog();
   const { setSettings } = useAppSettings();
   const { setLocale } = useLanguage();
-  const [displayName, setDisplayName] = useState(initial.displayName ?? "");
-  const [nickname, setNickname] = useState(initial.nickname ?? "");
+  const [nickname, setNickname] = useState(initial.displayName ?? "");
+  const [realName, setRealName] = useState(initial.realName ?? "");
   const [relation, setRelation] = useState<RelationshipLabel | null>(initial.relation ?? null);
   const [residenceCountry, setResidenceCountry] = useState<ResidenceCountry | null>(
     initial.residenceCountry ?? null,
@@ -83,10 +83,12 @@ export function ProfileSetupScreen({
   const [error, setError] = useState("");
 
   const canContinue = canSubmitUserProfile({
-    displayName,
+    displayName: nickname,
+    realName,
     relation,
     residenceCountry,
     preferredLanguage,
+    guardianBirthDate,
   }) && !saving;
 
   const pickAvatar = () => {
@@ -111,8 +113,8 @@ export function ProfileSetupScreen({
     setError("");
     try {
       const saved = await ProfileRepository.upsertMyProfile({
-        displayName,
-        nickname,
+        displayName: nickname,
+        nickname: realName,
         defaultRelation: relation,
         residenceCountry,
         preferredLanguage,
@@ -174,7 +176,7 @@ export function ProfileSetupScreen({
       >
         <View style={styles.heading}>
           <Text style={styles.title}>내 프로필을 설정해 주세요</Text>
-          <Text style={styles.subtitle}>가족과 함께 볼 때 사용할 이름과 기본 설정을 알려주세요.</Text>
+          <Text style={styles.subtitle}>가족과 친구가 알아볼 수 있도록 닉네임과 이름을 입력해 주세요.</Text>
         </View>
 
         <ProfileAvatar
@@ -186,24 +188,26 @@ export function ProfileSetupScreen({
         />
 
         <View style={styles.card}>
-          <Text style={styles.label}>표시 이름 *</Text>
-          <TextInput
-            style={styles.input}
-            value={displayName}
-            onChangeText={setDisplayName}
-            placeholder="가족에게 보일 이름"
-            placeholderTextColor={colors.faint}
-            maxLength={40}
-            autoFocus={!displayName.trim()}
-            returnKeyType="next"
-          />
-
-          <Text style={styles.label}>닉네임</Text>
+          <Text style={styles.label}>닉네임 *</Text>
+          <Text style={styles.help}>앱에서 주로 보이는 이름이에요.</Text>
           <TextInput
             style={styles.input}
             value={nickname}
             onChangeText={setNickname}
-            placeholder="선택 사항"
+            placeholder="예: 콩이맘, 준이아빠"
+            placeholderTextColor={colors.faint}
+            maxLength={40}
+            autoFocus={!nickname.trim()}
+            returnKeyType="next"
+          />
+
+          <Text style={styles.label}>이름 *</Text>
+          <Text style={styles.help}>친구 추가와 초대 확인 때 함께 보여줘요.</Text>
+          <TextInput
+            style={styles.input}
+            value={realName}
+            onChangeText={setRealName}
+            placeholder="예: 김민지, 이원준"
             placeholderTextColor={colors.faint}
             maxLength={40}
           />
@@ -256,7 +260,7 @@ export function ProfileSetupScreen({
           </View>
 
           <Text style={styles.label}>보호자 생년월일</Text>
-          <Text style={styles.help}>맞춤 안내를 위해 선택적으로 사용할 수 있어요.</Text>
+          <Text style={styles.help}>맞춤 안내를 위해 사용해요.</Text>
           <Pressable
             style={[styles.input, styles.dateInput]}
             onPress={() => setBirthDatePickerOpen(true)}

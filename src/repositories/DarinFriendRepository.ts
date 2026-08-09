@@ -5,7 +5,7 @@ export type DarinFriendDisplay = {
   friendshipId: string;
   userId: string;
   displayName: string;
-  nickname?: string;
+  realName?: string;
   status: FriendshipStatus;
   acceptedAt?: string;
 };
@@ -14,7 +14,7 @@ export type BabyMemoryFriendDisplay = {
   membershipId: string;
   userId: string;
   displayName: string;
-  nickname?: string;
+  realName?: string;
   status: MemoryFriendStatus;
 };
 
@@ -26,7 +26,7 @@ export const DarinFriendRepository = {
       friendshipId: row.friendship_id,
       userId: row.user_id,
       displayName: row.display_name,
-      nickname: row.nickname ?? undefined,
+      realName: row.nickname ?? undefined,
       status: row.status,
       acceptedAt: row.accepted_at ?? undefined,
     }));
@@ -41,7 +41,7 @@ export const DarinFriendRepository = {
       membershipId: row.membership_id,
       userId: row.user_id,
       displayName: row.display_name,
-      nickname: row.nickname ?? undefined,
+      realName: row.nickname ?? undefined,
       status: row.status,
     }));
   },

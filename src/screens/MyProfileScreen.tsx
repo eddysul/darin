@@ -13,8 +13,12 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProfileAvatar } from "../components/profile/ProfileAvatar";
+import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
+import { RecordDatePickerModal } from "../components/babylog/RecordDatePickerModal";
 import { useApp } from "../context/AppContext";
+import { useAppSettings } from "../context/AppSettingsContext";
 import { useBabyLog } from "../context/BabyLogContext";
+import { useLanguage } from "../LanguageContext";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { FamilyRepository } from "../repositories/FamilyRepository";
 import { ProfileRepository } from "../repositories/ProfileRepository";
@@ -24,14 +28,30 @@ import { getSupabaseSync } from "../utils/supabaseSyncStore";
 import { presentAvatarPicker } from "../utils/profileAvatarPicker";
 import { colors, radius } from "../theme";
 import { FAMILY_ROLE_LABELS } from "../types/family";
+import {
+  APP_LANGUAGE_OPTIONS,
+  RESIDENCE_COUNTRY_OPTIONS,
+  isAppLanguagePreference,
+  isResidenceCountry,
+  resolveAppLocale,
+  type AppLanguagePreference,
+  type ResidenceCountry,
+} from "../types/profilePreferences";
+import { formatDateKey } from "../utils/dateKey";
 
 export function MyProfileScreen() {
   const insets = useSafeAreaInsets();
   const { careSetup, setCareSetup } = useApp();
+  const { setSettings } = useAppSettings();
   const { myFamilyRole, applyOwnerFromSetup, rehydrateFromServer } = useBabyLog();
-  const [displayName, setDisplayName] = useState(careSetup.parent.parentName);
-  const [nickname, setNickname] = useState(careSetup.parent.nickname ?? "");
+  const { setLocale } = useLanguage();
+  const [nickname, setNickname] = useState(careSetup.parent.parentName);
+  const [realName, setRealName] = useState(careSetup.parent.nickname ?? "");
   const [relation, setRelation] = useState<RelationshipLabel>("엄마");
+  const [residenceCountry, setResidenceCountry] = useState<ResidenceCountry | null>(null);
+  const [preferredLanguage, setPreferredLanguage] = useState<AppLanguagePreference>("system");
+  const [guardianBirthDate, setGuardianBirthDate] = useState("");
+  const [birthDatePickerOpen, setBirthDatePickerOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const [email, setEmail] = useState("");
   const [provider, setProvider] = useState("이메일");
@@ -51,15 +71,22 @@ export function MyProfileScreen() {
       else if (identities.includes("kakao")) setProvider("Kakao");
       else setProvider("이메일");
 
-      const profile = await ProfileRepository.getMyDisplayProfile();
+      const profile = await ProfileRepository.getMyProfile();
       if (profile) {
-        setDisplayName(profile.displayName);
-        setNickname(profile.nickname ?? "");
-        setAvatarUrl(profile.avatarUrl);
-        if (profile.defaultRelation) setRelation(profile.defaultRelation as RelationshipLabel);
+        setNickname(profile.display_name);
+        setRealName(profile.nickname ?? "");
+        setResidenceCountry(isResidenceCountry(profile.residence_country) ? profile.residence_country : null);
+        setPreferredLanguage(isAppLanguagePreference(profile.preferred_language) ? profile.preferred_language : "system");
+        setGuardianBirthDate(profile.guardian_birth_date ?? "");
+        setAvatarUrl(
+          profile.avatar_storage_path
+            ? await ProfileRepository.createProfileAvatarSignedUrl(profile.avatar_storage_path).catch(() => undefined)
+            : profile.avatar_url ?? undefined,
+        );
+        if (profile.default_relation) setRelation(profile.default_relation as RelationshipLabel);
       } else {
-        setDisplayName(careSetup.parent.parentName);
-        setNickname(careSetup.parent.nickname ?? "");
+        setNickname(careSetup.parent.parentName);
+        setRealName(careSetup.parent.nickname ?? "");
       }
 
       const babyId = getSupabaseSync().babyId;
@@ -79,19 +106,30 @@ export function MyProfileScreen() {
 
   const save = async () => {
     if (saving) return;
-    const name = displayName.trim();
-    if (!name) {
-      setError("표시 이름을 입력해 주세요.");
+    const displayNickname = nickname.trim();
+    const confirmedRealName = realName.trim();
+    if (!displayNickname) {
+      setError("닉네임을 입력해 주세요.");
+      return;
+    }
+    if (!confirmedRealName) {
+      setError("이름을 입력해 주세요.");
+      return;
+    }
+    if (!residenceCountry || !guardianBirthDate) {
+      setError("거주 국가와 보호자 생년월일을 확인해 주세요.");
       return;
     }
     setSaving(true);
     setError("");
     try {
       const next = await ProfileRepository.updateMyProfile({
-        displayName: name,
-        nickname,
+        displayName: displayNickname,
+        nickname: confirmedRealName,
         defaultRelation: relation,
-        preferredLanguage: careSetup.parent.preferredLanguage,
+        preferredLanguage,
+        residenceCountry,
+        guardianBirthDate,
       });
       const babyId = getSupabaseSync().babyId;
       const user = await AuthRepository.getUser();
@@ -102,17 +140,24 @@ export function MyProfileScreen() {
           relation,
         }).catch(() => undefined);
       }
+      const resolvedLanguage = resolveAppLocale(preferredLanguage);
       const nextSetup = {
         ...careSetup,
         parent: {
           ...careSetup.parent,
           parentName: next.displayName,
-          nickname: next.nickname,
+          nickname: confirmedRealName,
+          preferredLanguage: resolvedLanguage,
           avatarUri: next.avatarUrl,
         },
       };
       setCareSetup(nextSetup);
       applyOwnerFromSetup(nextSetup);
+      setLocale(resolvedLanguage);
+      setSettings((current) => ({
+        ...current,
+        account: { ...current.account, language: preferredLanguage },
+      }));
       setAvatarUrl(next.avatarUrl);
       await rehydrateFromServer().catch(() => undefined);
     } catch (cause) {
@@ -144,8 +189,8 @@ export function MyProfileScreen() {
       onClear: () => {
         setSaving(true);
         void ProfileRepository.updateMyProfile({
-          displayName: displayName.trim() || careSetup.parent.parentName || "나",
-          nickname,
+          displayName: nickname.trim() || careSetup.parent.parentName || "나",
+          nickname: realName,
           defaultRelation: relation,
           clearAvatar: true,
         })
@@ -177,10 +222,12 @@ export function MyProfileScreen() {
         <ProfileAvatar uri={avatarUrl} size={104} editable onPress={pickAvatar} label="내 사진 추가" />
 
         <View style={styles.card}>
-          <Text style={styles.label}>표시 이름</Text>
-          <TextInput style={styles.input} value={displayName} onChangeText={setDisplayName} placeholder="가족에게 보일 이름" placeholderTextColor={colors.faint} maxLength={40} />
-          <Text style={styles.label}>닉네임</Text>
-          <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder="선택 사항" placeholderTextColor={colors.faint} maxLength={40} />
+          <Text style={styles.label}>닉네임 *</Text>
+          <Text style={styles.help}>앱에서 주로 보이는 이름이에요.</Text>
+          <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder="예: 콩이맘, 준이아빠" placeholderTextColor={colors.faint} maxLength={40} />
+          <Text style={styles.label}>이름 *</Text>
+          <Text style={styles.help}>친구와 가족이 확인할 수 있는 이름이에요.</Text>
+          <TextInput style={styles.input} value={realName} onChangeText={setRealName} placeholder="예: 김민지, 이원준" placeholderTextColor={colors.faint} maxLength={40} />
           <Text style={styles.label}>아기와의 관계</Text>
           <View style={styles.chips}>
             {PROFILE_RELATION_OPTIONS.map((option) => {
@@ -192,6 +239,27 @@ export function MyProfileScreen() {
               );
             })}
           </View>
+          <Text style={styles.label}>거주 국가 *</Text>
+          <View style={styles.chips}>
+            {RESIDENCE_COUNTRY_OPTIONS.map((option) => (
+              <Pressable key={option.value} style={[styles.chip, residenceCountry === option.value && styles.chipActive]} onPress={() => setResidenceCountry(option.value)}>
+                <Text style={[styles.chipText, residenceCountry === option.value && styles.chipTextActive]}>{option.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.label}>앱 언어 *</Text>
+          <View style={styles.chips}>
+            {APP_LANGUAGE_OPTIONS.map((option) => (
+              <Pressable key={option.value} style={[styles.chip, preferredLanguage === option.value && styles.chipActive]} onPress={() => setPreferredLanguage(option.value)}>
+                <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>{option.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.label}>보호자 생년월일 *</Text>
+          <Pressable style={[styles.input, styles.dateInput]} onPress={() => setBirthDatePickerOpen(true)} accessibilityRole="button" accessibilityLabel="보호자 생년월일 선택">
+            <Text style={[styles.dateInputText, !guardianBirthDate && styles.datePlaceholder]}>{guardianBirthDate || "YYYY-MM-DD"}</Text>
+            <BabyLogIcon kind="calendar" size={18} color={colors.amber} />
+          </Pressable>
         </View>
 
         <View style={styles.card}>
@@ -207,6 +275,15 @@ export function MyProfileScreen() {
         <Pressable style={[styles.save, saving && styles.disabled]} onPress={() => void save()} disabled={saving}>
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>저장</Text>}
         </Pressable>
+        <RecordDatePickerModal
+          visible={birthDatePickerOpen}
+          selectedDateKey={guardianBirthDate || formatDateKey(new Date(new Date().getFullYear() - 30, 0, 1), "midnight")}
+          minDateKey={formatDateKey(new Date(new Date().getFullYear() - 120, 0, 1), "midnight")}
+          maxDateKey={formatDateKey()}
+          title="보호자 생년월일 선택"
+          onSelect={setGuardianBirthDate}
+          onClose={() => setBirthDatePickerOpen(false)}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -219,7 +296,11 @@ const styles = StyleSheet.create({
   content: { padding: 20, gap: 16, alignItems: "stretch" },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 10 },
   label: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  help: { color: colors.faint, fontSize: 11.5, lineHeight: 17, marginTop: -4 },
   input: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, paddingHorizontal: 13, color: colors.text, fontSize: 15 },
+  dateInput: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  dateInputText: { color: colors.text, fontSize: 15 },
+  datePlaceholder: { color: colors.faint },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { minHeight: 40, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },

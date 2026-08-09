@@ -368,7 +368,7 @@ export function BabyProfileScreen() {
                   {m.isMe ? " (나)" : ""}
                 </Text>
                 <Text style={styles.memberRole}>
-                  {m.relation} · {FAMILY_ROLE_LABELS[permissionToFamilyRole(m.role)]}
+                  {m.realName ? `${m.realName} · ` : ""}{m.relation} · {FAMILY_ROLE_LABELS[permissionToFamilyRole(m.role)]}
                   <Text style={styles.badge}> · 가족</Text>
                 </Text>
                 {!m.isMe && allowManage && m.status !== "inactive" ? (

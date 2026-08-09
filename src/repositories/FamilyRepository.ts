@@ -36,10 +36,10 @@ export const FamilyRepository = {
   async listMembersAsFamily(babyId: string): Promise<FamilyMember[]> {
     const rows = await this.listMembers(babyId);
     const user = await AuthRepository.getUser();
-    let profiles = new Map<string, { displayName: string; avatarUrl?: string }>();
+    let profiles = new Map<string, { displayName: string; realName?: string; avatarUrl?: string }>();
     try {
       const list = await ProfileRepository.listDisplayProfilesForBaby(babyId);
-      profiles = new Map(list.map((item) => [item.userId, { displayName: item.displayName, avatarUrl: item.avatarUrl }]));
+      profiles = new Map(list.map((item) => [item.userId, { displayName: item.displayName, realName: item.nickname, avatarUrl: item.avatarUrl }]));
     } catch {
       // Fall back to membership-only labels when profile join is unavailable.
     }
@@ -48,6 +48,7 @@ export const FamilyRepository = {
       const name = row.display_name_override?.trim() || profile?.displayName || "멤버";
       return {
         ...memberFromRow(row, name),
+        realName: profile?.realName,
         isMe: user?.id === row.user_id,
         avatarUrl: profile?.avatarUrl,
       };
@@ -65,6 +66,7 @@ export const FamilyRepository = {
         membershipId: row.id,
         userId: row.user_id,
         displayName: row.display_name_override?.trim() || profile?.displayName || "멤버",
+        realName: profile?.nickname,
         nickname: profile?.nickname,
         relation: (row.relationship_label || "가족") as RelationshipLabel,
         role: row.permission_role,

@@ -178,7 +178,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
           <MenuRow
             icon="profile"
             title="내 프로필"
-            subtitle="사진·표시 이름·닉네임·관계"
+            subtitle="사진·닉네임·이름·관계"
             onPress={() => (onOpenMyProfile ? onOpenMyProfile() : setAccountSettingsOpen(true))}
           />
           <MenuRow icon="baby" title="아기 프로필" subtitle="사진·이름·별명·생년월일 관리" onPress={onOpenProfile} />

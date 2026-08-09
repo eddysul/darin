@@ -86,6 +86,10 @@ try {
   if (familyAccept.error || familyAccept.data?.[0]?.invite_type !== "family") throw new Error(`family accept: ${familyAccept.error?.message ?? "missing"}`);
   const familyMembership = await family.sb.from("baby_members").select("permission_role").eq("baby_id", babyId).eq("user_id", family.user.id).maybeSingle();
   if (familyMembership.error || familyMembership.data?.permission_role !== "editor") throw new Error("family baby_members connection missing");
+  const familyProfile = await family.sb.from("profiles").select("display_name,nickname").eq("id", family.user.id).maybeSingle();
+  if (familyProfile.error || familyProfile.data?.display_name !== "초대 가족" || familyProfile.data?.nickname !== "가족닉네임") {
+    throw new Error("family invite did not preserve nickname and confirmed name");
+  }
   pass("family invite preview/accept creates editor baby_members row");
 
   const memoryInvite = await owner.sb.rpc("create_invite_code", {
@@ -99,9 +103,14 @@ try {
   const memoryAccept = await babyFriend.sb.rpc("accept_invite_code", {
     p_code: memoryInvite.data.code,
     p_display_name: "아기 친구",
+    p_nickname: "아기친구 이름",
     p_relation: "친구",
   });
   if (memoryAccept.error || memoryAccept.data?.[0]?.invite_type !== "baby_friend") throw new Error(`baby friend accept: ${memoryAccept.error?.message ?? "missing"}`);
+  const memoryProfile = await babyFriend.sb.from("profiles").select("display_name,nickname").eq("id", babyFriend.user.id).maybeSingle();
+  if (memoryProfile.error || memoryProfile.data?.display_name !== "아기 친구" || memoryProfile.data?.nickname !== "아기친구 이름") {
+    throw new Error("baby friend invite did not preserve nickname and confirmed name");
+  }
   const memoryConnection = await babyFriend.sb.from("memory_friends").select("status").eq("baby_id", babyId).eq("user_id", babyFriend.user.id).maybeSingle();
   if (memoryConnection.error || memoryConnection.data?.status !== "active") throw new Error("memory_friends connection missing");
   const forbiddenBabyMember = await babyFriend.sb.from("baby_members").select("user_id").eq("baby_id", babyId).eq("user_id", babyFriend.user.id);
@@ -128,9 +137,14 @@ try {
   const userAccept = await darinFriend.sb.rpc("accept_invite_code", {
     p_code: userInvite.data.code,
     p_display_name: "다린 친구",
+    p_nickname: "다린친구 이름",
     p_relation: "친구",
   });
   if (userAccept.error || userAccept.data?.[0]?.invite_type !== "darin_friend") throw new Error(`Darin friend accept: ${userAccept.error?.message ?? "missing"}`);
+  const darinProfile = await darinFriend.sb.from("profiles").select("display_name,nickname").eq("id", darinFriend.user.id).maybeSingle();
+  if (darinProfile.error || darinProfile.data?.display_name !== "다린 친구" || darinProfile.data?.nickname !== "다린친구 이름") {
+    throw new Error("Darin friend invite did not preserve nickname and confirmed name");
+  }
   const friendList = await owner.sb.rpc("list_my_darin_friends", {});
   if (friendList.error || !friendList.data?.some((row) => row.user_id === darinFriend.user.id)) throw new Error(`friend list: ${friendList.error?.message ?? "missing friend"}`);
   const noBabyAccess = await darinFriend.sb.from("babies").select("id").eq("id", babyId);

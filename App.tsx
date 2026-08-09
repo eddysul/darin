@@ -472,7 +472,7 @@ function RootApp() {
     if (!profileComplete) {
       setProfileSetupInitial({
         displayName,
-        nickname: profile?.nickname ?? undefined,
+        realName: profile?.nickname ?? undefined,
         relation,
         avatarUrl,
         residenceCountry: isResidenceCountry(profile?.residence_country)
@@ -575,6 +575,7 @@ function RootApp() {
           accepted = await FamilyRepository.acceptInviteCode({
             code: result.code,
             displayName: result.myName,
+            nickname: result.myRealName,
             relation: result.relationshipLabel,
           });
           await clearPendingInvite();
