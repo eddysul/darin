@@ -579,6 +579,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
           onSelect={handleOneTouch}
           onLongPress={handleLongPress}
           onInteractionChange={setCategoryPressing}
+          onAdd={allowAdd ? () => openSheet("memo") : undefined}
           onOpenGrowth={() => {
             setGrowthMeasuredAt(selectedDateKey);
             setGrowthRecordOpen(true);

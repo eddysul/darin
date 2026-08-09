@@ -25,6 +25,8 @@ type Props = {
   visibleActions?: OneTouchAction[];
   coreActions?: OneTouchAction[];
   onOpenGrowth?: () => void;
+  /** Opens create flow for a new record (not expand/collapse). */
+  onAdd?: () => void;
 };
 
 export function OneTouchRecordGrid({
@@ -38,6 +40,7 @@ export function OneTouchRecordGrid({
   visibleActions,
   coreActions,
   onOpenGrowth,
+  onAdd,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const orderedVisible = visibleActions ?? QUICK_RECORD_ACTIONS.map((action) => action.id);
@@ -59,14 +62,15 @@ export function OneTouchRecordGrid({
           <Text style={styles.title}>빠르게 기록하기</Text>
           <Text style={styles.subtitle}>짧게 탭 · 길게 눌러 상세</Text>
         </View>
-        {extra.length > 0 ? (
+        {onAdd ? (
           <Pressable
-            style={styles.countBadge}
-            onPress={() => setExpanded((value) => !value)}
+            style={[styles.countBadge, disabled && styles.disabled]}
+            disabled={disabled}
+            onPress={onAdd}
             accessibilityRole="button"
-            accessibilityLabel={expanded ? "카테고리 접기" : "더 보기"}
+            accessibilityLabel="새로 추가"
           >
-            <Text style={styles.countBadgeText}>{expanded ? "접기" : "더 보기"}</Text>
+            <Text style={styles.countBadgeText}>새로 추가</Text>
           </Pressable>
         ) : null}
       </View>
