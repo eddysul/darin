@@ -61,7 +61,7 @@ export const ProfileRepository = {
     nickname?: string | null;
     defaultRelation?: string | null;
     residenceCountry?: string | null;
-    guardianBirthYear?: number | null;
+    guardianBirthDate?: string | null;
     avatarStoragePath?: string | null;
   }): Promise<ProfileRow> {
     const sb = requireSupabase();
@@ -75,8 +75,8 @@ export const ProfileRepository = {
       default_relation: input.defaultRelation === undefined ? undefined : input.defaultRelation,
       residence_country:
         input.residenceCountry === undefined ? undefined : input.residenceCountry,
-      guardian_birth_year:
-        input.guardianBirthYear === undefined ? undefined : input.guardianBirthYear,
+      guardian_birth_date:
+        input.guardianBirthDate === undefined ? undefined : input.guardianBirthDate,
       avatar_storage_path:
         input.avatarStoragePath === undefined ? undefined : input.avatarStoragePath,
       updated_at: new Date().toISOString(),

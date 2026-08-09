@@ -16,6 +16,8 @@ import { PROFILE_RELATION_OPTIONS } from "../../types/profileSettings";
 import type { PickedAvatar } from "../../utils/profileAvatarPicker";
 import { presentAvatarPicker } from "../../utils/profileAvatarPicker";
 import { ProfileAvatar } from "../../components/profile/ProfileAvatar";
+import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
+import { RecordDatePickerModal } from "../../components/babylog/RecordDatePickerModal";
 import { ProfileRepository } from "../../repositories/ProfileRepository";
 import { useApp } from "../../context/AppContext";
 import { useBabyLog } from "../../context/BabyLogContext";
@@ -24,6 +26,7 @@ import { useLanguage } from "../../LanguageContext";
 import type { RelationshipToChild } from "../../types/careSetup";
 import { colors, radius } from "../../theme";
 import { canSubmitUserProfile } from "../../utils/profileCompletion";
+import { formatDateKey } from "../../utils/dateKey";
 import {
   APP_LANGUAGE_OPTIONS,
   RESIDENCE_COUNTRY_OPTIONS,
@@ -39,7 +42,7 @@ export type ProfileSetupInitial = {
   avatarUrl?: string;
   residenceCountry?: ResidenceCountry;
   preferredLanguage?: AppLanguagePreference;
-  guardianBirthYear?: number;
+  guardianBirthDate?: string;
 };
 
 function relationshipToCareValue(relation: RelationshipLabel): RelationshipToChild {
@@ -71,24 +74,20 @@ export function ProfileSetupScreen({
   const [preferredLanguage, setPreferredLanguage] = useState<AppLanguagePreference | null>(
     initial.preferredLanguage ?? null,
   );
-  const [guardianBirthYear, setGuardianBirthYear] = useState(
-    initial.guardianBirthYear ? String(initial.guardianBirthYear) : "",
-  );
+  const [guardianBirthDate, setGuardianBirthDate] = useState(initial.guardianBirthDate ?? "");
+  const [birthDatePickerOpen, setBirthDatePickerOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(initial.avatarUrl);
   const [pickedAvatar, setPickedAvatar] = useState<PickedAvatar | null>(null);
   const [clearAvatar, setClearAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const parsedBirthYear = guardianBirthYear ? Number(guardianBirthYear) : null;
-  const birthYearValid = parsedBirthYear === null
-    || (Number.isInteger(parsedBirthYear) && parsedBirthYear >= 1900 && parsedBirthYear <= new Date().getFullYear());
   const canContinue = canSubmitUserProfile({
     displayName,
     relation,
     residenceCountry,
     preferredLanguage,
-  }) && birthYearValid && !saving;
+  }) && !saving;
 
   const pickAvatar = () => {
     presentAvatarPicker({
@@ -117,7 +116,7 @@ export function ProfileSetupScreen({
         defaultRelation: relation,
         residenceCountry,
         preferredLanguage,
-        guardianBirthYear: parsedBirthYear,
+        guardianBirthDate: guardianBirthDate || null,
         avatarStoragePath: clearAvatar ? null : undefined,
         avatarUrl: clearAvatar ? null : undefined,
       });
@@ -256,18 +255,19 @@ export function ProfileSetupScreen({
             ))}
           </View>
 
-          <Text style={styles.label}>보호자 출생연도</Text>
+          <Text style={styles.label}>보호자 생년월일</Text>
           <Text style={styles.help}>맞춤 안내를 위해 선택적으로 사용할 수 있어요.</Text>
-          <TextInput
-            style={styles.input}
-            value={guardianBirthYear}
-            onChangeText={(value) => setGuardianBirthYear(value.replace(/\D/g, "").slice(0, 4))}
-            placeholder="선택 사항 · 예: 1990"
-            placeholderTextColor={colors.faint}
-            keyboardType="number-pad"
-            maxLength={4}
-          />
-          {!birthYearValid ? <Text style={styles.fieldError}>올바른 출생연도를 입력해 주세요.</Text> : null}
+          <Pressable
+            style={[styles.input, styles.dateInput]}
+            onPress={() => setBirthDatePickerOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="보호자 생년월일 선택"
+          >
+            <Text style={[styles.dateInputText, !guardianBirthDate && styles.datePlaceholder]}>
+              {guardianBirthDate || "YYYY-MM-DD"}
+            </Text>
+            <BabyLogIcon kind="calendar" size={18} color={colors.amber} />
+          </Pressable>
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -280,6 +280,18 @@ export function ProfileSetupScreen({
         >
           {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.nextText}>다음</Text>}
         </Pressable>
+        <RecordDatePickerModal
+          visible={birthDatePickerOpen}
+          selectedDateKey={
+            guardianBirthDate
+              || formatDateKey(new Date(new Date().getFullYear() - 30, 0, 1), "midnight")
+          }
+          minDateKey={formatDateKey(new Date(new Date().getFullYear() - 120, 0, 1), "midnight")}
+          maxDateKey={formatDateKey()}
+          title="보호자 생년월일 선택"
+          onSelect={setGuardianBirthDate}
+          onClose={() => setBirthDatePickerOpen(false)}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -301,7 +313,9 @@ const styles = StyleSheet.create({
   chipText: { color: colors.muted, fontSize: 12.5, fontWeight: "700" },
   chipTextActive: { color: colors.amber },
   error: { padding: 12, borderRadius: radius.md, backgroundColor: colors.dangerSoft, color: colors.dangerText, fontSize: 12.5, lineHeight: 19 },
-  fieldError: { color: colors.dangerText, fontSize: 11.5, lineHeight: 17 },
+  dateInput: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  dateInputText: { color: colors.text, fontSize: 15 },
+  datePlaceholder: { color: colors.faint },
   next: { minHeight: 54, marginTop: "auto", borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
   nextText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
   disabled: { opacity: 0.45 },

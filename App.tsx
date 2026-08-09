@@ -481,7 +481,7 @@ function RootApp() {
         preferredLanguage: isAppLanguagePreference(profile?.preferred_language)
           ? profile.preferred_language
           : undefined,
-        guardianBirthYear: profile?.guardian_birth_year ?? undefined,
+        guardianBirthDate: profile?.guardian_birth_date ?? undefined,
       });
       setPhase("profileSetup");
       return;
