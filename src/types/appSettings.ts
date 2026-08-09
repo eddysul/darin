@@ -2,7 +2,8 @@ import {
   QUICK_RECORD_ACTIONS,
   type OneTouchAction,
 } from "../constants/quickRecordActions";
-import type { PreferredLanguage, RelationshipToChild } from "./careSetup";
+import type { RelationshipToChild } from "./careSetup";
+import type { AppLanguagePreference } from "./profilePreferences";
 
 export type VolumeUnit = "ml" | "oz";
 export type WeightUnit = "kg" | "lb";
@@ -44,7 +45,7 @@ export type AppSettings = {
   account: {
     email: string;
     loginMethod: LoginMethod;
-    language: PreferredLanguage;
+    language: AppLanguagePreference;
     relationship: RelationshipToChild;
   };
   notifications: {

@@ -460,13 +460,85 @@ function log(
 // --- Every provider shares the same server-profile completion gate ---
 {
   assert.equal(isUserProfileComplete(null), false);
-  assert.equal(isUserProfileComplete({ display_name: "", default_relation: "엄마" }), false);
-  assert.equal(isUserProfileComplete({ display_name: "민지", default_relation: " " }), false);
-  assert.equal(isUserProfileComplete({ display_name: "user@example.com", default_relation: "보호자" }), false);
-  assert.equal(isUserProfileComplete({ display_name: "민지", default_relation: "엄마" }), true);
-  assert.equal(canSubmitUserProfile("민지", null), false);
-  assert.equal(canSubmitUserProfile("", "엄마"), false);
-  assert.equal(canSubmitUserProfile("민지", "엄마"), true);
+  assert.equal(
+    isUserProfileComplete({
+      display_name: "",
+      default_relation: "엄마",
+      residence_country: "KR",
+      preferred_language: "ko",
+    }),
+    false,
+  );
+  assert.equal(
+    isUserProfileComplete({
+      display_name: "민지",
+      default_relation: " ",
+      residence_country: "KR",
+      preferred_language: "ko",
+    }),
+    false,
+  );
+  assert.equal(
+    isUserProfileComplete({
+      display_name: "user@example.com",
+      default_relation: "보호자",
+      residence_country: "US",
+      preferred_language: "en",
+    }),
+    false,
+  );
+  assert.equal(
+    isUserProfileComplete({
+      display_name: "민지",
+      default_relation: "엄마",
+      preferred_language: "ko",
+    }),
+    false,
+  );
+  assert.equal(
+    isUserProfileComplete({
+      display_name: "민지",
+      default_relation: "엄마",
+      residence_country: "KR",
+    }),
+    false,
+  );
+  assert.equal(
+    isUserProfileComplete({
+      display_name: "민지",
+      default_relation: "엄마",
+      residence_country: "KR",
+      preferred_language: "system",
+    }),
+    true,
+  );
+  assert.equal(
+    canSubmitUserProfile({
+      displayName: "민지",
+      relation: null,
+      residenceCountry: "KR",
+      preferredLanguage: "ko",
+    }),
+    false,
+  );
+  assert.equal(
+    canSubmitUserProfile({
+      displayName: "",
+      relation: "엄마",
+      residenceCountry: "KR",
+      preferredLanguage: "ko",
+    }),
+    false,
+  );
+  assert.equal(
+    canSubmitUserProfile({
+      displayName: "민지",
+      relation: "엄마",
+      residenceCountry: "KR",
+      preferredLanguage: "system",
+    }),
+    true,
+  );
 
   for (const provider of ["email", "apple", "google", "kakao"] as const) {
     void provider;

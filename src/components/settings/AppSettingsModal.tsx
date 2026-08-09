@@ -20,9 +20,13 @@ import { useBabyLog } from "../../context/BabyLogContext";
 import { colors } from "../../theme";
 import {
   RELATIONSHIP_OPTIONS,
-  type PreferredLanguage,
   type RelationshipToChild,
 } from "../../types/careSetup";
+import {
+  APP_LANGUAGE_OPTIONS,
+  resolveAppLocale,
+  type AppLanguagePreference,
+} from "../../types/profilePreferences";
 import { NavigationHeader } from "../navigation/NavigationHeader";
 import { DataExportRepository } from "../../repositories/DataExportRepository";
 import { ContactRequestRepository } from "../../repositories/ContactRequestRepository";
@@ -162,7 +166,7 @@ export function AppSettingsModal({
   const { setLocale } = useLanguage();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [language, setLanguage] = useState<PreferredLanguage>("ko");
+  const [language, setLanguage] = useState<AppLanguagePreference>("ko");
   const [relationship, setRelationship] = useState<RelationshipToChild>("mom");
   const [accountReady, setAccountReady] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -246,18 +250,19 @@ export function AppSettingsModal({
   };
 
   const saveAccount = () => {
+    const resolvedLanguage = resolveAppLocale(language);
     const nextSetup = {
       ...careSetup,
       parent: {
         ...careSetup.parent,
         parentName: name.trim() || careSetup.parent.parentName,
-        preferredLanguage: language,
+        preferredLanguage: resolvedLanguage,
         relationshipToChild: relationship,
       },
     };
     setCareSetup(nextSetup);
     setProfile({ ...profile, name: nextSetup.parent.parentName });
-    setLocale(language);
+    setLocale(resolvedLanguage);
     applyOwnerFromSetup(nextSetup);
     setSettings((current) => ({
       ...current,
@@ -388,11 +393,8 @@ export function AppSettingsModal({
                 <ChoiceRow
                   label="언어"
                   value={language}
-                  options={[
-                    { value: "ko", label: "한국어" },
-                    { value: "en", label: "English" },
-                  ]}
-                  onChange={(value) => setLanguage(value as PreferredLanguage)}
+                  options={APP_LANGUAGE_OPTIONS}
+                  onChange={(value) => setLanguage(value as AppLanguagePreference)}
                 />
                 <ChoiceRow
                   label="아이와의 관계"

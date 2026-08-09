@@ -43,7 +43,7 @@ export const DataExportRepository = {
     const [profileResult, membersResult, careLogs, growthRecords, diaryEntries, diaryMedia,
       growthBooks, growthBookPages, growthBookMedia, growthBookComments, memoryPosts,
       memoryMedia, notificationSettings] = await Promise.all([
-      sb.from("profiles").select("id,display_name,avatar_url,preferred_language,created_at,updated_at").eq("id", user.id).maybeSingle(),
+      sb.from("profiles").select("id,display_name,nickname,avatar_url,avatar_storage_path,default_relation,residence_country,preferred_language,guardian_birth_year,created_at,updated_at").eq("id", user.id).maybeSingle(),
       sb.from("baby_members").select("permission_role,relationship_label,status,created_at").eq("baby_id", babyId),
       rows("care_logs", babyId), rows("growth_records", babyId), rows("diary_entries", babyId),
       rows("diary_media", babyId), rows("growth_books", babyId), rows("growth_book_pages", babyId),

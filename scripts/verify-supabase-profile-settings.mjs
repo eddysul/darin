@@ -95,11 +95,23 @@ try {
     display_name: "ProfileQA-A-Updated",
     nickname: "에이",
     default_relation: "엄마",
+    residence_country: "KR",
+    preferred_language: "system",
+    guardian_birth_year: 1990,
     updated_at: new Date().toISOString(),
-  }).eq("id", accountA.user.id).select("display_name, nickname").maybeSingle();
-  if (myUpdate.error || myUpdate.data?.display_name !== "ProfileQA-A-Updated") {
-    fail(`내 profile update: ${myUpdate.error?.message ?? "missing row"}`);
-  } else pass("내 profile update");
+  }).eq("id", accountA.user.id)
+    .select("display_name, nickname, default_relation, residence_country, preferred_language, guardian_birth_year")
+    .maybeSingle();
+  if (
+    myUpdate.error
+    || myUpdate.data?.display_name !== "ProfileQA-A-Updated"
+    || myUpdate.data?.default_relation !== "엄마"
+    || myUpdate.data?.residence_country !== "KR"
+    || myUpdate.data?.preferred_language !== "system"
+    || myUpdate.data?.guardian_birth_year !== 1990
+  ) {
+    fail(`내 profile onboarding preferences update: ${myUpdate.error?.message ?? "persisted values mismatch"}`);
+  } else pass("내 profile onboarding preferences update");
 
   // Other user profile update denied
   const otherUpdate = await accountB.sb.from("profiles").update({

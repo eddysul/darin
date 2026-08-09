@@ -41,6 +41,11 @@ import type { UserProfile } from "./src/types/profile";
 import type { BabyRow } from "./src/types/database";
 import type { RelationshipLabel } from "./src/types/growthBook";
 import { RELATIONSHIP_LABELS } from "./src/types/growthBook";
+import {
+  isAppLanguagePreference,
+  isResidenceCountry,
+  resolveAppLocale,
+} from "./src/types/profilePreferences";
 import { WebAppShell } from "./src/components/WebAppShell";
 import { colors } from "./src/theme";
 import { resolvePostSplashPhase } from "./src/utils/appStartup";
@@ -355,8 +360,9 @@ function RootApp() {
   }, [clearSession, prepareForLogout]);
 
   const restoreWorkspace = useCallback(async (serverBaby: BabyRow, fallbackName = "") => {
-    const [displayProfile, babyProfile, members, familyDisplays, authenticatedUser] = await Promise.all([
+    const [displayProfile, ownProfile, babyProfile, members, familyDisplays, authenticatedUser] = await Promise.all([
       ProfileRepository.getMyDisplayProfile(),
+      ProfileRepository.getMyProfile(),
       BabyProfileRepository.getBabyProfile(serverBaby.id).catch(() => null),
       FamilyRepository.listMembers(serverBaby.id),
       FamilyRepository.listMembersAsFamily(serverBaby.id).catch(() => [] as Awaited<ReturnType<typeof FamilyRepository.listMembersAsFamily>>),
@@ -377,7 +383,11 @@ function RootApp() {
           me?.relationship_label ?? displayProfile?.defaultRelation,
         ),
         postpartumStatus: careSetup.parent.postpartumStatus,
-        preferredLanguage: careSetup.parent.preferredLanguage,
+        preferredLanguage: resolveAppLocale(
+          isAppLanguagePreference(ownProfile?.preferred_language)
+            ? ownProfile.preferred_language
+            : "system",
+        ),
         avatarUri: displayProfile?.avatarUrl,
       },
       child: {
@@ -396,6 +406,13 @@ function RootApp() {
     };
     setCareSetup(restoredSetup);
     applyParentSetup(restoredSetup);
+    const storedLanguagePreference = ownProfile?.preferred_language;
+    if (isAppLanguagePreference(storedLanguagePreference)) {
+      setSettings((current) => ({
+        ...current,
+        account: { ...current.account, language: storedLanguagePreference },
+      }));
+    }
     if (familyDisplays.length) {
       const { saveFamilyMembers } = await import("./src/utils/familyMembersStore");
       await saveFamilyMembers(familyDisplays);
@@ -408,7 +425,7 @@ function RootApp() {
     setOnboardingInviteCode("");
     setOnboardingStartsWithBaby(false);
     setPhase("main");
-  }, [applyParentSetup, careSetup, hasSavedCareSetup, rehydrateFromServer, setCareSetup]);
+  }, [applyParentSetup, careSetup, hasSavedCareSetup, rehydrateFromServer, setCareSetup, setSettings]);
 
   const routeAuthenticatedSession = useCallback(async (input?: {
     name?: string;
@@ -458,6 +475,13 @@ function RootApp() {
         nickname: profile?.nickname ?? undefined,
         relation,
         avatarUrl,
+        residenceCountry: isResidenceCountry(profile?.residence_country)
+          ? profile.residence_country
+          : undefined,
+        preferredLanguage: isAppLanguagePreference(profile?.preferred_language)
+          ? profile.preferred_language
+          : undefined,
+        guardianBirthYear: profile?.guardian_birth_year ?? undefined,
       });
       setPhase("profileSetup");
       return;

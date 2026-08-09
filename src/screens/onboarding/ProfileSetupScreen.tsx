@@ -19,15 +19,27 @@ import { ProfileAvatar } from "../../components/profile/ProfileAvatar";
 import { ProfileRepository } from "../../repositories/ProfileRepository";
 import { useApp } from "../../context/AppContext";
 import { useBabyLog } from "../../context/BabyLogContext";
+import { useAppSettings } from "../../context/AppSettingsContext";
+import { useLanguage } from "../../LanguageContext";
 import type { RelationshipToChild } from "../../types/careSetup";
 import { colors, radius } from "../../theme";
 import { canSubmitUserProfile } from "../../utils/profileCompletion";
+import {
+  APP_LANGUAGE_OPTIONS,
+  RESIDENCE_COUNTRY_OPTIONS,
+  resolveAppLocale,
+  type AppLanguagePreference,
+  type ResidenceCountry,
+} from "../../types/profilePreferences";
 
 export type ProfileSetupInitial = {
   displayName?: string;
   nickname?: string;
   relation?: RelationshipLabel;
   avatarUrl?: string;
+  residenceCountry?: ResidenceCountry;
+  preferredLanguage?: AppLanguagePreference;
+  guardianBirthYear?: number;
 };
 
 function relationshipToCareValue(relation: RelationshipLabel): RelationshipToChild {
@@ -48,16 +60,35 @@ export function ProfileSetupScreen({
   const insets = useSafeAreaInsets();
   const { careSetup, setCareSetup } = useApp();
   const { applyOwnerFromSetup } = useBabyLog();
+  const { setSettings } = useAppSettings();
+  const { setLocale } = useLanguage();
   const [displayName, setDisplayName] = useState(initial.displayName ?? "");
   const [nickname, setNickname] = useState(initial.nickname ?? "");
   const [relation, setRelation] = useState<RelationshipLabel | null>(initial.relation ?? null);
+  const [residenceCountry, setResidenceCountry] = useState<ResidenceCountry | null>(
+    initial.residenceCountry ?? null,
+  );
+  const [preferredLanguage, setPreferredLanguage] = useState<AppLanguagePreference | null>(
+    initial.preferredLanguage ?? null,
+  );
+  const [guardianBirthYear, setGuardianBirthYear] = useState(
+    initial.guardianBirthYear ? String(initial.guardianBirthYear) : "",
+  );
   const [avatarUrl, setAvatarUrl] = useState(initial.avatarUrl);
   const [pickedAvatar, setPickedAvatar] = useState<PickedAvatar | null>(null);
   const [clearAvatar, setClearAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const canContinue = canSubmitUserProfile(displayName, relation) && !saving;
+  const parsedBirthYear = guardianBirthYear ? Number(guardianBirthYear) : null;
+  const birthYearValid = parsedBirthYear === null
+    || (Number.isInteger(parsedBirthYear) && parsedBirthYear >= 1900 && parsedBirthYear <= new Date().getFullYear());
+  const canContinue = canSubmitUserProfile({
+    displayName,
+    relation,
+    residenceCountry,
+    preferredLanguage,
+  }) && birthYearValid && !saving;
 
   const pickAvatar = () => {
     presentAvatarPicker({
@@ -76,7 +107,7 @@ export function ProfileSetupScreen({
   };
 
   const save = async () => {
-    if (!canContinue || !relation) return;
+    if (!canContinue || !relation || !residenceCountry || !preferredLanguage) return;
     setSaving(true);
     setError("");
     try {
@@ -84,13 +115,16 @@ export function ProfileSetupScreen({
         displayName,
         nickname,
         defaultRelation: relation,
-        preferredLanguage: careSetup.parent.preferredLanguage,
+        residenceCountry,
+        preferredLanguage,
+        guardianBirthYear: parsedBirthYear,
         avatarStoragePath: clearAvatar ? null : undefined,
         avatarUrl: clearAvatar ? null : undefined,
       });
       const uploaded = pickedAvatar
         ? await ProfileRepository.uploadMyAvatar(pickedAvatar)
         : null;
+      const resolvedLanguage = resolveAppLocale(preferredLanguage);
       const nextSetup = {
         ...careSetup,
         parent: {
@@ -98,11 +132,21 @@ export function ProfileSetupScreen({
           parentName: saved.display_name.trim(),
           nickname: saved.nickname ?? undefined,
           relationshipToChild: relationshipToCareValue(relation),
+          preferredLanguage: resolvedLanguage,
           avatarUri: uploaded?.avatarUrl ?? (clearAvatar ? undefined : avatarUrl),
         },
       };
       setCareSetup(nextSetup);
       applyOwnerFromSetup(nextSetup);
+      setLocale(resolvedLanguage);
+      setSettings((current) => ({
+        ...current,
+        account: {
+          ...current.account,
+          language: preferredLanguage,
+          relationship: relationshipToCareValue(relation),
+        },
+      }));
       await onComplete();
     } catch (cause) {
       setError(
@@ -131,7 +175,7 @@ export function ProfileSetupScreen({
       >
         <View style={styles.heading}>
           <Text style={styles.title}>내 프로필을 설정해 주세요</Text>
-          <Text style={styles.subtitle}>가족과 함께 볼 때 사용할 이름과 관계를 알려주세요.</Text>
+          <Text style={styles.subtitle}>가족과 함께 볼 때 사용할 이름과 기본 설정을 알려주세요.</Text>
         </View>
 
         <ProfileAvatar
@@ -179,6 +223,51 @@ export function ProfileSetupScreen({
               </Pressable>
             ))}
           </View>
+
+          <Text style={styles.label}>거주 국가 *</Text>
+          <Text style={styles.help}>단위와 기본 설정을 맞추는 데 사용돼요.</Text>
+          <View style={styles.chips}>
+            {RESIDENCE_COUNTRY_OPTIONS.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[styles.chip, residenceCountry === option.value && styles.chipActive]}
+                onPress={() => setResidenceCountry(option.value)}
+              >
+                <Text style={[styles.chipText, residenceCountry === option.value && styles.chipTextActive]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.label}>앱 언어 *</Text>
+          <Text style={styles.help}>앱에서 사용할 언어를 선택해 주세요.</Text>
+          <View style={styles.chips}>
+            {APP_LANGUAGE_OPTIONS.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[styles.chip, preferredLanguage === option.value && styles.chipActive]}
+                onPress={() => setPreferredLanguage(option.value)}
+              >
+                <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.label}>보호자 출생연도</Text>
+          <Text style={styles.help}>맞춤 안내를 위해 선택적으로 사용할 수 있어요.</Text>
+          <TextInput
+            style={styles.input}
+            value={guardianBirthYear}
+            onChangeText={(value) => setGuardianBirthYear(value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="선택 사항 · 예: 1990"
+            placeholderTextColor={colors.faint}
+            keyboardType="number-pad"
+            maxLength={4}
+          />
+          {!birthYearValid ? <Text style={styles.fieldError}>올바른 출생연도를 입력해 주세요.</Text> : null}
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -204,6 +293,7 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.muted, fontSize: 14, lineHeight: 21, textAlign: "center" },
   card: { padding: 16, gap: 11, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   label: { color: colors.text, fontSize: 13, fontWeight: "800", marginTop: 2 },
+  help: { color: colors.faint, fontSize: 11.5, lineHeight: 17, marginTop: -5 },
   input: { minHeight: 48, paddingHorizontal: 13, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, color: colors.text, fontSize: 15 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { minHeight: 42, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
@@ -211,6 +301,7 @@ const styles = StyleSheet.create({
   chipText: { color: colors.muted, fontSize: 12.5, fontWeight: "700" },
   chipTextActive: { color: colors.amber },
   error: { padding: 12, borderRadius: radius.md, backgroundColor: colors.dangerSoft, color: colors.dangerText, fontSize: 12.5, lineHeight: 19 },
+  fieldError: { color: colors.dangerText, fontSize: 11.5, lineHeight: 17 },
   next: { minHeight: 54, marginTop: "auto", borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
   nextText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
   disabled: { opacity: 0.45 },

@@ -66,6 +66,8 @@ export type ProfileRow = {
   avatar_url: string | null;
   avatar_storage_path: string | null;
   default_relation: string | null;
+  residence_country: string | null;
+  guardian_birth_year: number | null;
   preferred_language: string;
   created_at: string;
   updated_at: string;

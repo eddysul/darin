@@ -18,7 +18,13 @@ function extensionForMime(mimeType?: string): string {
   return "jpg";
 }
 
-function rowToDisplay(row: ProfileRow, avatarUrl?: string): DisplayProfile {
+function rowToDisplay(
+  row: Pick<
+    ProfileRow,
+    "id" | "display_name" | "nickname" | "avatar_storage_path" | "default_relation"
+  >,
+  avatarUrl?: string,
+): DisplayProfile {
   return {
     userId: row.id,
     displayName: row.display_name?.trim() || "가족",
@@ -54,6 +60,8 @@ export const ProfileRepository = {
     avatarUrl?: string | null;
     nickname?: string | null;
     defaultRelation?: string | null;
+    residenceCountry?: string | null;
+    guardianBirthYear?: number | null;
     avatarStoragePath?: string | null;
   }): Promise<ProfileRow> {
     const sb = requireSupabase();
@@ -65,6 +73,10 @@ export const ProfileRepository = {
       avatar_url: input.avatarUrl === undefined ? undefined : input.avatarUrl,
       nickname: input.nickname === undefined ? undefined : (input.nickname?.trim() || null),
       default_relation: input.defaultRelation === undefined ? undefined : input.defaultRelation,
+      residence_country:
+        input.residenceCountry === undefined ? undefined : input.residenceCountry,
+      guardian_birth_year:
+        input.guardianBirthYear === undefined ? undefined : input.guardianBirthYear,
       avatar_storage_path:
         input.avatarStoragePath === undefined ? undefined : input.avatarStoragePath,
       updated_at: new Date().toISOString(),
