@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,10 +9,13 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { DiaryReminderRepeat, DiaryReminderSettings } from "../../types/diaryReminder";
-import { DEFAULT_DIARY_REMINDER, REMINDER_PRESETS } from "../../types/diaryReminder";
+import { useAppSettings } from "../../context/AppSettingsContext";
+import { NotificationRepository } from "../../repositories/NotificationRepository";
+import { AuthRepository } from "../../repositories/AuthRepository";
+import { colors, radius } from "../../theme";
+import type { DiaryReminderSettings } from "../../types/diaryReminder";
+import { REMINDER_PRESETS } from "../../types/diaryReminder";
 import {
-  formatNextReminderLabel,
   formatReminderTime,
   matchesReminderPreset,
 } from "../../utils/diaryReminderStore";
@@ -25,9 +27,6 @@ import {
   syncDiaryReminderNotifications,
   type ReminderPermissionStatus,
 } from "../../utils/diaryReminderNotifications";
-import { colors, radius } from "../../theme";
-import { NotificationRepository } from "../../repositories/NotificationRepository";
-import { AuthRepository } from "../../repositories/AuthRepository";
 import { registerCurrentPushToken } from "../../utils/pushNotifications";
 
 type Props = {
@@ -37,23 +36,17 @@ type Props = {
   babyId?: string | null;
   onClose: () => void;
   onSave: (settings: DiaryReminderSettings) => void;
-  /** Prototype: simulate in-app push → open compose (deep-link path) */
   onTestNotification?: () => void;
 };
 
-const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
-const MINUTE_OPTIONS = [0, 10, 15, 20, 30, 40, 45, 50];
+type SectionId = "all" | "diary" | "care" | "family" | "invite" | "quiet";
 
-const REPEAT_OPTIONS: Array<{
-  value: DiaryReminderRepeat;
-  label: string;
-  enabled: boolean;
-}> = [
-  { value: "daily", label: "매일", enabled: true },
-  { value: "weekdays", label: "평일", enabled: false },
-  { value: "weekend", label: "주말", enabled: false },
-  { value: "custom", label: "요일 직접 선택", enabled: false },
-];
+const permissionLabel: Record<ReminderPermissionStatus, string> = {
+  granted: "허용됨",
+  denied: "거부됨",
+  not_determined: "아직 요청하지 않음",
+  unavailable: "사용할 수 없음",
+};
 
 export function DiaryReminderSettingsModal({
   visible,
@@ -65,65 +58,58 @@ export function DiaryReminderSettingsModal({
   onTestNotification,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const [enabled, setEnabled] = useState(value.enabled);
-  const [hour, setHour] = useState(value.hour);
-  const [minute, setMinute] = useState(value.minute);
-  const [repeat, setRepeat] = useState<DiaryReminderRepeat>(value.repeat ?? "daily");
+  const { settings, setSettings } = useAppSettings();
+  const [draft, setDraft] = useState(value);
   const [permission, setPermission] = useState<ReminderPermissionStatus>("not_determined");
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [draftHour, setDraftHour] = useState(value.hour);
-  const [draftMinute, setDraftMinute] = useState(value.minute);
+  const [expanded, setExpanded] = useState<SectionId | null>("all");
   const [busy, setBusy] = useState(false);
-  const [familyActivityEnabled, setFamilyActivityEnabled] = useState(value.familyActivityEnabled ?? true);
-  const [inviteActivityEnabled, setInviteActivityEnabled] = useState(value.inviteActivityEnabled ?? true);
-  const [quietHoursEnabled, setQuietHoursEnabled] = useState(value.quietHoursEnabled ?? false);
-  const [showPreview, setShowPreview] = useState(value.showPreview ?? true);
-  const [serverMessage, setServerMessage] = useState("");
+  const [message, setMessage] = useState("");
+
+  const careEnabled = settings.notifications.feedingEnabled || settings.notifications.sleepEnabled;
+  const allEnabled = draft.enabled
+    || careEnabled
+    || Boolean(draft.familyActivityEnabled)
+    || Boolean(draft.inviteActivityEnabled)
+    || Boolean(draft.quietHoursEnabled);
 
   useEffect(() => {
     if (!visible) return;
-    setEnabled(value.enabled);
-    setHour(value.hour);
-    setMinute(value.minute);
-    setRepeat(value.repeat ?? "daily");
-    setFamilyActivityEnabled(value.familyActivityEnabled ?? true);
-    setInviteActivityEnabled(value.inviteActivityEnabled ?? true);
-    setQuietHoursEnabled(value.quietHoursEnabled ?? false);
-    setShowPreview(value.showPreview ?? true);
-    setServerMessage("");
-    setPickerOpen(false);
-    void getReminderPermissionStatus().then(setPermission);
-    if (babyId) {
-      void NotificationRepository.getSettings(babyId).then((server) => {
+    setDraft(value);
+    setExpanded("all");
+    setMessage("");
+    void getReminderPermissionStatus().then(setPermission).catch(() => setPermission("unavailable"));
+    if (!babyId) return;
+    void NotificationRepository.getSettings(babyId)
+      .then((server) => {
         if (!server) return;
-        setEnabled(server.diaryReminderEnabled);
-        setHour(server.diaryReminderHour);
-        setMinute(server.diaryReminderMinute);
-        setFamilyActivityEnabled(server.familyActivityEnabled);
-        setInviteActivityEnabled(server.inviteActivityEnabled);
-        setQuietHoursEnabled(server.quietHoursEnabled);
-        setShowPreview(server.showPreview);
-      }).catch(() => setServerMessage("서버 설정을 불러오지 못했어요. 기기 설정은 계속 사용할 수 있어요."));
-    }
-  }, [babyId, visible, value]);
+        setDraft((current) => ({
+          ...current,
+          enabled: server.diaryReminderEnabled,
+          hour: server.diaryReminderHour,
+          minute: server.diaryReminderMinute,
+          familyActivityEnabled: server.familyActivityEnabled,
+          inviteActivityEnabled: server.inviteActivityEnabled,
+          quietHoursEnabled: server.quietHoursEnabled,
+          showPreview: server.showPreview,
+        }));
+      })
+      .catch(() => setMessage("서버 설정을 불러오지 못했어요. 기기 설정은 계속 사용할 수 있어요."));
+    // Opening the sheet is the only load trigger. Saving must not start another fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [babyId, visible]);
 
-  const presetId = matchesReminderPreset(hour, minute);
-  const scheduleLabel = formatReminderTime(hour, minute);
-  const nextLabel = formatNextReminderLabel(hour, minute);
+  const previewBody = useMemo(() => `자기 전 ${babyName}와의 순간을 남겨보세요.`, [babyName]);
 
-  const previewBody = useMemo(
-    () => `자기 전 ${babyName}와의 순간을 남겨보세요.`,
-    [babyName],
-  );
-
-  const persist = async (next: DiaryReminderSettings) => {
+  const persistReminder = async (next: DiaryReminderSettings) => {
+    setDraft(next);
+    onSave(next);
     setBusy(true);
+    setMessage("");
     try {
       await syncDiaryReminderNotifications(next, {
         title: "오늘 하루 어땠나요?",
         body: previewBody,
       });
-      onSave(next);
       if (babyId) {
         const user = await AuthRepository.getUser();
         if (user) {
@@ -134,582 +120,331 @@ export function DiaryReminderSettingsModal({
             diaryReminderHour: next.hour,
             diaryReminderMinute: next.minute,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-            familyActivityEnabled: next.familyActivityEnabled ?? familyActivityEnabled,
-            inviteActivityEnabled: next.inviteActivityEnabled ?? inviteActivityEnabled,
-            quietHoursEnabled: next.quietHoursEnabled ?? quietHoursEnabled,
+            familyActivityEnabled: next.familyActivityEnabled ?? true,
+            inviteActivityEnabled: next.inviteActivityEnabled ?? true,
+            quietHoursEnabled: next.quietHoursEnabled ?? false,
             quietHoursStart: next.quietHoursStart ?? "22:00",
             quietHoursEnd: next.quietHoursEnd ?? "07:00",
-            showPreview: next.showPreview ?? showPreview,
+            showPreview: next.showPreview ?? true,
           });
-          setServerMessage("설정이 저장됐어요.");
         }
       }
     } catch {
-      setServerMessage("서버 설정 저장에 실패했어요. 연결을 확인하고 다시 시도해주세요.");
+      setMessage("일부 설정을 저장하지 못했어요. 연결을 확인하고 다시 시도해주세요.");
     } finally {
       setBusy(false);
     }
   };
 
-  const handleToggle = async (nextEnabled: boolean) => {
-    if (nextEnabled) {
+  const enableWithPermission = async () => {
+    setBusy(true);
+    try {
       const status = await requestReminderPermission();
       setPermission(status);
-      if (status !== "granted") {
-        setEnabled(false);
-        await cancelDiaryReminderNotifications();
-        await persist({
-          ...value,
-          enabled: false,
-          hour,
-          minute,
-          repeat,
-        });
-        return;
-      }
+      if (status !== "granted") return false;
       void registerCurrentPushToken();
-    } else {
-      await cancelDiaryReminderNotifications();
+      return true;
+    } finally {
+      setBusy(false);
     }
-    setEnabled(nextEnabled);
-    await persist({
-      ...value,
-      enabled: nextEnabled,
-      hour,
-      minute,
-      repeat,
-    });
   };
 
-  const applyTime = async (nextHour: number, nextMinute: number) => {
-    setHour(nextHour);
-    setMinute(nextMinute);
-    await persist({
-      ...value,
-      enabled,
-      hour: nextHour,
-      minute: nextMinute,
-      repeat,
-    });
+  const toggleAll = async (next: boolean) => {
+    if (next && !(await enableWithPermission())) {
+      setExpanded("all");
+      return;
+    }
+    if (!next) await cancelDiaryReminderNotifications();
+    setSettings((current) => ({
+      ...current,
+      notifications: {
+        ...current.notifications,
+        feedingEnabled: next ? current.notifications.feedingEnabled : false,
+        sleepEnabled: next ? current.notifications.sleepEnabled : false,
+      },
+    }));
+    const nextDraft: DiaryReminderSettings = next
+      ? { ...draft, enabled: true }
+      : {
+          ...draft,
+          enabled: false,
+          familyActivityEnabled: false,
+          inviteActivityEnabled: false,
+          quietHoursEnabled: false,
+        };
+    setExpanded(next ? "all" : null);
+    await persistReminder(nextDraft);
   };
 
-  const handleSaveAndClose = async () => {
-    await persist({
-      ...value,
-      enabled,
-      hour,
-      minute,
-      repeat,
-      familyActivityEnabled,
-      inviteActivityEnabled,
-      quietHoursEnabled,
-      quietHoursStart: value.quietHoursStart ?? "22:00",
-      quietHoursEnd: value.quietHoursEnd ?? "07:00",
-      showPreview,
-    });
-    onClose();
+  const toggleDiary = async (next: boolean) => {
+    if (next && !(await enableWithPermission())) return;
+    setExpanded(next ? "diary" : null);
+    await persistReminder({ ...draft, enabled: next });
+  };
+
+  const toggleCare = (next: boolean) => {
+    setSettings((current) => ({
+      ...current,
+      notifications: {
+        ...current.notifications,
+        feedingEnabled: next,
+        sleepEnabled: next,
+      },
+    }));
+    setExpanded(next ? "care" : null);
+  };
+
+  const toggleReminderField = (
+    id: "family" | "invite" | "quiet",
+    key: "familyActivityEnabled" | "inviteActivityEnabled" | "quietHoursEnabled",
+    next: boolean,
+  ) => {
+    setExpanded(next ? id : null);
+    void persistReminder({ ...draft, [key]: next });
+  };
+
+  const setReminderTime = (hour: number, minute: number) => {
+    void persistReminder({ ...draft, hour, minute });
+  };
+
+  const setQuietTime = (key: "quietHoursStart" | "quietHoursEnd", time: string) => {
+    void persistReminder({ ...draft, [key]: time });
   };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.header}>
-          <Pressable onPress={onClose} hitSlop={10}>
-            <Text style={styles.headerBtn}>닫기</Text>
-          </Pressable>
+          <Pressable onPress={onClose} hitSlop={10}><Text style={styles.headerButton}>닫기</Text></Pressable>
           <Text style={styles.headerTitle}>알림 설정</Text>
-          <Pressable onPress={() => void handleSaveAndClose()} hitSlop={10} disabled={busy}>
-            <Text style={styles.saveBtn}>완료</Text>
-          </Pressable>
+          <View style={styles.headerSpacer} />
         </View>
-
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.heroCard}>
-            <Text style={styles.heroTitle}>알림</Text>
-            <Text style={styles.heroBody}>필요한 순간만 다정하게 알려드릴게요.</Text>
-            <View style={styles.toggleRow}>
-              <Text style={styles.toggleLabel}>알림 켜기</Text>
+          <Text style={styles.intro}>받고 싶은 알림만 켜고, 필요한 설정은 바로 아래에서 조정하세요.</Text>
+
+          <NotificationRow
+            id="all"
+            title="전체 알림"
+            description="알림 권한과 미리보기를 확인해요."
+            enabled={allEnabled}
+            expanded={expanded === "all"}
+            busy={busy}
+            onToggle={(next) => void toggleAll(next)}
+            onExpand={() => setExpanded(expanded === "all" ? null : "all")}
+          >
+            <DetailLine label="권한 상태" value={permissionLabel[permission]} />
+            <DetailLine label="미리보기" value={draft.showPreview === false ? "끔" : "켬"} />
+            <View style={styles.inlineSwitchRow}>
+              <Text style={styles.detailLabel}>잠금 화면 미리보기</Text>
               <Switch
-                value={enabled}
-                onValueChange={(next) => void handleToggle(next)}
-                trackColor={{ false: colors.border, true: colors.amber }}
-                thumbColor="#FFFFFF"
+                value={draft.showPreview !== false}
+                onValueChange={(showPreview) => void persistReminder({ ...draft, showPreview })}
                 disabled={busy}
               />
             </View>
-            <Text style={styles.permissionStatus}>
-              권한 상태 · {permission === "granted" ? "허용됨" : permission === "denied" ? "거부됨" : permission === "unavailable" ? "사용 불가" : "아직 요청하지 않음"}
-            </Text>
-          </View>
-
-          {!enabled ? (
-            <View style={styles.offCard}>
-              <Text style={styles.offTitle}>알림이 꺼져 있어요</Text>
-              <Text style={styles.offBody}>알림을 켜면 시간, 반복, 가족 소식과 조용한 시간을 설정할 수 있어요.</Text>
-            </View>
-          ) : null}
-
-          <View style={!enabled && styles.hidden}>
-          <Text style={styles.sectionTitle}>언제 알려드릴까요?</Text>
-          <View style={styles.presetGrid}>
-            {REMINDER_PRESETS.map((preset) => {
-              const active = presetId === preset.id;
-              return (
-                <Pressable
-                  key={preset.id}
-                  style={[
-                    styles.presetChip,
-                    active && styles.presetChipActive,
-                    !enabled && styles.disabledSoft,
-                  ]}
-                  disabled={!enabled || busy}
-                  onPress={() => void applyTime(preset.hour, preset.minute)}
-                >
-                  <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>
-                    {preset.label}
-                    {preset.recommended ? " 추천" : ""}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              style={[
-                styles.presetChip,
-                presetId === "custom" && styles.presetChipActive,
-                !enabled && styles.disabledSoft,
-              ]}
-              disabled={!enabled || busy}
-              onPress={() => {
-                setDraftHour(hour);
-                setDraftMinute(minute);
-                setPickerOpen(true);
-              }}
-            >
-              <Text
-                style={[
-                  styles.presetChipText,
-                  presetId === "custom" && styles.presetChipTextActive,
-                ]}
-              >
-                직접 설정
-              </Text>
-            </Pressable>
-          </View>
-
-          <View style={[styles.card, !enabled && styles.disabledSoft]}>
-            <Text style={styles.cardEyebrow}>선택된 시간</Text>
-            <Text style={styles.selectedTime}>{scheduleLabel}</Text>
-            <Pressable
-              style={styles.changeTimeBtn}
-              disabled={!enabled || busy}
-              onPress={() => {
-                setDraftHour(hour);
-                setDraftMinute(minute);
-                setPickerOpen(true);
-              }}
-            >
-              <Text style={styles.changeTimeText}>시간 변경하기</Text>
-            </Pressable>
-          </View>
-
-          <Text style={styles.sectionTitle}>반복</Text>
-          <View style={styles.repeatRow}>
-            {REPEAT_OPTIONS.map((option) => {
-              const active = repeat === option.value;
-              const locked = !option.enabled;
-              return (
-                <Pressable
-                  key={option.value}
-                  style={[
-                    styles.repeatChip,
-                    active && styles.repeatChipActive,
-                    (locked || !enabled) && styles.disabledSoft,
-                  ]}
-                  disabled={locked || !enabled || busy}
-                  onPress={() => {
-                    if (!option.enabled) return;
-                    setRepeat(option.value);
-                    void persist({
-                      ...value,
-                      enabled,
-                      hour,
-                      minute,
-                      repeat: option.value,
-                    });
-                  }}
-                >
-                  <Text style={[styles.repeatChipText, active && styles.repeatChipTextActive]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={styles.hint}>MVP에서는 매일 알림만 예약돼요.</Text>
-
-          <Text style={styles.sectionTitle}>가족 소식</Text>
-          <View style={styles.card}>
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleCopy}>
-                <Text style={styles.toggleLabel}>댓글·반응 알림</Text>
-                <Text style={styles.toggleHint}>추억과 성장책에 가족이 남긴 소식</Text>
-              </View>
-              <Switch value={familyActivityEnabled} onValueChange={setFamilyActivityEnabled} trackColor={{ false: colors.border, true: colors.amber }} />
-            </View>
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleCopy}>
-                <Text style={styles.toggleLabel}>가족 참여 알림</Text>
-                <Text style={styles.toggleHint}>초대한 가족이 참여했을 때</Text>
-              </View>
-              <Switch value={inviteActivityEnabled} onValueChange={setInviteActivityEnabled} trackColor={{ false: colors.border, true: colors.amber }} />
-            </View>
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleCopy}>
-                <Text style={styles.toggleLabel}>알림 내용 미리보기</Text>
-                <Text style={styles.toggleHint}>잠금 화면에 안전한 요약만 표시</Text>
-              </View>
-              <Switch value={showPreview} onValueChange={setShowPreview} trackColor={{ false: colors.border, true: colors.amber }} />
-            </View>
-          </View>
-
-          <Text style={styles.sectionTitle}>방해 금지</Text>
-          <View style={styles.card}>
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleCopy}>
-                <Text style={styles.toggleLabel}>조용한 시간</Text>
-                <Text style={styles.toggleHint}>밤 10시부터 오전 7시까지 가족 알림을 쉬어요.</Text>
-              </View>
-              <Switch value={quietHoursEnabled} onValueChange={setQuietHoursEnabled} trackColor={{ false: colors.border, true: colors.amber }} />
-            </View>
-          </View>
-
-          {serverMessage ? <Text style={styles.serverMessage}>{serverMessage}</Text> : null}
-
-          <View style={styles.previewCard}>
-            <Text style={styles.cardEyebrow}>알림 미리보기</Text>
-            <Text style={styles.previewTitle}>오늘 하루 어땠나요?</Text>
-            <Text style={styles.previewBody}>{previewBody}</Text>
-            <Text style={styles.previewFoot}>
-              알림을 누르면 목록이 아니라 오늘 일기 작성 화면으로 바로 열려요.
-            </Text>
-          </View>
-
-          {enabled && permission !== "granted" ? (
-            <View style={styles.permissionCard}>
-              <Text style={styles.permissionTitle}>알림 권한이 꺼져 있어요.</Text>
-              <Text style={styles.permissionBody}>
-                기기 설정에서 알림을 허용해야 받을 수 있어요.
-              </Text>
-              <Pressable style={styles.settingsBtn} onPress={() => void openDeviceNotificationSettings()}>
-                <Text style={styles.settingsBtnText}>설정 열기</Text>
+            {permission !== "granted" ? (
+              <Pressable style={styles.secondaryButton} onPress={() => void openDeviceNotificationSettings()}>
+                <Text style={styles.secondaryButtonText}>시스템 설정 열기</Text>
               </Pressable>
-            </View>
-          ) : null}
+            ) : null}
+          </NotificationRow>
 
-          {enabled && permission === "granted" ? (
-            <View style={styles.nextCard}>
-              <Text style={styles.cardEyebrow}>다음 알림</Text>
-              <Text style={styles.nextTime}>{nextLabel}</Text>
-            </View>
-          ) : null}
-
-          {onTestNotification ? (
-            <Pressable
-              style={styles.testBtn}
-              accessibilityRole="button"
-              accessibilityLabel="알림 테스트"
-              onPress={() => {
-                onTestNotification();
-                onClose();
-              }}
-            >
-              <Text style={styles.testBtnText}>알림 테스트 · 오늘 일기 열기</Text>
-            </Pressable>
-          ) : null}
-
-          <Pressable
-            style={styles.resetBtn}
-            onPress={() => {
-              setEnabled(DEFAULT_DIARY_REMINDER.enabled);
-              setHour(DEFAULT_DIARY_REMINDER.hour);
-              setMinute(DEFAULT_DIARY_REMINDER.minute);
-              setRepeat("daily");
-              void persist({ ...DEFAULT_DIARY_REMINDER, lastFiredDateKey: value.lastFiredDateKey });
-            }}
+          <NotificationRow
+            id="diary"
+            title="일기 리마인더"
+            description="하루를 돌아볼 시간을 알려드려요."
+            enabled={draft.enabled}
+            expanded={expanded === "diary"}
+            busy={busy}
+            onToggle={(next) => void toggleDiary(next)}
+            onExpand={() => setExpanded(expanded === "diary" ? null : "diary")}
           >
-            <Text style={styles.resetBtnText}>기본값으로 (매일 밤 9시)</Text>
-          </Pressable>
-          </View>
-        </ScrollView>
-
-        {pickerOpen ? (
-          <View style={styles.sheetOverlay}>
-            <Pressable style={styles.sheetBackdrop} onPress={() => setPickerOpen(false)} />
-            <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-              <View style={styles.sheetHandle} />
-              <Text style={styles.sheetTitle}>시간 변경</Text>
-              <Text style={styles.sheetSub}>원하는 시·분을 고른 뒤 적용해 주세요.</Text>
-
-              <Text style={styles.pickerLabel}>시</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.pickerRow}
-              >
-                {HOUR_OPTIONS.map((h) => {
-                  const active = draftHour === h;
-                  return (
-                    <Pressable
-                      key={h}
-                      style={[styles.pickerChip, active && styles.pickerChipActive]}
-                      onPress={() => setDraftHour(h)}
-                    >
-                      <Text style={[styles.pickerChipText, active && styles.pickerChipTextActive]}>
-                        {String(h).padStart(2, "0")}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-
-              <Text style={styles.pickerLabel}>분</Text>
-              <View style={styles.pickerRowWrap}>
-                {MINUTE_OPTIONS.map((m) => {
-                  const active = draftMinute === m;
-                  return (
-                    <Pressable
-                      key={m}
-                      style={[styles.pickerChip, active && styles.pickerChipActive]}
-                      onPress={() => setDraftMinute(m)}
-                    >
-                      <Text style={[styles.pickerChipText, active && styles.pickerChipTextActive]}>
-                        {String(m).padStart(2, "0")}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Pressable
-                style={styles.applyBtn}
-                onPress={() => {
-                  setPickerOpen(false);
-                  void applyTime(draftHour, draftMinute);
-                }}
-              >
-                <Text style={styles.applyBtnText}>
-                  {formatReminderTime(draftHour, draftMinute)} 적용
-                </Text>
-              </Pressable>
-              {Platform.OS === "ios" ? <View style={{ height: 4 }} /> : null}
+            <DetailLine label="요일" value="매일" />
+            <Text style={styles.detailLabel}>시간</Text>
+            <View style={styles.choiceWrap}>
+              {REMINDER_PRESETS.map((preset) => {
+                const selected = matchesReminderPreset(draft.hour, draft.minute) === preset.id;
+                return (
+                  <Pressable key={preset.id} style={[styles.choice, selected && styles.choiceOn]} onPress={() => setReminderTime(preset.hour, preset.minute)} disabled={busy}>
+                    <Text style={[styles.choiceText, selected && styles.choiceTextOn]}>{preset.label}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          </View>
-        ) : null}
+            <Text style={styles.detailFoot}>현재 {formatReminderTime(draft.hour, draft.minute)} · 매일 예약</Text>
+            {onTestNotification ? (
+              <Pressable style={styles.secondaryButton} onPress={onTestNotification}>
+                <Text style={styles.secondaryButtonText}>알림 미리보기 보내기</Text>
+              </Pressable>
+            ) : null}
+          </NotificationRow>
+
+          <NotificationRow
+            id="care"
+            title="수유·수면 알림"
+            description="다음 돌봄 시간을 놓치지 않게 도와요."
+            enabled={careEnabled}
+            expanded={expanded === "care"}
+            busy={busy}
+            onToggle={toggleCare}
+            onExpand={() => setExpanded(expanded === "care" ? null : "care")}
+          >
+            <IntervalSetting label="수유 간격" value={settings.notifications.feedingIntervalMinutes} options={[120, 180, 240]} onChange={(feedingIntervalMinutes) => setSettings((current) => ({ ...current, notifications: { ...current.notifications, feedingEnabled: true, feedingIntervalMinutes } }))} />
+            <IntervalSetting label="수면 간격" value={settings.notifications.sleepIntervalMinutes} options={[90, 120, 180]} onChange={(sleepIntervalMinutes) => setSettings((current) => ({ ...current, notifications: { ...current.notifications, sleepEnabled: true, sleepIntervalMinutes } }))} />
+          </NotificationRow>
+
+          <NotificationRow
+            id="family"
+            title="가족 소식"
+            description="가족이 남긴 댓글과 반응을 알려드려요."
+            enabled={draft.familyActivityEnabled ?? true}
+            expanded={expanded === "family"}
+            busy={busy}
+            onToggle={(next) => toggleReminderField("family", "familyActivityEnabled", next)}
+            onExpand={() => setExpanded(expanded === "family" ? null : "family")}
+          >
+            <DetailLine label="댓글 알림" value="켬" />
+            <DetailLine label="반응 알림" value="켬" />
+          </NotificationRow>
+
+          <NotificationRow
+            id="invite"
+            title="초대/참여 알림"
+            description="초대한 가족이나 친구의 참여 소식을 받아요."
+            enabled={draft.inviteActivityEnabled ?? true}
+            expanded={expanded === "invite"}
+            busy={busy}
+            onToggle={(next) => toggleReminderField("invite", "inviteActivityEnabled", next)}
+            onExpand={() => setExpanded(expanded === "invite" ? null : "invite")}
+          >
+            <Text style={styles.detailBody}>초대 수락과 가족 참여 상태가 바뀌면 알려드려요.</Text>
+          </NotificationRow>
+
+          <NotificationRow
+            id="quiet"
+            title="조용한 시간대"
+            description="정한 시간에는 가족 소식 알림을 쉬어요."
+            enabled={draft.quietHoursEnabled ?? false}
+            expanded={expanded === "quiet"}
+            busy={busy}
+            onToggle={(next) => toggleReminderField("quiet", "quietHoursEnabled", next)}
+            onExpand={() => setExpanded(expanded === "quiet" ? null : "quiet")}
+          >
+            <TimeSetting label="시작 시간" value={draft.quietHoursStart ?? "22:00"} options={["21:00", "22:00", "23:00"]} onChange={(time) => setQuietTime("quietHoursStart", time)} />
+            <TimeSetting label="종료 시간" value={draft.quietHoursEnd ?? "07:00"} options={["06:00", "07:00", "08:00"]} onChange={(time) => setQuietTime("quietHoursEnd", time)} />
+          </NotificationRow>
+
+          {message ? <Text style={styles.message}>{message}</Text> : null}
+        </ScrollView>
       </View>
     </Modal>
   );
 }
 
+function NotificationRow({
+  id,
+  title,
+  description,
+  enabled,
+  expanded,
+  busy,
+  onToggle,
+  onExpand,
+  children,
+}: {
+  id: SectionId;
+  title: string;
+  description: string;
+  enabled: boolean;
+  expanded: boolean;
+  busy: boolean;
+  onToggle: (next: boolean) => void;
+  onExpand: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.rowCard}>
+      <View style={styles.rowHeader}>
+        <Pressable
+          style={styles.rowCopy}
+          onPress={onExpand}
+          disabled={!enabled}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: enabled && expanded, disabled: !enabled }}
+          accessibilityLabel={`${title} 상세 ${expanded ? "접기" : "펼치기"}`}
+        >
+          <Text style={styles.rowTitle}>{title}</Text>
+          <Text style={styles.rowDescription}>{description}</Text>
+          {enabled ? <Text style={styles.expandHint}>{expanded ? "접기 ︿" : "자세히 보기 ﹀"}</Text> : null}
+        </Pressable>
+        <Switch
+          testID={`notification-toggle-${id}`}
+          value={enabled}
+          onValueChange={onToggle}
+          disabled={busy}
+          trackColor={{ false: colors.border, true: colors.amber }}
+          thumbColor="#FFFFFF"
+        />
+      </View>
+      {enabled && expanded ? <View style={styles.details}>{children}</View> : null}
+    </View>
+  );
+}
+
+function DetailLine({ label, value }: { label: string; value: string }) {
+  return <View style={styles.detailLine}><Text style={styles.detailLabel}>{label}</Text><Text style={styles.detailValue}>{value}</Text></View>;
+}
+
+function IntervalSetting({ label, value, options, onChange }: { label: string; value: number; options: number[]; onChange: (value: number) => void }) {
+  return (
+    <View style={styles.optionBlock}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <View style={styles.choiceWrap}>{options.map((option) => <Pressable key={option} style={[styles.choice, value === option && styles.choiceOn]} onPress={() => onChange(option)}><Text style={[styles.choiceText, value === option && styles.choiceTextOn]}>{option / 60}시간</Text></Pressable>)}</View>
+    </View>
+  );
+}
+
+function TimeSetting({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return (
+    <View style={styles.optionBlock}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <View style={styles.choiceWrap}>{options.map((option) => <Pressable key={option} style={[styles.choice, value === option && styles.choiceOn]} onPress={() => onChange(option)}><Text style={[styles.choiceText, value === option && styles.choiceTextOn]}>{option}</Text></Pressable>)}</View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerBtn: { fontSize: 15, fontWeight: "600", color: colors.muted, minWidth: 48 },
-  headerTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
-  saveBtn: { fontSize: 15, fontWeight: "800", color: colors.amber, minWidth: 48, textAlign: "right" },
-  content: { paddingHorizontal: 18, paddingTop: 16 },
-  heroCard: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.xl,
-    padding: 16,
-    marginBottom: 18,
-  },
-  heroTitle: { fontSize: 20, fontWeight: "800", color: colors.text, letterSpacing: -0.3 },
-  heroBody: { marginTop: 6, fontSize: 13.5, lineHeight: 20, color: colors.muted },
-  offCard: { backgroundColor: colors.cardHi, borderRadius: radius.lg, padding: 16, marginBottom: 18, borderWidth: 1, borderColor: colors.border },
-  offTitle: { color: colors.text, fontSize: 15, fontWeight: "800" },
-  offBody: { color: colors.muted, fontSize: 12.5, lineHeight: 18, marginTop: 5 },
-  hidden: { display: "none" },
-  toggleRow: {
-    marginTop: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  toggleLabel: { fontSize: 15, fontWeight: "700", color: colors.text },
-  toggleCopy: { flex: 1, paddingRight: 12 },
-  toggleHint: { marginTop: 3, fontSize: 11.5, lineHeight: 16, color: colors.faint },
-  serverMessage: { marginBottom: 14, textAlign: "center", fontSize: 12, color: colors.muted },
-  permissionStatus: { marginTop: 10, fontSize: 11.5, color: colors.faint },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: colors.text,
-    marginBottom: 10,
-  },
-  presetGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  presetChip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  presetChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  presetChipText: { fontSize: 13, fontWeight: "700", color: colors.muted },
-  presetChipTextActive: { color: colors.amber },
-  card: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    padding: 16,
-    marginBottom: 18,
-  },
-  cardEyebrow: { fontSize: 11.5, fontWeight: "800", color: colors.amber, marginBottom: 6 },
-  selectedTime: { fontSize: 22, fontWeight: "800", color: colors.text, letterSpacing: -0.3 },
-  changeTimeBtn: {
-    marginTop: 12,
-    alignSelf: "flex-start",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.cardHi,
-  },
-  changeTimeText: { fontSize: 13, fontWeight: "700", color: colors.text },
-  repeatRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 6 },
-  repeatChip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  repeatChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  repeatChipText: { fontSize: 12.5, fontWeight: "700", color: colors.muted },
-  repeatChipTextActive: { color: colors.amber },
-  hint: { fontSize: 12, color: colors.faint, marginBottom: 16 },
-  previewCard: {
-    backgroundColor: "#FFF8F4",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    padding: 16,
-    marginBottom: 12,
-  },
-  previewTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
-  previewBody: { marginTop: 6, fontSize: 13.5, lineHeight: 20, color: colors.muted },
-  previewFoot: { marginTop: 12, fontSize: 12, lineHeight: 18, color: colors.faint },
-  permissionCard: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.lg,
-    padding: 14,
-    marginBottom: 12,
-  },
-  permissionTitle: { fontSize: 14, fontWeight: "800", color: colors.dangerText },
-  permissionBody: { marginTop: 4, fontSize: 12.5, lineHeight: 18, color: colors.muted },
-  settingsBtn: {
-    marginTop: 12,
-    alignSelf: "flex-start",
-    backgroundColor: colors.amber,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  settingsBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 },
-  nextCard: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    padding: 14,
-    marginBottom: 8,
-  },
-  nextTime: { fontSize: 18, fontWeight: "800", color: colors.text },
-  testBtn: {
-    marginTop: 14,
-    alignItems: "center",
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  testBtnText: { fontSize: 13, fontWeight: "700", color: colors.muted },
-  resetBtn: { marginTop: 8, paddingVertical: 10, alignItems: "center" },
-  resetBtnText: { fontSize: 12.5, fontWeight: "600", color: colors.faint },
-  disabledSoft: { opacity: 0.45 },
-  sheetOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "flex-end",
-    zIndex: 30,
-  },
-  sheetBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.4)",
-  },
-  sheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    paddingHorizontal: 18,
-    paddingTop: 10,
-  },
-  sheetHandle: {
-    alignSelf: "center",
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
-    marginBottom: 12,
-  },
-  sheetTitle: { fontSize: 17, fontWeight: "800", color: colors.text },
-  sheetSub: { marginTop: 4, marginBottom: 14, fontSize: 12.5, color: colors.muted },
-  pickerLabel: {
-    fontSize: 11.5,
-    fontWeight: "800",
-    color: colors.faint,
-    letterSpacing: 0.4,
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  pickerRow: { gap: 8, paddingRight: 8, marginBottom: 12 },
-  pickerRowWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  pickerChip: {
-    minWidth: 48,
-    alignItems: "center",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  pickerChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  pickerChipText: { fontSize: 14, fontWeight: "700", color: colors.muted },
-  pickerChipTextActive: { color: colors.text },
-  applyBtn: {
-    backgroundColor: colors.amber,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 4,
-  },
-  applyBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 14.5 },
+  header: { minHeight: 48, paddingHorizontal: 16, paddingBottom: 10, flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  headerButton: { minWidth: 52, color: colors.amber, fontSize: 15, fontWeight: "800" },
+  headerTitle: { flex: 1, textAlign: "center", color: colors.text, fontSize: 17, fontWeight: "800" },
+  headerSpacer: { width: 52 },
+  content: { paddingHorizontal: 16, paddingTop: 16, gap: 10 },
+  intro: { marginBottom: 4, color: colors.muted, fontSize: 13, lineHeight: 20 },
+  rowCard: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" },
+  rowHeader: { minHeight: 78, paddingHorizontal: 14, paddingVertical: 13, flexDirection: "row", alignItems: "center", gap: 12 },
+  rowCopy: { flex: 1 },
+  rowTitle: { color: colors.text, fontSize: 15, fontWeight: "800" },
+  rowDescription: { marginTop: 4, color: colors.muted, fontSize: 11.5, lineHeight: 17 },
+  expandHint: { marginTop: 6, color: colors.amberDark, fontSize: 11, fontWeight: "700" },
+  details: { padding: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, backgroundColor: colors.backgroundSecondary, gap: 12 },
+  detailLine: { minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  detailLabel: { flex: 1, color: colors.text, fontSize: 13, fontWeight: "700" },
+  detailValue: { color: colors.muted, fontSize: 13, fontWeight: "700" },
+  detailBody: { color: colors.muted, fontSize: 12.5, lineHeight: 20 },
+  detailFoot: { color: colors.faint, fontSize: 11.5, lineHeight: 18 },
+  inlineSwitchRow: { minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  optionBlock: { gap: 8 },
+  choiceWrap: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  choice: { minHeight: 34, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, backgroundColor: colors.card },
+  choiceOn: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  choiceText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
+  choiceTextOn: { color: colors.amberDark },
+  secondaryButton: { minHeight: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  secondaryButtonText: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  message: { padding: 12, color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center" },
 });

@@ -70,7 +70,6 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
     localDataScope,
   } = useBabyLog();
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
-  const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const [quickRecordsOpen, setQuickRecordsOpen] = useState(false);
@@ -191,7 +190,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
             icon="bell"
             title="알림 설정"
             subtitle="전체·일기·돌봄·가족 소식 알림"
-            onPress={() => setNotificationSettingsOpen(true)}
+            onPress={() => setReminderOpen(true)}
           />
         </MenuSection>
 
@@ -311,83 +310,6 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         onSaveSticker={addBabySticker}
         onDeleteSticker={deleteBabySticker}
       />
-
-      <Modal
-        visible={notificationSettingsOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setNotificationSettingsOpen(false)}
-      >
-        <Pressable style={styles.overlay} onPress={() => setNotificationSettingsOpen(false)}>
-          <Pressable style={styles.notificationCard} onPress={(event) => event.stopPropagation()}>
-            <Text style={styles.notificationTitle}>알림 설정</Text>
-            <Text style={styles.notificationBody}>필요한 알림을 한 곳에서 관리해요.</Text>
-            <ScrollView
-              style={styles.notificationScroller}
-              contentContainerStyle={styles.notificationList}
-              showsVerticalScrollIndicator={false}
-            >
-              <MenuRow
-                icon="bell"
-                title="전체 알림"
-                subtitle="알림 켜기·권한·미리보기"
-                onPress={() => {
-                  setNotificationSettingsOpen(false);
-                  setReminderOpen(true);
-                }}
-              />
-              <MenuRow
-                icon="bell"
-                title="일기 리마인더"
-                subtitle="기록을 돌아볼 요일과 시간 설정"
-                onPress={() => {
-                  setNotificationSettingsOpen(false);
-                  setReminderOpen(true);
-                }}
-              />
-              <MenuRow
-                icon="clock"
-                title="수유·수면 알림"
-                subtitle="돌봄 간격과 다음 알림 설정"
-                onPress={() => {
-                  setNotificationSettingsOpen(false);
-                  onOpenSettings("careAlerts");
-                }}
-              />
-              <MenuRow
-                icon="family"
-                title="가족 소식"
-                subtitle="댓글·반응 알림"
-                onPress={() => {
-                  setNotificationSettingsOpen(false);
-                  setReminderOpen(true);
-                }}
-              />
-              <MenuRow
-                icon="family"
-                title="초대/참여 알림"
-                subtitle="초대한 가족이 참여했을 때"
-                onPress={() => {
-                  setNotificationSettingsOpen(false);
-                  setReminderOpen(true);
-                }}
-              />
-              <MenuRow
-                icon="clock"
-                title="조용한 시간대"
-                subtitle="밤 시간 가족 알림 쉬기"
-                onPress={() => {
-                  setNotificationSettingsOpen(false);
-                  setReminderOpen(true);
-                }}
-              />
-            </ScrollView>
-            <Pressable style={styles.notificationClose} onPress={() => setNotificationSettingsOpen(false)}>
-              <Text style={styles.notificationCloseText}>닫기</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       <Modal visible={deleteOpen} transparent animationType="fade" onRequestClose={() => !deleting && setDeleteOpen(false)}>
         <View style={styles.overlay}>

@@ -63,6 +63,83 @@ export const SETTINGS_PAGE_TITLES: Record<SettingsPage, string> = {
   legal: "이용약관 및 개인정보 안내",
 };
 
+const LEGAL_ACCORDION_SECTIONS: Array<{
+  title: string;
+  paragraphs: Array<[string, string]>;
+}> = [
+  {
+    title: "서비스 목적",
+    paragraphs: [
+      ["서비스 목적", "Darin은 보호자의 육아 기록, 일기, 성장책과 초대된 가족 간 공유를 돕는 beta 서비스입니다."],
+      ["서비스 변경", "beta 기간에는 기능이 변경되거나 점검을 위해 일시 중단될 수 있습니다."],
+      ["문의", "서비스 관련 문의는 설정의 문의하기를 이용해주세요."],
+    ],
+  },
+  {
+    title: "사용자 책임",
+    paragraphs: [
+      ["계정과 기록", "사용자는 계정과 초대 링크를 안전하게 관리하고 입력한 기록의 정확성과 적법성에 책임을 집니다."],
+      ["계정 삭제", "설정에서 계정 삭제를 요청할 수 있으며 공유 데이터는 다른 가족의 권리에 따라 일부 보존될 수 있습니다."],
+      ["면책", "서비스와 AI 안내는 의료 진단이나 응급 판단을 제공하지 않으며 사용자는 필요한 경우 의료 전문가에게 문의해야 합니다."],
+    ],
+  },
+  {
+    title: "가족 공유",
+    paragraphs: [
+      ["초대 책임", "사용자는 데이터 공유에 동의한 사람만 초대하고 적절한 역할을 설정해야 합니다."],
+      ["공유 범위", "아기의 활성 구성원만 공유 데이터에 접근합니다. 역할과 각 콘텐츠의 공개 범위에 따라 조회·작성·관리 권한이 달라집니다."],
+    ],
+  },
+  {
+    title: "사진·기록 업로드",
+    paragraphs: [
+      ["업로드 책임", "본인이 사용할 권한이 있는 사진과 기록만 업로드해야 하며 타인의 권리를 침해해서는 안 됩니다."],
+      ["사진·미디어 처리", "사용자가 선택한 일기·성장책·추억 사진과 관련 metadata를 비공개 Storage에 저장합니다. 접근 권한이 있는 가족에게만 제한된 signed URL을 발급합니다."],
+    ],
+  },
+  {
+    title: "금지 행위",
+    paragraphs: [["금지되는 사용", "무단 접근, 타인 사칭, 불법 콘텐츠 업로드, 서비스 안정성을 해치는 행위를 금지합니다."]],
+  },
+  {
+    title: "개인정보처리방침",
+    paragraphs: [
+      ["안내", "Darin은 육아 기록과 가족 공유에 필요한 정보를 처리합니다. 아래 내용은 beta용 앱 내 안내 초안이며 외부 공개 전 법률 검토가 필요합니다."],
+      ["수집하는 정보", "로그인 식별 정보, 프로필 이름과 표시 이름, 아기 프로필, 수유·수면·기저귀·성장 기록, 일기와 성장책, 추억 및 가족 공유 정보를 처리합니다."],
+      ["알림 정보", "알림 허용 시 기기 식별자와 Expo push token, 알림 설정 및 전송 상태를 처리합니다."],
+      ["사용 목적", "기록 저장과 복원, 가족 공유, 요약 제공, 알림 전송, 고객 문의 처리를 위해 사용합니다."],
+      ["보관 및 삭제", "계정 삭제 시 개인 설정과 멤버십을 제거합니다. 혼자 관리하는 아기 데이터는 삭제하며, 공유 아기 데이터는 다른 가족을 위해 보존하고 작성자는 ‘탈퇴한 사용자’로 표시할 수 있습니다."],
+      ["계정 삭제 방법", "설정의 계정 삭제에서 안내를 확인하고 ‘삭제’를 입력해 요청할 수 있습니다."],
+      ["문의", "설정의 문의하기를 이용할 수 있습니다. 문의 내용에는 민감한 아기 건강정보를 입력하지 않는 것을 권장합니다."],
+      ["시행일", "beta 안내 시행일: 2026년 8월 3일"],
+    ],
+  },
+  {
+    title: "데이터 보존 및 삭제",
+    paragraphs: [
+      ["안내", "현재 beta에서 적용되는 데이터 보존·삭제 정책입니다. 실제 구현과 함께 갱신하며 외부 공개 전 법률 검토가 필요합니다."],
+      ["개인 계정", "계정 삭제 시 profile, 알림 token·설정과 baby membership을 제거하고 Auth 계정을 삭제합니다."],
+      ["공유 아기 데이터", "다른 활성 가족이 있으면 아기 기록은 보존되고 탈퇴자의 작성자 식별값은 제거됩니다."],
+      ["혼자 관리하는 아기", "다른 활성 구성원이 없는 아기는 관련 기록·일기·성장책·추억 DB 데이터와 비공개 미디어를 삭제합니다."],
+      ["Soft delete", "사용자가 앱에서 삭제한 일부 일기·성장책·추억은 복원과 동기화 안전성을 위해 soft delete로 처리될 수 있습니다."],
+      ["로컬 캐시", "로그아웃 시 화면 상태를 비우고 계정별 cache를 격리합니다. 계정 삭제에서 이 기기의 로컬 데이터 삭제를 선택할 수 있습니다."],
+      ["알림", "계정 삭제 시 push token과 알림 설정을 삭제합니다. 일반 로그아웃 시 현재 기기의 token을 비활성화합니다."],
+      ["문의", "문의 기록은 지원 이력 관리를 위해 계정 식별값을 제거한 뒤 보존될 수 있습니다."],
+      ["가족 탈퇴", "가족 구성원이 탈퇴하면 membership과 접근 권한이 제거되며 다른 가족의 공유 데이터는 유지됩니다."],
+    ],
+  },
+  {
+    title: "Medical Disclaimer",
+    paragraphs: [
+      ["안내", "Darin은 육아 기록과 가족 공유를 돕는 도구이며 의료 서비스가 아닙니다."],
+      ["진단·치료 아님", "앱은 의료 진단, 치료 계획 또는 응급 여부 판단을 제공하지 않습니다."],
+      ["기록의 성격", "수유·수면·성장·체온·약 기록과 요약은 보호자가 참고하기 위한 정보입니다."],
+      ["AI 안내", "AI 답변은 일반적인 참고 정보이며 의료 전문가의 진료나 판단을 대체하지 않습니다."],
+      ["도움이 필요한 경우", "걱정되는 증상이나 응급 상황이 있다면 지역의 소아과, 의료기관 또는 응급서비스에 문의해주세요."],
+    ],
+  },
+];
+
 export function AppSettingsModal({
   page,
   onClose,
@@ -93,6 +170,7 @@ export function AppSettingsModal({
   const [contactMessage, setContactMessage] = useState("");
   const [contactBusy, setContactBusy] = useState(false);
   const [contactStatus, setContactStatus] = useState("");
+  const [openLegalSection, setOpenLegalSection] = useState<string | null>(null);
 
   const accountDirty = page === "account" && accountReady && (
     name !== (careSetup.parent.parentName || profile.name) ||
@@ -100,6 +178,10 @@ export function AppSettingsModal({
     language !== settings.account.language ||
     relationship !== settings.account.relationship
   );
+
+  useEffect(() => {
+    if (page !== "legal") setOpenLegalSection(null);
+  }, [page]);
 
   useEffect(() => {
     if (page !== "account") {
@@ -453,63 +535,23 @@ export function AppSettingsModal({
 
           {page === "legal" ? (
             <>
-              <Text style={styles.help}>
-                App Store 심사와 사용자 신뢰를 위해 이용약관·개인정보·의료 안내·데이터 보존 정책을 앱 안에서 확인할 수 있어요.
-              </Text>
-              <Text style={styles.legalSectionTitle}>이용약관</Text>
-              <PolicyDocument
-                lead="이 내용은 무료 beta/internal TestFlight를 위한 이용약관 초안입니다. 수익화 전에 별도 업데이트와 법률 검토가 필요합니다."
-                sections={[
-                  ["서비스 목적", "Darin은 보호자의 육아 기록, 일기, 성장책과 초대된 가족 간 공유를 돕는 beta 서비스입니다."],
-                  ["사용자 책임", "사용자는 계정과 초대 링크를 안전하게 관리하고 입력한 기록의 정확성과 적법성에 책임을 집니다."],
-                  ["가족 공유", "사용자는 데이터 공유에 동의한 사람만 초대하고 적절한 역할을 설정해야 합니다."],
-                  ["사진·기록 업로드", "본인이 사용할 권한이 있는 사진과 기록만 업로드해야 하며 타인의 권리를 침해해서는 안 됩니다."],
-                  ["금지 행위", "무단 접근, 타인 사칭, 불법 콘텐츠 업로드, 서비스 안정성을 해치는 행위를 금지합니다."],
-                  ["서비스 변경", "beta 기간에는 기능이 변경되거나 점검을 위해 일시 중단될 수 있습니다."],
-                  ["계정 삭제", "설정에서 계정 삭제를 요청할 수 있으며 공유 데이터는 다른 가족의 권리에 따라 일부 보존될 수 있습니다."],
-                  ["면책", "서비스와 AI 안내는 의료 진단이나 응급 판단을 제공하지 않으며 사용자는 필요한 경우 의료 전문가에게 문의해야 합니다."],
-                  ["문의", "서비스 관련 문의는 설정의 문의하기를 이용해주세요."],
-                ]}
-              />
-              <Text style={styles.legalSectionTitle}>개인정보처리방침</Text>
-              <PolicyDocument
-                lead="Darin은 육아 기록과 가족 공유에 필요한 정보를 처리합니다. 아래 내용은 beta용 앱 내 안내 초안이며 외부 공개 전 법률 검토가 필요합니다."
-                sections={[
-                  ["수집하는 정보", "로그인 식별 정보, 프로필 이름과 표시 이름, 아기 프로필, 수유·수면·기저귀·성장 기록, 일기와 성장책, 추억 및 가족 공유 정보를 처리합니다."],
-                  ["사진·미디어", "사용자가 선택한 일기·성장책·추억 사진과 관련 metadata를 비공개 Storage에 저장합니다. 접근 권한이 있는 가족에게만 제한된 signed URL을 발급합니다."],
-                  ["알림 정보", "알림 허용 시 기기 식별자와 Expo push token, 알림 설정 및 전송 상태를 처리합니다."],
-                  ["사용 목적", "기록 저장과 복원, 가족 공유, 요약 제공, 알림 전송, 고객 문의 처리를 위해 사용합니다."],
-                  ["가족 공유 범위", "아기의 활성 구성원만 공유 데이터에 접근합니다. 역할과 각 콘텐츠의 공개 범위에 따라 조회·작성·관리 권한이 달라집니다."],
-                  ["보관 및 삭제", "계정 삭제 시 개인 설정과 멤버십을 제거합니다. 혼자 관리하는 아기 데이터는 삭제하며, 공유 아기 데이터는 다른 가족을 위해 보존하고 작성자는 ‘탈퇴한 사용자’로 표시할 수 있습니다."],
-                  ["계정 삭제 방법", "설정의 계정 삭제에서 안내를 확인하고 ‘삭제’를 입력해 요청할 수 있습니다."],
-                  ["문의", "설정의 문의하기를 이용할 수 있습니다. 문의 내용에는 민감한 아기 건강정보를 입력하지 않는 것을 권장합니다."],
-                  ["시행일", "beta 안내 시행일: 2026년 8월 3일"],
-                ]}
-              />
-              <Text style={styles.legalSectionTitle}>의료 정보 안내</Text>
-              <PolicyDocument
-                lead="Darin은 육아 기록과 가족 공유를 돕는 도구이며 의료 서비스가 아닙니다."
-                sections={[
-                  ["진단·치료 아님", "앱은 의료 진단, 치료 계획 또는 응급 여부 판단을 제공하지 않습니다."],
-                  ["기록의 성격", "수유·수면·성장·체온·약 기록과 요약은 보호자가 참고하기 위한 정보입니다."],
-                  ["AI 안내", "AI 답변은 일반적인 참고 정보이며 의료 전문가의 진료나 판단을 대체하지 않습니다."],
-                  ["도움이 필요한 경우", "걱정되는 증상이나 응급 상황이 있다면 지역의 소아과, 의료기관 또는 응급서비스에 문의해주세요."],
-                ]}
-              />
-              <Text style={styles.legalSectionTitle}>데이터 보존 및 삭제 안내</Text>
-              <PolicyDocument
-                lead="현재 beta에서 적용되는 데이터 보존·삭제 정책입니다. 실제 구현과 함께 갱신하며 외부 공개 전 법률 검토가 필요합니다."
-                sections={[
-                  ["개인 계정", "계정 삭제 시 profile, 알림 token·설정과 baby membership을 제거하고 Auth 계정을 삭제합니다."],
-                  ["공유 아기 데이터", "다른 활성 가족이 있으면 아기 기록은 보존되고 탈퇴자의 작성자 식별값은 제거됩니다."],
-                  ["혼자 관리하는 아기", "다른 활성 구성원이 없는 아기는 관련 기록·일기·성장책·추억 DB 데이터와 비공개 미디어를 삭제합니다."],
-                  ["Soft delete", "사용자가 앱에서 삭제한 일부 일기·성장책·추억은 복원과 동기화 안전성을 위해 soft delete로 처리될 수 있습니다."],
-                  ["로컬 캐시", "로그아웃 시 화면 상태를 비우고 계정별 cache를 격리합니다. 계정 삭제에서 이 기기의 로컬 데이터 삭제를 선택할 수 있습니다."],
-                  ["알림", "계정 삭제 시 push token과 알림 설정을 삭제합니다. 일반 로그아웃 시 현재 기기의 token을 비활성화합니다."],
-                  ["문의", "문의 기록은 지원 이력 관리를 위해 계정 식별값을 제거한 뒤 보존될 수 있습니다."],
-                  ["가족 탈퇴", "가족 구성원이 탈퇴하면 membership과 접근 권한이 제거되며 다른 가족의 공유 데이터는 유지됩니다."],
-                ]}
-              />
+              <View style={styles.legalIntro}>
+                <Text style={styles.policyLead}>Beta/internal TestFlight용 정책 안내 초안입니다.</Text>
+                <Text style={styles.help}>이 내용은 무료 beta/internal TestFlight를 위한 이용약관 초안입니다. 수익화 전에 별도 업데이트와 법률 검토가 필요합니다.</Text>
+                <Text style={styles.help}>필요한 항목만 펼쳐 읽을 수 있어요.</Text>
+                <Text style={styles.legalUpdated}>마지막 업데이트 · 2026년 8월 3일</Text>
+                <Text style={styles.help}>문의는 설정의 ‘문의하기’를 이용해주세요.</Text>
+              </View>
+              {LEGAL_ACCORDION_SECTIONS.map((section) => (
+                <PolicyAccordion
+                  key={section.title}
+                  title={section.title}
+                  open={openLegalSection === section.title}
+                  onPress={() => setOpenLegalSection((current) => current === section.title ? null : section.title)}
+                  paragraphs={section.paragraphs}
+                />
+              ))}
+              <Text style={styles.policyFootnote}>Beta 앱 내 안내 초안 · 외부 공개 및 정식 출시 전 법률 검토 필요</Text>
             </>
           ) : null}
 
@@ -700,6 +742,43 @@ function PolicyDocument({ lead, sections }: { lead: string; sections: Array<[str
   );
 }
 
+function PolicyAccordion({
+  title,
+  open,
+  onPress,
+  paragraphs,
+}: {
+  title: string;
+  open: boolean;
+  onPress: () => void;
+  paragraphs: Array<[string, string]>;
+}) {
+  return (
+    <View style={styles.accordionCard}>
+      <Pressable
+        style={styles.accordionHeader}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${title} ${open ? "접기" : "펼치기"}`}
+      >
+        <Text style={styles.accordionTitle}>{title}</Text>
+        <Text style={styles.accordionChevron}>{open ? "︿" : "﹀"}</Text>
+      </Pressable>
+      {open ? (
+        <View style={styles.accordionBody}>
+          {paragraphs.map(([heading, body]) => (
+            <View key={heading} style={styles.accordionParagraph}>
+              <Text style={styles.policyTitle}>{heading}</Text>
+              <Text style={styles.policyBody}>{body}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function PrimaryButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable style={styles.primaryButton} onPress={onPress}>
@@ -755,6 +834,14 @@ const styles = StyleSheet.create({
   stateButtonTextOn: { color: colors.text },
   help: { color: colors.muted, fontSize: 12.5, lineHeight: 19 },
   legalSectionTitle: { marginTop: 18, marginBottom: 8, color: colors.text, fontSize: 16, fontWeight: "800" },
+  legalIntro: { gap: 7, marginBottom: 2 },
+  legalUpdated: { color: colors.faint, fontSize: 11.5, lineHeight: 18, fontWeight: "700" },
+  accordionCard: { borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  accordionHeader: { minHeight: 58, paddingHorizontal: 15, flexDirection: "row", alignItems: "center", gap: 12 },
+  accordionTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800" },
+  accordionChevron: { color: colors.muted, fontSize: 15, fontWeight: "800" },
+  accordionBody: { padding: 15, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 17, backgroundColor: colors.backgroundSecondary },
+  accordionParagraph: { gap: 6 },
   accountEmailHelp: { paddingHorizontal: 14, paddingVertical: 10 },
   primaryButton: { minHeight: 50, borderRadius: 15, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
   primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
