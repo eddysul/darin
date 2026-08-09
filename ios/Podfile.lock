@@ -19,6 +19,8 @@ PODS:
     - ExpoModulesCore
   - ExpoAsset (11.0.5):
     - ExpoModulesCore
+  - ExpoClipboard (7.0.1):
+    - ExpoModulesCore
   - ExpoFileSystem (18.0.12):
     - ExpoModulesCore
   - ExpoFont (13.0.4):
@@ -1688,6 +1690,7 @@ DEPENDENCIES:
   - "Expo (from `../node_modules/.pnpm/expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core@7.29.7__@expo+metr_f2fc0b443ddbc5e5e7b16a9ede4ece84/node_modules/expo`)"
   - "ExpoAppleAuthentication (from `../node_modules/.pnpm/expo-apple-authentication@7.1.3_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29._e0f9c7424429e738898ce5ab9ef348fa/node_modules/expo-apple-authentication/ios`)"
   - "ExpoAsset (from `../node_modules/.pnpm/expo-asset@11.0.5_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core@_fff7f31db0327a03d444ffd29e9a01ba/node_modules/expo-asset/ios`)"
+  - "ExpoClipboard (from `../node_modules/.pnpm/expo-clipboard@7.0.1_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+co_c7bff7da530f36527db5a6520e4c8686/node_modules/expo-clipboard/ios`)"
   - "ExpoFileSystem (from `../node_modules/.pnpm/expo-file-system@18.0.12_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babe_504ce5a22fe461592970a3cf90f1a0fb/node_modules/expo-file-system/ios`)"
   - "ExpoFont (from `../node_modules/.pnpm/expo-font@13.0.4_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core@7_8131bacf19875f64597c5f7d0e6e69c3/node_modules/expo-font/ios`)"
   - "ExpoImage (from `../node_modules/.pnpm/expo-image@2.0.7_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core@7_1d8b4cb785ed1d9342a0e263b63b0ce7/node_modules/expo-image/ios`)"
@@ -1799,6 +1802,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/.pnpm/expo-apple-authentication@7.1.3_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29._e0f9c7424429e738898ce5ab9ef348fa/node_modules/expo-apple-authentication/ios"
   ExpoAsset:
     :path: "../node_modules/.pnpm/expo-asset@11.0.5_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core@_fff7f31db0327a03d444ffd29e9a01ba/node_modules/expo-asset/ios"
+  ExpoClipboard:
+    :path: "../node_modules/.pnpm/expo-clipboard@7.0.1_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+co_c7bff7da530f36527db5a6520e4c8686/node_modules/expo-clipboard/ios"
   ExpoFileSystem:
     :path: "../node_modules/.pnpm/expo-file-system@18.0.12_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babe_504ce5a22fe461592970a3cf90f1a0fb/node_modules/expo-file-system/ios"
   ExpoFont:
@@ -1968,6 +1973,7 @@ SPEC CHECKSUMS:
   Expo: 4bb70893882e6382b41d1e910d7226c6a1b85f0a
   ExpoAppleAuthentication: 52631ed9dcb71c65712a447bbb9a5667bb8fcf0c
   ExpoAsset: 48386d40d53a8c1738929b3ed509bcad595b5516
+  ExpoClipboard: 44fd1c8959ee8f6175d059dc011b154c9709a969
   ExpoFileSystem: 42d363d3b96f9afab980dcef60d5657a4443c655
   ExpoFont: f354e926f8feae5e831ec8087f36652b44a0b188
   ExpoImage: d840b256050f4428d2942bc2b6e9251f9e0d7021
