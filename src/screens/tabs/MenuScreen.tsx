@@ -176,6 +176,12 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         <Text style={styles.subtitle}>계정과 기록 방식을 한 곳에서 관리해요.</Text>
 
         <MenuSection title="아기/가족">
+          <MenuRow
+            icon="profile"
+            title="내 프로필"
+            subtitle="사진·표시 이름·닉네임·관계"
+            onPress={() => (onOpenMyProfile ? onOpenMyProfile() : setAccountSettingsOpen(true))}
+          />
           <MenuRow icon="baby" title="아기 프로필" subtitle="사진·이름·별명·생년월일 관리" onPress={onOpenProfile} />
           <MenuRow icon="family" title="가족·친구 공유" subtitle="구성원·친구·초대코드를 한 곳에서 관리" onPress={onOpenFamilyShare} />
         </MenuSection>
@@ -184,52 +190,51 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
           <MenuRow
             icon="bell"
             title="알림 설정"
-            subtitle="일기 리마인더·수유·수면 알림"
+            subtitle="전체·일기·돌봄·가족 소식 알림"
             onPress={() => setNotificationSettingsOpen(true)}
           />
         </MenuSection>
 
         <MenuSection title="기록 설정">
-          <MenuRow icon="interval" title="성장 기록 관리" subtitle="키·몸무게·머리둘레 기록" onPress={onOpenGrowthRecords} />
-          {onOpenGrowthBookStorage ? <MenuRow icon="folder" title="성장책 보관함" subtitle="담긴 기록·미리보기·PDF 관리" onPress={onOpenGrowthBookStorage} /> : null}
-          <MenuRow icon="folder" title="데이터 내보내기" subtitle="현재 아기 기록을 JSON으로 공유" onPress={() => onOpenSettings("dataExport")} />
           <MenuRow icon="edit" title="기록 카테고리 설정" subtitle="표시·순서·기본 6개 관리" onPress={() => onOpenSettings("categories")} />
           <MenuRow icon="sparkles" title="자주 쓰는 기록" subtitle="기본값 빠른 기록 관리" onPress={() => setQuickRecordsOpen(true)} />
           <MenuRow icon="clock" title="스탑워치 설정" subtitle="타이머 종류와 복원 방식" onPress={() => onOpenSettings("timers")} />
           <MenuRow icon="interval" title="단위 설정" subtitle="ml/oz·kg/lb·°C/°F·cm/inch" onPress={() => onOpenSettings("units")} />
           <MenuRow icon="clock" title="시간 설정" subtitle="시간 표시·하루/주 시작·아기 나이" onPress={() => onOpenSettings("time")} />
+          <MenuRow icon="interval" title="성장 기록 관리" subtitle="키·몸무게·머리둘레 기록" onPress={onOpenGrowthRecords} />
         </MenuSection>
 
         <MenuSection title="꾸미기/성장책">
           <MenuRow icon="baby" title="내 아기 스티커" subtitle="스티커 만들기와 보관함" onPress={() => setStickerOpen(true)} />
+          {onOpenGrowthBookStorage ? (
+            <MenuRow icon="folder" title="성장책 보관함" subtitle="담긴 기록·미리보기·PDF 관리" onPress={onOpenGrowthBookStorage} />
+          ) : null}
           <MenuRow icon="folder" title="성장책 설정" subtitle="날짜·작성자·기본 레이아웃" onPress={() => onOpenSettings("growthBook")} />
         </MenuSection>
 
         <MenuSection title="구독">
-          <MenuRow icon="check" title="결제/구독" subtitle="플랜과 구매 복원" onPress={() => onOpenSettings("billing")} />
+          <MenuRow
+            icon="check"
+            title="결제/구독"
+            subtitle="출시 준비 중 · 지금은 무료로 이용할 수 있어요"
+            onPress={() => Alert.alert("결제/구독", "유료 상품은 출시 준비 중이에요. 지금은 무료로 이용할 수 있어요.")}
+          />
         </MenuSection>
 
-        <MenuSection title="데이터/정책">
-          <MenuRow icon="folder" title="개인정보처리방침" subtitle="수집·보관·삭제 안내" onPress={() => onOpenSettings("privacy")} />
-          <MenuRow icon="folder" title="이용약관" subtitle="무료 beta 서비스 이용 안내" onPress={() => onOpenSettings("terms")} />
-          <MenuRow icon="check" title="Medical Disclaimer" subtitle="의료·AI 안내의 참고 범위" onPress={() => onOpenSettings("medical")} />
-          <MenuRow icon="folder" title="데이터 보존 및 삭제" subtitle="공유·탈퇴·로컬 cache 처리" onPress={() => onOpenSettings("retention")} />
+        <MenuSection title="정책/지원">
+          <MenuRow
+            icon="folder"
+            title="이용약관 및 개인정보 안내"
+            subtitle="약관·개인정보·의료·데이터 보존"
+            onPress={() => onOpenSettings("legal")}
+          />
           <MenuRow icon="edit" title="문의하기" subtitle="앱 내 문의 또는 이메일" onPress={() => onOpenSettings("contact")} />
         </MenuSection>
 
         {__DEV__ ? <QaDebugPanel trigger="menu" /> : null}
 
         <MenuSection title="계정">
-          {AuthRepository.isAnonymousUser(authUser) ? (
-            <MenuRow icon="profile" title="이메일 계정 연결" subtitle="현재 아기와 기록을 그대로 보호" onPress={() => setEmailAuthOpen(true)} />
-          ) : null}
-          <MenuRow
-            icon="profile"
-            title="내 프로필"
-            subtitle="사진·표시 이름·닉네임·관계"
-            onPress={() => (onOpenMyProfile ? onOpenMyProfile() : setAccountSettingsOpen(true))}
-          />
-          <MenuRow icon="profile" title="계정 설정" subtitle="이메일·언어 등 계정 옵션" onPress={() => setAccountSettingsOpen(true)} />
+          <MenuRow icon="profile" title="계정 설정" subtitle="로그인 방식·연결·데이터 관리" onPress={() => setAccountSettingsOpen(true)} />
           <MenuRow icon="logout" title="로그아웃" subtitle="로그인 화면으로 이동" onPress={confirmLogout} disabled={loggingOut} />
           <MenuRow
             icon="trash"
@@ -254,7 +259,12 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         </MenuSection>
       </ScrollView>
 
-      <AppSettingsModal page={accountSettingsOpen ? "account" : null} onClose={() => setAccountSettingsOpen(false)} />
+      <AppSettingsModal
+        page={accountSettingsOpen ? "account" : null}
+        onClose={() => setAccountSettingsOpen(false)}
+        canConnectEmail={AuthRepository.isAnonymousUser(authUser)}
+        onConnectEmail={() => setEmailAuthOpen(true)}
+      />
 
       <EmailAuthModal
         visible={emailAuthOpen}
@@ -312,7 +322,20 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
           <Pressable style={styles.notificationCard} onPress={(event) => event.stopPropagation()}>
             <Text style={styles.notificationTitle}>알림 설정</Text>
             <Text style={styles.notificationBody}>필요한 알림을 한 곳에서 관리해요.</Text>
-            <View style={styles.notificationList}>
+            <ScrollView
+              style={styles.notificationScroller}
+              contentContainerStyle={styles.notificationList}
+              showsVerticalScrollIndicator={false}
+            >
+              <MenuRow
+                icon="bell"
+                title="전체 알림"
+                subtitle="알림 켜기·권한·미리보기"
+                onPress={() => {
+                  setNotificationSettingsOpen(false);
+                  setReminderOpen(true);
+                }}
+              />
               <MenuRow
                 icon="bell"
                 title="일기 리마인더"
@@ -331,7 +354,34 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
                   onOpenSettings("careAlerts");
                 }}
               />
-            </View>
+              <MenuRow
+                icon="family"
+                title="가족 소식"
+                subtitle="댓글·반응 알림"
+                onPress={() => {
+                  setNotificationSettingsOpen(false);
+                  setReminderOpen(true);
+                }}
+              />
+              <MenuRow
+                icon="family"
+                title="초대/참여 알림"
+                subtitle="초대한 가족이 참여했을 때"
+                onPress={() => {
+                  setNotificationSettingsOpen(false);
+                  setReminderOpen(true);
+                }}
+              />
+              <MenuRow
+                icon="clock"
+                title="조용한 시간대"
+                subtitle="밤 시간 가족 알림 쉬기"
+                onPress={() => {
+                  setNotificationSettingsOpen(false);
+                  setReminderOpen(true);
+                }}
+              />
+            </ScrollView>
             <Pressable style={styles.notificationClose} onPress={() => setNotificationSettingsOpen(false)}>
               <Text style={styles.notificationCloseText}>닫기</Text>
             </Pressable>
@@ -463,9 +513,10 @@ const styles = StyleSheet.create({
   dangerTitle: { color: colors.dangerText },
   rowSubtitle: { color: colors.faint, fontSize: 11.5, marginTop: 3 },
   overlay: { flex: 1, justifyContent: "center", padding: 22, backgroundColor: "rgba(30,26,23,0.48)" },
-  notificationCard: { borderRadius: radius.xl, backgroundColor: colors.card, padding: 20, gap: 8 },
+  notificationCard: { borderRadius: radius.xl, backgroundColor: colors.card, padding: 20, gap: 8, maxHeight: "88%" },
   notificationTitle: { fontSize: 20, fontWeight: "900", color: colors.text },
   notificationBody: { color: colors.muted, fontSize: 13, marginBottom: 8 },
+  notificationScroller: { maxHeight: 420 },
   notificationList: { borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
   notificationClose: { minHeight: 46, marginTop: 8, borderRadius: radius.full, backgroundColor: colors.cardHi, alignItems: "center", justifyContent: "center" },
   notificationCloseText: { color: colors.text, fontSize: 14, fontWeight: "800" },
