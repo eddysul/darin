@@ -22,6 +22,9 @@ import type { RelationshipLabel } from "../../types/growthBook";
 import type { InviteType } from "../../types/database";
 import { FamilyRepository } from "../../repositories/FamilyRepository";
 import { colors, radius } from "../../theme";
+import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
+import { RecordDatePickerModal } from "../../components/babylog/RecordDatePickerModal";
+import { formatDateKey, offsetDateKey } from "../../utils/dateKey";
 import {
   OnboardingField,
   OnboardingOptionRow,
@@ -93,6 +96,7 @@ export function OnboardingFlow({
   const [inviteCode, setInviteCode] = useState(initialInviteCode);
   const [inviteError, setInviteError] = useState("");
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
+  const [datePickerTarget, setDatePickerTarget] = useState<"birthDate" | "dueDate" | null>(null);
 
   const setParent = <K extends keyof CareSetup["parent"]>(key: K, value: CareSetup["parent"][K]) =>
     setSetup((s) => ({ ...s, parent: { ...s.parent, [key]: value } }));
@@ -386,22 +390,18 @@ export function OnboardingFlow({
 
         {born ? (
           <OnboardingField label="생년월일" required>
-            <TextInput
-              style={onboardingInputStyle}
-              value={setup.child.birthDate ?? ""}
-              onChangeText={(v) => setChild("birthDate", v || undefined)}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.faint}
+            <DatePickerField
+              value={setup.child.birthDate}
+              label="생년월일 선택"
+              onPress={() => setDatePickerTarget("birthDate")}
             />
           </OnboardingField>
         ) : (
           <OnboardingField label="예정일" required>
-            <TextInput
-              style={onboardingInputStyle}
-              value={setup.child.dueDate ?? ""}
-              onChangeText={(v) => setChild("dueDate", v || undefined)}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.faint}
+            <DatePickerField
+              value={setup.child.dueDate}
+              label="예정일 선택"
+              onPress={() => setDatePickerTarget("dueDate")}
             />
           </OnboardingField>
         )}
@@ -430,12 +430,10 @@ export function OnboardingFlow({
               />
             </OnboardingField>
             <OnboardingField label="예정일" optional>
-              <TextInput
-                style={onboardingInputStyle}
-                value={setup.child.dueDate ?? ""}
-                onChangeText={(v) => setChild("dueDate", v || undefined)}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.faint}
+              <DatePickerField
+                value={setup.child.dueDate}
+                label="예정일 선택"
+                onPress={() => setDatePickerTarget("dueDate")}
               />
             </OnboardingField>
           </>
@@ -474,6 +472,22 @@ export function OnboardingFlow({
             ) : null}
           </View>
         </OnboardingField>
+
+        <RecordDatePickerModal
+          visible={datePickerTarget !== null}
+          selectedDateKey={
+            (datePickerTarget === "birthDate" ? setup.child.birthDate : setup.child.dueDate)
+              || formatDateKey()
+          }
+          minDateKey={formatDateKey(new Date(new Date().getFullYear() - 18, 0, 1), "midnight")}
+          maxDateKey={datePickerTarget === "birthDate" ? formatDateKey() : offsetDateKey(formatDateKey(), 365)}
+          title={datePickerTarget === "birthDate" ? "생년월일 선택" : "예정일 선택"}
+          onSelect={(dateKey) => {
+            if (datePickerTarget === "birthDate") setChild("birthDate", dateKey);
+            if (datePickerTarget === "dueDate") setChild("dueDate", dateKey);
+          }}
+          onClose={() => setDatePickerTarget(null)}
+        />
       </OnboardingShell>
     );
   }
@@ -570,6 +584,30 @@ export function OnboardingFlow({
   );
 }
 
+function DatePickerField({
+  value,
+  label,
+  onPress,
+}: {
+  value?: string;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={[onboardingInputStyle, styles.dateField]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Text style={[styles.dateFieldText, !value && styles.datePlaceholder]}>
+        {value || "날짜를 선택해 주세요"}
+      </Text>
+      <BabyLogIcon kind="calendar" size={18} color={colors.amber} />
+    </Pressable>
+  );
+}
+
 function ChoiceCard({
   title,
   body,
@@ -600,6 +638,9 @@ const styles = StyleSheet.create({
   hint: { fontSize: 12.5, color: colors.faint, lineHeight: 18, marginTop: 4, marginBottom: 8 },
   error: { color: colors.dangerText, fontSize: 13, fontWeight: "600", marginBottom: 8 },
   codeInput: { letterSpacing: 4, fontWeight: "800", textAlign: "center", fontSize: 20 },
+  dateField: { minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  dateFieldText: { color: colors.text, fontSize: 15, fontWeight: "600" },
+  datePlaceholder: { color: colors.faint, fontWeight: "500" },
   choice: {
     borderRadius: 18,
     borderWidth: 1.5,
