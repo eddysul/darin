@@ -8,8 +8,8 @@
       "distribution": "store",
       "environment": "production",
       "env": {
-        "EXPO_PUBLIC_SHOW_GOOGLE_LOGIN": "false",
-        "EXPO_PUBLIC_ENABLE_GOOGLE_LOGIN": "false"
+        "EXPO_PUBLIC_SHOW_GOOGLE_LOGIN": "true",
+        "EXPO_PUBLIC_ENABLE_GOOGLE_LOGIN": "true"
       },
       "ios": {
         "image": "latest"

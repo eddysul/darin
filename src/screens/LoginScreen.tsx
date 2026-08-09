@@ -21,6 +21,7 @@ import { authProviderFlags } from "../config/authProviders";
 type LoginScreenProps = {
   onLogin: () => void;
   onSignUp: () => void;
+  onGoogleLogin?: () => void;
 };
 
 type AuthMode = "login" | "signup";
@@ -63,7 +64,7 @@ function AppleIcon() {
   );
 }
 
-export function LoginScreen({ onLogin, onSignUp }: LoginScreenProps) {
+export function LoginScreen({ onLogin, onSignUp, onGoogleLogin }: LoginScreenProps) {
   const { t } = useLanguage();
   const topInset = useScreenTopInset(24);
   const [mode, setMode] = useState<AuthMode>("login");
@@ -221,8 +222,8 @@ export function LoginScreen({ onLogin, onSignUp }: LoginScreenProps) {
                 <View style={styles.dividerLine} />
               </View>
 
-              {authProviderFlags.google.visible ? (
-                <Pressable style={styles.socialBtn} onPress={onLogin}>
+              {authProviderFlags.google.visible && onGoogleLogin ? (
+                <Pressable style={styles.socialBtn} onPress={onGoogleLogin}>
                   <GoogleIcon />
                   <Text style={styles.socialBtnText}>{t("login.continueGoogle")}</Text>
                 </Pressable>

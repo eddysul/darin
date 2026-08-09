@@ -26,6 +26,8 @@ import {
 import { NavigationHeader } from "../navigation/NavigationHeader";
 import { DataExportRepository } from "../../repositories/DataExportRepository";
 import { ContactRequestRepository } from "../../repositories/ContactRequestRepository";
+import { AuthRepository } from "../../repositories/AuthRepository";
+import { authProviderFlags } from "../../config/authProviders";
 import type { ContactRequestCategory } from "../../types/database";
 
 export type SettingsPage =
@@ -171,6 +173,9 @@ export function AppSettingsModal({
   const [contactBusy, setContactBusy] = useState(false);
   const [contactStatus, setContactStatus] = useState("");
   const [openLegalSection, setOpenLegalSection] = useState<string | null>(null);
+  const [googleLinked, setGoogleLinked] = useState(false);
+  const [googleLinkReady, setGoogleLinkReady] = useState(false);
+  const [googleLinkBusy, setGoogleLinkBusy] = useState(false);
 
   const accountDirty = page === "account" && accountReady && (
     name !== (careSetup.parent.parentName || profile.name) ||
@@ -186,6 +191,7 @@ export function AppSettingsModal({
   useEffect(() => {
     if (page !== "account") {
       setAccountReady(false);
+      setGoogleLinkReady(false);
       return;
     }
     setName(careSetup.parent.parentName || profile.name);
@@ -193,6 +199,19 @@ export function AppSettingsModal({
     setLanguage(settings.account.language);
     setRelationship(settings.account.relationship);
     setAccountReady(true);
+    let active = true;
+    void AuthRepository.getUser()
+      .then((user) => {
+        if (!active) return;
+        setGoogleLinked(Boolean(user?.identities?.some((identity) => identity.provider === "google")));
+        setGoogleLinkReady(Boolean(user));
+      })
+      .catch(() => {
+        if (active) setGoogleLinkReady(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [
     careSetup.parent.parentName,
     page,
@@ -245,6 +264,24 @@ export function AppSettingsModal({
       account: { ...current.account, email: email.trim(), language, relationship },
     }));
     onClose();
+  };
+
+  const connectGoogle = async () => {
+    if (googleLinkBusy) return;
+    setGoogleLinkBusy(true);
+    try {
+      const user = await AuthRepository.linkGoogleIdentity();
+      if (!user) return;
+      setGoogleLinked(true);
+      Alert.alert("연결 완료", "Google 계정이 연결되었어요.");
+    } catch {
+      Alert.alert(
+        "연결하지 못했어요",
+        "Google 계정 연결을 완료하지 못했어요. 다시 시도해 주세요.",
+      );
+    } finally {
+      setGoogleLinkBusy(false);
+    }
   };
 
   const toggleVisible = (id: OneTouchAction, enabled: boolean) => {
@@ -322,6 +359,17 @@ export function AppSettingsModal({
                       onConnectEmail();
                     }}
                   />
+                ) : null}
+                {authProviderFlags.google.visible && googleLinkReady ? (
+                  googleLinked ? (
+                    <InfoRow label="Google 계정" value="연결됨" />
+                  ) : (
+                    <SecondaryButton
+                      label={googleLinkBusy ? "Google 연결 중…" : "Google 계정 연결"}
+                      disabled={googleLinkBusy}
+                      onPress={() => void connectGoogle()}
+                    />
+                  )
                 ) : null}
               </SettingsSection>
               <SettingsSection title="기본 정보">
@@ -787,9 +835,21 @@ function PrimaryButton({ label, onPress }: { label: string; onPress: () => void 
   );
 }
 
-function SecondaryButton({ label, onPress }: { label: string; onPress: () => void }) {
+function SecondaryButton({
+  label,
+  onPress,
+  disabled = false,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <Pressable style={styles.secondaryButton} onPress={onPress}>
+    <Pressable
+      style={[styles.secondaryButton, disabled && styles.secondaryButtonDisabled]}
+      onPress={onPress}
+      disabled={disabled}
+    >
       <Text style={styles.secondaryButtonText}>{label}</Text>
     </Pressable>
   );
@@ -846,6 +906,7 @@ const styles = StyleSheet.create({
   primaryButton: { minHeight: 50, borderRadius: 15, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
   primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   secondaryButton: { minHeight: 48, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  secondaryButtonDisabled: { opacity: 0.55 },
   secondaryButtonText: { color: colors.text, fontSize: 14, fontWeight: "800" },
   policyLead: { color: colors.text, fontSize: 15, lineHeight: 23, fontWeight: "700" },
   policySection: { borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 16 },

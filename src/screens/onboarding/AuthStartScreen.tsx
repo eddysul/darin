@@ -101,13 +101,8 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
         email: result.email,
         name: result.name,
       });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Google 로그인에 실패했어요.";
-      setSocialError(
-        /provider is not enabled|unsupported provider/i.test(message)
-          ? "Supabase에서 Google 로그인을 먼저 활성화해주세요."
-          : "Google 로그인을 완료하지 못했어요. 다시 시도해 주세요.",
-      );
+    } catch {
+      setSocialError("Google 로그인을 완료하지 못했어요. 다시 시도해 주세요.");
     } finally {
       setSocialBusy(null);
     }
