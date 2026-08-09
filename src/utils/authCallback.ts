@@ -1,5 +1,21 @@
 export type AuthCallbackMode = "confirmed" | "recovery";
 
+export type AuthCallbackResult =
+  | { status: "success"; mode: AuthCallbackMode }
+  | { status: "cancelled" }
+  | { status: "error" };
+
+export type AuthCallbackLogEvent = {
+  source: "oauth_callback" | "pkce_exchange" | "token_session" | "session_check";
+  errorCode: string;
+};
+
+export type AuthCallbackSessionAdapter = {
+  exchangeCodeForSession: (code: string) => Promise<{ error: { code?: string } | null }>;
+  setSession: (tokens: { access_token: string; refresh_token: string }) => Promise<{ error: { code?: string } | null }>;
+  getSession: () => Promise<{ data: { session: unknown | null }; error: { code?: string } | null }>;
+};
+
 export type ParsedAuthCallback =
   | { status: "ignored" }
   | { status: "cancelled"; errorDescription?: string }
@@ -72,4 +88,46 @@ export function parseAuthCallback(urlValue: string): ParsedAuthCallback {
     return { status: "error", reason: "incomplete_tokens" };
   }
   return { status: "error", reason: "missing_credentials" };
+}
+
+/** Complete a parsed callback only when Supabase confirms a real session. */
+export async function completeAuthCallback(
+  parsed: ParsedAuthCallback,
+  adapter: AuthCallbackSessionAdapter,
+  log?: (event: AuthCallbackLogEvent) => void,
+): Promise<AuthCallbackResult | null> {
+  if (parsed.status === "ignored") return null;
+  if (parsed.status === "cancelled") {
+    log?.({ source: "oauth_callback", errorCode: "access_denied" });
+    return { status: "cancelled" };
+  }
+  if (parsed.status === "error") {
+    log?.({
+      source: "oauth_callback",
+      errorCode: parsed.errorCode ?? parsed.reason,
+    });
+    return { status: "error" };
+  }
+
+  const source = parsed.status === "exchange" ? "pkce_exchange" : "token_session";
+  const authResult = parsed.status === "exchange"
+    ? await adapter.exchangeCodeForSession(parsed.code)
+    : await adapter.setSession({
+        access_token: parsed.accessToken,
+        refresh_token: parsed.refreshToken,
+      });
+  if (authResult.error) {
+    log?.({ source, errorCode: authResult.error.code ?? "session_rejected" });
+    return { status: "error" };
+  }
+
+  const sessionResult = await adapter.getSession();
+  if (sessionResult.error || !sessionResult.data.session) {
+    log?.({
+      source: "session_check",
+      errorCode: sessionResult.error?.code ?? "missing_session",
+    });
+    return { status: "error" };
+  }
+  return { status: "success", mode: parsed.mode };
 }

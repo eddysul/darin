@@ -56,7 +56,7 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
           ? "Supabase에서 카카오 로그인을 먼저 활성화해주세요."
           : /manual linking/i.test(message)
             ? "Supabase의 Allow manual linking 설정을 활성화해주세요."
-            : message,
+            : "카카오 로그인에 실패했어요. 잠시 후 다시 시도해주세요.",
       );
     } finally {
       setSocialBusy(null);

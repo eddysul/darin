@@ -3,7 +3,11 @@ import type { Session, User } from "@supabase/supabase-js";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
 import { getSupabase, isSupabaseConfigured, requireSupabase } from "../lib/supabase";
-import { parseAuthCallback, type AuthCallbackMode } from "../utils/authCallback";
+import {
+  completeAuthCallback,
+  parseAuthCallback,
+  type AuthCallbackResult,
+} from "../utils/authCallback";
 import { STORAGE_KEYS } from "../utils/storageKeys";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -16,11 +20,6 @@ export type EmailAuthResult = {
   email: string;
   needsPasswordAfterConfirmation: boolean;
 };
-
-export type AuthCallbackResult =
-  | { status: "success"; mode: AuthCallbackMode }
-  | { status: "cancelled" }
-  | { status: "error" };
 
 function authRedirectUrl(path: "callback" | "reset-password"): string {
   // TestFlight/standalone builds do not always expose an Expo manifest to
@@ -486,43 +485,29 @@ export const AuthRepository = {
   /** Accept only callbacks that produce and verify a real Supabase session. */
   async handleAuthUrl(url: string): Promise<AuthCallbackResult | null> {
     const parsed = parseAuthCallback(url);
-    if (parsed.status === "ignored") return null;
-    if (parsed.status === "cancelled") {
-      if (__DEV__ && parsed.errorDescription) {
-        console.info("[Auth] OAuth callback cancelled", parsed.errorDescription);
-      }
-      return { status: "cancelled" };
-    }
-    if (parsed.status === "error") {
-      if (__DEV__) {
-        console.warn("[Auth] OAuth callback rejected", {
-          reason: parsed.reason,
-          errorCode: parsed.errorCode,
-          errorDescription: parsed.errorDescription,
-        });
-      }
-      return { status: "error" };
-    }
-
-    const sb = requireSupabase();
-    const authResult =
-      parsed.status === "exchange"
-        ? await sb.auth.exchangeCodeForSession(parsed.code)
-        : await sb.auth.setSession({
-            access_token: parsed.accessToken,
-            refresh_token: parsed.refreshToken,
-          });
-    if (authResult.error) {
-      if (__DEV__) console.warn("[Auth] Supabase session exchange failed", authResult.error.message);
-      return { status: "error" };
-    }
-
-    const { data, error } = await sb.auth.getSession();
-    if (error || !data.session) {
-      if (__DEV__) console.warn("[Auth] Supabase callback produced no session", error?.message);
-      return { status: "error" };
-    }
-    return { status: "success", mode: parsed.mode };
+    return completeAuthCallback(
+      parsed,
+      {
+        exchangeCodeForSession: async (code) => {
+          const sb = requireSupabase();
+          const { error } = await sb.auth.exchangeCodeForSession(code);
+          return { error: error ? { code: error.code } : null };
+        },
+        setSession: async (tokens) => {
+          const sb = requireSupabase();
+          const { error } = await sb.auth.setSession(tokens);
+          return { error: error ? { code: error.code } : null };
+        },
+        getSession: async () => {
+          const sb = requireSupabase();
+          const { data, error } = await sb.auth.getSession();
+          return { data: { session: data.session }, error: error ? { code: error.code } : null };
+        },
+      },
+      __DEV__
+        ? (event) => console.warn("[Auth] OAuth callback rejected", event)
+        : undefined,
+    );
   },
 
   /**

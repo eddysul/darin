@@ -34,7 +34,7 @@ import {
   subscribeStorageIssues,
 } from "../src/utils/storageIssues";
 import { resolvePostSplashPhase } from "../src/utils/appStartup";
-import { parseAuthCallback } from "../src/utils/authCallback";
+import { completeAuthCallback, parseAuthCallback } from "../src/utils/authCallback";
 import { formatIsoDateInput, isValidBirthDate } from "../src/utils/dateInput";
 import {
   EMPTY_QA_FAULT_STATE,
@@ -110,6 +110,25 @@ assert.equal(isValidBirthDate("2025-02-29", new Date("2026-08-09T00:00:00Z")), f
     accessToken: "a",
     refreshToken: "r",
   });
+
+  let exchangeCalls = 0;
+  const adapter = {
+    exchangeCodeForSession: async (code: string) => {
+      exchangeCalls += 1;
+      return { error: code === "pkce-code" ? null : { code: "bad_code" } };
+    },
+    setSession: async () => ({ error: null }),
+    getSession: async () => ({ data: { session: { access_token: "verified" } }, error: null }),
+  };
+  assert.deepEqual(await completeAuthCallback(cancelled, adapter), { status: "cancelled" });
+  assert.equal(exchangeCalls, 0);
+  assert.deepEqual(await completeAuthCallback(missing, adapter), { status: "error" });
+  assert.equal(exchangeCalls, 0);
+  assert.deepEqual(await completeAuthCallback(exchange, adapter), {
+    status: "success",
+    mode: "confirmed",
+  });
+  assert.equal(exchangeCalls, 1);
 }
 
 // --- Growth Book server mapping preserves page content and scoped migration flags ---
