@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -47,6 +49,10 @@ const VOLUME_CATS: BabyLogCategoryId[] = [
   "milk",
 ];
 
+const DURATION_CATS: BabyLogCategoryId[] = ["breast", "sleep", "tummy", "play"];
+const AMOUNT_CATS: BabyLogCategoryId[] = [...VOLUME_CATS, "food", "snack", "med", "temp"];
+const STATE_CATS: BabyLogCategoryId[] = ["breast", "sleep", "diaper", "food", "snack", "pump", "temp"];
+
 type Props = {
   visible: boolean;
   records: QuickRecord[];
@@ -70,6 +76,7 @@ export function QuickRecordEditorSheet({
   const [color, setColor] = useState(QUICK_RECORD_COLORS[0]);
   const [cat, setCat] = useState<BabyLogCategoryId>("formula");
   const [amount, setAmount] = useState("");
+  const [duration, setDuration] = useState("");
   const [chip, setChip] = useState("");
   const [notes, setNotes] = useState("");
   const [pinned, setPinned] = useState(true);
@@ -87,6 +94,7 @@ export function QuickRecordEditorSheet({
         : r.defaults.amount ?? "",
     );
     setChip(r.defaults.chip ?? "");
+    setDuration(r.defaults.duration ?? "");
     setNotes(r.defaults.notes ?? "");
     setPinned(r.pinned);
     setMode("form");
@@ -98,6 +106,7 @@ export function QuickRecordEditorSheet({
     setCat("formula");
     setAmount("");
     setChip("");
+    setDuration("");
     setNotes("");
     setPinned(true);
   };
@@ -127,12 +136,15 @@ export function QuickRecordEditorSheet({
       defaults: {
         cat,
         amount:
-          amount.trim() && VOLUME_CATS.includes(cat)
+          !AMOUNT_CATS.includes(cat)
+            ? undefined
+            : amount.trim() && VOLUME_CATS.includes(cat)
             ? volumeToMl(amount.trim(), settings.units.volume)
             : amount.trim() || undefined,
-        chip: chip.trim() || undefined,
+        chip: STATE_CATS.includes(cat) ? chip.trim() || undefined : undefined,
+        duration: DURATION_CATS.includes(cat) ? duration.trim() || undefined : undefined,
         notes: notes.trim() || undefined,
-        sleepAction: cat === "sleep" && !amount ? "start" : undefined,
+        sleepAction: cat === "sleep" && !duration.trim() ? "start" : undefined,
       },
     };
     onSave((prev) => {
@@ -159,6 +171,7 @@ export function QuickRecordEditorSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.keyboardRoot} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.handle} />
@@ -206,6 +219,7 @@ export function QuickRecordEditorSheet({
                           }`
                         : ""}
                       {r.defaults.chip ? ` · ${r.defaults.chip}` : ""}
+                      {r.defaults.duration ? ` · ${r.defaults.duration}분` : ""}
                     </Text>
                   </View>
                   <Pressable style={styles.miniBtn} onPress={() => togglePin(r.id)}>
@@ -269,25 +283,48 @@ export function QuickRecordEditorSheet({
                 })}
               </View>
 
-              <Text style={styles.label}>
-                기본값 · 양{VOLUME_CATS.includes(cat) ? ` (${settings.units.volume})` : ""}
-              </Text>
-              <TextInput
-                style={styles.input}
-                value={amount}
-                onChangeText={setAmount}
-                placeholder="예: 120 또는 1 drop"
-                placeholderTextColor={colors.faint}
-              />
+              {AMOUNT_CATS.includes(cat) ? (
+                <>
+                  <Text style={styles.label}>
+                    {VOLUME_CATS.includes(cat) ? `기본 양 (${settings.units.volume})` : "기본 수치 또는 용량"}
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    value={amount}
+                    onChangeText={setAmount}
+                    placeholder={cat === "temp" ? "예: 36.5" : cat === "med" ? "예: 1 drop" : "예: 120"}
+                    placeholderTextColor={colors.faint}
+                    keyboardType={cat === "med" ? "default" : "decimal-pad"}
+                  />
+                </>
+              ) : null}
 
-              <Text style={styles.label}>기본값 · 구분/칩</Text>
-              <TextInput
-                style={styles.input}
-                value={chip}
-                onChangeText={setChip}
-                placeholder="예: 소변, 낮잠"
-                placeholderTextColor={colors.faint}
-              />
+              {DURATION_CATS.includes(cat) ? (
+                <>
+                  <Text style={styles.label}>기본 지속 시간 (분)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={duration}
+                    onChangeText={setDuration}
+                    placeholder={cat === "sleep" ? "비워두면 수면 타이머 시작" : "예: 15"}
+                    placeholderTextColor={colors.faint}
+                    keyboardType="number-pad"
+                  />
+                </>
+              ) : null}
+
+              {STATE_CATS.includes(cat) ? (
+                <>
+                  <Text style={styles.label}>기본 상태</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={chip}
+                    onChangeText={setChip}
+                    placeholder={cat === "diaper" ? "예: 소변 또는 대변" : cat === "sleep" ? "예: 낮잠 또는 밤잠" : "선택 사항"}
+                    placeholderTextColor={colors.faint}
+                  />
+                </>
+              ) : null}
 
               <Text style={styles.label}>기본값 · 메모</Text>
               <TextInput
@@ -310,11 +347,13 @@ export function QuickRecordEditorSheet({
           )}
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardRoot: { flex: 1 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   sheet: {
     backgroundColor: colors.background,

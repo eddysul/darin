@@ -32,7 +32,7 @@ export type QuickRecordActionDefinition = {
 export const QUICK_RECORD_ACTIONS: QuickRecordActionDefinition[] = [
   { id: "breastfeeding", label: "모유수유", cat: "breast", core: true },
   { id: "formula", label: "분유", cat: "formula", core: true },
-  { id: "bowel", label: "배변", cat: "diaper", chip: "대변", core: true },
+  { id: "bowel", label: "대변", cat: "diaper", chip: "대변", core: true },
   { id: "urine", label: "소변", cat: "diaper", chip: "소변", core: true },
   { id: "sleep", label: "수면", cat: "sleep", core: true },
   { id: "pump", label: "유축", cat: "pump", core: true },

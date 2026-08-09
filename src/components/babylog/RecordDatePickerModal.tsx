@@ -90,15 +90,15 @@ export function RecordDatePickerModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(43,31,24,0.38)", justifyContent: "center", padding: 22 },
+  overlay: { flex: 1, backgroundColor: "rgba(43,31,24,0.38)", justifyContent: "center", paddingHorizontal: 14, paddingVertical: 22 },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 16, borderWidth: 1, borderColor: colors.border, gap: 14 },
   modalTitle: { color: colors.text, fontSize: 18, fontWeight: "900", textAlign: "center" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  navGroup: { flexDirection: "row", gap: 4 },
-  title: { color: colors.text, fontSize: 16, fontWeight: "800" },
-  arrow: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: colors.cardHi },
-  arrowText: { color: colors.text, fontSize: 26 },
-  yearArrowText: { color: colors.muted, fontSize: 20, fontWeight: "800" },
+  navGroup: { flexDirection: "row", gap: 2 },
+  title: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  arrow: { width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, backgroundColor: colors.cardHi },
+  arrowText: { color: colors.text, fontSize: 23 },
+  yearArrowText: { color: colors.muted, fontSize: 17, fontWeight: "800" },
   grid: { flexDirection: "row", flexWrap: "wrap" },
   weekday: { width: "14.2857%", textAlign: "center", color: colors.faint, fontSize: 11, fontWeight: "700", paddingVertical: 6 },
   day: { width: "14.2857%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 999 },

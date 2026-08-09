@@ -245,6 +245,14 @@ export function DiaryReminderSettingsModal({
             </Text>
           </View>
 
+          {!enabled ? (
+            <View style={styles.offCard}>
+              <Text style={styles.offTitle}>알림이 꺼져 있어요</Text>
+              <Text style={styles.offBody}>알림을 켜면 시간, 반복, 가족 소식과 조용한 시간을 설정할 수 있어요.</Text>
+            </View>
+          ) : null}
+
+          <View style={!enabled && styles.hidden}>
           <Text style={styles.sectionTitle}>언제 알려드릴까요?</Text>
           <View style={styles.presetGrid}>
             {REMINDER_PRESETS.map((preset) => {
@@ -434,6 +442,7 @@ export function DiaryReminderSettingsModal({
           >
             <Text style={styles.resetBtnText}>기본값으로 (매일 밤 9시)</Text>
           </Pressable>
+          </View>
         </ScrollView>
 
         {pickerOpen ? (
@@ -529,6 +538,10 @@ const styles = StyleSheet.create({
   },
   heroTitle: { fontSize: 20, fontWeight: "800", color: colors.text, letterSpacing: -0.3 },
   heroBody: { marginTop: 6, fontSize: 13.5, lineHeight: 20, color: colors.muted },
+  offCard: { backgroundColor: colors.cardHi, borderRadius: radius.lg, padding: 16, marginBottom: 18, borderWidth: 1, borderColor: colors.border },
+  offTitle: { color: colors.text, fontSize: 15, fontWeight: "800" },
+  offBody: { color: colors.muted, fontSize: 12.5, lineHeight: 18, marginTop: 5 },
+  hidden: { display: "none" },
   toggleRow: {
     marginTop: 16,
     flexDirection: "row",

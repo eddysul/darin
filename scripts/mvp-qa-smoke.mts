@@ -36,6 +36,7 @@ import {
 import { resolvePostSplashPhase } from "../src/utils/appStartup";
 import { completeAuthCallback, parseAuthCallback } from "../src/utils/authCallback";
 import { formatIsoDateInput, isValidBirthDate } from "../src/utils/dateInput";
+import { formatClockInput, isValidClockInput } from "../src/utils/timeInput";
 import {
   EMPTY_QA_FAULT_STATE,
   armQaFault,
@@ -84,6 +85,11 @@ assert.equal(formatIsoDateInput("20260809"), "2026-08-09");
 assert.equal(formatIsoDateInput("2026.8.9"), "2026-89");
 assert.equal(isValidBirthDate("2024-02-29", new Date("2026-08-09T00:00:00Z")), true);
 assert.equal(isValidBirthDate("2025-02-29", new Date("2026-08-09T00:00:00Z")), false);
+assert.equal(formatClockInput("0930"), "09:30");
+assert.equal(formatClockInput("930"), "09:30");
+assert.equal(formatClockInput("12:45"), "12:45");
+assert.equal(isValidClockInput("23:59"), true);
+assert.equal(isValidClockInput("24:00"), false);
 
 // --- Auth callbacks never report success without credentials ---
 {

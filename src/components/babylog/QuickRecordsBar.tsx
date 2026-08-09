@@ -68,7 +68,7 @@ export function QuickRecordsBar({
           onPress={openManage}
         >
           <BabyLogIcon kind="edit" size={13} color={colors.amber} />
-          <Text style={styles.edit}>편집</Text>
+          <Text style={styles.edit}>관리</Text>
         </Pressable>
       </View>
 

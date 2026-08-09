@@ -24,6 +24,7 @@ import {
 import { FamilyRepository } from "../repositories/FamilyRepository";
 import { ProfileRepository } from "../repositories/ProfileRepository";
 import type { InviteType } from "../types/database";
+import { FAMILY_ROLE_LABELS } from "../types/family";
 import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
 import { getSupabaseSync } from "../utils/supabaseSyncStore";
 import { colors, radius } from "../theme";
@@ -243,7 +244,7 @@ export function FamilyShareScreen() {
           <Text style={styles.count}>함께 기록하는 가족 {activeFamily.length}명</Text>
           {activeFamily.slice(0, 8).map((member) => (
             <Text key={member.id} style={styles.person} numberOfLines={1}>
-              {member.name} · {member.relationshipLabel ?? "가족"}
+              {member.name} · {member.relationshipLabel ?? "가족"} · {FAMILY_ROLE_LABELS[member.role]}
             </Text>
           ))}
         </View>

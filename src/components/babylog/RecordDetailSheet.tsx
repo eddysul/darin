@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,6 +19,7 @@ import { resolveLogCategory } from "../../utils/resolveLogCategory";
 import { colors } from "../../theme";
 import { elapsedClockMinutes, nowTime, toMinutes } from "../../utils/formatLog";
 import { useAppSettings } from "../../context/AppSettingsContext";
+import { formatClockInput, isValidClockInput } from "../../utils/timeInput";
 import {
   temperatureFromCelsius,
   temperatureToCelsius,
@@ -98,12 +101,14 @@ export function RecordDetailSheet({
   const [details, setDetails] = useState("");
   const [nextAt, setNextAt] = useState("");
   const [voice, setVoice] = useState(false);
+  const [timeError, setTimeError] = useState("");
 
   useEffect(() => {
     if (!visible || !catKey) return;
     const nextCat = prefill?.cat ?? catKey;
     setSelectedCat(nextCat);
-    setTime(prefill?.time ?? nowTime());
+    setTimeError("");
+    setTime(formatClockInput(prefill?.time ?? nowTime()));
     setChip(prefill?.chip ?? "");
     setChip2(prefill?.chip2 ?? "");
     setStoolState(prefill?.stoolState ?? "");
@@ -148,7 +153,7 @@ export function RecordDetailSheet({
   }, [visible, catKey, prefill, settings.units.temperature, settings.units.volume]);
 
   const computedDuration = useMemo(() => {
-    if (!endTime || !time) return duration;
+    if (!isValidClockInput(endTime) || !isValidClockInput(time)) return duration;
     return String(elapsedClockMinutes(time, endTime));
   }, [endTime, time, duration]);
 
@@ -160,6 +165,11 @@ export function RecordDetailSheet({
   const isEdit = Boolean(prefill?.editId);
 
   const handleSave = () => {
+    if (!isValidClockInput(time) || (endTime && !isValidClockInput(endTime))) {
+      setTimeError("시간을 00:00부터 23:59 사이로 입력해 주세요.");
+      return;
+    }
+    setTimeError("");
     const isFood = builtinId === "food" || builtinId === "snack";
     const isMed = builtinId === "med";
     const timedDuration =
@@ -206,6 +216,7 @@ export function RecordDetailSheet({
   };
 
   const sheet = (
+    <KeyboardAvoidingView style={styles.keyboardRoot} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <Pressable
       style={[styles.backdrop, embedded && styles.embeddedBackdrop]}
       onPress={onClose}
@@ -290,9 +301,14 @@ export function RecordDetailSheet({
                   <TextInput
                     style={styles.input}
                     value={endTime}
-                    onChangeText={setEndTime}
+                    onChangeText={(value) => {
+                      setEndTime(formatClockInput(value));
+                      setTimeError("");
+                    }}
                     placeholder="HH:MM"
                     placeholderTextColor={colors.faint}
+                    keyboardType="number-pad"
+                    maxLength={5}
                   />
                   <Text style={styles.fieldLabel}>총 시간 (분)</Text>
                   <TextInput
@@ -320,22 +336,31 @@ export function RecordDetailSheet({
               <TextInput
                 style={styles.input}
                 value={time}
-                onChangeText={setTime}
+                onChangeText={(value) => {
+                  setTime(formatClockInput(value));
+                  setTimeError("");
+                }}
                 placeholder="HH:MM"
                 placeholderTextColor={colors.faint}
+                keyboardType="number-pad"
+                maxLength={5}
               />
               <Text style={styles.fieldLabel}>종료 시간</Text>
               <TextInput
                 style={styles.input}
                 value={endTime}
                 onChangeText={(v) => {
-                  setEndTime(v);
-                  if (/^\d{1,2}:\d{2}$/.test(v)) {
-                    setDuration(String(elapsedClockMinutes(time, v)));
+                  const formatted = formatClockInput(v);
+                  setEndTime(formatted);
+                  setTimeError("");
+                  if (/^\d{2}:\d{2}$/.test(formatted)) {
+                    setDuration(String(elapsedClockMinutes(time, formatted)));
                   }
                 }}
                 placeholder="HH:MM"
                 placeholderTextColor={colors.faint}
+                keyboardType="number-pad"
+                maxLength={5}
               />
               <Text style={styles.fieldLabel}>총 시간 (분)</Text>
               <TextInput
@@ -355,8 +380,8 @@ export function RecordDetailSheet({
 
           {builtinId === "diaper" && (
             <>
-              <Text style={styles.fieldLabel}>구분</Text>
-              <ChipRow options={["소변", "대변", "둘다"]} value={chip} onChange={setChip} />
+              <Text style={styles.fieldLabel}>기저귀 종류</Text>
+              <ChipRow options={["소변", "대변", "둘 다"]} value={chip} onChange={setChip} />
               {chip !== "소변" ? (
                 <>
                   <Text style={styles.fieldLabel}>색깔</Text>
@@ -588,9 +613,14 @@ export function RecordDetailSheet({
               <TextInput
                 style={styles.input}
                 value={time}
-                onChangeText={setTime}
+                onChangeText={(value) => {
+                  setTime(formatClockInput(value));
+                  setTimeError("");
+                }}
                 placeholder="HH:MM"
                 placeholderTextColor={colors.faint}
+                keyboardType="number-pad"
+                maxLength={5}
               />
             </>
           )}
@@ -648,6 +678,8 @@ export function RecordDetailSheet({
             placeholderTextColor={colors.faint}
           />
 
+          {timeError ? <Text style={styles.inputError}>{timeError}</Text> : null}
+
           {isEdit && prefill?.editId && onDelete && (
             <Pressable style={styles.deleteBtn} onPress={() => onDelete(prefill.editId!)}>
               <Text style={styles.deleteText}>이 기록 삭제하기</Text>
@@ -664,7 +696,8 @@ export function RecordDetailSheet({
           </View>
         </ScrollView>
       </Pressable>
-    </Pressable>
+      </Pressable>
+    </KeyboardAvoidingView>
   );
 
   if (embedded) {
@@ -679,6 +712,7 @@ export function RecordDetailSheet({
 }
 
 const styles = StyleSheet.create({
+  keyboardRoot: { flex: 1 },
   embeddedRoot: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 40,
@@ -725,6 +759,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
+  inputError: { color: colors.dangerText, fontSize: 12, marginTop: 12 },
   notes: { height: 64, textAlignVertical: "top" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {

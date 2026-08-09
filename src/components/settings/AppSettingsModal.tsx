@@ -322,9 +322,9 @@ export function AppSettingsModal({
           {page === "careAlerts" ? (
             <SettingsSection title="돌봄 알림">
               <ToggleRow label="수유 알림" value={settings.notifications.feedingEnabled} onChange={(feedingEnabled) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, feedingEnabled } }))} />
-              <ChoiceRow label="수유 간격" value={String(settings.notifications.feedingIntervalMinutes)} options={[{ value: "120", label: "2시간" }, { value: "180", label: "3시간" }, { value: "240", label: "4시간" }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, feedingIntervalMinutes: Number(value) } }))} />
+              {settings.notifications.feedingEnabled ? <ChoiceRow label="수유 간격" value={String(settings.notifications.feedingIntervalMinutes)} options={[{ value: "120", label: "2시간" }, { value: "180", label: "3시간" }, { value: "240", label: "4시간" }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, feedingIntervalMinutes: Number(value) } }))} /> : null}
               <ToggleRow label="수면 알림" value={settings.notifications.sleepEnabled} onChange={(sleepEnabled) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, sleepEnabled } }))} />
-              <ChoiceRow label="수면 간격" value={String(settings.notifications.sleepIntervalMinutes)} options={[{ value: "60", label: "1시간" }, { value: "120", label: "2시간" }, { value: "180", label: "3시간" }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, sleepIntervalMinutes: Number(value) } }))} />
+              {settings.notifications.sleepEnabled ? <ChoiceRow label="수면 간격" value={String(settings.notifications.sleepIntervalMinutes)} options={[{ value: "60", label: "1시간" }, { value: "120", label: "2시간" }, { value: "180", label: "3시간" }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, sleepIntervalMinutes: Number(value) } }))} /> : null}
             </SettingsSection>
           ) : null}
 

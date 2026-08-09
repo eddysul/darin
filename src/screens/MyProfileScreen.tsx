@@ -48,6 +48,7 @@ export function MyProfileScreen() {
       const identities = user?.identities?.map((item) => item.provider) ?? [];
       if (identities.includes("apple")) setProvider("Apple");
       else if (identities.includes("google")) setProvider("Google");
+      else if (identities.includes("kakao")) setProvider("Kakao");
       else setProvider("이메일");
 
       const profile = await ProfileRepository.getMyDisplayProfile();
@@ -172,7 +173,7 @@ export function MyProfileScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={88}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <ProfileAvatar uri={avatarUrl} size={104} editable onPress={pickAvatar} label="내 사진 추가" />
 
         <View style={styles.card}>
