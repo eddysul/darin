@@ -19,6 +19,7 @@ import { colors, radius } from "../../theme";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { formatVolume, volumeFromMl, volumeToMl } from "../../utils/measurementFormat";
+import { DurationPickerField, DurationPickerSheet } from "../inputs/TimePickerFields";
 
 const LINK_CATS: BabyLogCategoryId[] = [
   "formula",
@@ -49,7 +50,7 @@ const VOLUME_CATS: BabyLogCategoryId[] = [
   "milk",
 ];
 
-const DURATION_CATS: BabyLogCategoryId[] = ["breast", "sleep", "tummy", "play"];
+const DURATION_CATS: BabyLogCategoryId[] = ["breast", "sleep", "pump", "tummy", "bath", "play"];
 const AMOUNT_CATS: BabyLogCategoryId[] = [...VOLUME_CATS, "food", "snack", "med", "temp"];
 const STATE_CATS: BabyLogCategoryId[] = ["breast", "sleep", "diaper", "food", "snack", "pump", "temp"];
 
@@ -82,6 +83,7 @@ export function QuickRecordEditorSheet({
   const [pinned, setPinned] = useState(true);
   const [mode, setMode] = useState<"list" | "form">("list");
   const [editId, setEditId] = useState<string | null>(null);
+  const [durationPickerOpen, setDurationPickerOpen] = useState(false);
 
   const loadRecord = (r: QuickRecord) => {
     setEditId(r.id);
@@ -98,6 +100,7 @@ export function QuickRecordEditorSheet({
     setNotes(r.defaults.notes ?? "");
     setPinned(r.pinned);
     setMode("form");
+    setDurationPickerOpen(false);
   };
 
   const resetForm = () => {
@@ -109,6 +112,7 @@ export function QuickRecordEditorSheet({
     setDuration("");
     setNotes("");
     setPinned(true);
+    setDurationPickerOpen(false);
   };
 
   useEffect(() => {
@@ -300,17 +304,12 @@ export function QuickRecordEditorSheet({
               ) : null}
 
               {DURATION_CATS.includes(cat) ? (
-                <>
-                  <Text style={styles.label}>기본 지속 시간 (분)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={duration}
-                    onChangeText={setDuration}
-                    placeholder={cat === "sleep" ? "비워두면 수면 타이머 시작" : "예: 15"}
-                    placeholderTextColor={colors.faint}
-                    keyboardType="number-pad"
-                  />
-                </>
+                <DurationPickerField
+                  label="기본 지속 시간"
+                  valueMinutes={Number.parseInt(duration, 10) || null}
+                  placeholder={cat === "sleep" ? "비워두면 수면 타이머 시작" : "기간 선택"}
+                  onPress={() => setDurationPickerOpen(true)}
+                />
               ) : null}
 
               {STATE_CATS.includes(cat) ? (
@@ -347,6 +346,13 @@ export function QuickRecordEditorSheet({
           )}
         </Pressable>
       </Pressable>
+      <DurationPickerSheet
+        visible={durationPickerOpen}
+        valueMinutes={Number.parseInt(duration, 10) || null}
+        onCancel={() => setDurationPickerOpen(false)}
+        onConfirm={(minutes) => { setDuration(String(minutes)); setDurationPickerOpen(false); }}
+        onClear={() => { setDuration(""); setDurationPickerOpen(false); }}
+      />
       </KeyboardAvoidingView>
     </Modal>
   );

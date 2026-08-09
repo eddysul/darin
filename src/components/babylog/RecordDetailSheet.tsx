@@ -19,13 +19,20 @@ import { resolveLogCategory } from "../../utils/resolveLogCategory";
 import { colors } from "../../theme";
 import { elapsedClockMinutes, nowTime, toMinutes } from "../../utils/formatLog";
 import { useAppSettings } from "../../context/AppSettingsContext";
-import { formatClockInput, isValidClockInput } from "../../utils/timeInput";
+import { isValidClockInput } from "../../utils/timeInput";
 import {
   temperatureFromCelsius,
   temperatureToCelsius,
   volumeFromMl,
   volumeToMl,
 } from "../../utils/measurementFormat";
+import {
+  DurationPickerField,
+  DurationPickerSheet,
+  formatHHmm,
+  TimeOfDayPickerField,
+  TimePickerSheet,
+} from "../inputs/TimePickerFields";
 
 export type RecordSheetPrefill = Partial<BabyLogEntry> & { editId?: string };
 
@@ -102,13 +109,15 @@ export function RecordDetailSheet({
   const [nextAt, setNextAt] = useState("");
   const [voice, setVoice] = useState(false);
   const [timeError, setTimeError] = useState("");
+  const [timePickerTarget, setTimePickerTarget] = useState<"time" | "end" | "nextAt" | null>(null);
+  const [durationPickerOpen, setDurationPickerOpen] = useState(false);
 
   useEffect(() => {
     if (!visible || !catKey) return;
     const nextCat = prefill?.cat ?? catKey;
     setSelectedCat(nextCat);
     setTimeError("");
-    setTime(formatClockInput(prefill?.time ?? nowTime()));
+    setTime(isValidClockInput(prefill?.time ?? "") ? prefill!.time! : nowTime());
     setChip(prefill?.chip ?? "");
     setChip2(prefill?.chip2 ?? "");
     setStoolState(prefill?.stoolState ?? "");
@@ -150,12 +159,41 @@ export function RecordDetailSheet({
     } else {
       setEndTime("");
     }
+    setTimePickerTarget(null);
+    setDurationPickerOpen(false);
   }, [visible, catKey, prefill, settings.units.temperature, settings.units.volume]);
 
   const computedDuration = useMemo(() => {
     if (!isValidClockInput(endTime) || !isValidClockInput(time)) return duration;
     return String(elapsedClockMinutes(time, endTime));
   }, [endTime, time, duration]);
+
+  const durationMinutes = Number.parseInt(computedDuration || duration, 10);
+  const durationValue = Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : null;
+  const nextAtMatch = /(?:^|\s)(\d{1,2}):(\d{2})$/.exec(nextAt.trim());
+  const nextAtTime = nextAtMatch ? formatHHmm(Number(nextAtMatch[1]), Number(nextAtMatch[2])) : "";
+  const nextAtDate = nextAtMatch ? nextAt.slice(0, nextAtMatch.index).trim() : nextAt;
+
+  const confirmTimePicker = (valueHHmm: string) => {
+    const target = timePickerTarget;
+    setTimePickerTarget(null);
+    setTimeError("");
+    if (target === "nextAt") {
+      setNextAt([nextAtDate, valueHHmm].filter(Boolean).join(" "));
+    } else if (target === "end") {
+      setEndTime(valueHHmm);
+      if (isValidClockInput(time)) setDuration(String(elapsedClockMinutes(time, valueHHmm)));
+    } else {
+      setTime(valueHHmm);
+      if (isValidClockInput(endTime)) setDuration(String(elapsedClockMinutes(valueHHmm, endTime)));
+    }
+  };
+
+  const confirmDurationPicker = (minutes: number) => {
+    setDuration(String(minutes));
+    if (isValidClockInput(time)) setEndTime(minutesToHhMm(time, minutes));
+    setDurationPickerOpen(false);
+  };
 
   if (!catKey) return null;
   if (embedded && !visible) return null;
@@ -297,32 +335,8 @@ export function RecordDetailSheet({
               ) : null}
               {builtinId === "breast" ? (
                 <>
-                  <Text style={styles.fieldLabel}>종료 시간</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={endTime}
-                    onChangeText={(value) => {
-                      setEndTime(formatClockInput(value));
-                      setTimeError("");
-                    }}
-                    placeholder="HH:MM"
-                    placeholderTextColor={colors.faint}
-                    keyboardType="number-pad"
-                    maxLength={5}
-                  />
-                  <Text style={styles.fieldLabel}>총 시간 (분)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={computedDuration}
-                    onChangeText={(v) => {
-                      setDuration(v);
-                      const mins = Number.parseInt(v, 10);
-                      if (!Number.isNaN(mins) && time) setEndTime(minutesToHhMm(time, mins));
-                    }}
-                    keyboardType="numeric"
-                    placeholder="예: 15"
-                    placeholderTextColor={colors.faint}
-                  />
+                  <TimeOfDayPickerField label="종료 시간" valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
+                  <DurationPickerField label="총 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
                 </>
               ) : null}
             </>
@@ -332,49 +346,10 @@ export function RecordDetailSheet({
             <>
               <Text style={styles.fieldLabel}>낮잠 / 밤잠</Text>
               <ChipRow options={["낮잠", "밤잠"]} value={chip} onChange={setChip} />
-              <Text style={styles.fieldLabel}>시작 시간</Text>
-              <TextInput
-                style={styles.input}
-                value={time}
-                onChangeText={(value) => {
-                  setTime(formatClockInput(value));
-                  setTimeError("");
-                }}
-                placeholder="HH:MM"
-                placeholderTextColor={colors.faint}
-                keyboardType="number-pad"
-                maxLength={5}
-              />
-              <Text style={styles.fieldLabel}>종료 시간</Text>
-              <TextInput
-                style={styles.input}
-                value={endTime}
-                onChangeText={(v) => {
-                  const formatted = formatClockInput(v);
-                  setEndTime(formatted);
-                  setTimeError("");
-                  if (/^\d{2}:\d{2}$/.test(formatted)) {
-                    setDuration(String(elapsedClockMinutes(time, formatted)));
-                  }
-                }}
-                placeholder="HH:MM"
-                placeholderTextColor={colors.faint}
-                keyboardType="number-pad"
-                maxLength={5}
-              />
-              <Text style={styles.fieldLabel}>총 시간 (분)</Text>
-              <TextInput
-                style={styles.input}
-                value={computedDuration}
-                onChangeText={(v) => {
-                  setDuration(v);
-                  const mins = Number.parseInt(v, 10);
-                  if (!Number.isNaN(mins) && time) setEndTime(minutesToHhMm(time, mins));
-                }}
-                keyboardType="numeric"
-                placeholder="예: 40"
-                placeholderTextColor={colors.faint}
-              />
+              <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
+              <TimeOfDayPickerField label="종료 시간" valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
+              <DurationPickerField label="총 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+              {endTime && isValidClockInput(time) && toMinutes(endTime) < toMinutes(time) ? <Text style={styles.overnightHint}>종료 시간이 시작보다 이르므로 다음 날 종료로 계산해요.</Text> : null}
             </>
           )}
 
@@ -442,6 +417,7 @@ export function RecordDetailSheet({
                 placeholder="예: 90"
                 placeholderTextColor={colors.faint}
               />
+              <DurationPickerField label="유축 지속 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
             </>
           )}
 
@@ -489,17 +465,11 @@ export function RecordDetailSheet({
                   />
                 </>
               ) : null}
-              <Text style={styles.fieldLabel}>지속 시간 (분)</Text>
-              <TextInput
-                style={styles.input}
-                value={duration}
-                onChangeText={setDuration}
-                keyboardType="numeric"
-                placeholder="예: 15"
-                placeholderTextColor={colors.faint}
-              />
+              <DurationPickerField label="지속 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
             </>
           )}
+
+          {builtinId === "bath" ? <DurationPickerField label="목욕 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} /> : null}
 
           {builtinId === "med" && (
             <>
@@ -562,11 +532,12 @@ export function RecordDetailSheet({
               <Text style={styles.fieldLabel}>다음 예약</Text>
               <TextInput
                 style={styles.input}
-                value={nextAt}
-                onChangeText={setNextAt}
-                placeholder="예: 7/28 10:30"
+                value={nextAtDate}
+                onChangeText={(date) => setNextAt([date.trim(), nextAtTime].filter(Boolean).join(" "))}
+                placeholder="날짜 예: 7/28"
                 placeholderTextColor={colors.faint}
               />
+              <TimeOfDayPickerField label="다음 예약 시간" valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
               {onOpenGrowthRecord ? (
                 <Pressable
                   style={styles.growthLink}
@@ -608,21 +579,7 @@ export function RecordDetailSheet({
           )}
 
           {builtinId !== "sleep" && (
-            <>
-              <Text style={styles.fieldLabel}>{builtinId === "breast" ? "시작 시간" : "시간"}</Text>
-              <TextInput
-                style={styles.input}
-                value={time}
-                onChangeText={(value) => {
-                  setTime(formatClockInput(value));
-                  setTimeError("");
-                }}
-                placeholder="HH:MM"
-                placeholderTextColor={colors.faint}
-                keyboardType="number-pad"
-                maxLength={5}
-              />
-            </>
+            <TimeOfDayPickerField label={builtinId === "breast" ? "시작 시간" : "시간"} valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
           )}
 
           {(!builtinId || isCustomCategoryKey(effectiveCat)) && (
@@ -647,17 +604,7 @@ export function RecordDetailSheet({
                 </>
               ) : null}
               {c.duration ? (
-                <>
-                  <Text style={styles.fieldLabel}>지속 시간 (분)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={duration}
-                    onChangeText={setDuration}
-                    keyboardType="numeric"
-                    placeholder="예: 30"
-                    placeholderTextColor={colors.faint}
-                  />
-                </>
+                <DurationPickerField label="지속 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
               ) : null}
             </>
           )}
@@ -678,7 +625,7 @@ export function RecordDetailSheet({
             placeholderTextColor={colors.faint}
           />
 
-          {timeError ? <Text style={styles.inputError}>{timeError}</Text> : null}
+          {builtinId === "sleep" && timeError ? <Text style={styles.inputError}>{timeError}</Text> : null}
 
           {isEdit && prefill?.editId && onDelete && (
             <Pressable style={styles.deleteBtn} onPress={() => onDelete(prefill.editId!)}>
@@ -697,6 +644,25 @@ export function RecordDetailSheet({
         </ScrollView>
       </Pressable>
       </Pressable>
+      <TimePickerSheet
+        visible={timePickerTarget !== null}
+        valueHHmm={timePickerTarget === "end" ? endTime : timePickerTarget === "nextAt" ? nextAtTime : time}
+        title={timePickerTarget === "end" ? "종료 시간" : timePickerTarget === "nextAt" ? "다음 예약 시간" : "시간 선택"}
+        onCancel={() => setTimePickerTarget(null)}
+        onConfirm={confirmTimePicker}
+        onClear={timePickerTarget === "end"
+          ? () => { setEndTime(""); setDuration(""); setTimePickerTarget(null); }
+          : timePickerTarget === "nextAt"
+            ? () => { setNextAt(nextAtDate); setTimePickerTarget(null); }
+            : undefined}
+      />
+      <DurationPickerSheet
+        visible={durationPickerOpen}
+        valueMinutes={durationValue}
+        onCancel={() => setDurationPickerOpen(false)}
+        onConfirm={confirmDurationPicker}
+        onClear={() => { setDuration(""); setEndTime(""); setDurationPickerOpen(false); }}
+      />
     </KeyboardAvoidingView>
   );
 
@@ -760,6 +726,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   inputError: { color: colors.dangerText, fontSize: 12, marginTop: 12 },
+  overnightHint: { color: colors.muted, fontSize: 11.5, lineHeight: 17, marginTop: 4 },
   notes: { height: 64, textAlignVertical: "top" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {

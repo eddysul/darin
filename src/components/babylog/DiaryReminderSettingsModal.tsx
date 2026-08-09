@@ -23,6 +23,13 @@ import {
   type ReminderPermissionStatus,
 } from "../../utils/diaryReminderNotifications";
 import { registerCurrentPushToken } from "../../utils/pushNotifications";
+import {
+  DurationPickerField,
+  DurationPickerSheet,
+  formatTimeOfDay,
+  TimeOfDayPickerField,
+  TimePickerSheet,
+} from "../inputs/TimePickerFields";
 
 type Props = {
   visible: boolean;
@@ -35,12 +42,8 @@ type Props = {
 };
 
 type SectionId = "all" | "diary" | "care" | "family" | "invite" | "quiet";
-type DayPeriod = "am" | "pm";
-
-const WHEEL_ITEM_HEIGHT = 44;
-const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => String(index + 1));
-const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
-const PERIOD_OPTIONS = ["오전", "오후"];
+type TimeTarget = "reminder" | "quietStart" | "quietEnd";
+type DurationTarget = "feeding" | "sleep";
 
 const permissionLabel: Record<ReminderPermissionStatus, string> = {
   granted: "허용됨",
@@ -65,10 +68,8 @@ export function DiaryReminderSettingsModal({
   const [expanded, setExpanded] = useState<SectionId | null>("all");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [timePickerOpen, setTimePickerOpen] = useState(false);
-  const [pickerPeriod, setPickerPeriod] = useState<DayPeriod>("pm");
-  const [pickerHour, setPickerHour] = useState(9);
-  const [pickerMinute, setPickerMinute] = useState(0);
+  const [timeTarget, setTimeTarget] = useState<TimeTarget | null>(null);
+  const [durationTarget, setDurationTarget] = useState<DurationTarget | null>(null);
 
   const careEnabled = settings.notifications.feedingEnabled || settings.notifications.sleepEnabled;
   const allEnabled = draft.enabled
@@ -82,7 +83,8 @@ export function DiaryReminderSettingsModal({
     setDraft(value);
     setExpanded("all");
     setMessage("");
-    setTimePickerOpen(false);
+    setTimeTarget(null);
+    setDurationTarget(null);
     void getReminderPermissionStatus().then(setPermission).catch(() => setPermission("unavailable"));
     if (!babyId) return;
     void NotificationRepository.getSettings(babyId)
@@ -209,23 +211,30 @@ export function DiaryReminderSettingsModal({
     void persistReminder({ ...draft, [key]: next });
   };
 
-  const openTimePicker = () => {
-    setPickerPeriod(draft.hour >= 12 ? "pm" : "am");
-    setPickerHour(draft.hour % 12 || 12);
-    setPickerMinute(draft.minute);
-    setTimePickerOpen(true);
+  const pickerValue = timeTarget === "quietStart"
+    ? draft.quietHoursStart ?? "22:00"
+    : timeTarget === "quietEnd"
+      ? draft.quietHoursEnd ?? "07:00"
+      : `${String(draft.hour).padStart(2, "0")}:${String(draft.minute).padStart(2, "0")}`;
+
+  const confirmTime = (valueHHmm: string) => {
+    const [hour, minute] = valueHHmm.split(":").map(Number);
+    const target = timeTarget;
+    setTimeTarget(null);
+    if (target === "quietStart") void persistReminder({ ...draft, quietHoursStart: valueHHmm });
+    else if (target === "quietEnd") void persistReminder({ ...draft, quietHoursEnd: valueHHmm });
+    else void persistReminder({ ...draft, hour, minute });
   };
 
-  const confirmTimePicker = () => {
-    const hour = pickerPeriod === "am"
-      ? pickerHour % 12
-      : (pickerHour % 12) + 12;
-    setTimePickerOpen(false);
-    void persistReminder({ ...draft, hour, minute: pickerMinute });
-  };
-
-  const setQuietTime = (key: "quietHoursStart" | "quietHoursEnd", time: string) => {
-    void persistReminder({ ...draft, [key]: time });
+  const confirmCareInterval = (minutes: number) => {
+    const target = durationTarget;
+    setDurationTarget(null);
+    setSettings((current) => ({
+      ...current,
+      notifications: target === "feeding"
+        ? { ...current.notifications, feedingEnabled: true, feedingIntervalMinutes: minutes }
+        : { ...current.notifications, sleepEnabled: true, sleepIntervalMinutes: minutes },
+    }));
   };
 
   return (
@@ -285,9 +294,9 @@ export function DiaryReminderSettingsModal({
             <Text style={styles.detailBody}>알림을 받을 시간을 직접 설정해 주세요.</Text>
             <View style={styles.selectedTimeCard}>
               <Text style={styles.selectedTimeLabel}>선택된 시간</Text>
-              <Text style={styles.selectedTimeValue}>매일 {formatKoreanTime(draft.hour, draft.minute)}</Text>
+              <Text style={styles.selectedTimeValue}>매일 {formatTimeOfDay(pickerValue)}</Text>
             </View>
-            <Pressable style={styles.timeButton} onPress={openTimePicker} disabled={busy}>
+            <Pressable style={styles.timeButton} onPress={() => setTimeTarget("reminder")} disabled={busy}>
               <Text style={styles.timeButtonText}>시간 설정</Text>
             </Pressable>
             {onTestNotification ? (
@@ -307,8 +316,8 @@ export function DiaryReminderSettingsModal({
             onToggle={toggleCare}
             onExpand={() => setExpanded(expanded === "care" ? null : "care")}
           >
-            <IntervalSetting label="수유 간격" value={settings.notifications.feedingIntervalMinutes} options={[120, 180, 240]} onChange={(feedingIntervalMinutes) => setSettings((current) => ({ ...current, notifications: { ...current.notifications, feedingEnabled: true, feedingIntervalMinutes } }))} />
-            <IntervalSetting label="수면 간격" value={settings.notifications.sleepIntervalMinutes} options={[90, 120, 180]} onChange={(sleepIntervalMinutes) => setSettings((current) => ({ ...current, notifications: { ...current.notifications, sleepEnabled: true, sleepIntervalMinutes } }))} />
+            <DurationPickerField label="수유 간격" valueMinutes={settings.notifications.feedingIntervalMinutes} onPress={() => setDurationTarget("feeding")} disabled={busy} />
+            <DurationPickerField label="수면 간격" valueMinutes={settings.notifications.sleepIntervalMinutes} onPress={() => setDurationTarget("sleep")} disabled={busy} />
           </NotificationRow>
 
           <NotificationRow
@@ -348,68 +357,25 @@ export function DiaryReminderSettingsModal({
             onToggle={(next) => toggleReminderField("quiet", "quietHoursEnabled", next)}
             onExpand={() => setExpanded(expanded === "quiet" ? null : "quiet")}
           >
-            <TimeSetting label="시작 시간" value={draft.quietHoursStart ?? "22:00"} options={["21:00", "22:00", "23:00"]} onChange={(time) => setQuietTime("quietHoursStart", time)} />
-            <TimeSetting label="종료 시간" value={draft.quietHoursEnd ?? "07:00"} options={["06:00", "07:00", "08:00"]} onChange={(time) => setQuietTime("quietHoursEnd", time)} />
+            <TimeOfDayPickerField label="시작 시간" valueHHmm={draft.quietHoursStart ?? "22:00"} onPress={() => setTimeTarget("quietStart")} disabled={busy} />
+            <TimeOfDayPickerField label="종료 시간" valueHHmm={draft.quietHoursEnd ?? "07:00"} onPress={() => setTimeTarget("quietEnd")} disabled={busy} />
           </NotificationRow>
 
           {message ? <Text style={styles.message}>{message}</Text> : null}
         </ScrollView>
 
-        {timePickerOpen ? (
-          <View style={styles.timeOverlay}>
-            <Pressable style={styles.timeBackdrop} onPress={() => setTimePickerOpen(false)} accessibilityLabel="시간 선택 취소" />
-            <View style={[styles.timeSheet, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-              <View style={styles.timeSheetHeader}>
-                <Pressable style={styles.timeSheetAction} onPress={() => setTimePickerOpen(false)}><Text style={styles.timeCancel}>취소</Text></Pressable>
-                <Text style={styles.timeSheetTitle}>시간 선택</Text>
-                <Pressable style={styles.timeSheetAction} onPress={confirmTimePicker}><Text style={styles.timeDone}>완료</Text></Pressable>
-              </View>
-              <View style={styles.wheelArea}>
-                <View pointerEvents="none" style={styles.wheelSelection} />
-                <WheelColumn options={PERIOD_OPTIONS} selectedIndex={pickerPeriod === "am" ? 0 : 1} onSelect={(index) => setPickerPeriod(index === 0 ? "am" : "pm")} accessibilityLabel="오전 오후" />
-                <WheelColumn options={HOUR_OPTIONS} selectedIndex={pickerHour - 1} onSelect={(index) => setPickerHour(index + 1)} accessibilityLabel="시" />
-                <WheelColumn options={MINUTE_OPTIONS} selectedIndex={pickerMinute} onSelect={setPickerMinute} accessibilityLabel="분" />
-              </View>
-              <View style={styles.wheelLabels}><Text style={styles.wheelLabel}>오전/오후</Text><Text style={styles.wheelLabel}>시</Text><Text style={styles.wheelLabel}>분</Text></View>
-              <Text style={styles.timeSheetHelp}>선택한 시간에 매일 알림을 보내드려요.</Text>
-            </View>
-          </View>
-        ) : null}
+        <TimePickerSheet visible={timeTarget !== null} valueHHmm={pickerValue} onCancel={() => setTimeTarget(null)} onConfirm={confirmTime} />
+        <DurationPickerSheet
+          visible={durationTarget !== null}
+          valueMinutes={durationTarget === "feeding" ? settings.notifications.feedingIntervalMinutes : settings.notifications.sleepIntervalMinutes}
+          title={durationTarget === "feeding" ? "수유 간격" : "수면 간격"}
+          minMinutes={15}
+          maxMinutes={12 * 60}
+          onCancel={() => setDurationTarget(null)}
+          onConfirm={confirmCareInterval}
+        />
       </View>
     </Modal>
-  );
-}
-
-function formatKoreanTime(hour: number, minute: number) {
-  const period = hour < 12 ? "오전" : "오후";
-  const hour12 = hour % 12 || 12;
-  return `${period} ${hour12}:${String(minute).padStart(2, "0")}`;
-}
-
-function WheelColumn({ options, selectedIndex, onSelect, accessibilityLabel }: { options: string[]; selectedIndex: number; onSelect: (index: number) => void; accessibilityLabel: string }) {
-  const updateSelection = (offsetY: number) => {
-    const index = Math.max(0, Math.min(options.length - 1, Math.round(offsetY / WHEEL_ITEM_HEIGHT)));
-    onSelect(index);
-  };
-  return (
-    <ScrollView
-      style={styles.wheelColumn}
-      contentContainerStyle={styles.wheelContent}
-      contentOffset={{ x: 0, y: selectedIndex * WHEEL_ITEM_HEIGHT }}
-      showsVerticalScrollIndicator={false}
-      snapToInterval={WHEEL_ITEM_HEIGHT}
-      decelerationRate="fast"
-      nestedScrollEnabled
-      accessibilityLabel={accessibilityLabel}
-      onMomentumScrollEnd={(event) => updateSelection(event.nativeEvent.contentOffset.y)}
-      onScrollEndDrag={(event) => updateSelection(event.nativeEvent.contentOffset.y)}
-    >
-      {options.map((option, index) => (
-        <View key={option} style={styles.wheelItem}>
-          <Text style={[styles.wheelItemText, index === selectedIndex && styles.wheelItemTextSelected]}>{option}</Text>
-        </View>
-      ))}
-    </ScrollView>
   );
 }
 
@@ -467,24 +433,6 @@ function DetailLine({ label, value }: { label: string; value: string }) {
   return <View style={styles.detailLine}><Text style={styles.detailLabel}>{label}</Text><Text style={styles.detailValue}>{value}</Text></View>;
 }
 
-function IntervalSetting({ label, value, options, onChange }: { label: string; value: number; options: number[]; onChange: (value: number) => void }) {
-  return (
-    <View style={styles.optionBlock}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <View style={styles.choiceWrap}>{options.map((option) => <Pressable key={option} style={[styles.choice, value === option && styles.choiceOn]} onPress={() => onChange(option)}><Text style={[styles.choiceText, value === option && styles.choiceTextOn]}>{option / 60}시간</Text></Pressable>)}</View>
-    </View>
-  );
-}
-
-function TimeSetting({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
-  return (
-    <View style={styles.optionBlock}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <View style={styles.choiceWrap}>{options.map((option) => <Pressable key={option} style={[styles.choice, value === option && styles.choiceOn]} onPress={() => onChange(option)}><Text style={[styles.choiceText, value === option && styles.choiceTextOn]}>{option}</Text></Pressable>)}</View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   header: { minHeight: 48, paddingHorizontal: 16, paddingBottom: 10, flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
@@ -512,31 +460,7 @@ const styles = StyleSheet.create({
   timeButton: { minHeight: 44, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.amber },
   timeButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   inlineSwitchRow: { minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  optionBlock: { gap: 8 },
-  choiceWrap: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  choice: { minHeight: 34, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, backgroundColor: colors.card },
-  choiceOn: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  choiceText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
-  choiceTextOn: { color: colors.amberDark },
   secondaryButton: { minHeight: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   secondaryButtonText: { color: colors.text, fontSize: 13, fontWeight: "800" },
   message: { padding: 12, color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center" },
-  timeOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", zIndex: 20 },
-  timeBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(22, 18, 16, 0.34)" },
-  timeSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: colors.card, overflow: "hidden" },
-  timeSheetHeader: { minHeight: 52, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  timeSheetAction: { width: 64, minHeight: 44, alignItems: "center", justifyContent: "center" },
-  timeCancel: { color: colors.muted, fontSize: 15, fontWeight: "700" },
-  timeDone: { color: colors.amber, fontSize: 15, fontWeight: "800" },
-  timeSheetTitle: { flex: 1, textAlign: "center", color: colors.text, fontSize: 16, fontWeight: "800" },
-  wheelArea: { height: WHEEL_ITEM_HEIGHT * 5, marginHorizontal: 18, flexDirection: "row" },
-  wheelSelection: { position: "absolute", left: 0, right: 0, top: WHEEL_ITEM_HEIGHT * 2, height: WHEEL_ITEM_HEIGHT, borderRadius: 10, backgroundColor: colors.backgroundSecondary, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  wheelColumn: { flex: 1, height: WHEEL_ITEM_HEIGHT * 5 },
-  wheelContent: { paddingVertical: WHEEL_ITEM_HEIGHT * 2 },
-  wheelItem: { height: WHEEL_ITEM_HEIGHT, alignItems: "center", justifyContent: "center" },
-  wheelItemText: { color: colors.muted, fontSize: 18, fontWeight: "600" },
-  wheelItemTextSelected: { color: colors.text, fontSize: 21, fontWeight: "800" },
-  wheelLabels: { marginHorizontal: 18, flexDirection: "row" },
-  wheelLabel: { flex: 1, textAlign: "center", color: colors.faint, fontSize: 10.5, fontWeight: "700" },
-  timeSheetHelp: { marginTop: 12, paddingHorizontal: 20, textAlign: "center", color: colors.muted, fontSize: 12, lineHeight: 18 },
 });
