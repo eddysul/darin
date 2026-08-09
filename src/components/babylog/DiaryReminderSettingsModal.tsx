@@ -14,11 +14,6 @@ import { NotificationRepository } from "../../repositories/NotificationRepositor
 import { AuthRepository } from "../../repositories/AuthRepository";
 import { colors, radius } from "../../theme";
 import type { DiaryReminderSettings } from "../../types/diaryReminder";
-import { REMINDER_PRESETS } from "../../types/diaryReminder";
-import {
-  formatReminderTime,
-  matchesReminderPreset,
-} from "../../utils/diaryReminderStore";
 import {
   cancelDiaryReminderNotifications,
   getReminderPermissionStatus,
@@ -40,6 +35,12 @@ type Props = {
 };
 
 type SectionId = "all" | "diary" | "care" | "family" | "invite" | "quiet";
+type DayPeriod = "am" | "pm";
+
+const WHEEL_ITEM_HEIGHT = 44;
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => String(index + 1));
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
+const PERIOD_OPTIONS = ["오전", "오후"];
 
 const permissionLabel: Record<ReminderPermissionStatus, string> = {
   granted: "허용됨",
@@ -64,6 +65,10 @@ export function DiaryReminderSettingsModal({
   const [expanded, setExpanded] = useState<SectionId | null>("all");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [pickerPeriod, setPickerPeriod] = useState<DayPeriod>("pm");
+  const [pickerHour, setPickerHour] = useState(9);
+  const [pickerMinute, setPickerMinute] = useState(0);
 
   const careEnabled = settings.notifications.feedingEnabled || settings.notifications.sleepEnabled;
   const allEnabled = draft.enabled
@@ -77,6 +82,7 @@ export function DiaryReminderSettingsModal({
     setDraft(value);
     setExpanded("all");
     setMessage("");
+    setTimePickerOpen(false);
     void getReminderPermissionStatus().then(setPermission).catch(() => setPermission("unavailable"));
     if (!babyId) return;
     void NotificationRepository.getSettings(babyId)
@@ -203,8 +209,19 @@ export function DiaryReminderSettingsModal({
     void persistReminder({ ...draft, [key]: next });
   };
 
-  const setReminderTime = (hour: number, minute: number) => {
-    void persistReminder({ ...draft, hour, minute });
+  const openTimePicker = () => {
+    setPickerPeriod(draft.hour >= 12 ? "pm" : "am");
+    setPickerHour(draft.hour % 12 || 12);
+    setPickerMinute(draft.minute);
+    setTimePickerOpen(true);
+  };
+
+  const confirmTimePicker = () => {
+    const hour = pickerPeriod === "am"
+      ? pickerHour % 12
+      : (pickerHour % 12) + 12;
+    setTimePickerOpen(false);
+    void persistReminder({ ...draft, hour, minute: pickerMinute });
   };
 
   const setQuietTime = (key: "quietHoursStart" | "quietHoursEnd", time: string) => {
@@ -264,18 +281,15 @@ export function DiaryReminderSettingsModal({
             onExpand={() => setExpanded(expanded === "diary" ? null : "diary")}
           >
             <DetailLine label="요일" value="매일" />
-            <Text style={styles.detailLabel}>시간</Text>
-            <View style={styles.choiceWrap}>
-              {REMINDER_PRESETS.map((preset) => {
-                const selected = matchesReminderPreset(draft.hour, draft.minute) === preset.id;
-                return (
-                  <Pressable key={preset.id} style={[styles.choice, selected && styles.choiceOn]} onPress={() => setReminderTime(preset.hour, preset.minute)} disabled={busy}>
-                    <Text style={[styles.choiceText, selected && styles.choiceTextOn]}>{preset.label}</Text>
-                  </Pressable>
-                );
-              })}
+            <Text style={styles.timePrompt}>언제 알려드릴까요?</Text>
+            <Text style={styles.detailBody}>알림을 받을 시간을 직접 설정해 주세요.</Text>
+            <View style={styles.selectedTimeCard}>
+              <Text style={styles.selectedTimeLabel}>선택된 시간</Text>
+              <Text style={styles.selectedTimeValue}>매일 {formatKoreanTime(draft.hour, draft.minute)}</Text>
             </View>
-            <Text style={styles.detailFoot}>현재 {formatReminderTime(draft.hour, draft.minute)} · 매일 예약</Text>
+            <Pressable style={styles.timeButton} onPress={openTimePicker} disabled={busy}>
+              <Text style={styles.timeButtonText}>시간 설정</Text>
+            </Pressable>
             {onTestNotification ? (
               <Pressable style={styles.secondaryButton} onPress={onTestNotification}>
                 <Text style={styles.secondaryButtonText}>알림 미리보기 보내기</Text>
@@ -340,8 +354,62 @@ export function DiaryReminderSettingsModal({
 
           {message ? <Text style={styles.message}>{message}</Text> : null}
         </ScrollView>
+
+        {timePickerOpen ? (
+          <View style={styles.timeOverlay}>
+            <Pressable style={styles.timeBackdrop} onPress={() => setTimePickerOpen(false)} accessibilityLabel="시간 선택 취소" />
+            <View style={[styles.timeSheet, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+              <View style={styles.timeSheetHeader}>
+                <Pressable style={styles.timeSheetAction} onPress={() => setTimePickerOpen(false)}><Text style={styles.timeCancel}>취소</Text></Pressable>
+                <Text style={styles.timeSheetTitle}>시간 선택</Text>
+                <Pressable style={styles.timeSheetAction} onPress={confirmTimePicker}><Text style={styles.timeDone}>완료</Text></Pressable>
+              </View>
+              <View style={styles.wheelArea}>
+                <View pointerEvents="none" style={styles.wheelSelection} />
+                <WheelColumn options={PERIOD_OPTIONS} selectedIndex={pickerPeriod === "am" ? 0 : 1} onSelect={(index) => setPickerPeriod(index === 0 ? "am" : "pm")} accessibilityLabel="오전 오후" />
+                <WheelColumn options={HOUR_OPTIONS} selectedIndex={pickerHour - 1} onSelect={(index) => setPickerHour(index + 1)} accessibilityLabel="시" />
+                <WheelColumn options={MINUTE_OPTIONS} selectedIndex={pickerMinute} onSelect={setPickerMinute} accessibilityLabel="분" />
+              </View>
+              <View style={styles.wheelLabels}><Text style={styles.wheelLabel}>오전/오후</Text><Text style={styles.wheelLabel}>시</Text><Text style={styles.wheelLabel}>분</Text></View>
+              <Text style={styles.timeSheetHelp}>선택한 시간에 매일 알림을 보내드려요.</Text>
+            </View>
+          </View>
+        ) : null}
       </View>
     </Modal>
+  );
+}
+
+function formatKoreanTime(hour: number, minute: number) {
+  const period = hour < 12 ? "오전" : "오후";
+  const hour12 = hour % 12 || 12;
+  return `${period} ${hour12}:${String(minute).padStart(2, "0")}`;
+}
+
+function WheelColumn({ options, selectedIndex, onSelect, accessibilityLabel }: { options: string[]; selectedIndex: number; onSelect: (index: number) => void; accessibilityLabel: string }) {
+  const updateSelection = (offsetY: number) => {
+    const index = Math.max(0, Math.min(options.length - 1, Math.round(offsetY / WHEEL_ITEM_HEIGHT)));
+    onSelect(index);
+  };
+  return (
+    <ScrollView
+      style={styles.wheelColumn}
+      contentContainerStyle={styles.wheelContent}
+      contentOffset={{ x: 0, y: selectedIndex * WHEEL_ITEM_HEIGHT }}
+      showsVerticalScrollIndicator={false}
+      snapToInterval={WHEEL_ITEM_HEIGHT}
+      decelerationRate="fast"
+      nestedScrollEnabled
+      accessibilityLabel={accessibilityLabel}
+      onMomentumScrollEnd={(event) => updateSelection(event.nativeEvent.contentOffset.y)}
+      onScrollEndDrag={(event) => updateSelection(event.nativeEvent.contentOffset.y)}
+    >
+      {options.map((option, index) => (
+        <View key={option} style={styles.wheelItem}>
+          <Text style={[styles.wheelItemText, index === selectedIndex && styles.wheelItemTextSelected]}>{option}</Text>
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 
@@ -437,6 +505,12 @@ const styles = StyleSheet.create({
   detailValue: { color: colors.muted, fontSize: 13, fontWeight: "700" },
   detailBody: { color: colors.muted, fontSize: 12.5, lineHeight: 20 },
   detailFoot: { color: colors.faint, fontSize: 11.5, lineHeight: 18 },
+  timePrompt: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  selectedTimeCard: { padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  selectedTimeLabel: { color: colors.faint, fontSize: 11.5, fontWeight: "700" },
+  selectedTimeValue: { marginTop: 5, color: colors.text, fontSize: 19, fontWeight: "800" },
+  timeButton: { minHeight: 44, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.amber },
+  timeButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   inlineSwitchRow: { minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   optionBlock: { gap: 8 },
   choiceWrap: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
@@ -447,4 +521,22 @@ const styles = StyleSheet.create({
   secondaryButton: { minHeight: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   secondaryButtonText: { color: colors.text, fontSize: 13, fontWeight: "800" },
   message: { padding: 12, color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center" },
+  timeOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", zIndex: 20 },
+  timeBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(22, 18, 16, 0.34)" },
+  timeSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: colors.card, overflow: "hidden" },
+  timeSheetHeader: { minHeight: 52, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  timeSheetAction: { width: 64, minHeight: 44, alignItems: "center", justifyContent: "center" },
+  timeCancel: { color: colors.muted, fontSize: 15, fontWeight: "700" },
+  timeDone: { color: colors.amber, fontSize: 15, fontWeight: "800" },
+  timeSheetTitle: { flex: 1, textAlign: "center", color: colors.text, fontSize: 16, fontWeight: "800" },
+  wheelArea: { height: WHEEL_ITEM_HEIGHT * 5, marginHorizontal: 18, flexDirection: "row" },
+  wheelSelection: { position: "absolute", left: 0, right: 0, top: WHEEL_ITEM_HEIGHT * 2, height: WHEEL_ITEM_HEIGHT, borderRadius: 10, backgroundColor: colors.backgroundSecondary, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  wheelColumn: { flex: 1, height: WHEEL_ITEM_HEIGHT * 5 },
+  wheelContent: { paddingVertical: WHEEL_ITEM_HEIGHT * 2 },
+  wheelItem: { height: WHEEL_ITEM_HEIGHT, alignItems: "center", justifyContent: "center" },
+  wheelItemText: { color: colors.muted, fontSize: 18, fontWeight: "600" },
+  wheelItemTextSelected: { color: colors.text, fontSize: 21, fontWeight: "800" },
+  wheelLabels: { marginHorizontal: 18, flexDirection: "row" },
+  wheelLabel: { flex: 1, textAlign: "center", color: colors.faint, fontSize: 10.5, fontWeight: "700" },
+  timeSheetHelp: { marginTop: 12, paddingHorizontal: 20, textAlign: "center", color: colors.muted, fontSize: 12, lineHeight: 18 },
 });
