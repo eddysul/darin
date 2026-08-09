@@ -1,17 +1,16 @@
 /**
  * 소셜 로그인 노출 규칙:
- * - 버튼은 기본으로 노출한다 (순서: Kakao → Apple → Google).
- * - 실제 연동이 되기 전까지는 비활성(disabled)이며 "준비 중" 문구는 표시하지 않는다.
- * - EXPO_PUBLIC_SHOW_*_LOGIN=false 로만 숨길 수 있다.
- * - Flip the implementation guard only when the corresponding flow is wired.
+ * - 구현 guard와 ENABLE flag가 모두 준비된 provider만 활성화한다.
+ * - Google은 Build 11에서 숨기며, production 기본값도 false다.
+ * - Flip the implementation guard only after production OAuth smoke passes.
  */
 const APPLE_LOGIN_IMPLEMENTED = true;
-const GOOGLE_LOGIN_IMPLEMENTED = true;
+const GOOGLE_LOGIN_IMPLEMENTED = false;
 const KAKAO_LOGIN_IMPLEMENTED = true;
 
 function providerFlag(implemented: boolean, enableEnv?: string, showEnv?: string) {
   const enabled = implemented && enableEnv === "true";
-  const visible = showEnv !== "false";
+  const visible = implemented && showEnv !== "false";
   return { enabled, visible } as const;
 }
 

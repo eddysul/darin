@@ -106,9 +106,7 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
       setSocialError(
         /provider is not enabled|unsupported provider/i.test(message)
           ? "Supabase에서 Google 로그인을 먼저 활성화해주세요."
-          : /manual linking/i.test(message)
-            ? "Supabase의 Allow manual linking 설정을 활성화해주세요."
-            : message,
+          : "Google 로그인을 완료하지 못했어요. 다시 시도해 주세요.",
       );
     } finally {
       setSocialBusy(null);

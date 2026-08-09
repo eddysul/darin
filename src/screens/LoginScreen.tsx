@@ -16,6 +16,7 @@ import { useScreenTopInset } from "../hooks/useScreenInsets";
 import { ScreenBackground } from "../components/ScreenBackground";
 import { useLanguage } from "../LanguageContext";
 import { colors, radius } from "../theme";
+import { authProviderFlags } from "../config/authProviders";
 
 type LoginScreenProps = {
   onLogin: () => void;
@@ -220,10 +221,12 @@ export function LoginScreen({ onLogin, onSignUp }: LoginScreenProps) {
                 <View style={styles.dividerLine} />
               </View>
 
-              <Pressable style={styles.socialBtn} onPress={onLogin}>
-                <GoogleIcon />
-                <Text style={styles.socialBtnText}>{t("login.continueGoogle")}</Text>
-              </Pressable>
+              {authProviderFlags.google.visible ? (
+                <Pressable style={styles.socialBtn} onPress={onLogin}>
+                  <GoogleIcon />
+                  <Text style={styles.socialBtnText}>{t("login.continueGoogle")}</Text>
+                </Pressable>
+              ) : null}
 
               <Pressable style={styles.appleBtn} onPress={onLogin}>
                 <AppleIcon />
