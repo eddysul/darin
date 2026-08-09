@@ -34,7 +34,7 @@ import {
   subscribeStorageIssues,
 } from "../src/utils/storageIssues";
 import { resolvePostSplashPhase } from "../src/utils/appStartup";
-import { canSubmitUserProfile, isUserProfileComplete, resolveAuthenticatedRoute } from "../src/utils/profileCompletion";
+import { canSubmitUserProfile, isBabyProfileComplete, isUserProfileComplete, resolveAuthenticatedRoute } from "../src/utils/profileCompletion";
 import { parseInviteCodeFromUrl } from "../src/utils/inviteCode";
 import { completeAuthCallback, parseAuthCallback } from "../src/utils/authCallback";
 import { formatIsoDateInput, isValidBirthDate } from "../src/utils/dateInput";
@@ -526,6 +526,10 @@ function log(
     resolveAuthenticatedRoute({ profileComplete: true, hasPendingInvite: true, hasBaby: true }),
     "invite",
   );
+  assert.equal(isBabyProfileComplete({ name: "아기", child_status: "newborn", birth_date: null }), false);
+  assert.equal(isBabyProfileComplete({ name: "아기", child_status: "newborn", birth_date: "2026-01-01" }), true);
+  assert.equal(isBabyProfileComplete({ name: "아기", child_status: "unborn", due_date: null }), false);
+  assert.equal(isBabyProfileComplete({ name: "아기", child_status: "unborn", due_date: "2026-12-01" }), true);
   assert.equal(
     resolveAuthenticatedRoute({ profileComplete: true, hasPendingInvite: false, hasBaby: false }),
     "babySetup",

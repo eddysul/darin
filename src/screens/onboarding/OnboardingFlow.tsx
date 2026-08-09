@@ -52,6 +52,7 @@ type Props = {
   initialInviteCode?: string;
   skipProfileStep?: boolean;
   startAtBabySetup?: boolean;
+  initialChild?: Partial<CareSetup["child"]>;
   onComplete: (result: OnboardingResult) => void;
 };
 
@@ -81,6 +82,7 @@ export function OnboardingFlow({
   initialInviteCode = "",
   skipProfileStep = false,
   startAtBabySetup = false,
+  initialChild,
   onComplete,
 }: Props) {
   const [step, setStep] = useState<Step>(
@@ -92,6 +94,10 @@ export function OnboardingFlow({
       ...DEFAULT_CARE_SETUP.parent,
       parentName: initialName,
       relationshipToChild: relationshipFromLabel(initialRelation),
+    },
+    child: {
+      ...DEFAULT_CARE_SETUP.child,
+      ...initialChild,
     },
   }));
   const [inviteCode, setInviteCode] = useState(initialInviteCode);

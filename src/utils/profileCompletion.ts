@@ -88,3 +88,13 @@ export function resolveAuthenticatedRoute(input: {
   if (!input.hasBaby) return "babySetup";
   return "main";
 }
+
+export function isBabyProfileComplete(baby: {
+  name?: string | null;
+  child_status?: string | null;
+  birth_date?: string | null;
+  due_date?: string | null;
+} | null | undefined): boolean {
+  if (!baby?.name?.trim()) return false;
+  return baby.child_status === "unborn" ? Boolean(baby.due_date) : Boolean(baby.birth_date);
+}

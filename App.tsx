@@ -49,7 +49,7 @@ import {
 import { WebAppShell } from "./src/components/WebAppShell";
 import { colors } from "./src/theme";
 import { resolvePostSplashPhase } from "./src/utils/appStartup";
-import { isUserProfileComplete, resolveAuthenticatedRoute } from "./src/utils/profileCompletion";
+import { isBabyProfileComplete, isUserProfileComplete, resolveAuthenticatedRoute } from "./src/utils/profileCompletion";
 import {
   clearPendingInvite,
   hydratePendingInvite,
@@ -101,6 +101,28 @@ function authProfileName(user: Awaited<ReturnType<typeof AuthRepository.getUser>
     || "";
   if (!candidate || candidate.includes("@") || candidate === user?.email) return "";
   return candidate;
+}
+
+function normalizedChildStatus(value: string): ChildStatus {
+  return ["unborn", "newborn", "infant"].includes(value) ? value as ChildStatus : "newborn";
+}
+
+function onboardingChildFromBaby(baby: BabyRow): Partial<CareSetup["child"]> {
+  const gender = ["girl", "boy", "unknown"].includes(baby.gender ?? "")
+    ? baby.gender as ChildGender
+    : "unknown";
+  return {
+    childName: baby.name,
+    nickname: baby.nickname ?? undefined,
+    birthDate: baby.birth_date ?? undefined,
+    dueDate: baby.due_date ?? undefined,
+    childStatus: normalizedChildStatus(baby.child_status),
+    gender,
+    photoUri: baby.photo_url ?? undefined,
+    gestationalAgeWeeks: baby.gestational_age_weeks ?? undefined,
+    birthWeight: baby.birth_weight ?? undefined,
+    specialNotes: baby.special_notes ?? undefined,
+  };
 }
 
 export default function App() {
@@ -260,6 +282,8 @@ function RootApp() {
   const [onboardingRelation, setOnboardingRelation] = useState<RelationshipLabel | undefined>();
   const [onboardingInviteCode, setOnboardingInviteCode] = useState("");
   const [onboardingStartsWithBaby, setOnboardingStartsWithBaby] = useState(false);
+  const [onboardingInitialChild, setOnboardingInitialChild] = useState<Partial<CareSetup["child"]>>();
+  const [onboardingExistingBabyId, setOnboardingExistingBabyId] = useState<string | null>(null);
   const startupRouting = useRef(false);
 
   useEffect(() => {
@@ -488,12 +512,15 @@ function RootApp() {
     }
 
     const babies = await BabyRepository.listMyBabies();
+    const preferredBaby = babies.find((baby) => baby.id === input?.preferredBabyId) ?? babies[0];
     const route = resolveAuthenticatedRoute({
       profileComplete,
       hasPendingInvite: Boolean(validPendingCode),
-      hasBaby: babies.length > 0,
+      hasBaby: Boolean(preferredBaby && isBabyProfileComplete(preferredBaby)),
     });
     if (route === "invite") {
+      setOnboardingInitialChild(undefined);
+      setOnboardingExistingBabyId(null);
       setOnboardingStartsWithBaby(false);
       setOnboardingVersion((value) => value + 1);
       setPhase("setup");
@@ -501,12 +528,14 @@ function RootApp() {
     }
     if (route === "babySetup") {
       await resetCareSetup();
+      setOnboardingInitialChild(preferredBaby ? onboardingChildFromBaby(preferredBaby) : undefined);
+      setOnboardingExistingBabyId(preferredBaby?.id ?? null);
       setOnboardingStartsWithBaby(true);
       setOnboardingVersion((value) => value + 1);
       setPhase("setup");
       return;
     }
-    const serverBaby = babies.find((baby) => baby.id === input?.preferredBabyId) ?? babies[0];
+    const serverBaby = preferredBaby;
     if (serverBaby) await restoreWorkspace(serverBaby, displayName);
   }, [resetCareSetup, restoreWorkspace]);
 
@@ -599,9 +628,17 @@ function RootApp() {
         return;
       }
 
-      enterMain(result.setup, result.setup.parent.parentName);
+      try {
+        const baby = await BabyRepository.ensureFromCareSetup(result.setup, onboardingExistingBabyId);
+        await restoreWorkspace(baby, result.setup.parent.parentName);
+      } catch (cause) {
+        Alert.alert(
+          "아기 프로필을 저장하지 못했어요",
+          cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요.",
+        );
+      }
     },
-    [enterMain, rehydrateFromServer, routeAuthenticatedSession],
+    [onboardingExistingBabyId, rehydrateFromServer, restoreWorkspace, routeAuthenticatedSession],
   );
 
   return (
@@ -626,6 +663,7 @@ function RootApp() {
             initialInviteCode={onboardingInviteCode}
             skipProfileStep
             startAtBabySetup={onboardingStartsWithBaby}
+            initialChild={onboardingInitialChild}
             onComplete={handleSetupComplete}
           />
         )}
