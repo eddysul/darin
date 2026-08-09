@@ -27,6 +27,7 @@ const owner = await account("InviteQA-Owner");
 const family = await account("InviteQA-Family");
 const babyFriend = await account("InviteQA-BabyFriend");
 const darinFriend = await account("InviteQA-DarinFriend");
+const outsider = await account("InviteQA-Outsider");
 let babyId = null;
 
 try {
@@ -37,6 +38,32 @@ try {
   });
   if (created.error || !created.data?.id) throw created.error ?? new Error("QA baby create failed");
   babyId = created.data.id;
+
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const careFixture = await owner.sb.from("care_logs").insert({
+    baby_id: babyId,
+    category: "memo",
+    recorded_at: new Date().toISOString(),
+    date_key: dateKey,
+    time_local: "12:00",
+    payload: { note: "invite access fixture" },
+    created_by: owner.user.id,
+  });
+  if (careFixture.error) throw new Error(`care fixture: ${careFixture.error.message}`);
+  const diaryFixture = await owner.sb.from("diary_entries").insert({
+    baby_id: babyId,
+    author_id: owner.user.id,
+    entry_date: dateKey,
+    title: "Invite access fixture",
+    body: "private diary fixture",
+  });
+  if (diaryFixture.error) throw new Error(`diary fixture: ${diaryFixture.error.message}`);
+  const growthBookFixture = await owner.sb.from("growth_books").insert({
+    baby_id: babyId,
+    title: "Invite access fixture",
+    created_by: owner.user.id,
+  });
+  if (growthBookFixture.error) throw new Error(`growth book fixture: ${growthBookFixture.error.message}`);
 
   const familyInvite = await owner.sb.rpc("create_invite_code", {
     p_baby_id: babyId,
@@ -81,7 +108,12 @@ try {
   if (forbiddenBabyMember.error || forbiddenBabyMember.data?.length) throw new Error("baby friend leaked into baby_members");
   const forbiddenCare = await babyFriend.sb.from("care_logs").select("id").eq("baby_id", babyId);
   if (forbiddenCare.error || forbiddenCare.data?.length) throw new Error("baby friend can read care logs");
-  pass("baby friend creates memory_friends only; baby_members/care logs remain denied");
+  const forbiddenDiary = await babyFriend.sb.from("diary_entries").select("id").eq("baby_id", babyId);
+  if (forbiddenDiary.error || forbiddenDiary.data?.length) throw new Error("baby friend can read diary");
+  const forbiddenGrowthBook = await babyFriend.sb.from("growth_books").select("id").eq("baby_id", babyId);
+  if (forbiddenGrowthBook.error || forbiddenGrowthBook.data?.length) throw new Error("baby friend can read growth book");
+  pass("baby friend creates memory_friends only");
+  pass("baby friend cannot read care_logs, diary, or growth_book fixtures");
 
   const userInvite = await owner.sb.rpc("create_invite_code", {
     p_baby_id: null,
@@ -105,6 +137,18 @@ try {
   if (noBabyAccess.error || noBabyAccess.data?.length) throw new Error("Darin friendship granted baby read");
   pass("Darin friendship list works and grants no baby access");
 
+  const outsiderBaby = await outsider.sb.from("babies").select("id").eq("id", babyId);
+  const outsiderCare = await outsider.sb.from("care_logs").select("id").eq("baby_id", babyId);
+  const outsiderDiary = await outsider.sb.from("diary_entries").select("id").eq("baby_id", babyId);
+  const outsiderGrowthBook = await outsider.sb.from("growth_books").select("id").eq("baby_id", babyId);
+  if (
+    outsiderBaby.error || outsiderBaby.data?.length ||
+    outsiderCare.error || outsiderCare.data?.length ||
+    outsiderDiary.error || outsiderDiary.data?.length ||
+    outsiderGrowthBook.error || outsiderGrowthBook.data?.length
+  ) throw new Error("non-member can read protected baby data");
+  pass("non-member denied babies, care_logs, diary, and growth_book reads");
+
   const addToBaby = await owner.sb.rpc("add_darin_friend_to_baby", {
     p_baby_id: babyId,
     p_friend_user_id: darinFriend.user.id,
@@ -125,7 +169,7 @@ try {
   fail(error instanceof Error ? error.message : String(error));
 } finally {
   if (babyId) await owner.sb.from("babies").delete().eq("id", babyId);
-  await Promise.all([owner, family, babyFriend, darinFriend].map(({ sb }) => sb.auth.signOut()));
+  await Promise.all([owner, family, babyFriend, darinFriend, outsider].map(({ sb }) => sb.auth.signOut()));
 }
 
 console.log(lines.join("\n"));

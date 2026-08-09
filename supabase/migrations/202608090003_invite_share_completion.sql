@@ -135,8 +135,10 @@ begin
 
   if v_invite.invite_type = 'family' then
     if exists (
-      select 1 from public.baby_members
-      where baby_id = v_invite.baby_id and user_id = auth.uid() and status = 'active'
+      select 1 from public.baby_members bm
+      where bm.baby_id = v_invite.baby_id
+        and bm.user_id = auth.uid()
+        and bm.status = 'active'
     ) then raise exception 'already connected to this baby' using errcode = '23505'; end if;
     insert into public.baby_members (
       baby_id, user_id, permission_role, relationship_label, status, display_name_override
@@ -146,7 +148,7 @@ begin
   elsif v_invite.invite_type = 'baby_friend' then
     insert into public.memory_friends (baby_id, user_id, invited_by, status)
     values (v_invite.baby_id, auth.uid(), v_invite.created_by, 'active')
-    on conflict (baby_id, user_id) do update
+    on conflict on constraint memory_friends_baby_id_user_id_key do update
       set status = 'active', invited_by = excluded.invited_by, updated_at = now();
   else
     select * into v_friendship

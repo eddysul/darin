@@ -16,6 +16,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
+import { RecordDatePickerModal } from "../components/babylog/RecordDatePickerModal";
 import { ProfileAvatar } from "../components/profile/ProfileAvatar";
 import { EmptyState } from "../components/states/FeedbackStates";
 import { useApp } from "../context/AppContext";
@@ -35,7 +36,8 @@ import type { FamilyMemberDisplay } from "../types/profileSettings";
 import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
 import { familyRoleToPermission, permissionToFamilyRole } from "../utils/supabaseMappers";
 import { formatBabyAge } from "../utils/childDisplay";
-import { formatIsoDateInput, isValidBirthDate } from "../utils/dateInput";
+import { isValidBirthDate } from "../utils/dateInput";
+import { formatDateKey } from "../utils/dateKey";
 import { getSupabaseSync } from "../utils/supabaseSyncStore";
 import { presentAvatarPicker } from "../utils/profileAvatarPicker";
 import { colors, radius } from "../theme";
@@ -70,6 +72,7 @@ export function BabyProfileScreen() {
   const [name, setName] = useState(careSetup.child.childName);
   const [nickname, setNickname] = useState(careSetup.child.nickname ?? "");
   const [birthDate, setBirthDate] = useState(careSetup.child.birthDate ?? "");
+  const [birthPickerOpen, setBirthPickerOpen] = useState(false);
   const [gender, setGender] = useState(careSetup.child.gender ?? "unknown");
   const [note, setNote] = useState(careSetup.child.specialNotes ?? "");
   const [members, setMembers] = useState<FamilyMemberDisplay[]>([]);
@@ -287,16 +290,18 @@ export function BabyProfileScreen() {
         {editing ? (
           <View style={styles.card}>
             <Text style={styles.label}>생년월일</Text>
-            <TextInput
-              style={styles.input}
-              value={birthDate}
-              onChangeText={(value) => setBirthDate(formatIsoDateInput(value))}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.faint}
-              keyboardType="number-pad"
-              maxLength={10}
-            />
-            <Text style={styles.inputHint}>숫자만 입력하면 하이픈이 자동으로 추가돼요.</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="생년월일 선택"
+              style={styles.dateInput}
+              onPress={() => setBirthPickerOpen(true)}
+            >
+              <Text style={[styles.dateInputText, !birthDate && styles.datePlaceholder]}>
+                {birthDate || "날짜를 선택해 주세요"}
+              </Text>
+              <BabyLogIcon kind="calendar" size={18} color={colors.amber} />
+            </Pressable>
+            <Text style={styles.inputHint}>달력에서 생년월일을 선택해 주세요.</Text>
             <Text style={styles.label}>성별</Text>
             <View style={styles.chips}>
               {([
@@ -465,6 +470,15 @@ export function BabyProfileScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </ScrollView>
 
+      <RecordDatePickerModal
+        visible={birthPickerOpen}
+        selectedDateKey={birthDate || formatDateKey()}
+        minDateKey={formatDateKey(new Date(new Date().getFullYear() - 18, 0, 1), "midnight")}
+        maxDateKey={formatDateKey()}
+        title="생년월일 선택"
+        onSelect={setBirthDate}
+        onClose={() => setBirthPickerOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -492,6 +506,9 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 10 },
   label: { color: colors.text, fontSize: 13, fontWeight: "800", alignSelf: "flex-start" },
   input: { width: "100%", minHeight: 46, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, paddingHorizontal: 12, color: colors.text, fontSize: 15 },
+  dateInput: { width: "100%", minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  dateInputText: { color: colors.text, fontSize: 15, fontWeight: "600" },
+  datePlaceholder: { color: colors.faint, fontWeight: "500" },
   inputHint: { color: colors.faint, fontSize: 11.5, lineHeight: 16 },
   note: { minHeight: 88, paddingTop: 12, textAlignVertical: "top" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

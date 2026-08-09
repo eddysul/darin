@@ -70,6 +70,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
     localDataScope,
   } = useBabyLog();
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+  const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const [quickRecordsOpen, setQuickRecordsOpen] = useState(false);
@@ -184,11 +185,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
             icon="bell"
             title="알림 설정"
             subtitle="일기 리마인더·수유·수면 알림"
-            onPress={() => Alert.alert("알림 설정", "설정할 알림을 선택해 주세요.", [
-              { text: "취소", style: "cancel" },
-              { text: "일기 리마인더", onPress: () => setReminderOpen(true) },
-              { text: "수유·수면 알림", onPress: () => onOpenSettings("careAlerts") },
-            ])}
+            onPress={() => setNotificationSettingsOpen(true)}
           />
         </MenuSection>
 
@@ -304,6 +301,43 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         onSaveSticker={addBabySticker}
         onDeleteSticker={deleteBabySticker}
       />
+
+      <Modal
+        visible={notificationSettingsOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNotificationSettingsOpen(false)}
+      >
+        <Pressable style={styles.overlay} onPress={() => setNotificationSettingsOpen(false)}>
+          <Pressable style={styles.notificationCard} onPress={(event) => event.stopPropagation()}>
+            <Text style={styles.notificationTitle}>알림 설정</Text>
+            <Text style={styles.notificationBody}>필요한 알림을 한 곳에서 관리해요.</Text>
+            <View style={styles.notificationList}>
+              <MenuRow
+                icon="bell"
+                title="일기 리마인더"
+                subtitle="기록을 돌아볼 요일과 시간 설정"
+                onPress={() => {
+                  setNotificationSettingsOpen(false);
+                  setReminderOpen(true);
+                }}
+              />
+              <MenuRow
+                icon="clock"
+                title="수유·수면 알림"
+                subtitle="돌봄 간격과 다음 알림 설정"
+                onPress={() => {
+                  setNotificationSettingsOpen(false);
+                  onOpenSettings("careAlerts");
+                }}
+              />
+            </View>
+            <Pressable style={styles.notificationClose} onPress={() => setNotificationSettingsOpen(false)}>
+              <Text style={styles.notificationCloseText}>닫기</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={deleteOpen} transparent animationType="fade" onRequestClose={() => !deleting && setDeleteOpen(false)}>
         <View style={styles.overlay}>
@@ -429,6 +463,12 @@ const styles = StyleSheet.create({
   dangerTitle: { color: colors.dangerText },
   rowSubtitle: { color: colors.faint, fontSize: 11.5, marginTop: 3 },
   overlay: { flex: 1, justifyContent: "center", padding: 22, backgroundColor: "rgba(30,26,23,0.48)" },
+  notificationCard: { borderRadius: radius.xl, backgroundColor: colors.card, padding: 20, gap: 8 },
+  notificationTitle: { fontSize: 20, fontWeight: "900", color: colors.text },
+  notificationBody: { color: colors.muted, fontSize: 13, marginBottom: 8 },
+  notificationList: { borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
+  notificationClose: { minHeight: 46, marginTop: 8, borderRadius: radius.full, backgroundColor: colors.cardHi, alignItems: "center", justifyContent: "center" },
+  notificationCloseText: { color: colors.text, fontSize: 14, fontWeight: "800" },
   deleteCard: { borderRadius: radius.xl, backgroundColor: colors.card, padding: 20 },
   deleteTitle: { fontSize: 20, fontWeight: "800", color: colors.text },
   deleteBody: { marginTop: 9, color: colors.muted, fontSize: 13, lineHeight: 20 },

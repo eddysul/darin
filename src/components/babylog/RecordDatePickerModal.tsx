@@ -9,11 +9,17 @@ const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 export function RecordDatePickerModal({
   visible,
   selectedDateKey,
+  minDateKey,
+  maxDateKey,
+  title = "날짜 선택",
   onSelect,
   onClose,
 }: {
   visible: boolean;
   selectedDateKey: string;
+  minDateKey?: string;
+  maxDateKey?: string;
+  title?: string;
   onSelect: (dateKey: string) => void;
   onClose: () => void;
 }) {
@@ -21,7 +27,8 @@ export function RecordDatePickerModal({
   const [year, setYear] = useState(selected.getFullYear());
   const [month, setMonth] = useState(selected.getMonth());
   const todayKey = formatDateKey();
-  const oldestKey = offsetDateKey(todayKey, -365);
+  const earliestKey = minDateKey ?? offsetDateKey(todayKey, -365);
+  const latestKey = maxDateKey ?? todayKey;
 
   useEffect(() => {
     if (!visible) return;
@@ -41,17 +48,24 @@ export function RecordDatePickerModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.card}>
+          <Text style={styles.modalTitle}>{title}</Text>
           <View style={styles.header}>
-            <Pressable style={styles.arrow} onPress={() => moveMonth(-1)}><Text style={styles.arrowText}>‹</Text></Pressable>
+            <View style={styles.navGroup}>
+              <Pressable accessibilityLabel="이전 해" style={styles.arrow} onPress={() => moveMonth(-12)}><Text style={styles.yearArrowText}>«</Text></Pressable>
+              <Pressable accessibilityLabel="이전 달" style={styles.arrow} onPress={() => moveMonth(-1)}><Text style={styles.arrowText}>‹</Text></Pressable>
+            </View>
             <Text style={styles.title}>{formatMonthTitle(year, month, true)}</Text>
-            <Pressable style={styles.arrow} onPress={() => moveMonth(1)}><Text style={styles.arrowText}>›</Text></Pressable>
+            <View style={styles.navGroup}>
+              <Pressable accessibilityLabel="다음 달" style={styles.arrow} onPress={() => moveMonth(1)}><Text style={styles.arrowText}>›</Text></Pressable>
+              <Pressable accessibilityLabel="다음 해" style={styles.arrow} onPress={() => moveMonth(12)}><Text style={styles.yearArrowText}>»</Text></Pressable>
+            </View>
           </View>
           <View style={styles.grid}>
             {WEEKDAYS.map((weekday) => <Text key={weekday} style={styles.weekday}>{weekday}</Text>)}
             {days.map((day, index) => {
               if (!day) return <View key={`empty-${index}`} style={styles.day} />;
               const key = formatDateKey(day, "midnight");
-              const disabled = key < oldestKey || key > todayKey;
+              const disabled = key < earliestKey || key > latestKey;
               const active = key === selectedDateKey;
               return (
                 <Pressable
@@ -78,10 +92,13 @@ export function RecordDatePickerModal({
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(43,31,24,0.38)", justifyContent: "center", padding: 22 },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 16, borderWidth: 1, borderColor: colors.border, gap: 14 },
+  modalTitle: { color: colors.text, fontSize: 18, fontWeight: "900", textAlign: "center" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  navGroup: { flexDirection: "row", gap: 4 },
   title: { color: colors.text, fontSize: 16, fontWeight: "800" },
   arrow: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: colors.cardHi },
   arrowText: { color: colors.text, fontSize: 26 },
+  yearArrowText: { color: colors.muted, fontSize: 20, fontWeight: "800" },
   grid: { flexDirection: "row", flexWrap: "wrap" },
   weekday: { width: "14.2857%", textAlign: "center", color: colors.faint, fontSize: 11, fontWeight: "700", paddingVertical: 6 },
   day: { width: "14.2857%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 999 },

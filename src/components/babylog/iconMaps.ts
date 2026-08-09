@@ -8,6 +8,7 @@ import {
   Bell,
   Bot,
   BookOpen,
+  CalendarDays,
   Check,
   ChevronRight,
   ClipboardList,
@@ -78,6 +79,7 @@ export type MiscIconKey =
   | "check"
   | "folder"
   | "clock"
+  | "calendar"
   | "interval"
   | "bell"
   | "sparkles"
@@ -108,6 +110,7 @@ export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
   check: Check,
   folder: FolderOpen,
   clock: Clock,
+  calendar: CalendarDays,
   interval: ArrowLeftRight,
   bell: Bell,
   sparkles: Sparkles,
