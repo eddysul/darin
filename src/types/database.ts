@@ -18,6 +18,8 @@ export type DbRelationshipLabel =
 export type MemberStatus = "pending" | "active" | "inactive";
 export type MemoryPrivacyType = "only_me" | "family_circle" | "friend_circle" | "tagged_family" | "selected_people";
 export type MemoryFriendStatus = "pending" | "active" | "revoked";
+export type InviteType = "family" | "baby_friend" | "darin_friend";
+export type FriendshipStatus = "pending" | "accepted" | "blocked" | "declined";
 export type MemoryCommentType = "text" | "sticker";
 export type MemoryMediaType = "image" | "video";
 export type MemoryTagType = "baby" | "family_member" | "friend_baby" | "manual_guest";
@@ -101,12 +103,12 @@ export type BabyMemberRow = {
 
 export type InviteCodeRow = {
   id: string;
-  baby_id: string;
+  baby_id: string | null;
   code: string;
   created_by: string | null;
   permission_role: PermissionRole;
   relationship_label: DbRelationshipLabel;
-  invite_type: "family" | "friend";
+  invite_type: InviteType;
   max_uses: number;
   used_count: number;
   revoked_at: string | null;
@@ -115,6 +117,16 @@ export type InviteCodeRow = {
   used_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type UserFriendshipRow = {
+  id: string;
+  requester_id: string;
+  receiver_id: string;
+  status: FriendshipStatus;
+  created_at: string;
+  accepted_at: string | null;
+  blocked_at: string | null;
 };
 
 export type CareLogRow = {
@@ -415,8 +427,14 @@ export type Database = {
       };
       invite_codes: {
         Row: InviteCodeRow;
-        Insert: Partial<InviteCodeRow> & Pick<InviteCodeRow, "baby_id" | "code">;
+        Insert: Partial<InviteCodeRow> & Pick<InviteCodeRow, "code">;
         Update: Partial<InviteCodeRow>;
+        Relationships: [];
+      };
+      user_friendships: {
+        Row: UserFriendshipRow;
+        Insert: Partial<UserFriendshipRow> & Pick<UserFriendshipRow, "requester_id" | "receiver_id">;
+        Update: Partial<UserFriendshipRow>;
         Relationships: [];
       };
       care_logs: {
@@ -618,16 +636,28 @@ export type Database = {
         Returns: BabyRow;
       };
       create_invite_code: {
-        Args: { p_baby_id: string; p_invite_type: "family" | "friend"; p_role?: string; p_relation?: string; p_expires_at?: string | null; p_max_uses?: number };
+        Args: { p_baby_id: string | null; p_invite_type: InviteType; p_role?: string; p_relation?: string; p_expires_at?: string | null; p_max_uses?: number };
         Returns: InviteCodeRow;
       };
       preview_invite_code: {
         Args: { p_code: string };
-        Returns: Array<{ baby_id: string; baby_name: string; inviter_name: string; invite_type: "family" | "friend"; role: string; relation: string; expires_at: string | null; max_uses: number; used_count: number; is_valid: boolean; invalid_reason: string | null }>;
+        Returns: Array<{ baby_id: string | null; baby_name: string | null; inviter_name: string; invite_type: InviteType; role: string; relation: string; expires_at: string | null; max_uses: number; used_count: number; is_valid: boolean; invalid_reason: string | null }>;
       };
       accept_invite_code: {
         Args: { p_code: string; p_display_name: string; p_nickname?: string | null; p_relation?: string };
-        Returns: Array<{ baby_id: string; invite_type: "family" | "friend"; permission_role: string }>;
+        Returns: Array<{ baby_id: string | null; invite_type: InviteType; permission_role: string }>;
+      };
+      list_my_darin_friends: {
+        Args: Record<string, never>;
+        Returns: Array<{ friendship_id: string; user_id: string; display_name: string; nickname: string | null; status: FriendshipStatus; accepted_at: string | null }>;
+      };
+      list_baby_memory_friends: {
+        Args: { p_baby_id: string };
+        Returns: Array<{ membership_id: string; user_id: string; display_name: string; nickname: string | null; status: MemoryFriendStatus }>;
+      };
+      add_darin_friend_to_baby: {
+        Args: { p_baby_id: string; p_friend_user_id: string };
+        Returns: MemoryFriendRow;
       };
     };
     Enums: {

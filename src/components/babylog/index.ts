@@ -23,7 +23,6 @@ export { OneTouchRecordGrid } from "./OneTouchRecordGrid";
 export { QuickRecordsBar } from "./QuickRecordsBar";
 export { RecordCreatedToast } from "./RecordCreatedToast";
 export { TodayLogSummaryCard } from "./TodayLogSummaryCard";
-export { InviteFamilyModal } from "./InviteFamilyModal";
 export { LogCategoryIcon } from "./LogCategoryIcon";
 export { PushToast } from "./PushToast";
 export { RecordDetailSheet, type RecordSheetPrefill } from "./RecordDetailSheet";

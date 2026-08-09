@@ -16,7 +16,6 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
-import { InviteFamilyModal } from "../components/babylog/InviteFamilyModal";
 import { ProfileAvatar } from "../components/profile/ProfileAvatar";
 import { EmptyState } from "../components/states/FeedbackStates";
 import { useApp } from "../context/AppContext";
@@ -36,6 +35,7 @@ import type { FamilyMemberDisplay } from "../types/profileSettings";
 import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
 import { familyRoleToPermission, permissionToFamilyRole } from "../utils/supabaseMappers";
 import { formatBabyAge } from "../utils/childDisplay";
+import { formatIsoDateInput, isValidBirthDate } from "../utils/dateInput";
 import { getSupabaseSync } from "../utils/supabaseSyncStore";
 import { presentAvatarPicker } from "../utils/profileAvatarPicker";
 import { colors, radius } from "../theme";
@@ -51,9 +51,7 @@ export function BabyProfileScreen() {
     babyName,
     babyBirthMeta,
     myFamilyRole,
-    inviteFamilyMember,
     updateFamilyMemberRole,
-    acceptFamilyInvite,
     setFamilyMemberStatus,
     removeFamilyMember,
     rehydrateFromServer,
@@ -65,7 +63,6 @@ export function BabyProfileScreen() {
   const canEditBaby = myFamilyRole === "owner" || myFamilyRole === "admin" || myFamilyRole === "editor" || myFamilyRole === "caregiver";
 
   const [editing, setEditing] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -143,6 +140,10 @@ export function BabyProfileScreen() {
     const trimmed = name.trim();
     if (!trimmed) {
       setError("아기 이름을 입력해 주세요.");
+      return;
+    }
+    if (birthDate.trim() && !isValidBirthDate(birthDate.trim())) {
+      setError("생년월일을 YYYY-MM-DD 형식의 올바른 날짜로 입력해 주세요.");
       return;
     }
     setSaving(true);
@@ -250,6 +251,7 @@ export function BabyProfileScreen() {
             editable={canEditBaby}
             onPress={canEditBaby ? pickAvatar : undefined}
             label="아기 사진 추가"
+            imageFit="contain"
           />
           <View style={styles.babyCopy}>
             {editing ? (
@@ -285,7 +287,16 @@ export function BabyProfileScreen() {
         {editing ? (
           <View style={styles.card}>
             <Text style={styles.label}>생년월일</Text>
-            <TextInput style={styles.input} value={birthDate} onChangeText={setBirthDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.faint} autoCapitalize="none" />
+            <TextInput
+              style={styles.input}
+              value={birthDate}
+              onChangeText={(value) => setBirthDate(formatIsoDateInput(value))}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={colors.faint}
+              keyboardType="number-pad"
+              maxLength={10}
+            />
+            <Text style={styles.inputHint}>숫자만 입력하면 하이픈이 자동으로 추가돼요.</Text>
             <Text style={styles.label}>성별</Text>
             <View style={styles.chips}>
               {([
@@ -335,7 +346,7 @@ export function BabyProfileScreen() {
         </View>
 
         {members.length === 0 ? (
-          <EmptyState title="아직 공유 멤버가 없어요." body="가족이나 시터를 초대해 보세요." />
+          <EmptyState title="아직 공유 멤버가 없어요." body="가족 초대코드를 공유해 보세요." />
         ) : (
           members.map((m, i) => (
             <View key={m.membershipId} style={[styles.memberRow, m.status === "inactive" && styles.inactiveRow]}>
@@ -382,11 +393,6 @@ export function BabyProfileScreen() {
                 ) : null}
                 {!m.isMe && allowManage ? (
                   <View style={styles.actions}>
-                    {m.status === "pending" ? (
-                      <Pressable style={styles.actionBtn} onPress={() => acceptFamilyInvite(m.userId)}>
-                        <Text style={styles.actionText}>수락 시뮬레이션</Text>
-                      </Pressable>
-                    ) : null}
                     <Pressable
                       style={styles.actionBtn}
                       onPress={() => {
@@ -449,25 +455,9 @@ export function BabyProfileScreen() {
         )}
 
         {allowInvite ? (
-          <>
-            <Pressable style={styles.invite} onPress={() => navigation.navigate("FamilyShare")}>
-              <Text style={styles.inviteText}>가족·친구 공유</Text>
-            </Pressable>
-            <Pressable style={styles.invite} onPress={() => setInviteOpen(true)}>
-              <Text style={styles.inviteText}>가족 초대하기</Text>
-            </Pressable>
-            <Pressable
-              style={styles.inviteFriend}
-              onPress={() =>
-                Alert.alert(
-                  "친구 초대하기",
-                  "친구는 Memories 친구 공개만 볼 수 있어요. 돌봄·일기·성장책 편집 권한은 생기지 않습니다.\n\n친구 초대 흐름은 다음 단계에서 Memories 초대로 연결됩니다.",
-                )
-              }
-            >
-              <Text style={styles.inviteFriendText}>친구 초대하기</Text>
-            </Pressable>
-          </>
+          <Pressable style={styles.invite} onPress={() => navigation.navigate("FamilyShare")}>
+            <Text style={styles.inviteText}>가족·친구 공유</Text>
+          </Pressable>
         ) : (
           <Text style={styles.viewerHint}>초대 권한이 없어요. 관리자에게 요청해 주세요.</Text>
         )}
@@ -475,15 +465,6 @@ export function BabyProfileScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </ScrollView>
 
-      <InviteFamilyModal
-        visible={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        onInvite={(payload) => {
-          const member = inviteFamilyMember(payload);
-          setInviteOpen(false);
-          return member;
-        }}
-      />
     </KeyboardAvoidingView>
   );
 }
@@ -511,6 +492,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 10 },
   label: { color: colors.text, fontSize: 13, fontWeight: "800", alignSelf: "flex-start" },
   input: { width: "100%", minHeight: 46, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, paddingHorizontal: 12, color: colors.text, fontSize: 15 },
+  inputHint: { color: colors.faint, fontSize: 11.5, lineHeight: 16 },
   note: { minHeight: 88, paddingTop: 12, textAlignVertical: "top" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { minHeight: 40, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
@@ -541,8 +523,6 @@ const styles = StyleSheet.create({
   memberStatus: { color: colors.faint, fontSize: 11, fontWeight: "700" },
   invite: { minHeight: 50, borderRadius: radius.lg, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
   inviteText: { color: colors.amber, fontWeight: "800" },
-  inviteFriend: { minHeight: 46, borderRadius: radius.lg, borderWidth: 1, borderStyle: "dashed", borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  inviteFriendText: { color: colors.muted, fontWeight: "700" },
   viewerHint: { textAlign: "center", color: colors.faint, fontSize: 12.5 },
   save: { minHeight: 48, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", marginTop: 4 },
   saveText: { color: "#fff", fontWeight: "800" },

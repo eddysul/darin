@@ -24,7 +24,7 @@ import { getSupabaseSync } from "../../utils/supabaseSyncStore";
 import { colors, radius } from "../../theme";
 
 type Props = {
-  onOpenSettings: () => void;
+  onOpenSettings?: () => void;
   onOpenFamily?: () => void;
   onOpenDetail: (memoryPostId: string) => void;
 };
@@ -238,9 +238,11 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
               <BabyLogIcon kind="new" size={20} color={colors.amber} strokeWidth={2.2} />
             </Pressable>
           ) : null}
-          <Pressable style={styles.iconButton} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel="설정 열기">
-            <BabyLogIcon kind="settings" size={19} color={colors.muted} />
-          </Pressable>
+          {onOpenSettings ? (
+            <Pressable style={styles.iconButton} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel="설정 열기">
+              <BabyLogIcon kind="settings" size={19} color={colors.muted} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -262,7 +264,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
             </View>
           )}
         </View>
-        <Pressable style={styles.inviteButton} onPress={onOpenFamily ?? onOpenSettings}>
+        <Pressable style={styles.inviteButton} onPress={onOpenFamily}>
           <Text style={styles.inviteText}>가족 초대</Text>
         </Pressable>
       </Pressable>

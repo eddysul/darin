@@ -57,7 +57,7 @@ import type { MainTabParamList } from "../../navigation/types";
 
 type Props = {
   onOpenProfile: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings?: () => void;
   onOpenConsult: (initialQuestion?: string) => void;
 };
 

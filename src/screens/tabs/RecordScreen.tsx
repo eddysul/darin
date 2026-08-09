@@ -24,6 +24,7 @@ import { RecordDetailSheet, type RecordSheetPrefill } from "../../components/bab
 import { RecordHomeHeader } from "../../components/babylog/RecordHomeHeader";
 import { GrowthRecordModal } from "../../components/babylog/GrowthRecordModal";
 import { TodayLogSummaryCard } from "../../components/babylog/TodayLogSummaryCard";
+import { RecordDatePickerModal } from "../../components/babylog/RecordDatePickerModal";
 import { TodayTimeline } from "../../components/babylog/TodayTimeline";
 import { EmptyState } from "../../components/states/FeedbackStates";
 import { useBabyLog } from "../../context/BabyLogContext";
@@ -125,6 +126,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [growthRecordOpen, setGrowthRecordOpen] = useState(false);
   const [growthMeasuredAt, setGrowthMeasuredAt] = useState<string | undefined>(undefined);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
   const scrollHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerRestoreInitialized = useRef(false);
   const activeSleepRef = useRef<BabyLogEntry | undefined>(undefined);
@@ -564,6 +566,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
           canGoNext={canGoNext}
           onPrevDay={() => setSelectedDateKey((key) => offsetDateKey(key, -1))}
           onNextDay={() => setSelectedDateKey((key) => offsetDateKey(key, 1))}
+          onPressDate={() => setDatePickerOpen(true)}
         />
         <OneTouchRecordGrid
           sleepActive={Boolean(activeSleep)}
@@ -617,6 +620,13 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
           />
         )}
       </ScrollView>
+
+      <RecordDatePickerModal
+        visible={datePickerOpen}
+        selectedDateKey={selectedDateKey}
+        onSelect={setSelectedDateKey}
+        onClose={() => setDatePickerOpen(false)}
+      />
 
       <ConsultFab
         hidden={fabHidden}

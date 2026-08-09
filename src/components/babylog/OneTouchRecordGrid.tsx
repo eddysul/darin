@@ -61,7 +61,7 @@ export function OneTouchRecordGrid({
         </View>
         <Pressable style={styles.countBadge} onPress={() => setExpanded((value) => !value)}>
           <BabyLogIcon kind="edit" size={13} color={colors.text} />
-          <Text style={styles.countBadgeText}>{expanded ? "접기" : "편집"}</Text>
+          <Text style={styles.countBadgeText}>{expanded ? "접기" : "새로 추가"}</Text>
         </Pressable>
       </View>
 

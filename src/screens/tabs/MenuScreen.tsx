@@ -46,13 +46,14 @@ import { sendDiaryNotificationPreview } from "../../utils/diaryReminderNotificat
 type Props = {
   onOpenProfile: () => void;
   onOpenMyProfile?: () => void;
+  onOpenFamilyShare: () => void;
   onOpenSettings: (page: SettingsDetailPage) => void;
   onOpenGrowthRecords: () => void;
   onOpenGrowthBookStorage?: () => void;
   embedded?: boolean;
 };
 
-export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenSettings, onOpenGrowthRecords, onOpenGrowthBookStorage, embedded = false }: Props) {
+export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, onOpenSettings, onOpenGrowthRecords, onOpenGrowthBookStorage, embedded = false }: Props) {
   const insets = useSafeAreaInsets();
   const logout = useLogout();
   const { settings, setSettings, resetSettings } = useAppSettings();
@@ -175,17 +176,26 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenSettings, onO
 
         <MenuSection title="아기/가족">
           <MenuRow icon="baby" title="아기 프로필" subtitle="사진·이름·별명·생년월일 관리" onPress={onOpenProfile} />
-          <MenuRow icon="family" title="가족 공유" subtitle="구성원 역할과 활성 상태 관리" onPress={onOpenProfile} />
-          <MenuRow icon="folder" title="초대코드 관리" subtitle="초대 코드·링크 생성 및 수락" onPress={onOpenProfile} />
+          <MenuRow icon="family" title="가족·친구 공유" subtitle="구성원·친구·초대코드를 한 곳에서 관리" onPress={onOpenFamilyShare} />
         </MenuSection>
 
         <MenuSection title="알림">
-          <MenuRow icon="bell" title="알림 설정" subtitle="일기 리마인더와 가족 소식" onPress={() => setReminderOpen(true)} />
-          <MenuRow icon="clock" title="수유/수면 알림 설정" subtitle="돌봄 간격 알림" onPress={() => onOpenSettings("careAlerts")} />
+          <MenuRow
+            icon="bell"
+            title="알림 설정"
+            subtitle="일기 리마인더·수유·수면 알림"
+            onPress={() => Alert.alert("알림 설정", "설정할 알림을 선택해 주세요.", [
+              { text: "취소", style: "cancel" },
+              { text: "일기 리마인더", onPress: () => setReminderOpen(true) },
+              { text: "수유·수면 알림", onPress: () => onOpenSettings("careAlerts") },
+            ])}
+          />
         </MenuSection>
 
         <MenuSection title="기록 설정">
           <MenuRow icon="interval" title="성장 기록 관리" subtitle="키·몸무게·머리둘레 기록" onPress={onOpenGrowthRecords} />
+          {onOpenGrowthBookStorage ? <MenuRow icon="folder" title="성장책 보관함" subtitle="담긴 기록·미리보기·PDF 관리" onPress={onOpenGrowthBookStorage} /> : null}
+          <MenuRow icon="folder" title="데이터 내보내기" subtitle="현재 아기 기록을 JSON으로 공유" onPress={() => onOpenSettings("dataExport")} />
           <MenuRow icon="edit" title="기록 카테고리 설정" subtitle="표시·순서·기본 6개 관리" onPress={() => onOpenSettings("categories")} />
           <MenuRow icon="sparkles" title="자주 쓰는 기록" subtitle="기본값 빠른 기록 관리" onPress={() => setQuickRecordsOpen(true)} />
           <MenuRow icon="clock" title="스탑워치 설정" subtitle="타이머 종류와 복원 방식" onPress={() => onOpenSettings("timers")} />
@@ -195,7 +205,6 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenSettings, onO
 
         <MenuSection title="꾸미기/성장책">
           <MenuRow icon="baby" title="내 아기 스티커" subtitle="스티커 만들기와 보관함" onPress={() => setStickerOpen(true)} />
-          {onOpenGrowthBookStorage ? <MenuRow icon="folder" title="성장책 보관함" subtitle="담긴 기록·미리보기·PDF 관리" onPress={onOpenGrowthBookStorage} /> : null}
           <MenuRow icon="folder" title="성장책 설정" subtitle="날짜·작성자·기본 레이아웃" onPress={() => onOpenSettings("growthBook")} />
         </MenuSection>
 
@@ -204,7 +213,6 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenSettings, onO
         </MenuSection>
 
         <MenuSection title="데이터/정책">
-          <MenuRow icon="folder" title="데이터 내보내기" subtitle="현재 아기 기록을 JSON으로 공유" onPress={() => onOpenSettings("dataExport")} />
           <MenuRow icon="folder" title="개인정보처리방침" subtitle="수집·보관·삭제 안내" onPress={() => onOpenSettings("privacy")} />
           <MenuRow icon="folder" title="이용약관" subtitle="무료 beta 서비스 이용 안내" onPress={() => onOpenSettings("terms")} />
           <MenuRow icon="check" title="Medical Disclaimer" subtitle="의료·AI 안내의 참고 범위" onPress={() => onOpenSettings("medical")} />

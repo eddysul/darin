@@ -1,4 +1,4 @@
-import type { BabyMemberRow, InviteCodeRow, PermissionRole } from "../types/database";
+import type { BabyMemberRow, InviteCodeRow, InviteType, PermissionRole } from "../types/database";
 import type { FamilyMember, FamilyRole } from "../types/family";
 import type { FamilyMemberDisplay } from "../types/profileSettings";
 import type { RelationshipLabel } from "../types/growthBook";
@@ -172,8 +172,8 @@ export const FamilyRepository = {
   },
 
   async createInviteCode(input: {
-    babyId: string;
-    inviteType?: "family" | "friend";
+    babyId?: string | null;
+    inviteType?: InviteType;
     role?: FamilyRole;
     relationshipLabel?: string;
     expiresAt?: string | null;
@@ -181,10 +181,10 @@ export const FamilyRepository = {
     const sb = requireSupabase();
     const { data, error } = await sb
       .rpc("create_invite_code", {
-        p_baby_id: input.babyId,
+        p_baby_id: input.babyId ?? null,
         p_invite_type: input.inviteType ?? "family",
-        p_role: input.inviteType === "friend" ? "friend" : familyRoleToPermission(input.role ?? "editor"),
-        p_relation: input.relationshipLabel ?? (input.inviteType === "friend" ? "친구" : "가족"),
+        p_role: input.inviteType === "family" ? familyRoleToPermission(input.role ?? "editor") : "viewer",
+        p_relation: input.relationshipLabel ?? (input.inviteType === "family" ? "가족" : "친구"),
         p_expires_at: input.expiresAt ?? null,
         p_max_uses: 1,
       });

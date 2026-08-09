@@ -35,6 +35,7 @@ import {
 } from "../src/utils/storageIssues";
 import { resolvePostSplashPhase } from "../src/utils/appStartup";
 import { parseAuthCallback } from "../src/utils/authCallback";
+import { formatIsoDateInput, isValidBirthDate } from "../src/utils/dateInput";
 import {
   EMPTY_QA_FAULT_STATE,
   armQaFault,
@@ -78,6 +79,11 @@ import {
 
 const today = formatDateKey();
 const me = { id: "me", name: "Me", role: "editor" as const, status: "active" as const, isMe: true };
+
+assert.equal(formatIsoDateInput("20260809"), "2026-08-09");
+assert.equal(formatIsoDateInput("2026.8.9"), "2026-89");
+assert.equal(isValidBirthDate("2024-02-29", new Date("2026-08-09T00:00:00Z")), true);
+assert.equal(isValidBirthDate("2025-02-29", new Date("2026-08-09T00:00:00Z")), false);
 
 // --- Auth callbacks never report success without credentials ---
 {

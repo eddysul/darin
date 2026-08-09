@@ -27,7 +27,7 @@ import { formatWeight, lengthFromCm } from "../../utils/measurementFormat";
 
 type Props = {
   onOpenProfile: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings?: () => void;
   onOpenConsult: (initialQuestion?: string) => void;
   onOpenRecord: () => void;
 };

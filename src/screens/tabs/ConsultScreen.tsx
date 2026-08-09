@@ -43,7 +43,7 @@ type ConsultNav = BottomTabNavigationProp<
 
 type Props = {
   onOpenProfile: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings?: () => void;
 };
 
 export function ConsultScreen({ onOpenProfile, onOpenSettings }: Props) {

@@ -20,6 +20,7 @@
     "qa:supabase:account-deletion": "node --env-file=.env scripts/verify-supabase-account-deletion.mjs",
     "qa:supabase:account-safety": "node --env-file=.env scripts/verify-supabase-account-deletion.mjs",
     "qa:supabase:profile": "node --env-file=.env scripts/verify-supabase-profile-settings.mjs",
+    "qa:supabase:invite": "node --env-file=.env scripts/verify-supabase-invite-share.mjs",
     "qa:supabase": "pnpm qa:supabase:growth && pnpm qa:supabase:diary && pnpm qa:supabase:growth-book && pnpm qa:supabase:memories && pnpm qa:supabase:notifications && pnpm qa:supabase:auth && pnpm qa:supabase:account-deletion && pnpm qa:supabase:profile",
     "server:dh": "bash -lc 'set -a && source .env && set +a && cd ../darin-dh/script && exec .venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8000'"
   },

@@ -10,6 +10,7 @@ export function ProfileAvatar({
   editable = false,
   onPress,
   label = "사진 추가",
+  imageFit = "cover",
 }: {
   uri?: string | null;
   size?: number;
@@ -17,11 +18,12 @@ export function ProfileAvatar({
   editable?: boolean;
   onPress?: () => void;
   label?: string;
+  imageFit?: "cover" | "contain";
 }) {
   const content = (
     <View style={[styles.wrap, { width: size, height: size, borderRadius: size / 2 }]}>
       {uri ? (
-        <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={120} />
+        <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit={imageFit} contentPosition="center" transition={120} />
       ) : (
         <BabyLogIcon kind={fallback} size={Math.round(size * 0.42)} color={colors.amber} />
       )}

@@ -19,6 +19,7 @@ import {
   type RelationshipToChild,
 } from "../../types/careSetup";
 import type { RelationshipLabel } from "../../types/growthBook";
+import type { InviteType } from "../../types/database";
 import { FamilyRepository } from "../../repositories/FamilyRepository";
 import { colors, radius } from "../../theme";
 import {
@@ -29,7 +30,7 @@ import {
 } from "./OnboardingShell";
 
 export type OnboardingResult =
-  | { mode: "create"; setup: CareSetup; showInviteShare: boolean }
+  | { mode: "create"; setup: CareSetup }
   | {
       mode: "join";
       code: string;
@@ -38,6 +39,7 @@ export type OnboardingResult =
       myName: string;
       relationship: RelationshipToChild;
       relationshipLabel: RelationshipLabel;
+      inviteType: InviteType;
     };
 
 type Props = {
@@ -55,7 +57,7 @@ type Step =
   | "care"
   | "complete";
 
-type InvitePreview = { code: string; babyName: string; ownerName: string };
+type InvitePreview = { code: string; babyName: string; ownerName: string; inviteType: InviteType };
 
 export function OnboardingFlow({ initialName = "", onComplete }: Props) {
   const [step, setStep] = useState<Step>("about");
@@ -222,7 +224,12 @@ export function OnboardingFlow({ initialName = "", onComplete }: Props) {
         primaryDisabled={!inviteCode.trim()}
         onPrimary={() => { void FamilyRepository.previewInviteCode(inviteCode).then((row) => {
           if (!row || !row.is_valid) throw new Error(row?.invalid_reason === "expired" ? "만료된 초대코드예요." : "유효하지 않은 초대코드예요.");
-          setInvitePreview({ code: inviteCode.trim().toUpperCase(), babyName: row.baby_name, ownerName: row.inviter_name });
+          setInvitePreview({
+            code: inviteCode.trim().toUpperCase(),
+            babyName: row.baby_name ?? "",
+            ownerName: row.inviter_name,
+            inviteType: row.invite_type,
+          });
           setInviteError("");
           setStep("invite-confirm");
         }).catch((cause) => setInviteError(cause instanceof Error ? cause.message : "초대 정보를 확인하지 못했어요.")); }}
@@ -250,9 +257,15 @@ export function OnboardingFlow({ initialName = "", onComplete }: Props) {
   if (step === "invite-confirm" && invitePreview) {
     return (
       <OnboardingShell
-        title="연결할 아기 확인"
-        subtitle="이 기록에 참여할까요?"
-        primaryLabel="연결하고 시작하기"
+        title={invitePreview.inviteType === "darin_friend" ? "다린 친구 초대 확인" : "초대 확인"}
+        subtitle={
+          invitePreview.inviteType === "family"
+            ? "이 아기 기록에 가족으로 참여할까요?"
+            : invitePreview.inviteType === "baby_friend"
+              ? "이 아기의 친구 공개 순간에 연결할까요?"
+              : "이 사용자와 다린 친구를 맺을까요?"
+        }
+        primaryLabel="초대 수락"
         onPrimary={() =>
           onComplete({
             mode: "join",
@@ -262,16 +275,17 @@ export function OnboardingFlow({ initialName = "", onComplete }: Props) {
             myName: setup.parent.parentName.trim(),
             relationship: setup.parent.relationshipToChild,
             relationshipLabel,
+            inviteType: invitePreview.inviteType,
           })
         }
         secondaryLabel="코드 다시 입력"
         onSecondary={() => setStep("invite")}
       >
         <View style={styles.summaryCard}>
-          <SummaryRow label="아기" value={invitePreview.babyName} />
-          <SummaryRow label="초대 가족" value={invitePreview.ownerName} />
+          {invitePreview.babyName ? <SummaryRow label="아기" value={invitePreview.babyName} /> : null}
+          <SummaryRow label="초대한 사람" value={invitePreview.ownerName} />
           <SummaryRow label="초대코드" value={invitePreview.code} />
-          <SummaryRow label="나의 관계" value={relationshipLabel} />
+          {invitePreview.inviteType === "family" ? <SummaryRow label="나의 관계" value={relationshipLabel} /> : null}
           <SummaryRow label="내 이름" value={setup.parent.parentName.trim()} />
         </View>
       </OnboardingShell>
@@ -501,7 +515,6 @@ export function OnboardingFlow({ initialName = "", onComplete }: Props) {
                 : [...ALL_LOG_CATEGORY_GROUPS],
             },
           },
-          showInviteShare: setup.preferences.familySharingEnabled,
         })
       }
       secondaryLabel="뒤로"

@@ -14,7 +14,6 @@ import { LogoutProvider } from "./src/context/LogoutContext";
 import { VoiceRecordingProvider } from "./src/context/VoiceRecordingContext";
 import { LanguageProvider, useLanguage } from "./src/LanguageContext";
 import { AuthStartScreen } from "./src/screens/onboarding/AuthStartScreen";
-import { InviteShareScreen } from "./src/screens/onboarding/InviteShareScreen";
 import { OnboardingFlow, type OnboardingResult } from "./src/screens/onboarding/OnboardingFlow";
 import { TermsConsentScreen } from "./src/screens/onboarding/TermsConsentScreen";
 import { MainTabs } from "./src/screens/MainTabs";
@@ -55,7 +54,6 @@ type AppPhase =
   | "terms"
   | "auth"
   | "setup"
-  | "invite-share"
   | "main";
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -210,10 +208,10 @@ function RootApp() {
   const [termsReady, setTermsReady] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [authName, setAuthName] = useState("");
-  const [pendingInviteBaby, setPendingInviteBaby] = useState("");
   const [authReady, setAuthReady] = useState(false);
   const [hasAuthSession, setHasAuthSession] = useState(false);
   const [authRecovery, setAuthRecovery] = useState(false);
+  const [onboardingVersion, setOnboardingVersion] = useState(0);
 
   useEffect(() => {
     void hydrateTermsAccepted().then(() => {
@@ -309,7 +307,6 @@ function RootApp() {
     setHasAuthSession(false);
     setOnboardingProfile(null);
     setAuthName("");
-    setPendingInviteBaby("");
     setPhase(getTermsAccepted() ? "auth" : "terms");
   }, [clearSession, prepareForLogout]);
 
@@ -451,6 +448,18 @@ function RootApp() {
           Alert.alert("초대를 수락하지 못했어요", cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요.");
           return;
         }
+        if (result.inviteType !== "family") {
+          Alert.alert(
+            "초대 수락 완료",
+            result.inviteType === "baby_friend"
+              ? "친구 공개 순간에 연결됐어요. 내 아기 설정을 이어서 완료해 주세요."
+              : "다린 친구로 연결됐어요. 내 아기 설정을 이어서 완료해 주세요.",
+          );
+          setAuthName(result.myName);
+          setOnboardingVersion((value) => value + 1);
+          setPhase("setup");
+          return;
+        }
         const setup: CareSetup = {
           ...DEFAULT_CARE_SETUP,
           parent: {
@@ -473,22 +482,10 @@ function RootApp() {
         return;
       }
 
-      if (result.showInviteShare) {
-        setCareSetup(result.setup);
-        applyParentSetup(result.setup);
-        setPendingInviteBaby(result.setup.child.childName.trim() || "아기");
-        setPhase("invite-share");
-        return;
-      }
-
       enterMain(result.setup, result.setup.parent.parentName);
     },
     [applyParentSetup, enterMain, rehydrateFromServer, setCareSetup],
   );
-
-  const finishInviteShare = useCallback(() => {
-    setPhase("main");
-  }, []);
 
   return (
     <LogoutProvider onLogout={handleLogout}>
@@ -499,14 +496,7 @@ function RootApp() {
         {phase === "terms" && <TermsConsentScreen onAccept={handleTermsAccept} />}
         {phase === "auth" && <AuthStartScreen recoveryMode={authRecovery} onAuthenticated={handleAuthenticated} />}
         {phase === "setup" && (
-          <OnboardingFlow initialName={authName} onComplete={handleSetupComplete} />
-        )}
-        {phase === "invite-share" && (
-          <InviteShareScreen
-            babyName={pendingInviteBaby || careSetup.child.childName || "아기"}
-            onDone={() => finishInviteShare()}
-            onSkip={() => finishInviteShare()}
-          />
+          <OnboardingFlow key={onboardingVersion} initialName={authName} onComplete={handleSetupComplete} />
         )}
       </View>
     </LogoutProvider>

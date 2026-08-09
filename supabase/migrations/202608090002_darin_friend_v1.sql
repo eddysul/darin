@@ -37,7 +37,7 @@ begin
   if p_invite_type <> 'darin_friend' and (p_baby_id is null or public.baby_permission(p_baby_id) <> 'admin') then raise exception 'only baby admin can create baby invites' using errcode = '42501'; end if;
   if p_invite_type = 'family' and p_role not in ('admin','editor') then raise exception 'family role must be admin or editor' using errcode = '22023'; end if;
   loop
-    v_code := 'DARIN-' || upper(substr(encode(gen_random_bytes(5), 'hex'), 1, 10));
+    v_code := 'DARIN-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10));
     begin
       insert into public.invite_codes (baby_id,code,created_by,invite_type,permission_role,relationship_label,expires_at,max_uses,used_count)
       values (case when p_invite_type = 'darin_friend' then null else p_baby_id end, v_code, auth.uid(), p_invite_type,

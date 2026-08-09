@@ -48,7 +48,7 @@ begin
   end if;
 
   loop
-    v_code := 'DARIN-' || upper(substr(encode(gen_random_bytes(5), 'hex'), 1, 10));
+    v_code := 'DARIN-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10));
     begin
       insert into public.invite_codes (
         baby_id, code, created_by, invite_type, permission_role, relationship_label,

@@ -10,6 +10,7 @@ export function SettingsHomeScreen({ navigation }: Props) {
       embedded
       onOpenProfile={() => navigation.navigate("BabyProfile")}
       onOpenMyProfile={() => navigation.navigate("MyProfile")}
+      onOpenFamilyShare={() => navigation.navigate("FamilyShare")}
       onOpenSettings={(page) => navigation.navigate("SettingsDetail", { page })}
       onOpenGrowthRecords={() => navigation.navigate("GrowthRecords")}
       onOpenGrowthBookStorage={() => navigation.navigate("MainTabs", { screen: "Diary", params: { openGrowthBookVault: true } })}

@@ -26,6 +26,7 @@ type Props = {
   onNextDay?: () => void;
   canGoNext?: boolean;
   canGoPrev?: boolean;
+  onPressDate?: () => void;
 };
 
 type MetricCard = {
@@ -80,6 +81,7 @@ export function TodayLogSummaryCard({
   onNextDay,
   canGoNext = true,
   canGoPrev = true,
+  onPressDate,
 }: Props) {
   const [page, setPage] = useState(0);
   const isToday = dateKey === formatDateKey();
@@ -202,7 +204,16 @@ export function TodayLogSummaryCard({
           >
             <Text style={styles.arrow}>‹</Text>
           </Pressable>
-          <Text style={styles.date}>{dateLabel}</Text>
+          <Pressable
+            onPress={onPressDate}
+            disabled={!onPressDate}
+            accessibilityRole="button"
+            accessibilityLabel="기록 날짜 선택"
+            style={styles.dateButton}
+          >
+            <Text style={styles.date}>{dateLabel}</Text>
+            {onPressDate ? <Text style={styles.calendarHint}>▾</Text> : null}
+          </Pressable>
           <Pressable
             onPress={onNextDay}
             disabled={!canGoNext || !onNextDay}
@@ -301,7 +312,9 @@ const styles = StyleSheet.create({
   },
   infoText: { color: colors.faint, fontSize: 9, lineHeight: 11, fontWeight: "800" },
   dateRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  date: { fontSize: 12, color: colors.muted, fontWeight: "700", minWidth: 96, textAlign: "center" },
+  dateButton: { minHeight: 32, minWidth: 104, paddingHorizontal: 5, borderRadius: radius.full, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3 },
+  date: { fontSize: 12, color: colors.muted, fontWeight: "700", textAlign: "center" },
+  calendarHint: { color: colors.faint, fontSize: 10 },
   arrowBtn: {
     width: 28,
     height: 28,

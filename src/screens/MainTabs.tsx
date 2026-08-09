@@ -251,7 +251,6 @@ function DiaryTab() {
   return (
     <DiaryScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
-      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
       }
@@ -265,7 +264,6 @@ function ReportTab() {
   return (
     <BabyReportScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
-      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenRecord={() => navigation.navigate("Record")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
@@ -280,7 +278,6 @@ function ConsultTab() {
   return (
     <ConsultScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
-      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
     />
   );
 }
@@ -290,8 +287,7 @@ function MemoriesTab() {
   const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <MemoriesScreen
-      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
-      onOpenFamily={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenFamily={() => rootNavigation?.navigate("FamilyShare")}
       onOpenDetail={(memoryPostId) => rootNavigation?.navigate("MemoryDetail", { memoryPostId })}
     />
   );
