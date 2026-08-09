@@ -450,6 +450,9 @@ export function BabyProfileScreen() {
 
         {allowInvite ? (
           <>
+            <Pressable style={styles.invite} onPress={() => navigation.navigate("FamilyShare")}>
+              <Text style={styles.inviteText}>가족·친구 공유</Text>
+            </Pressable>
             <Pressable style={styles.invite} onPress={() => setInviteOpen(true)}>
               <Text style={styles.inviteText}>가족 초대하기</Text>
             </Pressable>

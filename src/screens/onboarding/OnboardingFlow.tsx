@@ -19,6 +19,7 @@ import {
   type RelationshipToChild,
 } from "../../types/careSetup";
 import type { RelationshipLabel } from "../../types/growthBook";
+import { FamilyRepository } from "../../repositories/FamilyRepository";
 import { colors, radius } from "../../theme";
 import {
   OnboardingField,
@@ -55,23 +56,6 @@ type Step =
   | "complete";
 
 type InvitePreview = { code: string; babyName: string; ownerName: string };
-
-const MOCK_INVITES: Record<string, { babyName: string; ownerName: string }> = {
-  DARIN1: { babyName: "콩이", ownerName: "김민지" },
-  KNANNY: { babyName: "하람", ownerName: "이서연" },
-};
-
-function resolveInvite(code: string): InvitePreview | null {
-  const normalized = code.trim().toUpperCase();
-  if (normalized.length !== 6) return null;
-  const known = MOCK_INVITES[normalized];
-  if (known) return { code: normalized, ...known };
-  // Any valid 6-char code works in MVP mock join.
-  if (/^[A-Z0-9]{6}$/.test(normalized)) {
-    return { code: normalized, babyName: "연결된 아기", ownerName: "가족" };
-  }
-  return null;
-}
 
 export function OnboardingFlow({ initialName = "", onComplete }: Props) {
   const [step, setStep] = useState<Step>("about");
@@ -235,17 +219,13 @@ export function OnboardingFlow({ initialName = "", onComplete }: Props) {
         title="초대코드 입력"
         subtitle="가족이 공유한 6자리 코드를 입력하세요."
         primaryLabel="코드 확인"
-        primaryDisabled={inviteCode.trim().length !== 6}
-        onPrimary={() => {
-          const preview = resolveInvite(inviteCode);
-          if (!preview) {
-            setInviteError("올바른 6자리 코드를 입력해 주세요.");
-            return;
-          }
-          setInvitePreview(preview);
+        primaryDisabled={!inviteCode.trim()}
+        onPrimary={() => { void FamilyRepository.previewInviteCode(inviteCode).then((row) => {
+          if (!row || !row.is_valid) throw new Error(row?.invalid_reason === "expired" ? "만료된 초대코드예요." : "유효하지 않은 초대코드예요.");
+          setInvitePreview({ code: inviteCode.trim().toUpperCase(), babyName: row.baby_name, ownerName: row.inviter_name });
           setInviteError("");
           setStep("invite-confirm");
-        }}
+        }).catch((cause) => setInviteError(cause instanceof Error ? cause.message : "초대 정보를 확인하지 못했어요.")); }}
         secondaryLabel="뒤로"
         onSecondary={() => setStep("connect")}
       >
@@ -253,16 +233,16 @@ export function OnboardingFlow({ initialName = "", onComplete }: Props) {
           <TextInput
             style={[onboardingInputStyle, styles.codeInput]}
             value={inviteCode}
-            onChangeText={(v) => setInviteCode(v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
-            placeholder="예: DARIN1"
+            onChangeText={(v) => setInviteCode(v.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 16))}
+            placeholder="예: DARIN-8F3K2Q"
             placeholderTextColor={colors.faint}
             autoCapitalize="characters"
             autoCorrect={false}
-            maxLength={6}
+            maxLength={16}
           />
         </OnboardingField>
         {inviteError ? <Text style={styles.error}>{inviteError}</Text> : null}
-        <Text style={styles.hint}>데모 코드: DARIN1 · KNANNY</Text>
+        <Text style={styles.hint}>가족 또는 친구가 공유한 초대코드를 입력하세요.</Text>
       </OnboardingShell>
     );
   }

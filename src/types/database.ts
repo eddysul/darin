@@ -106,6 +106,10 @@ export type InviteCodeRow = {
   created_by: string | null;
   permission_role: PermissionRole;
   relationship_label: DbRelationshipLabel;
+  invite_type: "family" | "friend";
+  max_uses: number;
+  used_count: number;
+  revoked_at: string | null;
   expires_at: string | null;
   used_by: string | null;
   used_at: string | null;
@@ -612,6 +616,18 @@ export type Database = {
           p_relationship_label?: DbRelationshipLabel;
         };
         Returns: BabyRow;
+      };
+      create_invite_code: {
+        Args: { p_baby_id: string; p_invite_type: "family" | "friend"; p_role?: string; p_relation?: string; p_expires_at?: string | null; p_max_uses?: number };
+        Returns: InviteCodeRow;
+      };
+      preview_invite_code: {
+        Args: { p_code: string };
+        Returns: Array<{ baby_id: string; baby_name: string; inviter_name: string; invite_type: "family" | "friend"; role: string; relation: string; expires_at: string | null; max_uses: number; used_count: number; is_valid: boolean; invalid_reason: string | null }>;
+      };
+      accept_invite_code: {
+        Args: { p_code: string; p_display_name: string; p_nickname?: string | null; p_relation?: string };
+        Returns: Array<{ baby_id: string; invite_type: "family" | "friend"; permission_role: string }>;
       };
     };
     Enums: {

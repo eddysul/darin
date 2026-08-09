@@ -173,27 +173,40 @@ export const FamilyRepository = {
 
   async createInviteCode(input: {
     babyId: string;
-    code: string;
+    inviteType?: "family" | "friend";
     role?: FamilyRole;
     relationshipLabel?: string;
     expiresAt?: string | null;
   }): Promise<InviteCodeRow> {
     const sb = requireSupabase();
-    const user = await AuthRepository.getUser();
     const { data, error } = await sb
-      .from("invite_codes")
-      .insert({
-        baby_id: input.babyId,
-        code: input.code,
-        created_by: user?.id ?? null,
-        permission_role: familyRoleToPermission(input.role ?? "editor"),
-        relationship_label: toDbRelationshipLabel(input.relationshipLabel),
-        expires_at: input.expiresAt ?? null,
-      })
-      .select("*")
-      .single();
+      .rpc("create_invite_code", {
+        p_baby_id: input.babyId,
+        p_invite_type: input.inviteType ?? "family",
+        p_role: input.inviteType === "friend" ? "friend" : familyRoleToPermission(input.role ?? "editor"),
+        p_relation: input.relationshipLabel ?? (input.inviteType === "friend" ? "친구" : "가족"),
+        p_expires_at: input.expiresAt ?? null,
+        p_max_uses: 1,
+      });
     if (error) throw error;
     return data;
+  },
+
+  async previewInviteCode(code: string) {
+    const { data, error } = await requireSupabase().rpc("preview_invite_code", { p_code: code });
+    if (error) throw error;
+    return data?.[0] ?? null;
+  },
+
+  async acceptInviteCode(input: { code: string; displayName: string; nickname?: string; relation: string }) {
+    const { data, error } = await requireSupabase().rpc("accept_invite_code", {
+      p_code: input.code,
+      p_display_name: input.displayName,
+      p_nickname: input.nickname ?? null,
+      p_relation: input.relation,
+    });
+    if (error) throw error;
+    return data?.[0] ?? null;
   },
 
   async getMyPermission(babyId: string): Promise<PermissionRole | null> {

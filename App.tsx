@@ -19,6 +19,7 @@ import { OnboardingFlow, type OnboardingResult } from "./src/screens/onboarding/
 import { TermsConsentScreen } from "./src/screens/onboarding/TermsConsentScreen";
 import { MainTabs } from "./src/screens/MainTabs";
 import { BabyProfileScreen } from "./src/screens/BabyProfileScreen";
+import { FamilyShareScreen } from "./src/screens/FamilyShareScreen";
 import { GrowthRecordsManagerScreen } from "./src/screens/GrowthRecordsManagerScreen";
 import { MemoryDetailScreen } from "./src/screens/MemoryDetailScreen";
 import { MyProfileScreen } from "./src/screens/MyProfileScreen";
@@ -39,9 +40,9 @@ import { colors } from "./src/theme";
 import { resolvePostSplashPhase } from "./src/utils/appStartup";
 import { AuthRepository } from "./src/repositories/AuthRepository";
 import { BabyRepository } from "./src/repositories/BabyRepository";
+import { FamilyRepository } from "./src/repositories/FamilyRepository";
 import { BabyProfileRepository } from "./src/repositories/BabyProfileRepository";
 import { ProfileRepository } from "./src/repositories/ProfileRepository";
-import { FamilyRepository } from "./src/repositories/FamilyRepository";
 import {
   getTermsAccepted,
   hydrateTermsAccepted,
@@ -175,6 +176,7 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
       >
         <RootStack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
         <RootStack.Screen name="BabyProfile" component={BabyProfileScreen} options={{ title: "아기 프로필" }} />
+        <RootStack.Screen name="FamilyShare" component={FamilyShareScreen} options={{ title: "가족·친구 공유" }} />
         <RootStack.Screen name="MyProfile" component={MyProfileScreen} options={{ title: "내 프로필" }} />
         <RootStack.Screen name="SettingsHome" component={SettingsHomeScreen} options={{ title: "설정" }} />
         <RootStack.Screen
@@ -430,8 +432,19 @@ function RootApp() {
   }, [applyParentSetup, careSetup, hasSavedCareSetup, rehydrateFromServer, resetCareSetup, setCareSetup, setProfile, setSettings]);
 
   const handleSetupComplete = useCallback(
-    (result: OnboardingResult) => {
+    async (result: OnboardingResult) => {
       if (result.mode === "join") {
+        try {
+          await FamilyRepository.acceptInviteCode({
+            code: result.code,
+            displayName: result.myName,
+            relation: result.relationshipLabel,
+          });
+          await rehydrateFromServer();
+        } catch (cause) {
+          Alert.alert("초대를 수락하지 못했어요", cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요.");
+          return;
+        }
         const setup: CareSetup = {
           ...DEFAULT_CARE_SETUP,
           parent: {
@@ -450,12 +463,6 @@ function RootApp() {
             familySharingEnabled: true,
           },
         };
-        joinWithInvite({
-          code: result.code,
-          myName: result.myName,
-          ownerName: result.ownerName,
-          relationshipLabel: result.relationshipLabel,
-        });
         enterMain(setup, result.myName);
         return;
       }
@@ -470,7 +477,7 @@ function RootApp() {
 
       enterMain(result.setup, result.setup.parent.parentName);
     },
-    [applyParentSetup, enterMain, joinWithInvite, setCareSetup],
+    [applyParentSetup, enterMain, rehydrateFromServer, setCareSetup],
   );
 
   const finishInviteShare = useCallback(() => {
