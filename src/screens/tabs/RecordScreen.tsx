@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { ActiveTimerSheet } from "../../components/babylog/ActiveTimerSheet";
+import { AddCustomCategorySheet } from "../../components/babylog/AddCustomCategorySheet";
 import { ConsultFab } from "../../components/babylog/ConsultFab";
 import { ConsultPromptSheet } from "../../components/babylog/ConsultPromptSheet";
 import {
@@ -32,9 +33,11 @@ import { useAppSettings } from "../../context/AppSettingsContext";
 import type { ActiveTimer, TimerSide } from "../../types/activeTimer";
 import { formatElapsedClock, elapsedMsNow, isTimerAction } from "../../types/activeTimer";
 import type { BabyLogEntry } from "../../types/babyLog";
-import type { LogCategoryKey } from "../../types/logCategory";
+import type { CustomCategory, LogCategoryKey } from "../../types/logCategory";
+import { customCategoryKey } from "../../types/logCategory";
 import type { QuickRecord } from "../../types/quickRecord";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
+import { createId } from "../../utils/id";
 import {
   dayNavLabel,
   formatDateKey,
@@ -104,6 +107,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     updateLog,
     deleteLog,
     customCategories,
+    upsertCustomCategory,
     quickRecords,
     setQuickRecords,
     myFamilyRole,
@@ -114,6 +118,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
   } = useBabyLog();
   const [sheetCat, setSheetCat] = useState<LogCategoryKey | null>(null);
   const [prefill, setPrefill] = useState<RecordSheetPrefill | null>(null);
+  const [addCategoryOpen, setAddCategoryOpen] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ id: string; title: string } | null>(null);
   const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey());
@@ -575,11 +580,21 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
             settings.categories.visible.includes(action),
           )}
           coreActions={settings.categories.core}
+          customCategories={customCategories}
           disabled={!allowAdd}
           onSelect={handleOneTouch}
           onLongPress={handleLongPress}
           onInteractionChange={setCategoryPressing}
-          onAdd={allowAdd ? () => openSheet("memo") : undefined}
+          onAdd={allowAdd ? () => setAddCategoryOpen(true) : undefined}
+          onSelectCustom={(category: CustomCategory) => {
+            if (!allowAdd) return;
+            openSheet(customCategoryKey(category.id), {
+              cat: customCategoryKey(category.id),
+              dateKey: selectedDateKey,
+              time: nowTime(),
+              source: "manual",
+            });
+          }}
           onOpenGrowth={() => {
             setGrowthMeasuredAt(selectedDateKey);
             setGrowthRecordOpen(true);
@@ -684,6 +699,28 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
               }
             : undefined
         }
+      />
+
+      <AddCustomCategorySheet
+        visible={addCategoryOpen}
+        existingCategories={customCategories}
+        onClose={() => setAddCategoryOpen(false)}
+        onSave={(input) => {
+          upsertCustomCategory({
+            id: createId(),
+            label: input.label,
+            color: input.color,
+            iconKey: input.iconKey,
+            templateId: input.iconKey,
+            kind: "custom",
+            inputMode: input.inputMode,
+            isEnabled: true,
+            duration: input.inputMode === "duration",
+            amount: input.inputMode === "amount" ? "회/량" : undefined,
+            chips: input.inputMode === "check" ? ["완료", "미완료"] : undefined,
+          });
+          setAddCategoryOpen(false);
+        }}
       />
 
       <ActiveTimerSheet

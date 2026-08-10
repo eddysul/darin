@@ -1,13 +1,41 @@
 import { categoryColors } from "../theme";
 
-export type CustomCategoryTemplateId =
-  | "symptom"
+/** Icon keys available for custom log categories (picker + persistence). */
+export type CustomCategoryIconKey =
+  | "memo"
+  | "play"
+  | "book"
+  | "walk"
+  | "outing"
+  | "bath"
+  | "massage"
+  | "hospital"
+  | "med"
+  | "temp"
   | "growth"
+  | "sleep"
+  | "feeding"
+  | "diaper"
   | "mood"
-  | "vaccine"
+  | "cry"
   | "spit"
-  | "outing";
+  | "vaccine"
+  | "photo"
+  | "phone"
+  | "other"
+  | "symptom";
 
+/** @deprecated Prefer CustomCategoryIconKey — kept for existing imports. */
+export type CustomCategoryTemplateId = CustomCategoryIconKey;
+
+export type CustomCategoryIconOption = {
+  iconKey: CustomCategoryIconKey;
+  label: string;
+  /** Soft default accent; user color still overrides on save. */
+  color: string;
+};
+
+/** Legacy shape used by addCustomFromTemplate. */
 export type CustomCategoryTemplate = {
   templateId: CustomCategoryTemplateId;
   label: string;
@@ -17,6 +45,33 @@ export type CustomCategoryTemplate = {
   amount?: string;
 };
 
+export const CUSTOM_CATEGORY_ICON_OPTIONS: CustomCategoryIconOption[] = [
+  { iconKey: "play", label: "놀이", color: categoryColors.play },
+  { iconKey: "book", label: "책", color: "#7c83fd" },
+  { iconKey: "walk", label: "산책", color: "#69AFA0" },
+  { iconKey: "outing", label: "외출", color: categoryColors.bath },
+  { iconKey: "bath", label: "목욕", color: categoryColors.bath },
+  { iconKey: "massage", label: "마사지", color: "#e8607a" },
+  { iconKey: "hospital", label: "병원", color: categoryColors.doctor },
+  { iconKey: "med", label: "약", color: categoryColors.med },
+  { iconKey: "temp", label: "체온", color: categoryColors.temp },
+  { iconKey: "growth", label: "성장", color: "#5b8dee" },
+  { iconKey: "sleep", label: "수면", color: categoryColors.sleep },
+  { iconKey: "feeding", label: "수유", color: categoryColors.formula },
+  { iconKey: "diaper", label: "기저귀", color: categoryColors.diaper },
+  { iconKey: "mood", label: "기분", color: categoryColors.play },
+  { iconKey: "cry", label: "울음", color: "#e8607a" },
+  { iconKey: "spit", label: "트림/토함", color: categoryColors.formula },
+  { iconKey: "vaccine", label: "예방접종", color: categoryColors.doctor },
+  { iconKey: "photo", label: "사진", color: "#7c83fd" },
+  { iconKey: "phone", label: "전화", color: "#4ec9b0" },
+  { iconKey: "other", label: "기타", color: categoryColors.other },
+  { iconKey: "symptom", label: "증상", color: categoryColors.temp },
+];
+
+const ICON_BY_KEY = new Map(CUSTOM_CATEGORY_ICON_OPTIONS.map((item) => [item.iconKey, item]));
+
+/** Legacy recommended templates (chips/duration helpers). Still valid icon keys. */
 export const RECOMMENDED_CUSTOM_TEMPLATES: CustomCategoryTemplate[] = [
   {
     templateId: "symptom",
@@ -59,10 +114,24 @@ export const RECOMMENDED_CUSTOM_TEMPLATES: CustomCategoryTemplate[] = [
   },
 ];
 
+export function isCustomCategoryIconKey(value: string): value is CustomCategoryIconKey {
+  return ICON_BY_KEY.has(value as CustomCategoryIconKey);
+}
+
+export function getCustomCategoryIconOption(
+  iconKey: CustomCategoryIconKey,
+): CustomCategoryIconOption | undefined {
+  return ICON_BY_KEY.get(iconKey);
+}
+
 export function getCustomCategoryTemplate(
   templateId: CustomCategoryTemplateId,
 ): CustomCategoryTemplate {
   const t = RECOMMENDED_CUSTOM_TEMPLATES.find((x) => x.templateId === templateId);
-  if (!t) throw new Error(`Unknown template: ${templateId}`);
-  return t;
+  if (t) return t;
+  const icon = getCustomCategoryIconOption(templateId);
+  if (icon) {
+    return { templateId: icon.iconKey, label: icon.label, color: icon.color };
+  }
+  throw new Error(`Unknown template: ${templateId}`);
 }

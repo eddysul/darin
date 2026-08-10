@@ -27,12 +27,14 @@ import {
   resolveAppLocale,
   type AppLanguagePreference,
 } from "../../types/profilePreferences";
+import { AddCustomCategorySheet } from "../babylog/AddCustomCategorySheet";
 import { NavigationHeader } from "../navigation/NavigationHeader";
 import { DataExportRepository } from "../../repositories/DataExportRepository";
 import { ContactRequestRepository } from "../../repositories/ContactRequestRepository";
 import { AuthRepository } from "../../repositories/AuthRepository";
 import { authProviderFlags } from "../../config/authProviders";
 import type { ContactRequestCategory } from "../../types/database";
+import { createId } from "../../utils/id";
 
 export type SettingsPage =
   | "account"
@@ -111,10 +113,10 @@ const LEGAL_ACCORDION_SECTIONS: Array<{
     title: "개인정보처리방침",
     paragraphs: [
       ["안내", "Darin은 육아 기록과 가족 공유에 필요한 정보를 처리합니다. 아래 내용은 beta용 앱 내 안내 초안이며 외부 공개 전 법률 검토가 필요합니다."],
-      ["수집하는 정보", "로그인 식별 정보, 프로필 닉네임과 이름, 아기 프로필, 수유·수면·기저귀·성장 기록, 일기와 성장책, 추억 및 가족 공유 정보를 처리합니다."],
+      ["수집하는 정보", "로그인 식별 정보, 프로필 닉네임·이름·관계, 거주 국가, 앱 언어, 보호자 생년월일, 아기 프로필, 수유·수면·기저귀·성장 기록, 일기와 성장책, 추억 및 가족 공유 정보를 처리합니다."],
       ["알림 정보", "알림 허용 시 기기 식별자와 Expo push token, 알림 설정 및 전송 상태를 처리합니다."],
-      ["사용 목적", "기록 저장과 복원, 가족 공유, 요약 제공, 알림 전송, 고객 문의 처리를 위해 사용합니다."],
-      ["보관 및 삭제", "계정 삭제 시 개인 설정과 멤버십을 제거합니다. 혼자 관리하는 아기 데이터는 삭제하며, 공유 아기 데이터는 다른 가족을 위해 보존하고 작성자는 ‘탈퇴한 사용자’로 표시할 수 있습니다."],
+      ["사용 목적", "프로필 관리, 앱 언어·단위·지역 기본 설정, 보호자 상황에 맞는 육아 상담 및 안내 개인화, 기록 저장과 복원, 가족 공유, 요약 제공, 알림 전송과 고객 문의 처리를 위해 사용합니다."],
+      ["보관 및 삭제", "계정 삭제 시 닉네임·이름·관계·거주 국가·앱 언어·보호자 생년월일을 포함한 개인 프로필과 설정 및 멤버십을 제거합니다. 혼자 관리하는 아기 데이터는 삭제하며, 공유 아기 데이터는 다른 가족을 위해 보존하고 작성자는 ‘탈퇴한 사용자’로 표시할 수 있습니다."],
       ["계정 삭제 방법", "설정의 계정 삭제에서 안내를 확인하고 ‘삭제’를 입력해 요청할 수 있습니다."],
       ["문의", "설정의 문의하기를 이용할 수 있습니다. 문의 내용에는 민감한 아기 건강정보를 입력하지 않는 것을 권장합니다."],
       ["시행일", "beta 안내 시행일: 2026년 8월 3일"],
@@ -124,7 +126,7 @@ const LEGAL_ACCORDION_SECTIONS: Array<{
     title: "데이터 보존 및 삭제",
     paragraphs: [
       ["안내", "현재 beta에서 적용되는 데이터 보존·삭제 정책입니다. 실제 구현과 함께 갱신하며 외부 공개 전 법률 검토가 필요합니다."],
-      ["개인 계정", "계정 삭제 시 profile, 알림 token·설정과 baby membership을 제거하고 Auth 계정을 삭제합니다."],
+      ["개인 계정", "계정 삭제 시 닉네임·이름·관계·거주 국가·앱 언어·보호자 생년월일을 포함한 profile, 알림 token·설정과 baby membership을 제거하고 Auth 계정을 삭제합니다."],
       ["공유 아기 데이터", "다른 활성 가족이 있으면 아기 기록은 보존되고 탈퇴자의 작성자 식별값은 제거됩니다."],
       ["혼자 관리하는 아기", "다른 활성 구성원이 없는 아기는 관련 기록·일기·성장책·추억 DB 데이터와 비공개 미디어를 삭제합니다."],
       ["Soft delete", "사용자가 앱에서 삭제한 일부 일기·성장책·추억은 복원과 동기화 안전성을 위해 soft delete로 처리될 수 있습니다."],
@@ -162,7 +164,13 @@ export function AppSettingsModal({
   const insets = useSafeAreaInsets();
   const { settings, setSettings } = useAppSettings();
   const { careSetup, profile, setCareSetup, setProfile } = useApp();
-  const { applyOwnerFromSetup, localDataScope } = useBabyLog();
+  const {
+    applyOwnerFromSetup,
+    localDataScope,
+    customCategories,
+    upsertCustomCategory,
+    removeCustomCategory,
+  } = useBabyLog();
   const { setLocale } = useLanguage();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -180,6 +188,10 @@ export function AppSettingsModal({
   const [googleLinked, setGoogleLinked] = useState(false);
   const [googleLinkReady, setGoogleLinkReady] = useState(false);
   const [googleLinkBusy, setGoogleLinkBusy] = useState(false);
+  const [kakaoLinked, setKakaoLinked] = useState(false);
+  const [kakaoLinkReady, setKakaoLinkReady] = useState(false);
+  const [kakaoLinkBusy, setKakaoLinkBusy] = useState(false);
+  const [addCategoryOpen, setAddCategoryOpen] = useState(false);
 
   const accountDirty = page === "account" && accountReady && (
     name !== (careSetup.parent.parentName || profile.name) ||
@@ -190,12 +202,14 @@ export function AppSettingsModal({
 
   useEffect(() => {
     if (page !== "legal") setOpenLegalSection(null);
+    if (page !== "categories") setAddCategoryOpen(false);
   }, [page]);
 
   useEffect(() => {
     if (page !== "account") {
       setAccountReady(false);
       setGoogleLinkReady(false);
+      setKakaoLinkReady(false);
       return;
     }
     setName(careSetup.parent.parentName || profile.name);
@@ -208,10 +222,15 @@ export function AppSettingsModal({
       .then((user) => {
         if (!active) return;
         setGoogleLinked(Boolean(user?.identities?.some((identity) => identity.provider === "google")));
+        setKakaoLinked(Boolean(user?.identities?.some((identity) => identity.provider === "kakao")));
         setGoogleLinkReady(Boolean(user));
+        setKakaoLinkReady(Boolean(user));
       })
       .catch(() => {
-        if (active) setGoogleLinkReady(false);
+        if (active) {
+          setGoogleLinkReady(false);
+          setKakaoLinkReady(false);
+        }
       });
     return () => {
       active = false;
@@ -286,6 +305,24 @@ export function AppSettingsModal({
       );
     } finally {
       setGoogleLinkBusy(false);
+    }
+  };
+
+  const connectKakao = async () => {
+    if (kakaoLinkBusy) return;
+    setKakaoLinkBusy(true);
+    try {
+      const user = await AuthRepository.linkKakaoIdentity();
+      if (!user) return;
+      setKakaoLinked(true);
+      Alert.alert("연결 완료", "카카오 계정이 연결되었어요.");
+    } catch {
+      Alert.alert(
+        "연결하지 못했어요",
+        "카카오 계정 연결을 완료하지 못했어요. 다시 시도해 주세요.",
+      );
+    } finally {
+      setKakaoLinkBusy(false);
     }
   };
 
@@ -376,6 +413,17 @@ export function AppSettingsModal({
                     />
                   )
                 ) : null}
+                {authProviderFlags.kakao.enabled && kakaoLinkReady ? (
+                  kakaoLinked ? (
+                    <InfoRow label="카카오 계정" value="연결됨" />
+                  ) : (
+                    <SecondaryButton
+                      label={kakaoLinkBusy ? "카카오 연결 중…" : "카카오 계정 연결"}
+                      disabled={kakaoLinkBusy}
+                      onPress={() => void connectKakao()}
+                    />
+                  )
+                ) : null}
               </SettingsSection>
               <SettingsSection title="기본 정보">
                 <Field label="이름" value={name} onChangeText={setName} placeholder="이름" />
@@ -442,7 +490,7 @@ export function AppSettingsModal({
           {page === "categories" ? (
             <>
               <Text style={styles.help}>
-                표시 여부와 기본 6개를 선택하고 화살표로 순서를 바꿀 수 있어요. 기본에 포함되지 않은 표시 항목은 펼치기 영역에 나타납니다.
+                표시 여부와 기본 6개를 선택하고 화살표로 순서를 바꿀 수 있어요. 기본에 포함되지 않은 표시 항목은 펼치기 영역에 나타납니다. 커스텀 카테고리는 아래에서 추가할 수 있어요.
               </Text>
               <SettingsSection title={`기본 노출 ${settings.categories.core.length}/6`}>
                 {settings.categories.order.map((id, index) => {
@@ -472,6 +520,71 @@ export function AppSettingsModal({
                   );
                 })}
               </SettingsSection>
+              <SettingsSection title="내 기록 카테고리">
+                {customCategories.length === 0 ? (
+                  <View style={styles.settingRow}>
+                    <Text style={styles.rowMeta}>아직 추가한 카테고리가 없어요.</Text>
+                  </View>
+                ) : (
+                  customCategories.map((category) => (
+                    <View key={category.id} style={styles.categoryRow}>
+                      <View style={[styles.customColorDot, { backgroundColor: category.color }]} />
+                      <View style={styles.categoryCopy}>
+                        <Text style={styles.rowLabel} numberOfLines={1}>{category.label}</Text>
+                        <Text style={styles.rowMeta}>커스텀 · 빠른기록에서 선택 가능</Text>
+                      </View>
+                      <Pressable
+                        style={styles.stateButton}
+                        onPress={() => {
+                          Alert.alert(
+                            "카테고리를 삭제할까요?",
+                            `"${category.label}" 카테고리를 목록에서 제거해요. 이미 저장된 기록은 그대로 남아요.`,
+                            [
+                              { text: "취소", style: "cancel" },
+                              {
+                                text: "삭제",
+                                style: "destructive",
+                                onPress: () => removeCustomCategory(category.id),
+                              },
+                            ],
+                          );
+                        }}
+                      >
+                        <Text style={styles.stateButtonText}>삭제</Text>
+                      </Pressable>
+                    </View>
+                  ))
+                )}
+                <Pressable
+                  style={styles.addCategoryRow}
+                  onPress={() => setAddCategoryOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="새로 추가"
+                >
+                  <Text style={styles.addCategoryText}>새로 추가</Text>
+                </Pressable>
+              </SettingsSection>
+              <AddCustomCategorySheet
+                visible={addCategoryOpen}
+                existingCategories={customCategories}
+                onClose={() => setAddCategoryOpen(false)}
+                onSave={(input) => {
+                  upsertCustomCategory({
+                    id: createId(),
+                    label: input.label,
+                    color: input.color,
+                    iconKey: input.iconKey,
+                    templateId: input.iconKey,
+                    kind: "custom",
+                    inputMode: input.inputMode,
+                    isEnabled: true,
+                    duration: input.inputMode === "duration",
+                    amount: input.inputMode === "amount" ? "회/량" : undefined,
+                    chips: input.inputMode === "check" ? ["완료", "미완료"] : undefined,
+                  });
+                  setAddCategoryOpen(false);
+                }}
+              />
             </>
           ) : null}
 
@@ -525,12 +638,12 @@ export function AppSettingsModal({
             <PolicyDocument
               lead="Darin은 육아 기록과 가족 공유에 필요한 정보를 처리합니다. 아래 내용은 beta용 앱 내 안내 초안이며 외부 공개 전 법률 검토가 필요합니다."
               sections={[
-                ["수집하는 정보", "로그인 식별 정보, 프로필 언어·닉네임·이름, 아기 프로필, 수유·수면·기저귀·성장 기록, 일기와 성장책, 추억 및 가족 공유 정보를 처리합니다."],
+                ["수집하는 정보", "로그인 식별 정보, 프로필 닉네임·이름·관계, 거주 국가, 앱 언어, 보호자 생년월일, 아기 프로필, 수유·수면·기저귀·성장 기록, 일기와 성장책, 추억 및 가족 공유 정보를 처리합니다."],
                 ["사진·미디어", "사용자가 선택한 일기·성장책·추억 사진과 관련 metadata를 비공개 Storage에 저장합니다. 접근 권한이 있는 가족에게만 제한된 signed URL을 발급합니다."],
                 ["알림 정보", "알림 허용 시 기기 식별자와 Expo push token, 알림 설정 및 전송 상태를 처리합니다."],
-                ["사용 목적", "기록 저장과 복원, 가족 공유, 요약 제공, 알림 전송, 고객 문의 처리를 위해 사용합니다."],
+                ["사용 목적", "프로필 관리, 앱 언어·단위·지역 기본 설정, 보호자 상황에 맞는 육아 상담 및 안내 개인화, 기록 저장과 복원, 가족 공유, 요약 제공, 알림 전송과 고객 문의 처리를 위해 사용합니다."],
                 ["가족 공유 범위", "아기의 활성 구성원만 공유 데이터에 접근합니다. 역할과 각 콘텐츠의 공개 범위에 따라 조회·작성·관리 권한이 달라집니다."],
-                ["보관 및 삭제", "계정 삭제 시 개인 설정과 멤버십을 제거합니다. 혼자 관리하는 아기 데이터는 삭제하며, 공유 아기 데이터는 다른 가족을 위해 보존하고 작성자는 ‘탈퇴한 사용자’로 표시할 수 있습니다."],
+                ["보관 및 삭제", "계정 삭제 시 닉네임·이름·관계·거주 국가·앱 언어·보호자 생년월일을 포함한 개인 프로필과 설정 및 멤버십을 제거합니다. 혼자 관리하는 아기 데이터는 삭제하며, 공유 아기 데이터는 다른 가족을 위해 보존하고 작성자는 ‘탈퇴한 사용자’로 표시할 수 있습니다."],
                 ["계정 삭제 방법", "설정의 계정 삭제에서 안내를 확인하고 ‘삭제’를 입력해 요청할 수 있습니다."],
                 ["문의", "설정의 문의하기를 이용할 수 있습니다. 문의 내용에는 민감한 아기 건강정보를 입력하지 않는 것을 권장합니다."],
                 ["시행일", "beta 안내 시행일: 2026년 8월 3일"],
@@ -571,7 +684,7 @@ export function AppSettingsModal({
             <PolicyDocument
               lead="현재 beta에서 적용되는 데이터 보존·삭제 정책입니다. 실제 구현과 함께 갱신하며 외부 공개 전 법률 검토가 필요합니다."
               sections={[
-                ["개인 계정", "계정 삭제 시 profile, 알림 token·설정과 baby membership을 제거하고 Auth 계정을 삭제합니다."],
+                ["개인 계정", "계정 삭제 시 닉네임·이름·관계·거주 국가·앱 언어·보호자 생년월일을 포함한 profile, 알림 token·설정과 baby membership을 제거하고 Auth 계정을 삭제합니다."],
                 ["공유 아기 데이터", "다른 활성 가족이 있으면 아기 기록은 보존되고 탈퇴자의 작성자 식별값은 제거됩니다."],
                 ["혼자 관리하는 아기", "다른 활성 구성원이 없는 아기는 관련 기록·일기·성장책·추억 DB 데이터와 비공개 미디어를 삭제합니다."],
                 ["Soft delete", "사용자가 앱에서 삭제한 일부 일기·성장책·추억은 복원과 동기화 안전성을 위해 soft delete로 처리될 수 있습니다."],
@@ -886,6 +999,20 @@ const styles = StyleSheet.create({
   choiceTextOn: { color: colors.amberDark },
   categoryRow: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   categoryCopy: { flex: 1 },
+  customColorDot: { width: 12, height: 12, borderRadius: 6, marginLeft: 4 },
+  addCategoryRow: {
+    minHeight: 54,
+    marginHorizontal: 10,
+    marginVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.amber,
+    backgroundColor: colors.amberSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addCategoryText: { color: colors.amber, fontSize: 13, fontWeight: "800" },
   miniButton: { width: 28, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: colors.backgroundSecondary },
   miniButtonText: { color: colors.text, fontSize: 16, fontWeight: "800" },
   disabledText: { opacity: 0.25 },

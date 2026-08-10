@@ -618,7 +618,7 @@ function RootApp() {
             "초대 수락 완료",
             result.inviteType === "baby_friend"
               ? "친구 공개 순간에 연결됐어요."
-              : "다린 친구로 연결됐어요.",
+              : "친구로 연결됐어요.",
           );
         }
         await routeAuthenticatedSession({

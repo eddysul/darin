@@ -34,7 +34,7 @@ export function LogCategoryIcon({
   const resolved = resolveLogCategory(categoryKey, customCategories);
   return (
     <CustomTemplateIcon
-      templateId={resolved.templateId}
+      iconKey={resolved.iconKey ?? resolved.templateId}
       size={size}
       color={color ?? resolved.color}
       strokeWidth={strokeWidth}

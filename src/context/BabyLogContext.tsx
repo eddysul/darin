@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CustomCategory } from "../types/logCategory";
+import type { CustomCategoryTemplate } from "../constants/customCategoryTemplates";
 import { useApp } from "./AppContext";
 import type { BabyLogActor, BabyLogEntry, ChatMessage, DiaryEntry } from "../types/babyLog";
 import type { CareSetup, DefaultFeedingMethod } from "../types/careSetup";
@@ -10,6 +11,7 @@ import { buildBabyDisplay } from "../utils/childDisplay";
 import {
   getCustomCategories,
   hydrateCustomCategories,
+  resetCustomCategoriesMemory,
   saveCustomCategories,
 } from "../utils/customCategoriesStore";
 import { getQuickRecords, hydrateQuickRecords, saveQuickRecords } from "../utils/quickRecordsStore";
@@ -281,6 +283,10 @@ type BabyLogContextValue = {
   babyBirthMeta: string;
   defaultFeedingMethod: DefaultFeedingMethod;
   customCategories: CustomCategory[];
+  upsertCustomCategory: (category: CustomCategory) => CustomCategory;
+  addCustomFromTemplate: (template: CustomCategoryTemplate) => CustomCategory;
+  addCustomByLabel: (label: string, color?: string) => CustomCategory;
+  removeCustomCategory: (id: string) => void;
   quickRecords: QuickRecord[];
   setQuickRecords: (records: QuickRecord[] | ((prev: QuickRecord[]) => QuickRecord[])) => void;
   logs: BabyLogEntry[];
@@ -426,13 +432,15 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       resetGrowthBookEditMemory();
       resetDiaryDraftMemory();
       resetBabyStickersMemory();
+      resetCustomCategoriesMemory();
+      setCustomCategoriesState([]);
       localDataScopeRef.current = scope;
       setLocalDataScope(scope);
     }
 
     const [customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, growthRecordsOk, syncOk] =
       await Promise.all([
-      hydrateCustomCategories(force),
+      hydrateCustomCategories(scope, force),
       hydrateQuickRecords(force),
       hydrateBabyLogs(force),
       hydrateDiaryEntries(scope, force),
@@ -760,6 +768,77 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const upsertCustomCategory = useCallback((category: CustomCategory) => {
+    const now = new Date().toISOString();
+    const normalized: CustomCategory = {
+      ...category,
+      kind: "custom",
+      inputMode: category.inputMode ?? "memo",
+      isEnabled: category.isEnabled !== false,
+      iconKey: category.iconKey ?? category.templateId,
+      templateId: category.templateId ?? category.iconKey,
+      createdAt: category.createdAt ?? now,
+      updatedAt: now,
+    };
+    setCustomCategoriesState((prev) => {
+      const exists = prev.some((item) => item.id === normalized.id);
+      const next = exists
+        ? prev.map((item) => (item.id === normalized.id ? { ...normalized, createdAt: item.createdAt ?? now } : item))
+        : [...prev, normalized];
+      void saveCustomCategories(next, localDataScopeRef.current);
+      return next;
+    });
+    return normalized;
+  }, []);
+
+  const addCustomFromTemplate = useCallback(
+    (template: CustomCategoryTemplate): CustomCategory => {
+      const existing = customCategories.find(
+        (item) => (item.iconKey ?? item.templateId) === template.templateId,
+      );
+      if (existing) return existing;
+      const category: CustomCategory = {
+        id: createId(),
+        label: template.label,
+        color: template.color,
+        iconKey: template.templateId,
+        templateId: template.templateId,
+        kind: "custom",
+        inputMode: "memo",
+        isEnabled: true,
+      };
+      return upsertCustomCategory(category);
+    },
+    [customCategories, upsertCustomCategory],
+  );
+
+  const addCustomByLabel = useCallback(
+    (label: string, color = "#9096a6"): CustomCategory => {
+      const trimmed = label.trim();
+      const existing = customCategories.find(
+        (item) => item.label.trim().toLowerCase() === trimmed.toLowerCase(),
+      );
+      if (existing) return existing;
+      return upsertCustomCategory({
+        id: createId(),
+        label: trimmed,
+        color,
+        kind: "custom",
+        inputMode: "memo",
+        isEnabled: true,
+      });
+    },
+    [customCategories, upsertCustomCategory],
+  );
+
+  const removeCustomCategory = useCallback((id: string) => {
+    setCustomCategoriesState((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      void saveCustomCategories(next, localDataScopeRef.current);
+      return next;
+    });
+  }, []);
+
   const locale = careSetup.parent.preferredLanguage;
   const display = useMemo(() => buildBabyDisplay(careSetup.child, locale), [careSetup.child, locale]);
 
@@ -973,7 +1052,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveGrowthRecords([]),
       clearGrowthRecordsMigrationState(),
       saveChatHistory([]),
-      saveCustomCategories([]),
+      saveCustomCategories([], localDataScope),
       saveQuickRecords([]),
       clearSupabaseSync(),
       isSupabaseConfigured() ? AuthRepository.signOut().catch(() => undefined) : Promise.resolve(),
@@ -1113,7 +1192,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveBabyStickers(babyStickers, localDataScope),
       saveGrowthRecords(growthRecords),
       saveQuickRecords(quickRecords),
-      saveCustomCategories(customCategories),
+      saveCustomCategories(customCategories, localDataScope),
       saveDiaryReminder(reminder),
       ...(draft ? [saveDiaryDraft(draft, localDataScope)] : []),
     ]);
@@ -1164,6 +1243,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     resetGrowthBookEditMemory();
     resetDiaryDraftMemory();
     resetBabyStickersMemory();
+    resetCustomCategoriesMemory();
     const emptyGrowthBook = createEmptyGrowthBookEdit({ babyId: "", babyName: "" });
     setLogs([]);
     setDiaryEntries([]);
@@ -1171,6 +1251,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setGrowthBookEditState(emptyGrowthBook);
     setBabyStickers([]);
     setGrowthRecords([]);
+    setCustomCategoriesState([]);
     setChatHistory([DEFAULT_GREETING]);
     await Promise.all([
       saveBabyLogs([]),
@@ -1237,6 +1318,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       babyBirthMeta: display.babyBirthMeta,
       defaultFeedingMethod: careSetup.preferences.defaultFeedingMethod,
       customCategories,
+      upsertCustomCategory,
+      addCustomFromTemplate,
+      addCustomByLabel,
+      removeCustomCategory,
       quickRecords,
       setQuickRecords,
       logs,
@@ -1286,6 +1371,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       careSetup,
       display,
       customCategories,
+      upsertCustomCategory,
+      addCustomFromTemplate,
+      addCustomByLabel,
+      removeCustomCategory,
       quickRecords,
       setQuickRecords,
       logs,

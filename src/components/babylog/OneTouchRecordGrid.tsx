@@ -6,8 +6,10 @@ import {
   type OneTouchAction,
 } from "../../constants/quickRecordActions";
 import { DEFAULT_CORE_ACTIONS } from "../../types/appSettings";
+import type { CustomCategory } from "../../types/logCategory";
 import { colors } from "../../theme";
 import { BabyLogIcon, CATEGORY_ICONS } from "./BabyLogIcon";
+import { CustomTemplateIcon } from "./CustomTemplateIcon";
 import { DiaperBowelIcon, DiaperUrineIcon } from "./icons/DiaperActionIcons";
 
 export type { OneTouchAction } from "../../constants/quickRecordActions";
@@ -24,9 +26,11 @@ type Props = {
   onInteractionChange?: (active: boolean) => void;
   visibleActions?: OneTouchAction[];
   coreActions?: OneTouchAction[];
+  customCategories?: CustomCategory[];
   onOpenGrowth?: () => void;
-  /** Opens create flow for a new record (not expand/collapse). */
+  /** Opens create flow for a new custom category (header "새로 추가"). */
   onAdd?: () => void;
+  onSelectCustom?: (category: CustomCategory) => void;
 };
 
 export function OneTouchRecordGrid({
@@ -39,8 +43,10 @@ export function OneTouchRecordGrid({
   onInteractionChange,
   visibleActions,
   coreActions,
+  customCategories = [],
   onOpenGrowth,
   onAdd,
+  onSelectCustom,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const orderedVisible = visibleActions ?? QUICK_RECORD_ACTIONS.map((action) => action.id);
@@ -54,6 +60,7 @@ export function OneTouchRecordGrid({
     (action) => orderedVisible.includes(action.id) && !coreIds.includes(action.id),
   ).sort((a, b) => orderedVisible.indexOf(a.id) - orderedVisible.indexOf(b.id));
   const visible = expanded ? [...core, ...extra] : core;
+  const canExpand = extra.length > 0 || customCategories.length > 0;
 
   return (
     <View style={styles.section}>
@@ -98,6 +105,15 @@ export function OneTouchRecordGrid({
           {!visible.some((action) => action.id === "doctor") && onOpenGrowth ? (
             <GrowthTile disabled={disabled} onPress={onOpenGrowth} />
           ) : null}
+          {customCategories.map((category) => (
+            <CustomCategoryTile
+              key={category.id}
+              category={category}
+              disabled={disabled}
+              onPress={() => onSelectCustom?.(category)}
+              onInteractionChange={onInteractionChange}
+            />
+          ))}
         </View>
       ) : (
         <ScrollView
@@ -118,7 +134,7 @@ export function OneTouchRecordGrid({
               onInteractionChange={onInteractionChange}
             />
           ))}
-          {extra.length > 0 ? (
+          {canExpand ? (
             <Pressable
               style={({ pressed }) => [styles.expandTile, pressed && styles.pressed]}
               onPress={() => setExpanded(true)}
@@ -131,7 +147,7 @@ export function OneTouchRecordGrid({
         </ScrollView>
       )}
 
-      {expanded && extra.length > 0 ? (
+      {expanded && canExpand ? (
         <Pressable
           style={({ pressed }) => [styles.collapseButton, pressed && styles.expandPressed]}
           onPress={() => setExpanded(false)}
@@ -142,6 +158,45 @@ export function OneTouchRecordGrid({
         </Pressable>
       ) : null}
     </View>
+  );
+}
+
+function CustomCategoryTile({
+  category,
+  disabled,
+  onPress,
+  onInteractionChange,
+}: {
+  category: CustomCategory;
+  disabled?: boolean;
+  onPress: () => void;
+  onInteractionChange?: (active: boolean) => void;
+}) {
+  return (
+    <Pressable
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.button,
+        styles.buttonExpanded,
+        disabled && styles.disabled,
+        pressed && !disabled && styles.pressed,
+      ]}
+      onPressIn={() => onInteractionChange?.(true)}
+      onPressOut={() => onInteractionChange?.(false)}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${category.label} 기록`}
+    >
+      <View style={[styles.iconWrap, { backgroundColor: `${category.color}18` }]}>
+        <CustomTemplateIcon
+          iconKey={category.iconKey ?? category.templateId}
+          size={24}
+          color={category.color}
+          strokeWidth={1.8}
+        />
+      </View>
+      <Text style={styles.label} numberOfLines={2}>{category.label}</Text>
+    </Pressable>
   );
 }
 

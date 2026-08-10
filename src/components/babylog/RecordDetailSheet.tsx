@@ -210,8 +210,9 @@ export function RecordDetailSheet({
     setTimeError("");
     const isFood = builtinId === "food" || builtinId === "snack";
     const isMed = builtinId === "med";
+    const customInputMode = c.isCustom ? c.inputMode ?? "memo" : null;
     const timedDuration =
-      builtinId === "sleep" || builtinId === "breast"
+      builtinId === "sleep" || builtinId === "breast" || customInputMode === "duration"
         ? computedDuration || duration
         : duration;
     const composedNotes = [
@@ -578,11 +579,43 @@ export function RecordDetailSheet({
             </>
           )}
 
-          {builtinId !== "sleep" && (
+          {builtinId !== "sleep" && !(c.isCustom && (c.inputMode ?? "memo") === "duration") && (
             <TimeOfDayPickerField label={builtinId === "breast" ? "시작 시간" : "시간"} valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
           )}
 
-          {(!builtinId || isCustomCategoryKey(effectiveCat)) && (
+          {c.isCustom ? (
+            <>
+              {(c.inputMode ?? "memo") === "duration" ? (
+                <>
+                  <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+                  <TimeOfDayPickerField label="종료 시간" valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
+                  <DurationPickerField label="총 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+                  {endTime && isValidClockInput(time) && toMinutes(endTime) < toMinutes(time) ? (
+                    <Text style={styles.overnightHint}>종료 시간이 시작보다 이르므로 다음 날 종료로 계산해요.</Text>
+                  ) : null}
+                </>
+              ) : null}
+              {(c.inputMode ?? "memo") === "amount" ? (
+                <>
+                  <Text style={styles.fieldLabel}>양</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={amount}
+                    onChangeText={setAmount}
+                    keyboardType="numeric"
+                    placeholder="예: 1, 30, 150"
+                    placeholderTextColor={colors.faint}
+                  />
+                </>
+              ) : null}
+              {(c.inputMode ?? "memo") === "check" ? (
+                <>
+                  <Text style={styles.fieldLabel}>완료 여부</Text>
+                  <ChipRow options={["완료", "미완료"]} value={chip} onChange={setChip} />
+                </>
+              ) : null}
+            </>
+          ) : !builtinId ? (
             <>
               {c.chips ? (
                 <>
@@ -607,7 +640,7 @@ export function RecordDetailSheet({
                 <DurationPickerField label="지속 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
               ) : null}
             </>
-          )}
+          ) : null}
 
           <Text style={styles.fieldLabel}>{builtinId === "memo" ? "내용" : "메모"}</Text>
           <TextInput
@@ -616,7 +649,7 @@ export function RecordDetailSheet({
             onChangeText={setNotes}
             multiline
             placeholder={
-              builtinId === "memo"
+              builtinId === "memo" || (c.isCustom && (c.inputMode ?? "memo") === "memo")
                 ? "오늘 남기고 싶은 메모"
                 : builtinId === "food"
                   ? "추가 메모"
@@ -625,7 +658,9 @@ export function RecordDetailSheet({
             placeholderTextColor={colors.faint}
           />
 
-          {builtinId === "sleep" && timeError ? <Text style={styles.inputError}>{timeError}</Text> : null}
+          {(builtinId === "sleep" || (c.isCustom && (c.inputMode ?? "memo") === "duration")) && timeError ? (
+            <Text style={styles.inputError}>{timeError}</Text>
+          ) : null}
 
           {isEdit && prefill?.editId && onDelete && (
             <Pressable style={styles.deleteBtn} onPress={() => onDelete(prefill.editId!)}>

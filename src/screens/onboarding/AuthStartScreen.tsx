@@ -140,16 +140,6 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
                 </View>
 
                 <View style={styles.socialGroup}>
-                  {authProviderFlags.kakao.visible ? (
-                    <SocialLoginButton
-                      label="카카오로 계속하기"
-                      symbol="K"
-                      tone="kakao"
-                      enabled={authProviderFlags.kakao.enabled}
-                      busy={socialBusy === "kakao"}
-                      onPress={() => void continueWithKakao()}
-                    />
-                  ) : null}
                   {authProviderFlags.apple.visible ? (
                     <SocialLoginButton
                       label="Apple로 계속하기"
@@ -166,6 +156,16 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
                       enabled={authProviderFlags.google.enabled}
                       busy={socialBusy === "google"}
                       onPress={() => void continueWithGoogle()}
+                    />
+                  ) : null}
+                  {authProviderFlags.kakao.visible ? (
+                    <SocialLoginButton
+                      label="카카오로 계속하기"
+                      symbol="K"
+                      tone="kakao"
+                      enabled={authProviderFlags.kakao.enabled}
+                      busy={socialBusy === "kakao"}
+                      onPress={() => void continueWithKakao()}
                     />
                   ) : null}
                 </View>

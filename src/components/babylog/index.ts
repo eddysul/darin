@@ -19,6 +19,7 @@ export { GrowthRecordsManagerModal } from "./GrowthRecordsManagerModal";
 export { BabyStickerVaultModal } from "./BabyStickerVaultModal";
 export { BabyStickerFromModel, BabyStickerView } from "./BabyStickerView";
 export { ActiveTimerSheet } from "./ActiveTimerSheet";
+export { AddCustomCategorySheet } from "./AddCustomCategorySheet";
 export { OneTouchRecordGrid } from "./OneTouchRecordGrid";
 export { QuickRecordsBar } from "./QuickRecordsBar";
 export { RecordCreatedToast } from "./RecordCreatedToast";

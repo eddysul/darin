@@ -1,7 +1,6 @@
 import { getCategory, type BabyLogCategoryId } from "../constants/babyLogCategories";
-import { getCustomCategoryTemplate } from "../constants/customCategoryTemplates";
 import type { CustomCategory, LogCategoryKey, ResolvedLogCategory } from "../types/logCategory";
-import { isCustomCategoryKey } from "../types/logCategory";
+import { isCustomCategoryKey, resolveCustomCategoryIconKey } from "../types/logCategory";
 
 export function resolveLogCategory(
   key: LogCategoryKey,
@@ -29,19 +28,23 @@ export function resolveLogCategory(
       label: "사용자 카테고리",
       color: "#9096a6",
       isCustom: true,
+      inputMode: "memo",
     };
   }
 
-  const template = custom.templateId ? getCustomCategoryTemplate(custom.templateId) : null;
+  const iconKey = resolveCustomCategoryIconKey(custom);
+  const inputMode = custom.inputMode ?? "memo";
 
   return {
     key,
     label: custom.label,
     color: custom.color,
-    chips: custom.chips ?? template?.chips,
-    amount: custom.amount ?? template?.amount,
-    duration: custom.duration ?? template?.duration,
+    chips: inputMode === "check" ? ["완료", "미완료"] : undefined,
+    amount: inputMode === "amount" ? (custom.amount || "회/량") : undefined,
+    duration: inputMode === "duration",
     isCustom: true,
-    templateId: custom.templateId,
+    iconKey,
+    templateId: iconKey,
+    inputMode,
   };
 }

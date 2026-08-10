@@ -325,11 +325,7 @@ export const AuthRepository = {
     return session.user;
   },
 
-  /**
-   * Kakao OAuth through Supabase. The Kakao REST key and client secret stay in
-   * Supabase; the app only opens the provider URL and receives its own callback.
-   * Anonymous users are linked in place to preserve their existing RLS records.
-   */
+  /** Kakao sign-in for signed-out login/onboarding screens. */
   async signInWithKakao(): Promise<{
     user: User;
     email: string;
@@ -338,7 +334,13 @@ export const AuthRepository = {
   } | null> {
     const sb = requireSupabase();
     const previousSession = await this.getSession();
-    const linkAnonymous = Boolean(previousSession && isAnonymousUser(previousSession.user));
+    if (
+      previousSession &&
+      isAnonymousUser(previousSession.user) &&
+      (await anonymousHasBabyMembership())
+    ) {
+      throw new Error("anonymous_records_require_linking");
+    }
     const redirectTo = authRedirectUrl("callback");
     const credentials = {
       provider: "kakao" as const,
@@ -347,9 +349,7 @@ export const AuthRepository = {
         skipBrowserRedirect: true,
       },
     };
-    const oauth = linkAnonymous
-      ? await sb.auth.linkIdentity(credentials)
-      : await sb.auth.signInWithOAuth(credentials);
+    const oauth = await sb.auth.signInWithOAuth(credentials);
     if (oauth.error) throw oauth.error;
     if (!oauth.data.url) throw new Error("카카오 로그인 주소를 만들지 못했어요.");
 
@@ -357,10 +357,7 @@ export const AuthRepository = {
     if (browserResult.type !== "success" || !("url" in browserResult) || !browserResult.url) {
       return null;
     }
-    const callback = await this.handleAuthUrl(
-      browserResult.url,
-      linkAnonymous ? "kakao-link" : "kakao-login",
-    );
+    const callback = await this.handleAuthUrl(browserResult.url, "kakao-login");
     if (callback?.status === "cancelled") return null;
     if (!callback || callback.status === "error") {
       throw new Error("카카오 로그인에 실패했어요. 다시 시도해주세요.");
@@ -368,28 +365,53 @@ export const AuthRepository = {
     const session = await this.getSession();
     if (!session?.user) throw new Error("카카오 로그인 세션을 만들지 못했어요.");
 
-    if (linkAnonymous && previousSession && session.user.id !== previousSession.user.id) {
-      await sb.auth.setSession({
-        access_token: previousSession.access_token,
-        refresh_token: previousSession.refresh_token,
-      });
-      throw new Error("기존 기록 계정과 카카오 계정을 안전하게 연결하지 못했어요.");
-    }
-    if (linkAnonymous) {
-      const { data: identities, error: identitiesError } = await sb.auth.getUserIdentities();
-      if (identitiesError) throw identitiesError;
-      if (!identities.identities.some((identity) => identity.provider === "kakao")) {
-        throw new Error("카카오 계정 연결 완료를 확인하지 못했어요. 다시 시도해주세요.");
-      }
-    }
-
     await Promise.all([clearLegacyDeviceAuth(), clearPendingEmailAuth()]);
     return {
       user: session.user,
       email: session.user.email ?? "",
       name: socialDisplayName(session.user),
-      linkedAnonymousUser: linkAnonymous,
+      linkedAnonymousUser: false,
     };
+  },
+
+  /** Add Kakao as an identity without changing the signed-in auth.uid(). */
+  async linkKakaoIdentity(): Promise<User | null> {
+    const sb = requireSupabase();
+    const previousSession = await this.getSession();
+    if (!previousSession?.user) throw new Error("missing_link_session");
+
+    const redirectTo = authRedirectUrl("callback");
+    const oauth = await sb.auth.linkIdentity({
+      provider: "kakao",
+      options: { redirectTo, skipBrowserRedirect: true },
+    });
+    if (oauth.error) throw oauth.error;
+    if (!oauth.data.url) throw new Error("missing_kakao_link_url");
+
+    const browserResult = await WebBrowser.openAuthSessionAsync(oauth.data.url, redirectTo);
+    if (browserResult.type !== "success" || !("url" in browserResult) || !browserResult.url) {
+      return null;
+    }
+
+    const callback = await this.handleAuthUrl(browserResult.url, "kakao-link");
+    if (callback?.status === "cancelled") return null;
+    if (!callback || callback.status === "error") {
+      throw new Error("kakao_link_callback_failed");
+    }
+    const session = await this.getSession();
+    if (!session?.user || session.user.id !== previousSession.user.id) {
+      await sb.auth.setSession({
+        access_token: previousSession.access_token,
+        refresh_token: previousSession.refresh_token,
+      });
+      throw new Error(session?.user ? "kakao_link_user_changed" : "kakao_link_missing_session");
+    }
+    const { data: identities, error: identitiesError } = await sb.auth.getUserIdentities();
+    if (identitiesError) throw identitiesError;
+    if (!identities.identities.some((identity) => identity.provider === "kakao")) {
+      throw new Error("kakao_link_identity_missing");
+    }
+    return session.user;
   },
 
   /** Native Sign in with Apple followed by Supabase ID-token authentication. */

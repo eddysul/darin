@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.darin.childcare",
-      "buildNumber": "10",
+      "buildNumber": "11",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -29,7 +29,8 @@
         "foregroundImage": "./assets/darin-logo.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.darin.childcare"
+      "package": "com.darin.childcare",
+      "versionCode": 11
     },
     "web": {
       "bundler": "metro"
