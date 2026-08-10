@@ -64,6 +64,17 @@ try {
     created_by: owner.user.id,
   });
   if (growthBookFixture.error) throw new Error(`growth book fixture: ${growthBookFixture.error.message}`);
+  const growthRecordFixture = await owner.sb.from("growth_records").insert({
+    baby_id: babyId,
+    client_generated_id: `invite-qa-${crypto.randomUUID()}`,
+    measured_at: dateKey,
+    weight_kg: 8.1,
+    source: "home",
+    input_method: "manual",
+    user_confirmed: true,
+    created_by: owner.user.id,
+  });
+  if (growthRecordFixture.error) throw new Error(`growth record fixture: ${growthRecordFixture.error.message}`);
 
   const familyInvite = await owner.sb.rpc("create_invite_code", {
     p_baby_id: babyId,
@@ -121,8 +132,10 @@ try {
   if (forbiddenDiary.error || forbiddenDiary.data?.length) throw new Error("baby friend can read diary");
   const forbiddenGrowthBook = await babyFriend.sb.from("growth_books").select("id").eq("baby_id", babyId);
   if (forbiddenGrowthBook.error || forbiddenGrowthBook.data?.length) throw new Error("baby friend can read growth book");
+  const forbiddenGrowthRecords = await babyFriend.sb.from("growth_records").select("id").eq("baby_id", babyId);
+  if (forbiddenGrowthRecords.error || forbiddenGrowthRecords.data?.length) throw new Error("friend can read growth records");
   pass("baby friend creates memory_friends only");
-  pass("baby friend cannot read care_logs, diary, or growth_book fixtures");
+  pass("friend cannot read care_logs, diary, growth_book, or growth_records fixtures");
 
   const userInvite = await owner.sb.rpc("create_invite_code", {
     p_baby_id: null,

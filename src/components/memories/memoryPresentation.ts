@@ -27,16 +27,16 @@ const PRESENTATION: Record<MemoryPrivacyType, MemoryPrivacyPresentation> = {
     soft: "#F1ECF8",
   },
   tagged_family: {
-    label: "태그된 가족",
-    icon: "#",
-    accent: "#D98A52",
-    soft: "#FFF0E5",
+    label: "가족 공개",
+    icon: "⌂",
+    accent: "#5E9E8C",
+    soft: "#EAF5F1",
   },
   selected_people: {
-    label: "선택 공개",
-    icon: "✓",
-    accent: "#6F91B8",
-    soft: "#EAF1F8",
+    label: "가족 공개",
+    icon: "⌂",
+    accent: "#5E9E8C",
+    soft: "#EAF5F1",
   },
 };
 

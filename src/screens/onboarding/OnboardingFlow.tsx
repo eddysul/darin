@@ -138,6 +138,9 @@ export function OnboardingFlow({
       if (!row || !row.is_valid) {
         throw new Error(row?.invalid_reason === "expired" ? "만료된 초대코드예요." : "유효하지 않은 초대코드예요.");
       }
+      if (row.invite_type === "darin_friend") {
+        throw new Error("이전 버전 초대코드예요. 새로운 친구 초대코드를 요청해 주세요.");
+      }
       setInvitePreview({
         code: inviteCode.trim().toUpperCase(),
         babyName: row.baby_name ?? "",
@@ -276,7 +279,7 @@ export function OnboardingFlow({
     return (
       <OnboardingShell
         title="초대코드 입력"
-        subtitle="가족이 공유한 6자리 코드를 입력하세요."
+        subtitle="가족 또는 친구가 공유한 초대코드를 입력하세요."
         primaryLabel="코드 확인"
         primaryDisabled={!inviteCode.trim()}
         onPrimary={() => void previewInvite()}
@@ -304,13 +307,11 @@ export function OnboardingFlow({
   if (step === "invite-confirm" && invitePreview) {
     return (
       <OnboardingShell
-        title={invitePreview.inviteType === "darin_friend" ? "다린 친구 초대 확인" : "초대 확인"}
+        title={invitePreview.inviteType === "family" ? "가족 초대 확인" : "친구 초대 확인"}
         subtitle={
           invitePreview.inviteType === "family"
             ? "이 아기 기록에 가족으로 참여할까요?"
-            : invitePreview.inviteType === "baby_friend"
-              ? "이 아기의 친구 공개 순간에 연결할까요?"
-              : "이 사용자와 다린 친구를 맺을까요?"
+            : "친구 공개 순간을 함께 볼 수 있도록 연결할까요?"
         }
         primaryLabel="초대 수락"
         onPrimary={() =>

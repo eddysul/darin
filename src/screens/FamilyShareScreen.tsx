@@ -17,9 +17,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBabyLog } from "../context/BabyLogContext";
 import {
-  DarinFriendRepository,
-  type BabyMemoryFriendDisplay,
-  type DarinFriendDisplay,
+  FriendRepository,
+  type FriendDisplay,
 } from "../repositories/DarinFriendRepository";
 import { FamilyRepository } from "../repositories/FamilyRepository";
 import { ProfileRepository } from "../repositories/ProfileRepository";
@@ -33,20 +32,20 @@ type InvitePreview = NonNullable<Awaited<ReturnType<typeof FamilyRepository.prev
 
 const INVITE_LABELS: Record<InviteType, string> = {
   family: "가족 초대",
-  baby_friend: "아기 친구 초대",
-  darin_friend: "다린 친구 맺기",
+  baby_friend: "친구 초대",
+  darin_friend: "친구 초대",
 };
 
 const INVITE_DESCRIPTIONS: Record<InviteType, string> = {
   family: "기록과 성장책을 함께 볼 수 있어요.",
-  baby_friend: "추억과 친구 공개 포스트를 함께 나눠요.",
-  darin_friend: "앱 안에서 친구로 연결돼요. 아기 기록은 공유되지 않아요.",
+  baby_friend: "친구 공개 순간만 볼 수 있어요.",
+  darin_friend: "친구 공개 순간만 볼 수 있어요.",
 };
 
 const INVITE_PERMISSION_COPY: Record<InviteType, string> = {
   family: "관리자 또는 편집 가능 권한으로 기록·일기·성장책을 함께 관리해요.",
-  baby_friend: "친구 공개 Memories만 볼 수 있고 기록·일기·성장책은 볼 수 없어요.",
-  darin_friend: "친구 관계만 연결되며 어떤 아기 기록도 자동으로 공유되지 않아요.",
+  baby_friend: "친구 공개 순간만 볼 수 있고 기록·일기·성장책은 볼 수 없어요.",
+  darin_friend: "친구 공개 순간만 볼 수 있고 기록·일기·성장책은 볼 수 없어요.",
 };
 
 const INVITE_ICON: Record<InviteType, string> = {
@@ -56,6 +55,7 @@ const INVITE_ICON: Record<InviteType, string> = {
 };
 
 type ShareTab = "create" | "enter" | "people";
+type VisibleInviteType = Extract<InviteType, "family" | "baby_friend">;
 
 function inviteMessage(type: InviteType, code: string, babyName: string): string {
   const intro =
@@ -63,13 +63,12 @@ function inviteMessage(type: InviteType, code: string, babyName: string): string
       ? `${babyName}의 다린 기록을 함께 남기도록 초대했어요.`
       : type === "baby_friend"
         ? `${babyName}의 친구 공개 순간을 함께 보도록 초대했어요.`
-        : "다린 친구로 초대했어요.";
+        : `${babyName}의 친구 공개 순간을 함께 보도록 초대했어요.`;
   return `${intro}\n\n초대코드: ${code}\n\n다린 앱에서 ‘초대코드 입력’을 선택해 주세요.`;
 }
 
 function previewTitle(preview: InvitePreview): string {
-  if (preview.invite_type === "darin_friend") return `${preview.inviter_name}님의 다린 친구 초대`;
-  if (preview.invite_type === "baby_friend") return `${preview.baby_name ?? "아기"}의 친구 공개 초대`;
+  if (preview.invite_type !== "family") return `${preview.baby_name ?? "아기"}의 친구 초대`;
   return `${preview.baby_name ?? "아기"}의 가족 초대`;
 }
 
@@ -79,24 +78,22 @@ export function FamilyShareScreen() {
   const babyId = getSupabaseSync().babyId;
   const isAdmin = myFamilyRole === "owner" || myFamilyRole === "admin";
   const [activeTab, setActiveTab] = useState<ShareTab>("create");
-  const [inviteType, setInviteType] = useState<InviteType>(() => (isAdmin ? "family" : "darin_friend"));
+  const [inviteType, setInviteType] = useState<VisibleInviteType>(() => (isAdmin ? "family" : "baby_friend"));
   const [role, setRole] = useState<"admin" | "editor">("editor");
   const [relation, setRelation] = useState("가족");
-  const [createdCodes, setCreatedCodes] = useState<Partial<Record<InviteType, string>>>({});
+  const [createdCodes, setCreatedCodes] = useState<Partial<Record<VisibleInviteType, string>>>({});
   const [code, setCode] = useState("");
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [realName, setRealName] = useState("");
-  const [darinFriends, setDarinFriends] = useState<DarinFriendDisplay[]>([]);
-  const [babyFriends, setBabyFriends] = useState<BabyMemoryFriendDisplay[]>([]);
+  const [friends, setFriends] = useState<FriendDisplay[]>([]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const createdCode = createdCodes[inviteType] ?? "";
 
   const refresh = useCallback(async () => {
-    const [profile, friends] = await Promise.all([
+    const [profile] = await Promise.all([
       ProfileRepository.getMyProfile().catch(() => null),
-      DarinFriendRepository.listMyFriends().catch(() => []),
       rehydrateFromServer().catch(() => undefined),
     ]);
     if (profile) {
@@ -106,9 +103,10 @@ export function FamilyShareScreen() {
         current === "가족" && profile.default_relation ? profile.default_relation : current,
       );
     }
-    setDarinFriends(friends);
     if (babyId && isAdmin) {
-      setBabyFriends(await DarinFriendRepository.listBabyMemoryFriends(babyId).catch(() => []));
+      setFriends(await FriendRepository.listFriendsByBabyId(babyId).catch(() => []));
+    } else {
+      setFriends([]);
     }
   }, [babyId, isAdmin, rehydrateFromServer]);
 
@@ -118,7 +116,7 @@ export function FamilyShareScreen() {
     }, [refresh]),
   );
 
-  const chooseType = (next: InviteType) => {
+  const chooseType = (next: VisibleInviteType) => {
     setInviteType(next);
     setError("");
     setRelation(next === "family" ? "가족" : "친구");
@@ -126,19 +124,16 @@ export function FamilyShareScreen() {
 
   const createInvite = async () => {
     if (working) return;
-    if (inviteType !== "darin_friend" && (!babyId || !isAdmin)) {
-      setError("아기 초대코드는 관리자만 만들 수 있어요.");
+    if (!babyId || !isAdmin) {
+      setError("초대코드는 관리자만 만들 수 있어요.");
       return;
     }
     setWorking(true);
     setError("");
     try {
-      const invite = await FamilyRepository.createInviteCode({
-        babyId: inviteType === "darin_friend" ? null : babyId,
-        inviteType,
-        role,
-        relationshipLabel: inviteType === "family" ? relation : "친구",
-      });
+      const invite = inviteType === "family"
+        ? await FamilyRepository.createInviteCode({ babyId, inviteType, role, relationshipLabel: relation })
+        : await FriendRepository.createFriendInvite(babyId);
       setCreatedCodes((current) => ({ ...current, [inviteType]: invite.code }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "초대코드를 만들지 못했어요.");
@@ -176,6 +171,9 @@ export function FamilyShareScreen() {
     try {
       const next = await FamilyRepository.previewInviteCode(normalized);
       if (!next) throw new Error("초대코드를 찾지 못했어요.");
+      if (next.invite_type === "darin_friend") {
+        throw new Error("이전 버전 초대코드예요. 새로운 친구 초대코드를 요청해 주세요.");
+      }
       if (!next.is_valid) {
         const reason =
           next.invalid_reason === "expired"
@@ -211,9 +209,7 @@ export function FamilyShareScreen() {
       const message =
         accepted?.invite_type === "family"
           ? "아기 가족 목록에 연결됐어요."
-          : accepted?.invite_type === "baby_friend"
-            ? "친구 공개 순간을 볼 수 있도록 연결됐어요."
-            : "다린 친구 목록에 추가됐어요.";
+          : "친구 공개 순간을 볼 수 있도록 친구 목록에 연결됐어요.";
       Alert.alert("초대 수락 완료", message);
       setPreview(null);
       setCode("");
@@ -224,23 +220,7 @@ export function FamilyShareScreen() {
     }
   };
 
-  const addFriendToBaby = async (friend: DarinFriendDisplay) => {
-    if (!babyId || !isAdmin || working) return;
-    setWorking(true);
-    setError("");
-    try {
-      await DarinFriendRepository.inviteFriendToBaby(babyId, friend.userId);
-      await refresh();
-      Alert.alert("친구 공개 연결 완료", `${friend.displayName}님이 ${babyName}의 친구 공개 순간을 볼 수 있어요.`);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "친구를 연결하지 못했어요.");
-    } finally {
-      setWorking(false);
-    }
-  };
-
   const activeFamily = familyMembers.filter((member) => member.status === "active");
-  const babyFriendIds = new Set(babyFriends.map((friend) => friend.userId));
 
   return (
     <KeyboardAvoidingView
@@ -283,7 +263,7 @@ export function FamilyShareScreen() {
             {([
               ["create", "초대 만들기"],
               ["enter", "초대코드 입력"],
-              ["people", "연결된 친구"],
+              ["people", "연결된 사람"],
             ] as const).map(([value, label]) => (
               <Pressable
                 key={value}
@@ -303,8 +283,8 @@ export function FamilyShareScreen() {
           {activeTab === "create" ? (
             <View style={styles.tabBody}>
               <Text style={styles.sectionTitle}>누구를 초대할까요?</Text>
-              {(["family", "baby_friend", "darin_friend"] as InviteType[]).map((type) => {
-                const disabled = type !== "darin_friend" && !isAdmin;
+              {(["family", "baby_friend"] as VisibleInviteType[]).map((type) => {
+                const disabled = !isAdmin;
                 return (
                   <Pressable
                     key={type}
@@ -429,7 +409,7 @@ export function FamilyShareScreen() {
           {activeTab === "people" ? (
             <View style={styles.tabBody}>
               <Text style={styles.sectionTitle}>연결된 사람</Text>
-              <Text style={styles.permissionHint}>친구 관계만으로는 아기 기록을 볼 수 없어요.</Text>
+              <Text style={styles.permissionHint}>친구는 친구 공개 순간만 볼 수 있어요. 기록, 일기, 성장책은 가족에게만 공유돼요.</Text>
 
               <View style={styles.peopleSection}>
                 <Text style={styles.peopleTitle}>가족</Text>
@@ -445,34 +425,21 @@ export function FamilyShareScreen() {
               </View>
 
               <View style={styles.peopleSection}>
-                <Text style={styles.peopleTitle}>아기 친구</Text>
-                {babyFriends.length ? babyFriends.map((friend) => (
+                <Text style={styles.peopleTitle}>친구</Text>
+                {friends.length ? friends.map((friend) => (
                   <View key={friend.membershipId} style={styles.personRow}>
                     <View style={styles.personAvatar}><Text style={styles.personAvatarText}>{friend.displayName.slice(0, 1)}</Text></View>
                     <View style={styles.friendCopy}>
                       <Text style={styles.person}>{friend.displayName}</Text>
-                      <Text style={styles.nickname}>{friend.realName ? `${friend.realName} · ` : ""}친구 공개 연결됨</Text>
+                      {friend.realName ? <Text style={styles.nickname}>{friend.realName}</Text> : null}
                     </View>
                   </View>
-                )) : <Text style={styles.empty}>아직 아기 친구가 없어요.</Text>}
-              </View>
-
-              <View style={styles.peopleSection}>
-                <Text style={styles.peopleTitle}>다린 친구</Text>
-                {darinFriends.length ? darinFriends.map((friend) => (
-                  <View key={friend.friendshipId} style={styles.friendRow}>
-                    <View style={styles.personAvatar}><Text style={styles.personAvatarText}>{friend.displayName.slice(0, 1)}</Text></View>
-                    <View style={styles.friendCopy}>
-                      <Text style={styles.person}>{friend.displayName}</Text>
-                      <Text style={styles.nickname}>{friend.realName ? `${friend.realName} · ` : ""}다린 친구</Text>
-                    </View>
-                    {isAdmin && babyId ? (
-                      <Pressable style={[styles.friendAction, babyFriendIds.has(friend.userId) && styles.disabled]} disabled={babyFriendIds.has(friend.userId) || working} onPress={() => void addFriendToBaby(friend)}>
-                        <Text style={styles.friendActionText}>{babyFriendIds.has(friend.userId) ? "아기 친구 연결됨" : "아기 친구로 초대"}</Text>
-                      </Pressable>
-                    ) : null}
+                )) : (
+                  <View style={styles.emptyGroup}>
+                    <Text style={styles.empty}>아직 연결된 친구가 없어요.</Text>
+                    <Text style={styles.empty}>친구를 초대해 추억을 함께 나눠보세요.</Text>
                   </View>
-                )) : <Text style={styles.empty}>아직 다린 친구가 없어요.</Text>}
+                )}
               </View>
             </View>
           ) : null}
@@ -553,10 +520,8 @@ const styles = StyleSheet.create({
   personRow: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 },
   personAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
   personAvatarText: { color: colors.amber, fontSize: 14, fontWeight: "900" },
-  friendRow: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8 },
   friendCopy: { flex: 1, minWidth: 0 },
-  friendAction: { minHeight: 36, maxWidth: 118, paddingHorizontal: 8, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  friendActionText: { color: colors.amber, fontSize: 10.5, fontWeight: "800", textAlign: "center" },
+  emptyGroup: { gap: 2 },
   empty: { color: colors.faint, fontSize: 12, lineHeight: 18 },
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12.5 },
   disabled: { opacity: 0.48 },
