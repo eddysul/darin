@@ -5,7 +5,7 @@ require 'json'
 podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
 
 # React Native 0.76's Hermes build still relies on CMake policies removed in
-# CMake 4. Prefer the compatible user-level CMake installed for iOS archives.
+# CMake 4. Prefer the compatible user-level CMake installed for local archives.
 compatible_cmake_bin = File.expand_path('~/Library/Python/3.10/bin')
 if File.executable?(File.join(compatible_cmake_bin, 'cmake'))
   ENV['PATH'] = "#{compatible_cmake_bin}:#{ENV['PATH']}"
@@ -134,6 +134,42 @@ target 'Darin' do
       )
       File.chmod(0644, hermes_internal_bytecode_cmake)
       File.write(hermes_internal_bytecode_cmake, source)
+    end
+
+    # EAS Xcode 26 images ship CMake 4, which no longer permits CMP0026 OLD.
+    # Hermes only used the legacy LOCATION property to derive its dSYM output;
+    # use the known framework output directory instead so both CMake 3 and 4 work.
+    hermes_root_cmake = File.join(installer.sandbox.root.to_s, 'hermes-engine/CMakeLists.txt')
+    if File.exist?(hermes_root_cmake)
+      source = File.read(hermes_root_cmake)
+      source = source.sub(
+        'cmake_policy(SET CMP0026 OLD)',
+        'cmake_policy(SET CMP0026 NEW)'
+      )
+      File.chmod(0644, hermes_root_cmake)
+      File.write(hermes_root_cmake, source)
+    end
+
+    hermes_api_cmake = File.join(
+      installer.sandbox.root.to_s,
+      'hermes-engine/API/hermes/CMakeLists.txt'
+    )
+    if File.exist?(hermes_api_cmake)
+      source = File.read(hermes_api_cmake)
+      source = source.sub(
+        "  get_target_property(DSYM_PATH libhermes LOCATION)\n" \
+          "  if(HERMES_BUILD_APPLE_FRAMEWORK)\n" \
+          "    get_filename_component(DSYM_PATH \${DSYM_PATH} DIRECTORY)\n" \
+          "  endif()\n" \
+          "  set(DSYM_PATH \"\${DSYM_PATH}.dSYM\")",
+        "  if(HERMES_BUILD_APPLE_FRAMEWORK)\n" \
+          "    set(DSYM_PATH \"\${CMAKE_CURRENT_BINARY_DIR}/hermes.framework.dSYM\")\n" \
+          "  else()\n" \
+          "    set(DSYM_PATH \"\${CMAKE_CURRENT_BINARY_DIR}/libhermes.dylib.dSYM\")\n" \
+          "  endif()"
+      )
+      File.chmod(0644, hermes_api_cmake)
+      File.write(hermes_api_cmake, source)
     end
 
     # fmt 11 bundled with this React Native version hits a Clang 21 consteval
