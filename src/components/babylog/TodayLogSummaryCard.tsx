@@ -66,7 +66,9 @@ function sumAmount(logs: BabyLogEntry[], cats: BabyLogCategoryId[]): number {
   return logs
     .filter(
       (entry) =>
-        !isCustomCategoryKey(entry.cat) && cats.includes(entry.cat as BabyLogCategoryId),
+        !isCustomCategoryKey(entry.cat)
+        && cats.includes(entry.cat as BabyLogCategoryId)
+        && (!entry.amountUnit || entry.amountUnit === "ml" || entry.amountUnit === "oz"),
     )
     .reduce((total, entry) => total + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
 }

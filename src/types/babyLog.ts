@@ -24,6 +24,9 @@ export type BabyLogEntry = {
   /** Stool consistency/state, kept separate from stool color. */
   stoolState?: string;
   amount?: string;
+  amountValue?: number | string;
+  amountUnit?: string;
+  amountText?: string;
   duration?: string;
   /** Feeding/pumping detail fields stored inside the existing JSON payload. */
   feedingMethod?: "direct" | "bottle" | "mixed";
@@ -31,6 +34,12 @@ export type BabyLogEntry = {
   rightDuration?: string;
   leftAmount?: string;
   rightAmount?: string;
+  leftAmountValue?: number | string;
+  leftAmountUnit?: string;
+  leftAmountText?: string;
+  rightAmountValue?: number | string;
+  rightAmountUnit?: string;
+  rightAmountText?: string;
   burped?: "yes" | "no";
   spitUp?: "yes" | "no";
   supplement?: string;

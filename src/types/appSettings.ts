@@ -9,6 +9,7 @@ export type VolumeUnit = "ml" | "oz";
 export type WeightUnit = "kg" | "lb";
 export type TemperatureUnit = "c" | "f";
 export type HeightUnit = "cm" | "inch";
+export type MedicationDefaultUnit = "none" | "ml" | "drop" | "방울" | "포" | "정" | "회" | "스푼" | "g" | "mg" | "other";
 export type ClockFormat = "12h" | "24h";
 export type DayStart = "midnight" | "04:00";
 export type WeekStart = "sunday" | "monday";
@@ -35,6 +36,7 @@ export type AppSettings = {
     weight: WeightUnit;
     temperature: TemperatureUnit;
     height: HeightUnit;
+    medicationDefaultUnit: MedicationDefaultUnit;
   };
   time: {
     clock: ClockFormat;
@@ -92,6 +94,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     weight: "kg",
     temperature: "c",
     height: "cm",
+    medicationDefaultUnit: "none",
   },
   time: {
     clock: "12h",

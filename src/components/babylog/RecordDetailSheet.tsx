@@ -38,9 +38,8 @@ import {
   formatHHmm,
   TimeOfDayPickerField,
   TimePickerSheet,
-  VolumePickerField,
-  VolumePickerSheet,
 } from "../inputs/TimePickerFields";
+import { AmountInput, CUSTOM_AMOUNT_UNIT, isPositiveAmount } from "../inputs/AmountInput";
 
 function normalizeDiaperChip(value: string): string {
   return value === "둘다" || value === "둘 다" ? "소변+대변" : value;
@@ -69,7 +68,8 @@ type Props = {
 
 const STARTER_INGREDIENTS = ["쌀미음", "소고기", "애호박", "바나나", "고구마", "사과"];
 const MEDICATION_DOSE_UNITS = ["ml", "drop", "방울", "포", "정", "회", "스푼", "g", "mg"];
-const CUSTOM_DOSE_UNIT = "기타";
+const CUSTOM_DOSE_UNIT = CUSTOM_AMOUNT_UNIT;
+const LIQUID_CATEGORIES = ["formula", "storedMilk", "pump", "water", "milk"] as const;
 
 function parseMedicationDose(raw?: string): { value: string; unit: string } | null {
   const match = /^\s*(\d+(?:[.,]\d+)?)\s*(\S(?:.*\S)?)\s*$/.exec(raw ?? "");
@@ -160,6 +160,8 @@ export function RecordDetailSheet({
   const [chip2, setChip2] = useState("");
   const [stoolState, setStoolState] = useState("");
   const [amount, setAmount] = useState("");
+  const [amountUnit, setAmountUnit] = useState("");
+  const [customAmountUnit, setCustomAmountUnit] = useState("");
   const [duration, setDuration] = useState("");
   const [leftDuration, setLeftDuration] = useState("");
   const [rightDuration, setRightDuration] = useState("");
@@ -185,6 +187,7 @@ export function RecordDetailSheet({
   const [doseUnit, setDoseUnit] = useState("");
   const [customDoseUnit, setCustomDoseUnit] = useState("");
   const [legacyDoseText, setLegacyDoseText] = useState("");
+  const [doseUnitTouched, setDoseUnitTouched] = useState(false);
   const [medicationReminderEnabled, setMedicationReminderEnabled] = useState(false);
   const [visitType, setVisitType] = useState<BabyLogEntry["visitType"]>();
   const [doctorName, setDoctorName] = useState("");
@@ -198,7 +201,6 @@ export function RecordDetailSheet({
   const [durationPickerOpen, setDurationPickerOpen] = useState(false);
   const [nextDatePickerOpen, setNextDatePickerOpen] = useState(false);
   const [sideDurationTarget, setSideDurationTarget] = useState<"left" | "right" | null>(null);
-  const [volumeTarget, setVolumeTarget] = useState<"amount" | "left" | "right" | null>(null);
 
   useEffect(() => {
     if (!visible || !catKey) return;
@@ -212,8 +214,17 @@ export function RecordDetailSheet({
     setChip2(prefill?.chip2 ?? "");
     setStoolState(prefill?.stoolState ?? "");
     const storedAmount = prefill?.amount ?? "";
-    if (["formula", "storedMilk", "pump", "water", "milk"].includes(nextCat)) {
-      setAmount(storedAmount ? volumeFromMl(storedAmount, settings.units.volume) : "");
+    if ((LIQUID_CATEGORIES as readonly string[]).includes(nextCat)) {
+      const savedUnit = prefill?.amountUnit?.trim();
+      const nextUnit = savedUnit || (prefill?.editId ? "ml" : settings.units.volume);
+      const storedValue = prefill?.amountValue == null ? "" : String(prefill.amountValue);
+      setAmount(
+        storedValue || (storedAmount
+          ? nextUnit === "ml" || nextUnit === "oz" ? volumeFromMl(storedAmount, nextUnit) : storedAmount
+          : ""),
+      );
+      setAmountUnit(nextUnit === "ml" || nextUnit === "oz" ? nextUnit : CUSTOM_AMOUNT_UNIT);
+      setCustomAmountUnit(nextUnit === "ml" || nextUnit === "oz" ? "" : nextUnit);
     } else if (nextCat === "temp") {
       setAmount(
         storedAmount
@@ -222,12 +233,28 @@ export function RecordDetailSheet({
       );
     } else {
       setAmount(storedAmount);
+      setAmountUnit("");
+      setCustomAmountUnit("");
     }
     setDuration(prefill?.duration ?? "");
     setLeftDuration(prefill?.leftDuration ?? "");
     setRightDuration(prefill?.rightDuration ?? "");
-    setLeftAmount(prefill?.leftAmount ? volumeFromMl(prefill.leftAmount, settings.units.volume) : "");
-    setRightAmount(prefill?.rightAmount ? volumeFromMl(prefill.rightAmount, settings.units.volume) : "");
+    const savedPumpUnit = prefill?.leftAmountUnit?.trim() || prefill?.rightAmountUnit?.trim();
+    const nextPumpUnit = savedPumpUnit || (prefill?.editId ? "ml" : settings.units.volume);
+    if (nextCat === "pump") {
+      setAmountUnit(nextPumpUnit === "ml" || nextPumpUnit === "oz" ? nextPumpUnit : CUSTOM_AMOUNT_UNIT);
+      setCustomAmountUnit(nextPumpUnit === "ml" || nextPumpUnit === "oz" ? "" : nextPumpUnit);
+    }
+    setLeftAmount(prefill?.leftAmountValue != null
+      ? String(prefill.leftAmountValue)
+      : prefill?.leftAmount
+        ? (nextPumpUnit === "ml" || nextPumpUnit === "oz" ? volumeFromMl(prefill.leftAmount, nextPumpUnit) : prefill.leftAmount)
+        : "");
+    setRightAmount(prefill?.rightAmountValue != null
+      ? String(prefill.rightAmountValue)
+      : prefill?.rightAmount
+        ? (nextPumpUnit === "ml" || nextPumpUnit === "oz" ? volumeFromMl(prefill.rightAmount, nextPumpUnit) : prefill.rightAmount)
+        : "");
     setFeedingMethod(prefill?.feedingMethod);
     setBurped(prefill?.burped);
     setSpitUp(prefill?.spitUp);
@@ -246,9 +273,12 @@ export function RecordDetailSheet({
       ? { value: structuredDoseValue, unit: structuredDoseUnit }
       : parseMedicationDose(legacyDose);
     setDoseValue(parsedDose?.value ?? "");
-    setDoseUnit(parsedDose ? (MEDICATION_DOSE_UNITS.includes(parsedDose.unit) ? parsedDose.unit : CUSTOM_DOSE_UNIT) : "");
+    const medicationDefaultUnit = settings.units.medicationDefaultUnit;
+    const defaultDoseUnit = medicationDefaultUnit === "none" ? "" : medicationDefaultUnit === "other" ? CUSTOM_DOSE_UNIT : medicationDefaultUnit;
+    setDoseUnit(parsedDose ? (MEDICATION_DOSE_UNITS.includes(parsedDose.unit) ? parsedDose.unit : CUSTOM_DOSE_UNIT) : prefill?.editId ? "" : defaultDoseUnit);
     setCustomDoseUnit(parsedDose && !MEDICATION_DOSE_UNITS.includes(parsedDose.unit) ? parsedDose.unit : "");
     setLegacyDoseText(legacyDose && !parsedDose ? legacyDose : "");
+    setDoseUnitTouched(false);
     setMedicationReminderEnabled(prefill?.medicationReminderEnabled ?? false);
     setVisitType(prefill?.visitType ?? (nextCat === "doctor" && prefill ? "checkup" : undefined));
     setDoctorName(prefill?.doctorName ?? "");
@@ -283,11 +313,31 @@ export function RecordDetailSheet({
     setDurationPickerOpen(false);
     setNextDatePickerOpen(false);
     setSideDurationTarget(null);
-    setVolumeTarget(null);
     setAddingIngredient(false);
     setNewIngredientName("");
     setIngredientError("");
-  }, [visible, catKey, prefill, settings.units.temperature, settings.units.volume]);
+  }, [visible, catKey, prefill, settings.units.medicationDefaultUnit, settings.units.temperature, settings.units.volume]);
+
+  useEffect(() => {
+    if (!visible || catKey !== "med" || prefill?.editId || doseUnitTouched || !medName.trim()) return;
+    const normalizedName = medName.trim().toLocaleLowerCase();
+    const recent = [...logs]
+      .filter((entry) => {
+        if (entry.cat !== "med") return false;
+        const savedName = entry.medicationName ?? entry.notes?.split(" · ")[0];
+        return savedName?.trim().toLocaleLowerCase() === normalizedName;
+      })
+      .sort((a, b) => `${b.dateKey ?? ""} ${b.time}`.localeCompare(`${a.dateKey ?? ""} ${a.time}`))[0];
+    const recentDose = recent?.doseUnit || parseMedicationDose(recent?.doseText ?? recent?.amount)?.unit;
+    if (!recentDose) return;
+    if (MEDICATION_DOSE_UNITS.includes(recentDose)) {
+      setDoseUnit(recentDose);
+      setCustomDoseUnit("");
+    } else {
+      setDoseUnit(CUSTOM_DOSE_UNIT);
+      setCustomDoseUnit(recentDose);
+    }
+  }, [catKey, doseUnitTouched, logs, medName, prefill?.editId, visible]);
 
   const computedDuration = useMemo(() => {
     if (!isValidClockInput(endTime) || !isValidClockInput(time)) return duration;
@@ -300,7 +350,12 @@ export function RecordDetailSheet({
   const rightDurationValue = Number.parseInt(rightDuration, 10) || null;
   const sideDurationTotal = (leftDurationValue ?? 0) + (rightDurationValue ?? 0);
   const sideAmountTotal = (Number.parseFloat(leftAmount) || 0) + (Number.parseFloat(rightAmount) || 0);
-  const storedMilkConsumedMl = Number.parseFloat(volumeToMl(amount, settings.units.volume)) || 0;
+  const resolvedAmountUnit = amountUnit === CUSTOM_AMOUNT_UNIT ? customAmountUnit.trim() : amountUnit;
+  const hasValidAmount = isPositiveAmount(amount) && Boolean(resolvedAmountUnit);
+  const hasValidLeftAmount = isPositiveAmount(leftAmount) && Boolean(resolvedAmountUnit);
+  const hasValidRightAmount = isPositiveAmount(rightAmount) && Boolean(resolvedAmountUnit);
+  const convertibleVolumeUnit = resolvedAmountUnit === "ml" || resolvedAmountUnit === "oz" ? resolvedAmountUnit : null;
+  const storedMilkConsumedMl = convertibleVolumeUnit && isPositiveAmount(amount) ? Number.parseFloat(volumeToMl(amount, convertibleVolumeUnit)) || 0 : 0;
   const editingStoredMilkMl = prefill?.editId && prefill.cat === "storedMilk" ? Number.parseFloat(prefill.amount ?? "0") || 0 : 0;
   const storedMilkEstimatedRemainingMl = storedMilkEstimatedAvailableMl == null
     ? undefined
@@ -400,8 +455,16 @@ export function RecordDetailSheet({
       return;
     }
     setDiaperError("");
-    if ((builtinId === "formula" || builtinId === "storedMilk") && !(Number.parseFloat(amount) > 0)) {
-      setFeedingAmountError("먹은 양을 선택해 주세요.");
+    if ((builtinId === "formula" || builtinId === "storedMilk") && !hasValidAmount) {
+      setFeedingAmountError("0보다 큰 값과 단위를 함께 입력해 주세요.");
+      return;
+    }
+    if ((builtinId === "water" || builtinId === "milk") && !hasValidAmount) {
+      Alert.alert("양을 확인해 주세요", "0보다 큰 값과 단위를 함께 입력해 주세요.");
+      return;
+    }
+    if (builtinId === "pump" && ((leftAmount && !hasValidLeftAmount) || (rightAmount && !hasValidRightAmount))) {
+      Alert.alert("유축량을 확인해 주세요", "값과 단위를 함께 입력해 주세요.");
       return;
     }
     setFeedingAmountError("");
@@ -452,21 +515,21 @@ export function RecordDetailSheet({
       .filter(Boolean)
       .join(" · ");
     const canonicalAmount =
-      ["formula", "storedMilk", "pump", "water", "milk"].includes(effectiveCat)
-        ? volumeToMl(amount, settings.units.volume)
+      (LIQUID_CATEGORIES as readonly string[]).includes(effectiveCat)
+        ? convertibleVolumeUnit ? volumeToMl(amount, convertibleVolumeUnit) : amount
         : effectiveCat === "temp"
           ? temperatureToCelsius(amount, settings.units.temperature)
           : effectiveCat === "med"
             ? medicationDoseText
             : amount;
-    const canonicalLeftAmount = leftAmount ? volumeToMl(leftAmount, settings.units.volume) : "";
-    const canonicalRightAmount = rightAmount ? volumeToMl(rightAmount, settings.units.volume) : "";
+    const canonicalLeftAmount = leftAmount ? convertibleVolumeUnit ? volumeToMl(leftAmount, convertibleVolumeUnit) : leftAmount : "";
+    const canonicalRightAmount = rightAmount ? convertibleVolumeUnit ? volumeToMl(rightAmount, convertibleVolumeUnit) : rightAmount : "";
     const sideTotalDuration = sideDurationTotal ? String(sideDurationTotal) : "";
     const finalDuration = ["breast", "pump"].includes(effectiveCat)
       ? sideTotalDuration || timedDuration
       : timedDuration;
     const finalAmount = effectiveCat === "pump" && sideAmountTotal > 0
-      ? volumeToMl(String(sideAmountTotal), settings.units.volume)
+      ? convertibleVolumeUnit ? volumeToMl(String(sideAmountTotal), convertibleVolumeUnit) : String(sideAmountTotal)
       : canonicalAmount;
     const diaperType = builtinId === "diaper" ? chip : "";
     onSave(
@@ -483,12 +546,21 @@ export function RecordDetailSheet({
           builtinId === "diaper" && diaperType === "대변"
             ? undefined
             : finalAmount || undefined,
+        amountValue: (LIQUID_CATEGORIES as readonly string[]).includes(effectiveCat) && amount ? amount : undefined,
+        amountUnit: (LIQUID_CATEGORIES as readonly string[]).includes(effectiveCat) && amount ? resolvedAmountUnit || undefined : undefined,
+        amountText: (LIQUID_CATEGORIES as readonly string[]).includes(effectiveCat) && amount && resolvedAmountUnit ? `${amount} ${resolvedAmountUnit}` : undefined,
         duration: finalDuration || undefined,
         feedingMethod: effectiveCat === "breast" ? feedingMethod : undefined,
         leftDuration: ["breast", "pump"].includes(effectiveCat) ? leftDuration || undefined : undefined,
         rightDuration: ["breast", "pump"].includes(effectiveCat) ? rightDuration || undefined : undefined,
         leftAmount: effectiveCat === "pump" ? canonicalLeftAmount || undefined : undefined,
         rightAmount: effectiveCat === "pump" ? canonicalRightAmount || undefined : undefined,
+        leftAmountValue: effectiveCat === "pump" && leftAmount ? leftAmount : undefined,
+        leftAmountUnit: effectiveCat === "pump" && leftAmount ? resolvedAmountUnit || undefined : undefined,
+        leftAmountText: effectiveCat === "pump" && leftAmount && resolvedAmountUnit ? `${leftAmount} ${resolvedAmountUnit}` : undefined,
+        rightAmountValue: effectiveCat === "pump" && rightAmount ? rightAmount : undefined,
+        rightAmountUnit: effectiveCat === "pump" && rightAmount ? resolvedAmountUnit || undefined : undefined,
+        rightAmountText: effectiveCat === "pump" && rightAmount && resolvedAmountUnit ? `${rightAmount} ${resolvedAmountUnit}` : undefined,
         burped: effectiveCat === "breast" ? burped : undefined,
         spitUp: ["breast", "formula", "storedMilk"].includes(effectiveCat) ? spitUp : undefined,
         supplement: ["formula", "storedMilk"].includes(effectiveCat) ? supplement.trim() || undefined : undefined,
@@ -555,7 +627,7 @@ export function RecordDetailSheet({
               ) : null}
               {builtinId !== "breast" ? (
                 <>
-                  <VolumePickerField label="먹은 양" value={amount} unit={settings.units.volume} onPress={() => { setFeedingAmountError(""); setVolumeTarget("amount"); }} error={feedingAmountError || undefined} />
+                  <AmountInput label="먹은 양" value={amount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={(value) => { setAmount(value); setFeedingAmountError(""); }} onChangeUnit={(unit) => { setAmountUnit(unit); setFeedingAmountError(""); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} error={feedingAmountError || undefined} />
                   <DurationPickerField label="소요 시간 (선택)" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
                   <Text style={styles.fieldLabel}>영양제 (선택)</Text>
                   <TextInput style={styles.input} value={supplement} onChangeText={setSupplement} placeholder="예: 비타민D" placeholderTextColor={colors.faint} />
@@ -725,43 +797,17 @@ export function RecordDetailSheet({
               <TimeOfDayPickerField label="종료 시간" valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
               <DurationPickerField label="왼쪽 시간" valueMinutes={leftDurationValue} onPress={() => setSideDurationTarget("left")} />
               <DurationPickerField label="오른쪽 시간" valueMinutes={rightDurationValue} onPress={() => setSideDurationTarget("right")} />
-              <VolumePickerField label="왼쪽 유축량" value={leftAmount} unit={settings.units.volume} onPress={() => setVolumeTarget("left")} />
-              <VolumePickerField label="오른쪽 유축량" value={rightAmount} unit={settings.units.volume} onPress={() => setVolumeTarget("right")} />
+              <AmountInput label="왼쪽 유축량" value={leftAmount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={setLeftAmount} onChangeUnit={(unit) => { setAmountUnit(unit); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} />
+              <AmountInput label="오른쪽 유축량" value={rightAmount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={setRightAmount} onChangeUnit={(unit) => { setAmountUnit(unit); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} />
               <View style={styles.calculatedRow}>
                 <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>총 시간</Text><Text style={styles.calculatedValue}>{sideDurationTotal || durationValue || 0}분</Text></View>
-                <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>총 유축량</Text><Text style={styles.calculatedValue}>{sideAmountTotal}{settings.units.volume}</Text></View>
+                <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>총 유축량</Text><Text style={styles.calculatedValue}>{sideAmountTotal}{resolvedAmountUnit ? ` ${resolvedAmountUnit}` : ""}</Text></View>
               </View>
             </>
           )}
 
           {(builtinId === "water" || builtinId === "milk") && (
-            <>
-              <Text style={styles.fieldLabel}>양 ({settings.units.volume})</Text>
-              <View style={styles.chipRow}>
-                {["30", "60", "80", "100", "120"].map((ml) => {
-                  const displayAmount = volumeFromMl(ml, settings.units.volume);
-                  return (
-                  <Pressable
-                    key={ml}
-                    style={[styles.chip, amount === displayAmount && styles.chipSel]}
-                    onPress={() => setAmount(displayAmount)}
-                  >
-                    <Text style={[styles.chipText, amount === displayAmount && styles.chipTextSel]}>
-                      {displayAmount}
-                    </Text>
-                  </Pressable>
-                  );
-                })}
-              </View>
-              <TextInput
-                style={[styles.input, { marginTop: 8 }]}
-                value={amount}
-                onChangeText={setAmount}
-                keyboardType="numeric"
-                placeholder="직접 입력"
-                placeholderTextColor={colors.faint}
-              />
-            </>
+            <AmountInput label="양" value={amount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={setAmount} onChangeUnit={(unit) => { setAmountUnit(unit); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} />
           )}
 
           {(builtinId === "tummy" || builtinId === "play") && (
@@ -806,37 +852,7 @@ export function RecordDetailSheet({
                 placeholder="예: 비타민D"
                 placeholderTextColor={colors.faint}
               />
-              <Text style={styles.fieldLabel}>용량</Text>
-              <TextInput
-                style={styles.input}
-                value={doseValue}
-                onChangeText={(value) => {
-                  setDoseValue(value.replace(",", ".").replace(/[^0-9.]/g, ""));
-                  setLegacyDoseText("");
-                }}
-                keyboardType="decimal-pad"
-                placeholder="예: 1"
-                placeholderTextColor={colors.faint}
-              />
-              <Text style={styles.fieldLabel}>단위</Text>
-              <ChipRow
-                options={[...MEDICATION_DOSE_UNITS, CUSTOM_DOSE_UNIT]}
-                value={doseUnit}
-                onChange={(value) => {
-                  setDoseUnit(value);
-                  setLegacyDoseText("");
-                  if (value !== CUSTOM_DOSE_UNIT) setCustomDoseUnit("");
-                }}
-              />
-              {doseUnit === CUSTOM_DOSE_UNIT ? (
-                <TextInput
-                  style={[styles.input, { marginTop: 8 }]}
-                  value={customDoseUnit}
-                  onChangeText={(value) => { setCustomDoseUnit(value); setLegacyDoseText(""); }}
-                  placeholder="단위를 입력해 주세요"
-                  placeholderTextColor={colors.faint}
-                />
-              ) : null}
+              <AmountInput label="용량" value={doseValue} unit={doseUnit} unitOptions={MEDICATION_DOSE_UNITS} customUnit={customDoseUnit} onChangeValue={(value) => { setDoseValue(value); setLegacyDoseText(""); }} onChangeUnit={(value) => { setDoseUnit(value); setDoseUnitTouched(true); setLegacyDoseText(""); if (value !== CUSTOM_DOSE_UNIT) setCustomDoseUnit(""); }} onChangeCustomUnit={(value) => { setCustomDoseUnit(value); setDoseUnitTouched(true); setLegacyDoseText(""); }} />
               {legacyDoseText ? (
                 <View style={styles.legacyDoseCard}>
                   <Text style={styles.legacyDoseLabel}>기존 용량 기록</Text>
@@ -1133,26 +1149,6 @@ export function RecordDetailSheet({
           if (sideDurationTarget === "left") setLeftDuration("");
           if (sideDurationTarget === "right") setRightDuration("");
           setSideDurationTarget(null);
-        }}
-      />
-      <VolumePickerSheet
-        visible={volumeTarget !== null}
-        value={volumeTarget === "left" ? leftAmount : volumeTarget === "right" ? rightAmount : amount}
-        title={volumeTarget === "left" ? "왼쪽 유축량" : volumeTarget === "right" ? "오른쪽 유축량" : "먹은 양"}
-        unit={settings.units.volume}
-        allowZero={volumeTarget === "left" || volumeTarget === "right"}
-        onCancel={() => setVolumeTarget(null)}
-        onConfirm={(value) => {
-          if (volumeTarget === "left") setLeftAmount(value);
-          else if (volumeTarget === "right") setRightAmount(value);
-          else setAmount(value);
-          setVolumeTarget(null);
-        }}
-        onClear={() => {
-          if (volumeTarget === "left") setLeftAmount("");
-          else if (volumeTarget === "right") setRightAmount("");
-          else setAmount("");
-          setVolumeTarget(null);
         }}
       />
     </KeyboardAvoidingView>

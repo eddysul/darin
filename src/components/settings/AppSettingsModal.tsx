@@ -590,10 +590,12 @@ export function AppSettingsModal({
 
           {page === "units" ? (
             <SettingsSection title="표시 단위">
-              <ChoiceRow label="수유량" value={settings.units.volume} options={[{ value: "ml", label: "ml" }, { value: "oz", label: "oz" }]} onChange={(volume) => setSettings((s) => ({ ...s, units: { ...s.units, volume: volume as "ml" | "oz" } }))} />
-              <ChoiceRow label="몸무게" value={settings.units.weight} options={[{ value: "kg", label: "kg" }, { value: "lb", label: "lb" }]} onChange={(weight) => setSettings((s) => ({ ...s, units: { ...s.units, weight: weight as "kg" | "lb" } }))} />
-              <ChoiceRow label="체온" value={settings.units.temperature} options={[{ value: "c", label: "°C" }, { value: "f", label: "°F" }]} onChange={(temperature) => setSettings((s) => ({ ...s, units: { ...s.units, temperature: temperature as "c" | "f" } }))} />
-              <ChoiceRow label="키" value={settings.units.height} options={[{ value: "cm", label: "cm" }, { value: "inch", label: "inch" }]} onChange={(height) => setSettings((s) => ({ ...s, units: { ...s.units, height: height as "cm" | "inch" } }))} />
+              <ChoiceRow label="수유/음료 단위" value={settings.units.volume} options={[{ value: "ml", label: "ml" }, { value: "oz", label: "oz" }]} onChange={(volume) => setSettings((s) => ({ ...s, units: { ...s.units, volume: volume as "ml" | "oz" } }))} help="분유, 저장 모유, 물, 우유, 유축량 입력의 기본 단위로 사용돼요." />
+              <ChoiceRow label="체온 단위" value={settings.units.temperature} options={[{ value: "c", label: "℃" }, { value: "f", label: "℉" }]} onChange={(temperature) => setSettings((s) => ({ ...s, units: { ...s.units, temperature: temperature as "c" | "f" } }))} help="체온 기록의 기본 단위로 사용돼요." />
+              <ChoiceRow label="성장 단위" value={`${settings.units.weight}/${settings.units.height}`} options={[{ value: "kg/cm", label: "kg/cm" }, { value: "lb/inch", label: "lb/in" }]} onChange={(value) => setSettings((s) => ({ ...s, units: { ...s.units, weight: value === "kg/cm" ? "kg" : "lb", height: value === "kg/cm" ? "cm" : "inch" } }))} help="키, 몸무게, 머리둘레 기록의 기본 단위로 사용돼요." />
+              <ChoiceRow label="투약 기본 단위" value={settings.units.medicationDefaultUnit} options={[
+                { value: "none", label: "없음" }, { value: "ml", label: "ml" }, { value: "drop", label: "drop" }, { value: "방울", label: "방울" }, { value: "포", label: "포" }, { value: "정", label: "정" }, { value: "회", label: "회" }, { value: "스푼", label: "스푼" }, { value: "g", label: "g" }, { value: "mg", label: "mg" }, { value: "other", label: "기타" },
+              ]} onChange={(medicationDefaultUnit) => setSettings((s) => ({ ...s, units: { ...s.units, medicationDefaultUnit: medicationDefaultUnit as typeof s.units.medicationDefaultUnit } }))} help="약마다 단위가 다를 수 있어요. 같은 약의 최근 사용 단위를 우선 보여줘요." />
             </SettingsSection>
           ) : null}
 
@@ -861,11 +863,13 @@ function ChoiceRow({
   value,
   options,
   onChange,
+  help,
 }: {
   label: string;
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange: (value: string) => void;
+  help?: string;
 }) {
   return (
     <View style={styles.choiceBlock}>
@@ -877,6 +881,7 @@ function ChoiceRow({
           </Pressable>
         ))}
       </View>
+      {help ? <Text style={styles.choiceHelp}>{help}</Text> : null}
     </View>
   );
 }
@@ -997,6 +1002,7 @@ const styles = StyleSheet.create({
   choiceOn: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
   choiceText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   choiceTextOn: { color: colors.amberDark },
+  choiceHelp: { color: colors.faint, fontSize: 10.5, lineHeight: 16 },
   categoryRow: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   categoryCopy: { flex: 1 },
   customColorDot: { width: 12, height: 12, borderRadius: 6, marginLeft: 4 },

@@ -10,7 +10,8 @@ import {
 } from "../../types/activeTimer";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { volumeToMl } from "../../utils/measurementFormat";
-import { VolumePickerField, VolumePickerSheet } from "../inputs/TimePickerFields";
+import { AmountInput, isPositiveAmount } from "../inputs/AmountInput";
+type TimerAmounts = { amount?: string; amountValue?: string; amountUnit?: string; amountText?: string; leftAmount?: string; rightAmount?: string; leftAmountValue?: string; leftAmountUnit?: string; leftAmountText?: string; rightAmountValue?: string; rightAmountUnit?: string; rightAmountText?: string };
 type Props = {
   visible: boolean;
   timer: ActiveTimer | null;
@@ -18,7 +19,7 @@ type Props = {
   onChangeSide: (side: TimerSide) => void;
   onPause: () => void;
   onResume: () => void;
-  onStop: (opts?: { amount?: string; leftAmount?: string; rightAmount?: string }) => void;
+  onStop: (opts?: TimerAmounts) => void;
   allowSideSwitch?: boolean;
   saving?: boolean;
   sessionLabel?: string;
@@ -54,7 +55,7 @@ export function ActiveTimerSheet({
   const [leftAmount, setLeftAmount] = useState("");
   const [rightAmount, setRightAmount] = useState("");
   const [feedingAmount, setFeedingAmount] = useState("");
-  const [volumeTarget, setVolumeTarget] = useState<"left" | "right" | "feeding" | null>(null);
+  const [volumeUnit, setVolumeUnit] = useState<"ml" | "oz">(settings.units.volume);
 
   useEffect(() => {
     if (!visible || !timer || timer.status !== "running") return;
@@ -67,7 +68,7 @@ export function ActiveTimerSheet({
       setLeftAmount("");
       setRightAmount("");
       setFeedingAmount("");
-      setVolumeTarget(null);
+      setVolumeUnit(settings.units.volume);
     }
   }, [visible]);
 
@@ -99,23 +100,23 @@ export function ActiveTimerSheet({
   const needsFeedingAmount = timer.kind === "formula" || timer.kind === "storedMilk";
   const paused = timer.status === "paused";
 
+  const canonical = (value: string) => value ? volumeToMl(value, volumeUnit) : undefined;
   const handleStopPress = () => {
     onStop(
       needsFeedingAmount
         ? {
-            amount: feedingAmount
-              ? volumeToMl(feedingAmount, settings.units.volume)
-              : undefined,
+            amount: canonical(feedingAmount), amountValue: feedingAmount, amountUnit: volumeUnit, amountText: `${feedingAmount} ${volumeUnit}`,
           }
         : timer.kind === "pump"
           ? {
-              leftAmount: leftAmount ? volumeToMl(leftAmount, settings.units.volume) : undefined,
-              rightAmount: rightAmount ? volumeToMl(rightAmount, settings.units.volume) : undefined,
+              leftAmount: canonical(leftAmount), rightAmount: canonical(rightAmount),
+              leftAmountValue: leftAmount || undefined, leftAmountUnit: leftAmount ? volumeUnit : undefined, leftAmountText: leftAmount ? `${leftAmount} ${volumeUnit}` : undefined,
+              rightAmountValue: rightAmount || undefined, rightAmountUnit: rightAmount ? volumeUnit : undefined, rightAmountText: rightAmount ? `${rightAmount} ${volumeUnit}` : undefined,
             }
         : undefined,
     );
   };
-  const canSave = !needsFeedingAmount || Number.parseFloat(feedingAmount) > 0;
+  const canSave = !needsFeedingAmount || isPositiveAmount(feedingAmount);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -164,15 +165,13 @@ export function ActiveTimerSheet({
 
           {timer.kind === "pump" ? (
             <>
-              <View style={styles.amountRow}>
-                <View style={styles.amountField}><VolumePickerField label="왼쪽 유축량" value={leftAmount} unit={settings.units.volume} onPress={() => setVolumeTarget("left")} /></View>
-                <View style={styles.amountField}><VolumePickerField label="오른쪽 유축량" value={rightAmount} unit={settings.units.volume} onPress={() => setVolumeTarget("right")} /></View>
-              </View>
-              <Text style={styles.totalAmount}>총 유축량 {(Number.parseFloat(leftAmount) || 0) + (Number.parseFloat(rightAmount) || 0)}{settings.units.volume}</Text>
+              <AmountInput label="왼쪽 유축량" value={leftAmount} unit={volumeUnit} unitOptions={["ml", "oz"]} allowCustomUnit={false} onChangeValue={setLeftAmount} onChangeUnit={(unit) => setVolumeUnit((unit || settings.units.volume) as "ml" | "oz")} />
+              <AmountInput label="오른쪽 유축량" value={rightAmount} unit={volumeUnit} unitOptions={["ml", "oz"]} allowCustomUnit={false} onChangeValue={setRightAmount} onChangeUnit={(unit) => setVolumeUnit((unit || settings.units.volume) as "ml" | "oz")} />
+              <Text style={styles.totalAmount}>총 유축량 {(Number.parseFloat(leftAmount) || 0) + (Number.parseFloat(rightAmount) || 0)} {volumeUnit}</Text>
             </>
           ) : null}
 
-          {needsFeedingAmount ? <VolumePickerField label="먹은 양" value={feedingAmount} unit={settings.units.volume} onPress={() => setVolumeTarget("feeding")} error={!feedingAmount ? "먹은 양을 선택하면 종료 및 저장할 수 있어요." : undefined} /> : null}
+          {needsFeedingAmount ? <AmountInput label="먹은 양" value={feedingAmount} unit={volumeUnit} unitOptions={["ml", "oz"]} allowCustomUnit={false} onChangeValue={setFeedingAmount} onChangeUnit={(unit) => setVolumeUnit((unit || settings.units.volume) as "ml" | "oz")} error={!feedingAmount ? "먹은 양을 입력하면 종료 및 저장할 수 있어요." : undefined} /> : null}
 
           <View style={styles.actions}>
             <Pressable disabled={saving} style={[styles.btn, styles.btnGhost, saving && styles.btnDisabled]} onPress={onClose}>
@@ -193,26 +192,6 @@ export function ActiveTimerSheet({
               </Text>
             </Pressable>
           </View>
-          <VolumePickerSheet
-            visible={volumeTarget !== null}
-            value={volumeTarget === "left" ? leftAmount : volumeTarget === "right" ? rightAmount : feedingAmount}
-            title={volumeTarget === "left" ? "왼쪽 유축량" : volumeTarget === "right" ? "오른쪽 유축량" : "먹은 양"}
-            unit={settings.units.volume}
-            allowZero={volumeTarget === "left" || volumeTarget === "right"}
-            onCancel={() => setVolumeTarget(null)}
-            onConfirm={(value) => {
-              if (volumeTarget === "left") setLeftAmount(value);
-              else if (volumeTarget === "right") setRightAmount(value);
-              else setFeedingAmount(value);
-              setVolumeTarget(null);
-            }}
-            onClear={() => {
-              if (volumeTarget === "left") setLeftAmount("");
-              else if (volumeTarget === "right") setRightAmount("");
-              else setFeedingAmount("");
-              setVolumeTarget(null);
-            }}
-          />
         </Pressable>
       </Pressable>
     </Modal>

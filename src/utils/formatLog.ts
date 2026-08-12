@@ -9,11 +9,16 @@ export function formatLogMeta(
     chip2?: string;
     stoolState?: string;
     amount?: string;
+    amountValue?: number | string;
+    amountUnit?: string;
+    amountText?: string;
     duration?: string;
     leftDuration?: string;
     rightDuration?: string;
     leftAmount?: string;
     rightAmount?: string;
+    leftAmountText?: string;
+    rightAmountText?: string;
     notes?: string;
     title?: string;
     details?: string;
@@ -50,7 +55,9 @@ export function formatLogMeta(
   if (entry.chip) parts.push(entry.chip);
   if (entry.chip2) parts.push(entry.chip2);
   if (entry.stoolState) parts.push(entry.stoolState);
-  if (entry.amount && entry.cat !== "med") {
+  if (entry.amountText && entry.cat !== "med") {
+    parts.push(entry.amountText);
+  } else if (entry.amount && entry.cat !== "med") {
     if (["formula", "storedMilk", "pump", "water", "milk"].includes(entry.cat)) {
       parts.push(formatVolume(entry.amount));
     } else if (entry.cat === "temp") {
@@ -62,8 +69,10 @@ export function formatLogMeta(
   if (entry.duration) parts.push(`${entry.duration}분`);
   if (entry.leftDuration) parts.push(`왼쪽 ${entry.leftDuration}분`);
   if (entry.rightDuration) parts.push(`오른쪽 ${entry.rightDuration}분`);
-  if (entry.leftAmount) parts.push(`왼쪽 ${formatVolume(entry.leftAmount)}`);
-  if (entry.rightAmount) parts.push(`오른쪽 ${formatVolume(entry.rightAmount)}`);
+  if (entry.leftAmountText) parts.push(`왼쪽 ${entry.leftAmountText}`);
+  else if (entry.leftAmount) parts.push(`왼쪽 ${formatVolume(entry.leftAmount)}`);
+  if (entry.rightAmountText) parts.push(`오른쪽 ${entry.rightAmountText}`);
+  else if (entry.rightAmount) parts.push(`오른쪽 ${formatVolume(entry.rightAmount)}`);
   if (entry.details) parts.push(entry.details.length > 16 ? `${entry.details.slice(0, 16)}…` : entry.details);
   if (entry.nextAt) parts.push(`다음 ${entry.nextAt}`);
   const displayNotes = entry.cat === "med" && !entry.medicationName

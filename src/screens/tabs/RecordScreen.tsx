@@ -147,9 +147,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     [logs, selectedDateKey, todayKey],
   );
   const storedMilkEstimatedAvailableMl = useMemo(() => {
-    const pumped = logs.filter((entry) => entry.cat === "pump").reduce((sum, entry) => sum + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
+    const canSumVolume = (entry: BabyLogEntry) => !entry.amountUnit || entry.amountUnit === "ml" || entry.amountUnit === "oz";
+    const pumped = logs.filter((entry) => entry.cat === "pump" && canSumVolume(entry)).reduce((sum, entry) => sum + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
     if (pumped <= 0) return undefined;
-    const consumed = logs.filter((entry) => entry.cat === "storedMilk").reduce((sum, entry) => sum + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
+    const consumed = logs.filter((entry) => entry.cat === "storedMilk" && canSumVolume(entry)).reduce((sum, entry) => sum + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
     return Math.max(0, pumped - consumed);
   }, [logs]);
   const isViewingToday = selectedDateKey === todayKey;
@@ -254,12 +255,21 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
         chip2: entry.chip2,
         stoolState: entry.stoolState,
         amount: entry.amount,
+        amountValue: entry.amountValue,
+        amountUnit: entry.amountUnit,
+        amountText: entry.amountText,
         duration: entry.duration,
         feedingMethod: entry.feedingMethod,
         leftDuration: entry.leftDuration,
         rightDuration: entry.rightDuration,
         leftAmount: entry.leftAmount,
         rightAmount: entry.rightAmount,
+        leftAmountValue: entry.leftAmountValue,
+        leftAmountUnit: entry.leftAmountUnit,
+        leftAmountText: entry.leftAmountText,
+        rightAmountValue: entry.rightAmountValue,
+        rightAmountUnit: entry.rightAmountUnit,
+        rightAmountText: entry.rightAmountText,
         burped: entry.burped,
         spitUp: entry.spitUp,
         supplement: entry.supplement,
@@ -413,7 +423,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     setActiveTimers((prev) => prev.map((t) => (t.id === id ? updater(t) : t)));
   };
 
-  const handleStopTimer = async (opts?: { amount?: string; leftAmount?: string; rightAmount?: string }) => {
+  const handleStopTimer = async (opts?: Parameters<React.ComponentProps<typeof ActiveTimerSheet>["onStop"]>[0]) => {
     const timer = activeTimers.find((t) => t.id === timerSheetId);
     if (!timer || timerSaving) return;
     setTimerSaving(true);
@@ -426,10 +436,19 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
       chip: result.chip,
       notes: result.notes,
       amount: result.amount,
+      amountValue: opts?.amountValue,
+      amountUnit: opts?.amountUnit,
+      amountText: opts?.amountText,
       leftDuration: result.leftMinutes ? String(result.leftMinutes) : undefined,
       rightDuration: result.rightMinutes ? String(result.rightMinutes) : undefined,
       leftAmount: result.leftAmount,
       rightAmount: result.rightAmount,
+      leftAmountValue: opts?.leftAmountValue,
+      leftAmountUnit: opts?.leftAmountUnit,
+      leftAmountText: opts?.leftAmountText,
+      rightAmountValue: opts?.rightAmountValue,
+      rightAmountUnit: opts?.rightAmountUnit,
+      rightAmountText: opts?.rightAmountText,
     };
 
     try {

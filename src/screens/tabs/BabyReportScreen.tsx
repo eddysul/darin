@@ -274,7 +274,9 @@ function buildDashboardData(input: {
 }): DashboardData {
   const { todayLogs, summary } = input;
   const feeds = todayLogs.filter(isFeedingLog);
-  const feedMl = feeds.reduce((sum, entry) => sum + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
+  const feedMl = feeds
+    .filter((entry) => !entry.amountUnit || entry.amountUnit === "ml" || entry.amountUnit === "oz")
+    .reduce((sum, entry) => sum + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
   const stoolCount = todayLogs.filter((entry) => entry.cat === "diaper" && ["대변", "둘다"].includes(entry.chip ?? "")).length;
   const highlights: string[] = [];
 
