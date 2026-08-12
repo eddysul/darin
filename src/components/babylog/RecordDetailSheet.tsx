@@ -68,6 +68,30 @@ type Props = {
 };
 
 const STARTER_INGREDIENTS = ["쌀미음", "소고기", "애호박", "바나나", "고구마", "사과"];
+const MEDICATION_DOSE_UNITS = ["ml", "drop", "방울", "포", "정", "회", "스푼", "g", "mg"];
+const CUSTOM_DOSE_UNIT = "기타";
+
+function parseMedicationDose(raw?: string): { value: string; unit: string } | null {
+  const match = /^\s*(\d+(?:[.,]\d+)?)\s*(\S(?:.*\S)?)\s*$/.exec(raw ?? "");
+  if (!match) return null;
+  return { value: match[1].replace(",", "."), unit: match[2] };
+}
+
+function normalizeMedicationType(value?: string): string {
+  if (["medicine", "supplement", "ointment", "eye_drop", "other"].includes(value ?? "")) return value!;
+  if (value === "영양제") return "supplement";
+  if (value === "연고") return "ointment";
+  if (value === "안약") return "eye_drop";
+  return value ? "other" : "";
+}
+
+function normalizeMedicationStatus(value?: string): string {
+  if (["given", "partial", "refused"].includes(value ?? "")) return value!;
+  if (value === "복용 완료") return "given";
+  if (value === "일부 복용") return "partial";
+  if (value === "건너뜀" || value === "복용 안 함") return "refused";
+  return value ? "given" : "";
+}
 
 function minutesToHhMm(start: string, minutes: number): string {
   const total = (toMinutes(start) + Math.max(0, minutes)) % (24 * 60);
@@ -94,6 +118,18 @@ function ChipRow({
           onPress={() => onChange(value === ch ? "" : ch)}
         >
           <Text style={[styles.chipText, value === ch && styles.chipTextSel]}>{ch}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function LabeledChipRow({ options, value, onChange }: { options: { value: string; label: string }[]; value: string; onChange: (next: string) => void }) {
+  return (
+    <View style={styles.chipRow}>
+      {options.map((option) => (
+        <Pressable key={option.value} style={[styles.chip, value === option.value && styles.chipSel]} onPress={() => onChange(value === option.value ? "" : option.value)}>
+          <Text style={[styles.chipText, value === option.value && styles.chipTextSel]}>{option.label}</Text>
         </Pressable>
       ))}
     </View>
@@ -145,6 +181,10 @@ export function RecordDetailSheet({
   const [nextAt, setNextAt] = useState("");
   const [medicationType, setMedicationType] = useState("");
   const [medicationStatus, setMedicationStatus] = useState("");
+  const [doseValue, setDoseValue] = useState("");
+  const [doseUnit, setDoseUnit] = useState("");
+  const [customDoseUnit, setCustomDoseUnit] = useState("");
+  const [legacyDoseText, setLegacyDoseText] = useState("");
   const [medicationReminderEnabled, setMedicationReminderEnabled] = useState(false);
   const [visitType, setVisitType] = useState<BabyLogEntry["visitType"]>();
   const [doctorName, setDoctorName] = useState("");
@@ -197,8 +237,18 @@ export function RecordDetailSheet({
     setRecordTitle(prefill?.title ?? "");
     setDetails(prefill?.details ?? "");
     setNextAt(prefill?.nextAt ?? "");
-    setMedicationType(prefill?.medicationType ?? (nextCat === "med" && prefill ? "기타" : ""));
-    setMedicationStatus(prefill?.medicationStatus ?? (nextCat === "med" && prefill ? "복용 완료" : ""));
+    setMedicationType(normalizeMedicationType(prefill?.medicationType ?? (nextCat === "med" && prefill ? "other" : "")));
+    setMedicationStatus(normalizeMedicationStatus(prefill?.medicationStatus ?? (nextCat === "med" && prefill ? "given" : "")));
+    const structuredDoseValue = prefill?.doseValue == null ? "" : String(prefill.doseValue);
+    const structuredDoseUnit = prefill?.doseUnit?.trim() ?? "";
+    const legacyDose = prefill?.doseText?.trim() || (nextCat === "med" ? storedAmount.trim() : "");
+    const parsedDose = structuredDoseValue && structuredDoseUnit
+      ? { value: structuredDoseValue, unit: structuredDoseUnit }
+      : parseMedicationDose(legacyDose);
+    setDoseValue(parsedDose?.value ?? "");
+    setDoseUnit(parsedDose ? (MEDICATION_DOSE_UNITS.includes(parsedDose.unit) ? parsedDose.unit : CUSTOM_DOSE_UNIT) : "");
+    setCustomDoseUnit(parsedDose && !MEDICATION_DOSE_UNITS.includes(parsedDose.unit) ? parsedDose.unit : "");
+    setLegacyDoseText(legacyDose && !parsedDose ? legacyDose : "");
     setMedicationReminderEnabled(prefill?.medicationReminderEnabled ?? false);
     setVisitType(prefill?.visitType ?? (nextCat === "doctor" && prefill ? "checkup" : undefined));
     setDoctorName(prefill?.doctorName ?? "");
@@ -258,6 +308,16 @@ export function RecordDetailSheet({
   const nextAtMatch = /(?:^|\s)(\d{1,2}):(\d{2})$/.exec(nextAt.trim());
   const nextAtTime = nextAtMatch ? formatHHmm(Number(nextAtMatch[1]), Number(nextAtMatch[2])) : "";
   const nextAtDate = nextAtMatch ? nextAt.slice(0, nextAtMatch.index).trim() : nextAt;
+  const normalizedDoseValue = doseValue.trim().replace(",", ".");
+  const resolvedDoseUnit = doseUnit === CUSTOM_DOSE_UNIT ? customDoseUnit.trim() : doseUnit;
+  const numericDoseValue = Number.parseFloat(normalizedDoseValue);
+  const hasStructuredDose = /^(?:\d+\.?\d*|\.\d+)$/.test(normalizedDoseValue)
+    && Number.isFinite(numericDoseValue)
+    && numericDoseValue > 0
+    && Boolean(resolvedDoseUnit);
+  const medicationDoseText = hasStructuredDose
+    ? `${normalizedDoseValue} ${resolvedDoseUnit}`
+    : legacyDoseText.trim();
   const ingredientNames = useMemo(() => {
     const all = [...STARTER_INGREDIENTS, ...foodIngredients.map((item) => item.name)];
     for (const entry of logs) {
@@ -354,8 +414,12 @@ export function RecordDetailSheet({
       Alert.alert("온도를 입력해 주세요", "측정한 체온을 숫자로 입력해 주세요.");
       return;
     }
-    if (builtinId === "med" && (!medicationType || !medName.trim() || !amount.trim() || !medicationStatus)) {
-      Alert.alert("투약 정보를 확인해 주세요", "약 종류, 약 이름, 용량, 복용 상태를 입력해 주세요.");
+    if (builtinId === "med" && (!medicationType || !medName.trim() || !medicationStatus || !medicationDoseText)) {
+      Alert.alert("투약 정보를 확인해 주세요", "약 종류, 약 이름, 0보다 큰 용량과 단위, 복용 상태를 입력해 주세요.");
+      return;
+    }
+    if (builtinId === "med" && (doseValue || doseUnit) && !hasStructuredDose) {
+      Alert.alert("용량을 확인해 주세요", "0보다 큰 숫자와 단위를 함께 입력해 주세요.");
       return;
     }
     if (builtinId === "doctor" && (!visitType || !recordTitle.trim() || !details.trim())) {
@@ -392,7 +456,9 @@ export function RecordDetailSheet({
         ? volumeToMl(amount, settings.units.volume)
         : effectiveCat === "temp"
           ? temperatureToCelsius(amount, settings.units.temperature)
-          : amount;
+          : effectiveCat === "med"
+            ? medicationDoseText
+            : amount;
     const canonicalLeftAmount = leftAmount ? volumeToMl(leftAmount, settings.units.volume) : "";
     const canonicalRightAmount = rightAmount ? volumeToMl(rightAmount, settings.units.volume) : "";
     const sideTotalDuration = sideDurationTotal ? String(sideDurationTotal) : "";
@@ -435,6 +501,9 @@ export function RecordDetailSheet({
         medicationType: isMed ? medicationType || undefined : undefined,
         medicationName: isMed ? medName.trim() || undefined : undefined,
         medicationStatus: isMed ? medicationStatus || undefined : undefined,
+        doseValue: isMed && hasStructuredDose ? normalizedDoseValue : undefined,
+        doseUnit: isMed && hasStructuredDose ? resolvedDoseUnit : undefined,
+        doseText: isMed ? medicationDoseText || undefined : undefined,
         medicationReminderEnabled: isMed ? medicationReminderEnabled : undefined,
         visitType: builtinId === "doctor" ? visitType : undefined,
         doctorName: builtinId === "doctor" ? doctorName.trim() || undefined : undefined,
@@ -718,7 +787,17 @@ export function RecordDetailSheet({
           {builtinId === "med" && (
             <>
               <Text style={styles.fieldLabel}>약 종류</Text>
-              <ChipRow options={["해열제", "항생제", "영양제", "기타"]} value={medicationType} onChange={setMedicationType} />
+              <LabeledChipRow
+                options={[
+                  { value: "medicine", label: "의약품" },
+                  { value: "supplement", label: "영양제" },
+                  { value: "ointment", label: "연고" },
+                  { value: "eye_drop", label: "안약" },
+                  { value: "other", label: "기타" },
+                ]}
+                value={medicationType}
+                onChange={setMedicationType}
+              />
               <Text style={styles.fieldLabel}>약 이름</Text>
               <TextInput
                 style={styles.input}
@@ -730,13 +809,51 @@ export function RecordDetailSheet({
               <Text style={styles.fieldLabel}>용량</Text>
               <TextInput
                 style={styles.input}
-                value={amount}
-                onChangeText={setAmount}
-                placeholder="예: 1 drop"
+                value={doseValue}
+                onChangeText={(value) => {
+                  setDoseValue(value.replace(",", ".").replace(/[^0-9.]/g, ""));
+                  setLegacyDoseText("");
+                }}
+                keyboardType="decimal-pad"
+                placeholder="예: 1"
                 placeholderTextColor={colors.faint}
               />
+              <Text style={styles.fieldLabel}>단위</Text>
+              <ChipRow
+                options={[...MEDICATION_DOSE_UNITS, CUSTOM_DOSE_UNIT]}
+                value={doseUnit}
+                onChange={(value) => {
+                  setDoseUnit(value);
+                  setLegacyDoseText("");
+                  if (value !== CUSTOM_DOSE_UNIT) setCustomDoseUnit("");
+                }}
+              />
+              {doseUnit === CUSTOM_DOSE_UNIT ? (
+                <TextInput
+                  style={[styles.input, { marginTop: 8 }]}
+                  value={customDoseUnit}
+                  onChangeText={(value) => { setCustomDoseUnit(value); setLegacyDoseText(""); }}
+                  placeholder="단위를 입력해 주세요"
+                  placeholderTextColor={colors.faint}
+                />
+              ) : null}
+              {legacyDoseText ? (
+                <View style={styles.legacyDoseCard}>
+                  <Text style={styles.legacyDoseLabel}>기존 용량 기록</Text>
+                  <Text style={styles.legacyDoseValue}>{legacyDoseText}</Text>
+                  <Text style={styles.legacyDoseHint}>기존 값을 그대로 저장하거나 새 용량과 단위를 입력할 수 있어요.</Text>
+                </View>
+              ) : null}
               <Text style={styles.fieldLabel}>복용 상태</Text>
-              <ChipRow options={["복용 완료", "일부 복용", "건너뜀"]} value={medicationStatus} onChange={setMedicationStatus} />
+              <LabeledChipRow
+                options={[
+                  { value: "given", label: "복용 완료" },
+                  { value: "partial", label: "일부 복용" },
+                  { value: "refused", label: "복용 안 함" },
+                ]}
+                value={medicationStatus}
+                onChange={setMedicationStatus}
+              />
               <TimeOfDayPickerField label="시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
               <DatePickerField label="다음 투약 날짜 (선택)" valueDateKey={nextAtDate} onPress={() => setNextDatePickerOpen(true)} />
               <TimeOfDayPickerField label="다음 투약 시간 (선택)" valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
@@ -1139,6 +1256,10 @@ const styles = StyleSheet.create({
   chipSel: { backgroundColor: colors.amber, borderColor: colors.amber },
   chipText: { fontSize: 13, color: colors.muted, fontWeight: "600" },
   chipTextSel: { color: colors.amberDark },
+  legacyDoseCard: { marginTop: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  legacyDoseLabel: { color: colors.faint, fontSize: 10.5, fontWeight: "700" },
+  legacyDoseValue: { marginTop: 3, color: colors.text, fontSize: 14, fontWeight: "800" },
+  legacyDoseHint: { marginTop: 3, color: colors.muted, fontSize: 10.5, lineHeight: 15 },
   growthLink: {
     flexDirection: "row",
     alignItems: "center",

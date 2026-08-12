@@ -47,6 +47,10 @@ export type BabyLogEntry = {
   medicationType?: string;
   medicationName?: string;
   medicationStatus?: string;
+  doseValue?: number | string;
+  doseUnit?: string;
+  /** Display/backward-compatible form, e.g. "2.5 ml". */
+  doseText?: string;
   medicationReminderEnabled?: boolean;
   visitType?: "checkup" | "illness";
   doctorName?: string;

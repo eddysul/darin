@@ -21,6 +21,9 @@ export function formatLogMeta(
     medicationType?: string;
     medicationName?: string;
     medicationStatus?: string;
+    doseValue?: number | string;
+    doseUnit?: string;
+    doseText?: string;
     visitType?: "checkup" | "illness";
     doctorName?: string;
     cautions?: string;
@@ -29,16 +32,25 @@ export function formatLogMeta(
 ): string {
   const c = resolveLogCategory(entry.cat, customCategories);
   const parts: string[] = [];
+  const legacyMedicationNotes = entry.cat === "med" && !entry.medicationName
+    ? (entry.notes ?? "").split(" · ")
+    : [];
   if (entry.title) parts.push(entry.title);
-  if (entry.cat === "med" && entry.medicationType) parts.push(entry.medicationType);
-  if (entry.cat === "med" && entry.medicationName) parts.push(entry.medicationName);
-  if (entry.cat === "med" && entry.medicationStatus) parts.push(entry.medicationStatus);
+  if (entry.cat === "med") {
+    const medicationName = entry.medicationName ?? legacyMedicationNotes[0];
+    if (medicationName) parts.push(medicationName);
+  }
+  if (entry.cat === "med") {
+    const dose = entry.doseText
+      ?? (entry.doseValue != null && entry.doseUnit ? `${entry.doseValue} ${entry.doseUnit}` : entry.amount);
+    if (dose) parts.push(dose);
+  }
   if (entry.cat === "doctor" && entry.visitType) parts.push(entry.visitType === "checkup" ? "검진" : "질환");
   if (entry.cat === "doctor" && entry.doctorName) parts.push(entry.doctorName);
   if (entry.chip) parts.push(entry.chip);
   if (entry.chip2) parts.push(entry.chip2);
   if (entry.stoolState) parts.push(entry.stoolState);
-  if (entry.amount) {
+  if (entry.amount && entry.cat !== "med") {
     if (["formula", "storedMilk", "pump", "water", "milk"].includes(entry.cat)) {
       parts.push(formatVolume(entry.amount));
     } else if (entry.cat === "temp") {
@@ -54,7 +66,10 @@ export function formatLogMeta(
   if (entry.rightAmount) parts.push(`오른쪽 ${formatVolume(entry.rightAmount)}`);
   if (entry.details) parts.push(entry.details.length > 16 ? `${entry.details.slice(0, 16)}…` : entry.details);
   if (entry.nextAt) parts.push(`다음 ${entry.nextAt}`);
-  if (entry.notes) parts.push(entry.notes.length > 16 ? `${entry.notes.slice(0, 16)}…` : entry.notes);
+  const displayNotes = entry.cat === "med" && !entry.medicationName
+    ? legacyMedicationNotes.slice(1).join(" · ")
+    : entry.notes;
+  if (displayNotes) parts.push(displayNotes.length > 16 ? `${displayNotes.slice(0, 16)}…` : displayNotes);
   return parts.join(" · ") || "기록됨";
 }
 

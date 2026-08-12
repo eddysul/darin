@@ -61,6 +61,9 @@ export type CareLogPayload = {
   medicationType?: string;
   medicationName?: string;
   medicationStatus?: string;
+  doseValue?: number | string;
+  doseUnit?: string;
+  doseText?: string;
   medicationReminderEnabled?: boolean;
   visitType?: "checkup" | "illness";
   doctorName?: string;
