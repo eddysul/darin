@@ -58,6 +58,14 @@ export type CareLogPayload = {
   title?: string;
   details?: string;
   nextAt?: string;
+  medicationType?: string;
+  medicationName?: string;
+  medicationStatus?: string;
+  medicationReminderEnabled?: boolean;
+  visitType?: "checkup" | "illness";
+  doctorName?: string;
+  cautions?: string;
+  cautionReminderEnabled?: boolean;
   voice?: boolean;
   rawTranscript?: string;
   confidence?: number;

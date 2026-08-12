@@ -11,6 +11,7 @@ import type {
 import { colors } from "../../theme";
 import { lengthFromCm, lengthToCm, weightFromKg, weightToKg } from "../../utils/measurementFormat";
 import { BabyLogIcon } from "./BabyLogIcon";
+import { DatePickerField, DatePickerSheet } from "../inputs/TimePickerFields";
 
 type Props = {
   visible: boolean;
@@ -54,6 +55,7 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
   const [source, setSource] = useState<GrowthRecordSource>(initialSource);
   const [note, setNote] = useState("");
   const [initialFormKey, setInitialFormKey] = useState("");
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -73,6 +75,7 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
     setHead(nextHead);
     setSource(nextSource);
     setNote(nextNote);
+    setDatePickerOpen(false);
     setInitialFormKey(JSON.stringify({
       measuredAt: nextMeasuredAt,
       weight: nextWeight,
@@ -173,11 +176,10 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <Text style={styles.label}>측정일</Text>
-            <TextInput style={styles.input} value={measuredAt} onChangeText={setMeasuredAt} placeholder="YYYY-MM-DD" placeholderTextColor={colors.faint} />
+            <DatePickerField label="측정일" valueDateKey={measuredAt} onPress={() => setDatePickerOpen(true)} />
 
-            <MeasurementField label="몸무게" value={weight} onChangeText={setWeight} unit={<UnitToggle value={weightUnit} options={["kg", "lb"] as const} onChange={changeWeightUnit} />} placeholder={weightUnit === "kg" ? "예: 7.2" : "예: 15.9"} />
             <MeasurementField label="키 / 신장" value={height} onChangeText={setHeight} unit={<UnitToggle value={heightUnit} options={["cm", "in"] as const} onChange={(next) => changeLengthUnit("height", next)} />} placeholder={heightUnit === "cm" ? "예: 66.0" : "예: 26.0"} />
+            <MeasurementField label="몸무게" value={weight} onChangeText={setWeight} unit={<UnitToggle value={weightUnit} options={["kg", "lb"] as const} onChange={changeWeightUnit} />} placeholder={weightUnit === "kg" ? "예: 7.2" : "예: 15.9"} />
             <MeasurementField label="머리둘레" value={head} onChangeText={setHead} unit={<UnitToggle value={headUnit} options={["cm", "in"] as const} onChange={(next) => changeLengthUnit("head", next)} />} placeholder={headUnit === "cm" ? "예: 43.2" : "예: 17.0"} />
 
             <Text style={styles.label}>측정 장소</Text>
@@ -197,6 +199,15 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
               <Pressable style={[styles.actionBtn, styles.saveBtn]} onPress={save}><Text style={styles.saveText}>저장</Text></Pressable>
             </View>
           </ScrollView>
+          <DatePickerSheet
+            visible={datePickerOpen}
+            valueDateKey={measuredAt}
+            title="측정일 선택"
+            minYear={1900}
+            maxYear={new Date().getFullYear()}
+            onCancel={() => setDatePickerOpen(false)}
+            onConfirm={(dateKey) => { setMeasuredAt(dateKey); setDatePickerOpen(false); }}
+          />
         </Pressable>
       </Pressable>
     </Modal>

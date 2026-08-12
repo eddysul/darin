@@ -43,6 +43,15 @@ export type BabyLogEntry = {
   details?: string;
   /** Optional next appointment or follow-up date/time. */
   nextAt?: string;
+  /** Health-record details stored inside the existing care_logs JSON payload. */
+  medicationType?: string;
+  medicationName?: string;
+  medicationStatus?: string;
+  medicationReminderEnabled?: boolean;
+  visitType?: "checkup" | "illness";
+  doctorName?: string;
+  cautions?: string;
+  cautionReminderEnabled?: boolean;
   voice?: boolean;
   source?: BabyLogSource;
   /** Original STT text for the session this entry came from */

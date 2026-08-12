@@ -18,12 +18,23 @@ export function formatLogMeta(
     title?: string;
     details?: string;
     nextAt?: string;
+    medicationType?: string;
+    medicationName?: string;
+    medicationStatus?: string;
+    visitType?: "checkup" | "illness";
+    doctorName?: string;
+    cautions?: string;
   },
   customCategories: CustomCategory[] = [],
 ): string {
   const c = resolveLogCategory(entry.cat, customCategories);
   const parts: string[] = [];
   if (entry.title) parts.push(entry.title);
+  if (entry.cat === "med" && entry.medicationType) parts.push(entry.medicationType);
+  if (entry.cat === "med" && entry.medicationName) parts.push(entry.medicationName);
+  if (entry.cat === "med" && entry.medicationStatus) parts.push(entry.medicationStatus);
+  if (entry.cat === "doctor" && entry.visitType) parts.push(entry.visitType === "checkup" ? "검진" : "질환");
+  if (entry.cat === "doctor" && entry.doctorName) parts.push(entry.doctorName);
   if (entry.chip) parts.push(entry.chip);
   if (entry.chip2) parts.push(entry.chip2);
   if (entry.stoolState) parts.push(entry.stoolState);

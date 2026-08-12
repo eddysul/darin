@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -31,6 +33,8 @@ import {
 import {
   DurationPickerField,
   DurationPickerSheet,
+  DatePickerField,
+  DatePickerSheet,
   formatHHmm,
   TimeOfDayPickerField,
   TimePickerSheet,
@@ -139,12 +143,20 @@ export function RecordDetailSheet({
   const [recordTitle, setRecordTitle] = useState("");
   const [details, setDetails] = useState("");
   const [nextAt, setNextAt] = useState("");
+  const [medicationType, setMedicationType] = useState("");
+  const [medicationStatus, setMedicationStatus] = useState("");
+  const [medicationReminderEnabled, setMedicationReminderEnabled] = useState(false);
+  const [visitType, setVisitType] = useState<BabyLogEntry["visitType"]>();
+  const [doctorName, setDoctorName] = useState("");
+  const [cautions, setCautions] = useState("");
+  const [cautionReminderEnabled, setCautionReminderEnabled] = useState(false);
   const [voice, setVoice] = useState(false);
   const [timeError, setTimeError] = useState("");
   const [diaperError, setDiaperError] = useState("");
   const [feedingAmountError, setFeedingAmountError] = useState("");
   const [timePickerTarget, setTimePickerTarget] = useState<"time" | "end" | "nextAt" | null>(null);
   const [durationPickerOpen, setDurationPickerOpen] = useState(false);
+  const [nextDatePickerOpen, setNextDatePickerOpen] = useState(false);
   const [sideDurationTarget, setSideDurationTarget] = useState<"left" | "right" | null>(null);
   const [volumeTarget, setVolumeTarget] = useState<"amount" | "left" | "right" | null>(null);
 
@@ -185,6 +197,13 @@ export function RecordDetailSheet({
     setRecordTitle(prefill?.title ?? "");
     setDetails(prefill?.details ?? "");
     setNextAt(prefill?.nextAt ?? "");
+    setMedicationType(prefill?.medicationType ?? (nextCat === "med" && prefill ? "기타" : ""));
+    setMedicationStatus(prefill?.medicationStatus ?? (nextCat === "med" && prefill ? "복용 완료" : ""));
+    setMedicationReminderEnabled(prefill?.medicationReminderEnabled ?? false);
+    setVisitType(prefill?.visitType ?? (nextCat === "doctor" && prefill ? "checkup" : undefined));
+    setDoctorName(prefill?.doctorName ?? "");
+    setCautions(prefill?.cautions ?? "");
+    setCautionReminderEnabled(prefill?.cautionReminderEnabled ?? false);
     const note = prefill?.notes ?? "";
     if (nextCat === "food" || nextCat === "snack") {
       const [namePart, ...rest] = note.split(" · ");
@@ -197,8 +216,8 @@ export function RecordDetailSheet({
       setMedName("");
     } else if (nextCat === "med") {
       const [namePart, ...rest] = note.split(" · ");
-      setMedName(namePart ?? "");
-      setNotes(rest.join(" · "));
+      setMedName(prefill?.medicationName ?? namePart ?? "");
+      setNotes(prefill?.medicationName ? note : rest.join(" · "));
       setSelectedIngredients([]);
     } else {
       setSelectedIngredients([]);
@@ -212,6 +231,7 @@ export function RecordDetailSheet({
     }
     setTimePickerTarget(null);
     setDurationPickerOpen(false);
+    setNextDatePickerOpen(false);
     setSideDurationTarget(null);
     setVolumeTarget(null);
     setAddingIngredient(false);
@@ -330,6 +350,30 @@ export function RecordDetailSheet({
       return;
     }
     setIngredientError("");
+    if (builtinId === "temp" && !(Number.parseFloat(amount) > 0)) {
+      Alert.alert("온도를 입력해 주세요", "측정한 체온을 숫자로 입력해 주세요.");
+      return;
+    }
+    if (builtinId === "med" && (!medicationType || !medName.trim() || !amount.trim() || !medicationStatus)) {
+      Alert.alert("투약 정보를 확인해 주세요", "약 종류, 약 이름, 용량, 복용 상태를 입력해 주세요.");
+      return;
+    }
+    if (builtinId === "doctor" && (!visitType || !recordTitle.trim() || !details.trim())) {
+      Alert.alert("진료 정보를 확인해 주세요", "방문 유형, 병원 이름과 진료 내용을 입력해 주세요.");
+      return;
+    }
+    if ((medicationReminderEnabled || cautionReminderEnabled) && (!nextAtDate || !nextAtTime)) {
+      Alert.alert("알림 시간을 확인해 주세요", "알림을 사용하려면 날짜와 시간을 모두 선택해 주세요.");
+      return;
+    }
+    if (builtinId === "memo" && !notes.trim()) {
+      Alert.alert("메모를 입력해 주세요");
+      return;
+    }
+    if (builtinId === "other" && !recordTitle.trim()) {
+      Alert.alert("기록 이름을 입력해 주세요");
+      return;
+    }
     const isFood = builtinId === "food" || builtinId === "snack";
     const isMed = builtinId === "med";
     const customInputMode = c.isCustom ? c.inputMode ?? "memo" : null;
@@ -339,7 +383,6 @@ export function RecordDetailSheet({
         : duration;
     const composedNotes = [
       isFood && selectedIngredients.length ? selectedIngredients.join(", ") : null,
-      isMed ? medName.trim() : null,
       notes.trim() || null,
     ]
       .filter(Boolean)
@@ -389,6 +432,14 @@ export function RecordDetailSheet({
         title: recordTitle.trim() || undefined,
         details: details.trim() || undefined,
         nextAt: nextAt.trim() || undefined,
+        medicationType: isMed ? medicationType || undefined : undefined,
+        medicationName: isMed ? medName.trim() || undefined : undefined,
+        medicationStatus: isMed ? medicationStatus || undefined : undefined,
+        medicationReminderEnabled: isMed ? medicationReminderEnabled : undefined,
+        visitType: builtinId === "doctor" ? visitType : undefined,
+        doctorName: builtinId === "doctor" ? doctorName.trim() || undefined : undefined,
+        cautions: builtinId === "doctor" ? cautions.trim() || undefined : undefined,
+        cautionReminderEnabled: builtinId === "doctor" ? cautionReminderEnabled : undefined,
         voice,
         source: prefill?.source ?? (voice ? "voice" : "manual"),
         rawTranscript: prefill?.rawTranscript,
@@ -666,6 +717,8 @@ export function RecordDetailSheet({
 
           {builtinId === "med" && (
             <>
+              <Text style={styles.fieldLabel}>약 종류</Text>
+              <ChipRow options={["해열제", "항생제", "영양제", "기타"]} value={medicationType} onChange={setMedicationType} />
               <Text style={styles.fieldLabel}>약 이름</Text>
               <TextInput
                 style={styles.input}
@@ -682,6 +735,18 @@ export function RecordDetailSheet({
                 placeholder="예: 1 drop"
                 placeholderTextColor={colors.faint}
               />
+              <Text style={styles.fieldLabel}>복용 상태</Text>
+              <ChipRow options={["복용 완료", "일부 복용", "건너뜀"]} value={medicationStatus} onChange={setMedicationStatus} />
+              <TimeOfDayPickerField label="시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+              <DatePickerField label="다음 투약 날짜 (선택)" valueDateKey={nextAtDate} onPress={() => setNextDatePickerOpen(true)} />
+              <TimeOfDayPickerField label="다음 투약 시간 (선택)" valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleCopy}>
+                  <Text style={styles.toggleTitle}>다음 투약 알림</Text>
+                  <Text style={styles.toggleBody}>다음 투약 날짜와 시간이 있을 때 알림 요청을 저장해요.</Text>
+                </View>
+                <Switch value={medicationReminderEnabled} onValueChange={setMedicationReminderEnabled} disabled={!nextAtDate || !nextAtTime} trackColor={{ false: colors.border, true: colors.amber }} />
+              </View>
             </>
           )}
 
@@ -698,14 +763,22 @@ export function RecordDetailSheet({
                 placeholder="예: 36.5"
                 placeholderTextColor={colors.faint}
               />
-              <Text style={styles.fieldLabel}>측정 위치</Text>
+              <Text style={styles.fieldLabel}>측정 부위 (선택)</Text>
               <ChipRow options={["겨드랑이", "귀", "이마", "구강"]} value={chip} onChange={setChip} />
             </>
           )}
 
           {builtinId === "doctor" && (
             <>
-              <Text style={styles.fieldLabel}>병원명</Text>
+              <Text style={styles.fieldLabel}>방문 유형</Text>
+              <View style={styles.chipRow}>
+                {(["checkup", "illness"] as const).map((option) => (
+                  <Pressable key={option} style={[styles.chip, visitType === option && styles.chipSel]} onPress={() => setVisitType(visitType === option ? undefined : option)}>
+                    <Text style={[styles.chipText, visitType === option && styles.chipTextSel]}>{option === "checkup" ? "검진" : "질환"}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.fieldLabel}>병원 이름</Text>
               <TextInput
                 style={styles.input}
                 value={recordTitle}
@@ -713,24 +786,42 @@ export function RecordDetailSheet({
                 placeholder="예: 다린소아과"
                 placeholderTextColor={colors.faint}
               />
-              <Text style={styles.fieldLabel}>진료 내용</Text>
+              <Text style={styles.fieldLabel}>의사 이름</Text>
+              <TextInput
+                style={styles.input}
+                value={doctorName}
+                onChangeText={setDoctorName}
+                placeholder="예: 김다린 선생님"
+                placeholderTextColor={colors.faint}
+              />
+              <Text style={styles.fieldLabel}>{visitType === "illness" ? "질환 또는 증상 이름" : "검진 내용"}</Text>
               <TextInput
                 style={[styles.input, styles.notes]}
                 value={details}
                 onChangeText={setDetails}
                 multiline
-                placeholder="진료 결과나 처방 내용을 입력하세요"
+                placeholder={visitType === "illness" ? "질환명이나 증상을 입력하세요" : "검진 내용을 입력하세요"}
                 placeholderTextColor={colors.faint}
               />
-              <Text style={styles.fieldLabel}>다음 예약</Text>
+              <Text style={styles.fieldLabel}>주의해야 할 점</Text>
               <TextInput
-                style={styles.input}
-                value={nextAtDate}
-                onChangeText={(date) => setNextAt([date.trim(), nextAtTime].filter(Boolean).join(" "))}
-                placeholder="날짜 예: 7/28"
+                style={[styles.input, styles.notes]}
+                value={cautions}
+                onChangeText={setCautions}
+                multiline
+                placeholder="의료진에게 안내받은 주의사항을 기록하세요"
                 placeholderTextColor={colors.faint}
               />
-              <TimeOfDayPickerField label="다음 예약 시간" valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
+              <TimeOfDayPickerField label="진료 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+              <DatePickerField label="다음 예약 날짜 (선택)" valueDateKey={nextAtDate} onPress={() => setNextDatePickerOpen(true)} />
+              <TimeOfDayPickerField label="다음 예약 시간 (선택)" valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleCopy}>
+                  <Text style={styles.toggleTitle}>주의사항 확인 알림</Text>
+                  <Text style={styles.toggleBody}>다음 예약 날짜와 시간이 있을 때 알림 요청을 저장해요.</Text>
+                </View>
+                <Switch value={cautionReminderEnabled} onValueChange={setCautionReminderEnabled} disabled={!nextAtDate || !nextAtTime} trackColor={{ false: colors.border, true: colors.amber }} />
+              </View>
               {onOpenGrowthRecord ? (
                 <Pressable
                   style={styles.growthLink}
@@ -751,7 +842,7 @@ export function RecordDetailSheet({
 
           {builtinId === "other" && (
             <>
-              <Text style={styles.fieldLabel}>제목</Text>
+              <Text style={styles.fieldLabel}>기록 이름</Text>
               <TextInput
                 style={styles.input}
                 value={recordTitle}
@@ -759,19 +850,21 @@ export function RecordDetailSheet({
                 placeholder="예: 발진, 토함, 마사지"
                 placeholderTextColor={colors.faint}
               />
-              <Text style={styles.fieldLabel}>내용</Text>
-              <TextInput
-                style={[styles.input, styles.notes]}
-                value={details}
-                onChangeText={setDetails}
-                multiline
-                placeholder="상태나 상황을 입력하세요"
-                placeholderTextColor={colors.faint}
-              />
+              <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+              <DurationPickerField label="지속 시간 (선택)" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
             </>
           )}
 
-          {builtinId !== "sleep" && builtinId !== "breast" && builtinId !== "pump" && !(c.isCustom && (c.inputMode ?? "memo") === "duration") && (
+          {builtinId === "memo" && (
+            <>
+              <Text style={styles.fieldLabel}>제목 (선택)</Text>
+              <TextInput style={styles.input} value={recordTitle} onChangeText={setRecordTitle} placeholder="메모 제목" placeholderTextColor={colors.faint} />
+              <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+              <DurationPickerField label="지속 시간 (선택)" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+            </>
+          )}
+
+          {builtinId !== "sleep" && builtinId !== "breast" && builtinId !== "pump" && builtinId !== "med" && builtinId !== "doctor" && builtinId !== "memo" && builtinId !== "other" && !(c.isCustom && (c.inputMode ?? "memo") === "duration") && (
             <TimeOfDayPickerField label="시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
           )}
 
@@ -874,14 +967,32 @@ export function RecordDetailSheet({
       <TimePickerSheet
         visible={timePickerTarget !== null}
         valueHHmm={timePickerTarget === "end" ? endTime : timePickerTarget === "nextAt" ? nextAtTime : time}
-        title={timePickerTarget === "end" ? "종료 시간" : timePickerTarget === "nextAt" ? "다음 예약 시간" : "시간 선택"}
+        title={timePickerTarget === "end" ? "종료 시간" : timePickerTarget === "nextAt" ? (builtinId === "med" ? "다음 투약 시간" : "다음 예약 시간") : "시간 선택"}
         onCancel={() => setTimePickerTarget(null)}
         onConfirm={confirmTimePicker}
         onClear={timePickerTarget === "end"
           ? () => { setEndTime(""); setDuration(""); setTimePickerTarget(null); }
           : timePickerTarget === "nextAt"
-            ? () => { setNextAt(nextAtDate); setTimePickerTarget(null); }
+            ? () => { setNextAt(nextAtDate); setMedicationReminderEnabled(false); setCautionReminderEnabled(false); setTimePickerTarget(null); }
             : undefined}
+      />
+      <DatePickerSheet
+        visible={nextDatePickerOpen}
+        valueDateKey={nextAtDate}
+        title={builtinId === "med" ? "다음 투약 날짜" : "다음 예약 날짜"}
+        minYear={new Date().getFullYear() - 1}
+        maxYear={new Date().getFullYear() + 10}
+        onCancel={() => setNextDatePickerOpen(false)}
+        onConfirm={(dateKey) => {
+          setNextAt([dateKey, nextAtTime].filter(Boolean).join(" "));
+          setNextDatePickerOpen(false);
+        }}
+        onClear={() => {
+          setNextAt(nextAtTime);
+          setMedicationReminderEnabled(false);
+          setCautionReminderEnabled(false);
+          setNextDatePickerOpen(false);
+        }}
       />
       <DurationPickerSheet
         visible={durationPickerOpen}
@@ -1043,6 +1154,10 @@ const styles = StyleSheet.create({
   growthLinkTitle: { color: colors.amber, fontSize: 13.5, fontWeight: "800" },
   growthLinkBody: { color: colors.muted, fontSize: 11.5, marginTop: 3, lineHeight: 16 },
   growthLinkArrow: { color: colors.amber, fontSize: 24, fontWeight: "400" },
+  toggleRow: { minHeight: 58, marginTop: 14, paddingHorizontal: 13, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 12 },
+  toggleCopy: { flex: 1 },
+  toggleTitle: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  toggleBody: { color: colors.muted, fontSize: 10.5, lineHeight: 15, marginTop: 3 },
   deleteBtn: { paddingVertical: 10, marginTop: 8 },
   deleteText: { color: colors.dangerText, fontSize: 14 },
   actions: { flexDirection: "row", gap: 10, marginTop: 20, marginBottom: 8 },

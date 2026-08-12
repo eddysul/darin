@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius } from "../../theme";
 import { formatDurationMinutes, formatHHmm, formatTimeOfDay, parseHHmm } from "../../utils/timePicker";
+import { formatDateKey, parseDateKey } from "../../utils/dateKey";
 
 export { formatDurationMinutes, formatHHmm, formatTimeOfDay, parseHHmm } from "../../utils/timePicker";
 
@@ -35,6 +36,19 @@ export function DurationPickerField({ label, valueMinutes, placeholder = "기간
         <Text style={styles.fieldArrow}>›</Text>
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
+    </View>
+  );
+}
+
+export function DatePickerField({ label, valueDateKey, placeholder = "날짜 선택", onPress, disabled = false }: { label: string; valueDateKey?: string | null; placeholder?: string; onPress: () => void; disabled?: boolean }) {
+  const hasValue = /^\d{4}-\d{2}-\d{2}$/.test(valueDateKey ?? "");
+  return (
+    <View style={styles.fieldBlock}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button">
+        <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{hasValue ? valueDateKey : placeholder}</Text>
+        <Text style={styles.fieldArrow}>›</Text>
+      </Pressable>
     </View>
   );
 }
@@ -110,6 +124,51 @@ export function DurationPickerSheet({ visible, valueMinutes, title = "기간 선
         <WheelColumn options={MINUTES} selectedIndex={minute} onSelect={setMinute} label="분" />
       </View>
       <View style={styles.wheelLabels}><Text style={styles.wheelLabel}>시간</Text><Text style={styles.wheelLabel}>분</Text></View>
+    </PickerOverlay>
+  );
+}
+
+export function DatePickerSheet({ visible, valueDateKey, title = "날짜 선택", minYear = 1900, maxYear = new Date().getFullYear() + 10, onCancel, onConfirm, onClear }: { visible: boolean; valueDateKey?: string | null; title?: string; minYear?: number; maxYear?: number; onCancel: () => void; onConfirm: (valueDateKey: string) => void; onClear?: () => void }) {
+  const insets = useSafeAreaInsets();
+  const fallback = new Date();
+  const initial = /^\d{4}-\d{2}-\d{2}$/.test(valueDateKey ?? "") ? parseDateKey(valueDateKey!) : fallback;
+  const years = Array.from({ length: Math.max(1, maxYear - minYear + 1) }, (_, index) => String(minYear + index));
+  const months = Array.from({ length: 12 }, (_, index) => String(index + 1));
+  const [year, setYear] = useState(initial.getFullYear());
+  const [month, setMonth] = useState(initial.getMonth() + 1);
+  const [day, setDay] = useState(initial.getDate());
+  const maxDay = new Date(year, month, 0).getDate();
+  const days = Array.from({ length: maxDay }, (_, index) => String(index + 1));
+
+  useEffect(() => {
+    if (!visible) return;
+    const next = /^\d{4}-\d{2}-\d{2}$/.test(valueDateKey ?? "") ? parseDateKey(valueDateKey!) : new Date();
+    setYear(Math.max(minYear, Math.min(maxYear, next.getFullYear())));
+    setMonth(next.getMonth() + 1);
+    setDay(next.getDate());
+  }, [maxYear, minYear, valueDateKey, visible]);
+
+  useEffect(() => {
+    if (day > maxDay) setDay(maxDay);
+  }, [day, maxDay]);
+
+  if (!visible) return null;
+  return (
+    <PickerOverlay
+      title={title}
+      onCancel={onCancel}
+      onConfirm={() => onConfirm(formatDateKey(new Date(year, month - 1, Math.min(day, maxDay)), "midnight"))}
+      bottomInset={insets.bottom}
+      help="년·월·일을 위아래로 스크롤해서 선택해 주세요."
+      onClear={onClear}
+    >
+      <View style={styles.wheelArea}>
+        <View pointerEvents="none" style={styles.selection} />
+        <WheelColumn options={years} selectedIndex={Math.max(0, year - minYear)} onSelect={(index) => setYear(minYear + index)} label="년" />
+        <WheelColumn options={months} selectedIndex={month - 1} onSelect={(index) => setMonth(index + 1)} label="월" />
+        <WheelColumn options={days} selectedIndex={Math.min(day, maxDay) - 1} onSelect={(index) => setDay(index + 1)} label="일" />
+      </View>
+      <View style={styles.wheelLabels}><Text style={styles.wheelLabel}>년</Text><Text style={styles.wheelLabel}>월</Text><Text style={styles.wheelLabel}>일</Text></View>
     </PickerOverlay>
   );
 }
