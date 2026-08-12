@@ -14,6 +14,7 @@ import type { BabyLogCategoryId } from "../../constants/babyLogCategories";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
 import type { CustomCategory, LogCategoryKey } from "../../types/logCategory";
+import type { FoodIngredient, FoodIngredientSource } from "../../types/foodIngredient";
 import { isCustomCategoryKey } from "../../types/logCategory";
 import { resolveLogCategory } from "../../utils/resolveLogCategory";
 import { colors } from "../../theme";
@@ -23,6 +24,7 @@ import { isValidClockInput } from "../../utils/timeInput";
 import {
   temperatureFromCelsius,
   temperatureToCelsius,
+  formatVolume,
   volumeFromMl,
   volumeToMl,
 } from "../../utils/measurementFormat";
@@ -55,7 +57,13 @@ type Props = {
   /** Opens the separate growth-record flow from a clinic visit. */
   onOpenGrowthRecord?: () => void;
   sessionLabel?: string;
+  logs?: BabyLogEntry[];
+  foodIngredients?: FoodIngredient[];
+  onAddFoodIngredient?: (name: string, source: FoodIngredientSource) => FoodIngredient | null;
+  storedMilkEstimatedAvailableMl?: number;
 };
+
+const STARTER_INGREDIENTS = ["쌀미음", "소고기", "애호박", "바나나", "고구마", "사과"];
 
 function minutesToHhMm(start: string, minutes: number): string {
   const total = (toMinutes(start) + Math.max(0, minutes)) % (24 * 60);
@@ -99,6 +107,10 @@ export function RecordDetailSheet({
   embedded = false,
   onOpenGrowthRecord,
   sessionLabel,
+  logs = [],
+  foodIngredients = [],
+  onAddFoodIngredient,
+  storedMilkEstimatedAvailableMl,
 }: Props) {
   const { settings } = useAppSettings();
   const [time, setTime] = useState(nowTime());
@@ -119,7 +131,10 @@ export function RecordDetailSheet({
   const [supplement, setSupplement] = useState("");
   const [feedingNote, setFeedingNote] = useState("");
   const [notes, setNotes] = useState("");
-  const [foodName, setFoodName] = useState("");
+  const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
+  const [addingIngredient, setAddingIngredient] = useState(false);
+  const [newIngredientName, setNewIngredientName] = useState("");
+  const [ingredientError, setIngredientError] = useState("");
   const [medName, setMedName] = useState("");
   const [recordTitle, setRecordTitle] = useState("");
   const [details, setDetails] = useState("");
@@ -173,16 +188,20 @@ export function RecordDetailSheet({
     const note = prefill?.notes ?? "";
     if (nextCat === "food" || nextCat === "snack") {
       const [namePart, ...rest] = note.split(" · ");
-      setFoodName(namePart ?? "");
+      setSelectedIngredients(
+        Array.isArray(prefill?.ingredients)
+          ? prefill.ingredients
+          : (namePart ?? "").split(",").map((item) => item.trim()).filter(Boolean),
+      );
       setNotes(rest.join(" · "));
       setMedName("");
     } else if (nextCat === "med") {
       const [namePart, ...rest] = note.split(" · ");
       setMedName(namePart ?? "");
       setNotes(rest.join(" · "));
-      setFoodName("");
+      setSelectedIngredients([]);
     } else {
-      setFoodName("");
+      setSelectedIngredients([]);
       setMedName("");
       setNotes(note);
     }
@@ -195,6 +214,9 @@ export function RecordDetailSheet({
     setDurationPickerOpen(false);
     setSideDurationTarget(null);
     setVolumeTarget(null);
+    setAddingIngredient(false);
+    setNewIngredientName("");
+    setIngredientError("");
   }, [visible, catKey, prefill, settings.units.temperature, settings.units.volume]);
 
   const computedDuration = useMemo(() => {
@@ -208,9 +230,56 @@ export function RecordDetailSheet({
   const rightDurationValue = Number.parseInt(rightDuration, 10) || null;
   const sideDurationTotal = (leftDurationValue ?? 0) + (rightDurationValue ?? 0);
   const sideAmountTotal = (Number.parseFloat(leftAmount) || 0) + (Number.parseFloat(rightAmount) || 0);
+  const storedMilkConsumedMl = Number.parseFloat(volumeToMl(amount, settings.units.volume)) || 0;
+  const editingStoredMilkMl = prefill?.editId && prefill.cat === "storedMilk" ? Number.parseFloat(prefill.amount ?? "0") || 0 : 0;
+  const storedMilkEstimatedRemainingMl = storedMilkEstimatedAvailableMl == null
+    ? undefined
+    : Math.max(0, storedMilkEstimatedAvailableMl + editingStoredMilkMl - storedMilkConsumedMl);
   const nextAtMatch = /(?:^|\s)(\d{1,2}):(\d{2})$/.exec(nextAt.trim());
   const nextAtTime = nextAtMatch ? formatHHmm(Number(nextAtMatch[1]), Number(nextAtMatch[2])) : "";
   const nextAtDate = nextAtMatch ? nextAt.slice(0, nextAtMatch.index).trim() : nextAt;
+  const ingredientNames = useMemo(() => {
+    const all = [...STARTER_INGREDIENTS, ...foodIngredients.map((item) => item.name)];
+    for (const entry of logs) {
+      if (entry.cat !== "food" && entry.cat !== "snack") continue;
+      if (Array.isArray(entry.ingredients)) all.push(...entry.ingredients);
+      else {
+        const legacyNames = (entry.notes?.split(" · ")[0] ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+        all.push(...legacyNames);
+      }
+    }
+    const unique = [...new Map(all.filter(Boolean).map((name) => [name.toLocaleLowerCase(), name])).values()];
+    return unique.sort((a, b) => {
+      const aHistory = ingredientHistory(a);
+      const bHistory = ingredientHistory(b);
+      return (bHistory.lastDate ?? "").localeCompare(aHistory.lastDate ?? "") || bHistory.count - aHistory.count;
+    });
+  // History is intentionally recalculated from current care logs when the sheet opens/updates.
+  }, [foodIngredients, logs]);
+
+  function ingredientHistory(name: string) {
+    const key = name.toLocaleLowerCase();
+    const matches = logs.filter((entry) => {
+      if (entry.id === prefill?.editId) return false;
+      if (entry.cat !== "food" && entry.cat !== "snack") return false;
+      const names = Array.isArray(entry.ingredients)
+        ? entry.ingredients
+        : (entry.notes?.split(" · ")[0] ?? "").split(",").map((item) => item.trim());
+      return names.some((item) => item.toLocaleLowerCase() === key);
+    });
+    const sorted = [...matches].sort((a, b) => (b.dateKey ?? "").localeCompare(a.dateKey ?? ""));
+    return {
+      count: matches.length,
+      lastDate: sorted[0]?.dateKey,
+      hasMemo: matches.some((entry) => Boolean(entry.notes?.split(" · ").slice(1).join(" · ").trim() || entry.chip)),
+    };
+  }
+
+  function formatIngredientDate(dateKey?: string) {
+    if (!dateKey) return "날짜 없음";
+    const [, month, day] = dateKey.split("-").map(Number);
+    return Number.isFinite(month) && Number.isFinite(day) ? `${month}월 ${day}일` : dateKey;
+  }
 
   const confirmTimePicker = (valueHHmm: string) => {
     const target = timePickerTarget;
@@ -256,6 +325,11 @@ export function RecordDetailSheet({
       return;
     }
     setFeedingAmountError("");
+    if ((builtinId === "food" || builtinId === "snack") && !selectedIngredients.length && !notes.trim()) {
+      setIngredientError("재료를 하나 이상 선택하거나 메모를 입력해 주세요.");
+      return;
+    }
+    setIngredientError("");
     const isFood = builtinId === "food" || builtinId === "snack";
     const isMed = builtinId === "med";
     const customInputMode = c.isCustom ? c.inputMode ?? "memo" : null;
@@ -264,7 +338,7 @@ export function RecordDetailSheet({
         ? computedDuration || duration
         : duration;
     const composedNotes = [
-      isFood ? foodName.trim() : null,
+      isFood && selectedIngredients.length ? selectedIngredients.join(", ") : null,
       isMed ? medName.trim() : null,
       notes.trim() || null,
     ]
@@ -310,6 +384,7 @@ export function RecordDetailSheet({
         spitUp: ["breast", "formula", "storedMilk"].includes(effectiveCat) ? spitUp : undefined,
         supplement: ["formula", "storedMilk"].includes(effectiveCat) ? supplement.trim() || undefined : undefined,
         feedingNote: effectiveCat === "breast" ? feedingNote || undefined : undefined,
+        ingredients: isFood ? selectedIngredients : undefined,
         notes: composedNotes || undefined,
         title: recordTitle.trim() || undefined,
         details: details.trim() || undefined,
@@ -382,7 +457,17 @@ export function RecordDetailSheet({
                   <ChipRow options={["졸려했어요", "잘 먹었어요", "조금 먹었어요", "보챘어요", "기타"]} value={feedingNote} onChange={setFeedingNote} />
                 </>
               ) : null}
-              {builtinId === "storedMilk" ? <Text style={styles.readOnlyHint}>저장 모유 재고는 별도 수정하지 않으며, 기록된 수유량만 저장해요.</Text> : null}
+              {builtinId === "storedMilk" ? (
+                storedMilkEstimatedRemainingMl == null ? (
+                  <Text style={styles.readOnlyHint}>저장 모유 재고 관리는 후속 기능으로 준비 중이에요.</Text>
+                ) : (
+                  <View style={styles.estimatedStockCard}>
+                    <Text style={styles.calculatedLabel}>예상 남은 양</Text>
+                    <Text style={styles.calculatedValue}>{formatVolume(String(storedMilkEstimatedRemainingMl), settings.units.volume)}</Text>
+                    <Text style={styles.estimatedStockHint}>기존 유축 기록과 입력한 먹은 양을 기준으로 계산한 예상이에요.</Text>
+                  </View>
+                )
+              ) : null}
             </>
           )}
 
@@ -429,14 +514,77 @@ export function RecordDetailSheet({
 
           {(builtinId === "food" || builtinId === "snack") && (
             <>
-              <Text style={styles.fieldLabel}>음식/재료</Text>
-              <TextInput
-                style={styles.input}
-                value={foodName}
-                onChangeText={setFoodName}
-                placeholder={builtinId === "snack" ? "예: 사과 조각" : "예: 고구마 이유식"}
-                placeholderTextColor={colors.faint}
-              />
+              <Text style={styles.fieldLabel}>{builtinId === "snack" ? "재료/음식 선택" : "재료 선택"}</Text>
+              <View style={styles.ingredientGrid}>
+                {ingredientNames.map((name) => {
+                  const selected = selectedIngredients.includes(name);
+                  const history = ingredientHistory(name);
+                  return (
+                    <Pressable
+                      key={name}
+                      style={[styles.ingredientChip, selected && styles.ingredientChipSelected]}
+                      onPress={() => {
+                        setIngredientError("");
+                        setSelectedIngredients((current) => selected ? current.filter((item) => item !== name) : [...current, name]);
+                      }}
+                    >
+                      <Text style={[styles.ingredientName, selected && styles.ingredientNameSelected]}>{name}</Text>
+                      <Text style={[styles.ingredientHistory, selected && styles.ingredientHistorySelected]}>{history.count ? `지난 기록 ${history.count}회` : "처음 기록"}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {addingIngredient ? (
+                <View style={styles.newIngredientRow}>
+                  <TextInput
+                    style={[styles.input, styles.newIngredientInput]}
+                    value={newIngredientName}
+                    onChangeText={(value) => { setNewIngredientName(value); setIngredientError(""); }}
+                    maxLength={30}
+                    placeholder="재료명 입력"
+                    placeholderTextColor={colors.faint}
+                    autoFocus
+                  />
+                  <Pressable
+                    style={styles.newIngredientSave}
+                    onPress={() => {
+                      const clean = newIngredientName.trim().replace(/\s+/g, " ");
+                      if (!clean) { setIngredientError("재료명을 입력해 주세요."); return; }
+                      const existing = ingredientNames.find((name) => name.toLocaleLowerCase() === clean.toLocaleLowerCase());
+                      if (existing) {
+                        setSelectedIngredients((current) => current.includes(existing) ? current : [...current, existing]);
+                        setIngredientError("이미 있는 재료를 선택했어요.");
+                        setNewIngredientName("");
+                        setAddingIngredient(false);
+                        return;
+                      }
+                      const created = onAddFoodIngredient?.(clean, builtinId === "snack" ? "snack" : "baby_food");
+                      if (!created) { setIngredientError("재료를 추가하지 못했어요."); return; }
+                      setSelectedIngredients((current) => [...current, created.name]);
+                      setNewIngredientName("");
+                      setAddingIngredient(false);
+                    }}
+                  >
+                    <Text style={styles.newIngredientSaveText}>추가</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable style={styles.addIngredientButton} onPress={() => setAddingIngredient(true)}>
+                  <Text style={styles.addIngredientText}>+ 새 재료 추가</Text>
+                </Pressable>
+              )}
+              {ingredientError ? <Text style={styles.inputError}>{ingredientError}</Text> : null}
+              {selectedIngredients.map((name) => {
+                const history = ingredientHistory(name);
+                return (
+                  <View key={`history-${name}`} style={styles.historyRow}>
+                    <Text style={styles.historyName}>{name}</Text>
+                    <Text style={styles.historyText}>
+                      {history.count === 0 ? "처음 기록하는 재료예요." : `총 ${history.count}회 · 최근 ${formatIngredientDate(history.lastDate)}${history.hasMemo ? " · 메모 있음" : ""}`}
+                    </Text>
+                  </View>
+                );
+              })}
               <Text style={styles.fieldLabel}>양 (g)</Text>
               <TextInput
                 style={styles.input}
@@ -448,8 +596,6 @@ export function RecordDetailSheet({
               />
               <Text style={styles.fieldLabel}>반응</Text>
               <ChipRow options={["잘 먹음", "보통", "거부"]} value={chip} onChange={setChip} />
-              <Text style={styles.fieldLabel}>알러지 여부</Text>
-              <ChipRow options={["없음", "의심", "있음"]} value={chip2} onChange={setChip2} />
             </>
           )}
 
@@ -850,6 +996,24 @@ const styles = StyleSheet.create({
   calculatedLabel: { color: colors.faint, fontSize: 10.5, fontWeight: "700" },
   calculatedValue: { marginTop: 3, color: colors.text, fontSize: 15, fontWeight: "800" },
   readOnlyHint: { color: colors.muted, fontSize: 11.5, lineHeight: 17, marginTop: 12 },
+  estimatedStockCard: { marginTop: 12, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 10 },
+  estimatedStockHint: { marginTop: 3, color: colors.faint, fontSize: 10.5, lineHeight: 15 },
+  ingredientGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  ingredientChip: { minWidth: 92, minHeight: 52, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 11, paddingVertical: 8, justifyContent: "center" },
+  ingredientChipSelected: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  ingredientName: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  ingredientNameSelected: { color: colors.amberDark },
+  ingredientHistory: { marginTop: 3, color: colors.faint, fontSize: 9.5, fontWeight: "600" },
+  ingredientHistorySelected: { color: colors.amber },
+  addIngredientButton: { alignSelf: "flex-start", minHeight: 42, marginTop: 10, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  addIngredientText: { color: colors.amber, fontSize: 12.5, fontWeight: "800" },
+  newIngredientRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
+  newIngredientInput: { flex: 1 },
+  newIngredientSave: { minWidth: 58, minHeight: 44, borderRadius: 12, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  newIngredientSaveText: { color: colors.amberDark, fontSize: 13, fontWeight: "800" },
+  historyRow: { marginTop: 8, borderRadius: 10, backgroundColor: colors.card, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: colors.border },
+  historyName: { color: colors.text, fontSize: 11.5, fontWeight: "800" },
+  historyText: { marginTop: 2, color: colors.muted, fontSize: 10.5, lineHeight: 15 },
   overnightHint: { color: colors.muted, fontSize: 11.5, lineHeight: 17, marginTop: 4 },
   notes: { height: 64, textAlignVertical: "top" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

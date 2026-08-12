@@ -38,6 +38,7 @@ import {
   resumeTimer,
 } from "../src/utils/activeTimerOps";
 import { isTimerAction } from "../src/types/activeTimer";
+import { normalizeFoodIngredients, normalizeIngredientName } from "../src/utils/foodIngredientsStore";
 import {
   clearStorageIssue,
   getStorageIssue,
@@ -103,6 +104,15 @@ assert.equal(formatClockInput("930"), "09:30");
 assert.equal(formatClockInput("12:45"), "12:45");
 assert.equal(isValidClockInput("23:59"), true);
 assert.equal(isValidClockInput("24:00"), false);
+assert.equal(normalizeIngredientName("  고구마   큐브  "), "고구마 큐브");
+assert.deepEqual(
+  normalizeFoodIngredients([
+    { id: "1", name: " 바나나 ", source: "baby_food", createdAt: "2026-08-01" },
+    { id: "2", name: "바나나", source: "snack", createdAt: "2026-08-02" },
+    { id: "3", name: "사과", source: "snack", createdAt: "2026-08-03" },
+  ]).map((item) => item.name),
+  ["바나나", "사과"],
+);
 
 // --- Auth callbacks never report success without credentials ---
 {

@@ -35,6 +35,7 @@ export type BabyLogEntry = {
   spitUp?: "yes" | "no";
   supplement?: string;
   feedingNote?: string;
+  ingredients?: string[];
   notes?: string;
   /** User-editable short label, used by other/doctor/custom-like records. */
   title?: string;

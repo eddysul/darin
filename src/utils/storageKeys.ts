@@ -10,6 +10,7 @@ export const STORAGE_KEYS = {
   /** Keep the legacy runtime key so existing custom log metadata remains readable. */
   customCategories: "darin:custom-log-categories",
   quickRecords: "darin:quick-records",
+  foodIngredients: "darin:food-ingredients",
   growthBookEdit: "darin:growth-book-edit",
   babyStickers: "darin:baby-stickers",
   babyStickersMigration: "darin:baby-stickers-server-migration:v1",

@@ -53,6 +53,7 @@ export type CareLogPayload = {
   spitUp?: "yes" | "no";
   supplement?: string;
   feedingNote?: string;
+  ingredients?: string[];
   notes?: string;
   title?: string;
   details?: string;

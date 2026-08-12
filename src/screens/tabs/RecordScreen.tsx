@@ -38,6 +38,7 @@ import type { BabyLogEntry } from "../../types/babyLog";
 import type { CustomCategory, LogCategoryKey } from "../../types/logCategory";
 import { customCategoryKey, isCustomCategoryKey } from "../../types/logCategory";
 import type { QuickRecord } from "../../types/quickRecord";
+import type { FoodIngredient, FoodIngredientSource } from "../../types/foodIngredient";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
 import { createId } from "../../utils/id";
 import {
@@ -64,6 +65,7 @@ import {
 } from "../../utils/longPressActions";
 import { FEEDING_CATS, getLogsForDay } from "../../utils/reportAggregates";
 import { colors } from "../../theme";
+import { loadFoodIngredients, normalizeIngredientName, saveFoodIngredients } from "../../utils/foodIngredientsStore";
 
 type Props = {
   onOpenProfile: () => void;
@@ -99,6 +101,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     storageReady,
     addGrowthRecord,
     updateGrowthRecord,
+    localDataScope,
+    logAuthor,
   } = useBabyLog();
   const [sheetCat, setSheetCat] = useState<LogCategoryKey | null>(null);
   const [prefill, setPrefill] = useState<RecordSheetPrefill | null>(null);
@@ -117,6 +121,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
   const [growthRecordOpen, setGrowthRecordOpen] = useState(false);
   const [growthMeasuredAt, setGrowthMeasuredAt] = useState<string | undefined>(undefined);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [foodIngredients, setFoodIngredients] = useState<FoodIngredient[]>([]);
   const scrollHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerRestoreInitialized = useRef(false);
   const activeSleepRef = useRef<BabyLogEntry | undefined>(undefined);
@@ -126,6 +131,14 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     if (settingsReady) setSelectedDateKey(formatDateKey());
   }, [settingsReady, settings.time.dayStart]);
 
+  useEffect(() => {
+    let active = true;
+    void loadFoodIngredients(localDataScope).then((items) => {
+      if (active) setFoodIngredients(items);
+    });
+    return () => { active = false; };
+  }, [localDataScope]);
+
   const me = familyMembers.find((m) => m.isMe);
   const allowAdd = canAddLog(myFamilyRole);
   const todayKey = formatDateKey();
@@ -133,6 +146,12 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     () => getLogsForDay(logs, selectedDateKey, todayKey),
     [logs, selectedDateKey, todayKey],
   );
+  const storedMilkEstimatedAvailableMl = useMemo(() => {
+    const pumped = logs.filter((entry) => entry.cat === "pump").reduce((sum, entry) => sum + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
+    if (pumped <= 0) return undefined;
+    const consumed = logs.filter((entry) => entry.cat === "storedMilk").reduce((sum, entry) => sum + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
+    return Math.max(0, pumped - consumed);
+  }, [logs]);
   const isViewingToday = selectedDateKey === todayKey;
   const canGoNext = selectedDateKey < todayKey;
   const canGoPrev = selectedDateKey > offsetDateKey(todayKey, -365);
@@ -276,6 +295,25 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     } else if (allowAdd) {
       addLog(entry);
     }
+  };
+
+  const addFoodIngredient = (nameInput: string, source: FoodIngredientSource): FoodIngredient | null => {
+    const name = normalizeIngredientName(nameInput);
+    if (!name) return null;
+    const existing = foodIngredients.find((item) => item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+    if (existing) return existing;
+    const ingredient: FoodIngredient = {
+      id: createId(),
+      name,
+      source,
+      createdAt: new Date().toISOString(),
+      babyId: localDataScope?.babyId,
+      createdBy: logAuthor.userId,
+    };
+    const next = [...foodIngredients, ingredient];
+    setFoodIngredients(next);
+    void saveFoodIngredients(next, localDataScope);
+    return ingredient;
   };
 
   const handleOneTouch = (action: OneTouchAction) => {
@@ -706,6 +744,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
         catKey={sheetCat}
         customCategories={customCategories}
         prefill={prefill}
+        logs={logs}
+        foodIngredients={foodIngredients}
+        onAddFoodIngredient={addFoodIngredient}
+        storedMilkEstimatedAvailableMl={storedMilkEstimatedAvailableMl}
         sessionLabel={sessionLabelFor(sheetCat, prefill?.editId, prefill?.dateKey)}
         onClose={() => {
           setSheetCat(null);
