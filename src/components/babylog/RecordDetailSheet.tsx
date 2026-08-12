@@ -350,12 +350,6 @@ export function RecordDetailSheet({
             <>
               {builtinId === "breast" ? (
                 <>
-                  <Text style={styles.fieldLabel}>모유수유 방식</Text>
-                  <ChipRow
-                    options={["직수", "젖병수유", "혼합"]}
-                    value={feedingMethod === "direct" ? "직수" : feedingMethod === "bottle" ? "젖병수유" : feedingMethod === "mixed" ? "혼합" : ""}
-                    onChange={(value) => setFeedingMethod(value === "직수" ? "direct" : value === "젖병수유" ? "bottle" : value === "혼합" ? "mixed" : undefined)}
-                  />
                   <DurationPickerField label="왼쪽 시간" valueMinutes={leftDurationValue} onPress={() => setSideDurationTarget("left")} />
                   <DurationPickerField label="오른쪽 시간" valueMinutes={rightDurationValue} onPress={() => setSideDurationTarget("right")} />
                   <View style={styles.calculatedCard}>
