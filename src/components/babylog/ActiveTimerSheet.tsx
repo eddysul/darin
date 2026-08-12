@@ -26,6 +26,7 @@ type Props = {
   onResume: () => void;
   onStop: (opts?: { amount?: string }) => void;
   allowSideSwitch?: boolean;
+  saving?: boolean;
 };
 
 const SIDE_OPTIONS: TimerSide[] = ["left", "right", "both"];
@@ -47,6 +48,7 @@ export function ActiveTimerSheet({
   onResume,
   onStop,
   allowSideSwitch = true,
+  saving = false,
 }: Props) {
   const { settings } = useAppSettings();
   const [tick, setTick] = useState(0);
@@ -190,21 +192,21 @@ export function ActiveTimerSheet({
           ) : null}
 
           <View style={styles.actions}>
-            <Pressable style={[styles.btn, styles.btnGhost]} onPress={onClose}>
+            <Pressable disabled={saving} style={[styles.btn, styles.btnGhost, saving && styles.btnDisabled]} onPress={onClose}>
               <Text style={styles.btnGhostText}>닫기</Text>
             </Pressable>
             {paused ? (
-              <Pressable style={[styles.btn, styles.btnSecondary]} onPress={onResume}>
+              <Pressable disabled={saving} style={[styles.btn, styles.btnSecondary, saving && styles.btnDisabled]} onPress={onResume}>
                 <Text style={styles.btnSecondaryText}>재개</Text>
               </Pressable>
             ) : (
-              <Pressable style={[styles.btn, styles.btnSecondary]} onPress={onPause}>
+              <Pressable disabled={saving} style={[styles.btn, styles.btnSecondary, saving && styles.btnDisabled]} onPress={onPause}>
                 <Text style={styles.btnSecondaryText}>일시정지</Text>
               </Pressable>
             )}
-            <Pressable style={[styles.btn, styles.btnPrimary]} onPress={handleStopPress}>
+            <Pressable disabled={saving} style={[styles.btn, styles.btnPrimary, saving && styles.btnDisabled]} onPress={handleStopPress}>
               <Text style={styles.btnPrimaryText}>
-                {finishingPump ? "저장" : "종료"}
+                {saving ? "저장 중" : finishingPump ? "저장" : "종료"}
               </Text>
             </Pressable>
           </View>
@@ -326,4 +328,5 @@ const styles = StyleSheet.create({
   btnSecondaryText: { color: colors.text, fontWeight: "800", fontSize: 14 },
   btnPrimary: { backgroundColor: colors.amber },
   btnPrimaryText: { color: colors.amberDark, fontWeight: "800", fontSize: 14 },
+  btnDisabled: { opacity: 0.55 },
 });

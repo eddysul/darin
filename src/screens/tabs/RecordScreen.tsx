@@ -105,7 +105,9 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
   const {
     logs,
     addLog,
+    addLogWithPersistence,
     updateLog,
+    updateLogWithPersistence,
     deleteLog,
     customCategories,
     upsertCustomCategory,
@@ -125,6 +127,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
   const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey());
   const [activeTimers, setActiveTimers] = useState<ActiveTimer[]>([]);
   const [timerSheetId, setTimerSheetId] = useState<string | null>(null);
+  const [timerSaving, setTimerSaving] = useState(false);
   const [timerTick, setTimerTick] = useState(0);
   const [consultPromptOpen, setConsultPromptOpen] = useState(false);
   const [scrolling, setScrolling] = useState(false);
@@ -405,9 +408,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     setActiveTimers((prev) => prev.map((t) => (t.id === id ? updater(t) : t)));
   };
 
-  const handleStopTimer = (opts?: { amount?: string }) => {
+  const handleStopTimer = async (opts?: { amount?: string }) => {
     const timer = activeTimers.find((t) => t.id === timerSheetId);
-    if (!timer) return;
+    if (!timer || timerSaving) return;
+    setTimerSaving(true);
     const result = buildTimerStopResult(timer, opts);
     const base = {
       time: result.startTime,
@@ -419,38 +423,44 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
       amount: result.amount,
     };
 
-    if (timer.kind === "sleep" && timer.linkedLogId) {
-      const existing = logs.find((l) => l.id === timer.linkedLogId);
-      if (existing) {
-        const { id, ...entry } = existing;
-        updateLog(id, {
-          ...entry,
-          duration: String(result.durationMinutes),
-        });
-        announceCreated(
-          { ...entry, id, duration: String(result.durationMinutes) },
-          "수면 종료 완료",
-        );
-        // The log update is optimistic. Suppress the old open sleep record
-        // until its duration reaches state, so it cannot resurrect this timer.
-        suppressedRestoredSleepId.current = id;
+    try {
+      let saved: BabyLogEntry | null = null;
+      let title = "";
+      if (timer.kind === "sleep" && timer.linkedLogId) {
+        const existing = logs.find((l) => l.id === timer.linkedLogId);
+        if (existing) {
+          const { id, ...entry } = existing;
+          saved = await updateLogWithPersistence(id, {
+            ...entry,
+            duration: String(result.durationMinutes),
+          });
+          title = "수면 종료 완료";
+          if (saved) suppressedRestoredSleepId.current = id;
+        }
+      } else if (timer.kind === "breastfeeding") {
+        saved = await addLogWithPersistence({ ...base, cat: "breast" });
+        title = "모유수유 타이머 저장";
+      } else if (timer.kind === "pump") {
+        saved = await addLogWithPersistence({ ...base, cat: "pump" });
+        title = "유축 타이머 저장";
+      } else if (timer.kind === "tummy") {
+        saved = await addLogWithPersistence({ ...base, cat: "tummy" });
+        title = "터미타임 타이머 저장";
+      } else if (timer.kind === "play") {
+        saved = await addLogWithPersistence({ ...base, cat: "play" });
+        title = "놀이 타이머 저장";
       }
-    } else if (timer.kind === "breastfeeding") {
-      const created = addLog({ ...base, cat: "breast" });
-      announceCreated(created, "모유수유 타이머 저장");
-    } else if (timer.kind === "pump") {
-      const created = addLog({ ...base, cat: "pump" });
-      announceCreated(created, "유축 타이머 저장");
-    } else if (timer.kind === "tummy") {
-      const created = addLog({ ...base, cat: "tummy" });
-      announceCreated(created, "터미타임 타이머 저장");
-    } else if (timer.kind === "play") {
-      const created = addLog({ ...base, cat: "play" });
-      announceCreated(created, "놀이 타이머 저장");
-    }
 
-    setActiveTimers((prev) => prev.filter((t) => t.id !== timer.id));
-    setTimerSheetId(null);
+      if (!saved) {
+        Alert.alert("기록 저장에 실패했어요.", "타이머는 계속 유지돼요. 다시 종료해 주세요.");
+        return;
+      }
+      announceCreated(saved, title);
+      setActiveTimers((prev) => prev.filter((t) => t.id !== timer.id));
+      setTimerSheetId(null);
+    } finally {
+      setTimerSaving(false);
+    }
   };
 
   const handleQuickRecord = (record: QuickRecord) => {
@@ -740,6 +750,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
       <ActiveTimerSheet
         visible={Boolean(sheetTimer)}
         timer={sheetTimer}
+        saving={timerSaving}
         allowSideSwitch={settings.timers.switchBreastSide}
         onClose={() => setTimerSheetId(null)}
         onChangeSide={(side: TimerSide) => {

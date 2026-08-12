@@ -327,8 +327,12 @@ type BabyLogContextValue = {
   profileOpen: boolean;
   setProfileOpen: (open: boolean) => void;
   addLog: (entry: Omit<BabyLogEntry, "id">) => BabyLogEntry;
+  /** Awaited variant for flows that must not discard in-progress state on a failed save. */
+  addLogWithPersistence: (entry: Omit<BabyLogEntry, "id">) => Promise<BabyLogEntry | null>;
   addLogs: (entries: Omit<BabyLogEntry, "id">[]) => void;
   updateLog: (id: string, entry: Omit<BabyLogEntry, "id">) => void;
+  /** Awaited variant for flows that must keep their draft active after a failed save. */
+  updateLogWithPersistence: (id: string, entry: Omit<BabyLogEntry, "id">) => Promise<BabyLogEntry | null>;
   deleteLog: (id: string) => void;
   logAuthor: BabyLogActor;
   addDiary: (entry: Omit<DiaryEntry, "id" | "createdAt" | "updatedAt"> & { createdAt?: string; updatedAt?: string }) => void;
@@ -876,6 +880,24 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     [normalizeEntry],
   );
 
+  const addLogWithPersistence = useCallback(
+    async (entry: Omit<BabyLogEntry, "id">): Promise<BabyLogEntry | null> => {
+      const next = normalizeEntry(entry);
+      setLogs((prev) => [...prev, next]);
+      const remote = await syncCareLogCreate(next);
+      if (remote) {
+        setLogs((prev) => prev.map((log) => (log.id === next.id ? remote : log)));
+        return remote;
+      }
+      if (isSupabaseConfigured()) {
+        setLogs((prev) => prev.filter((log) => log.id !== next.id));
+        return null;
+      }
+      return next;
+    },
+    [normalizeEntry],
+  );
+
   const addLogs = useCallback(
     (entries: Omit<BabyLogEntry, "id">[]) => {
       if (!entries.length) return;
@@ -921,6 +943,32 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       }
     });
   }, [logs]);
+
+  const updateLogWithPersistence = useCallback(
+    async (id: string, entry: Omit<BabyLogEntry, "id">): Promise<BabyLogEntry | null> => {
+      const previous = logs.find((log) => log.id === id);
+      if (!previous) return null;
+      const next: BabyLogEntry = {
+        ...entry,
+        id,
+        dateKey: entry.dateKey ?? previous.dateKey ?? formatDateKey(),
+        createdBy: entry.createdBy ?? previous.createdBy,
+        source: entry.source ?? previous.source,
+      };
+      setLogs((current) => current.map((log) => (log.id === id ? next : log)));
+      const remote = await syncCareLogUpdate(id, entry);
+      if (remote) {
+        setLogs((current) => current.map((log) => (log.id === id ? remote : log)));
+        return remote;
+      }
+      if (isSupabaseConfigured()) {
+        setLogs((current) => current.map((log) => (log.id === id ? previous : log)));
+        return null;
+      }
+      return next;
+    },
+    [logs],
+  );
 
   const deleteLog = useCallback((id: string) => {
     const previous = logs.find((log) => log.id === id);
@@ -1349,8 +1397,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       profileOpen,
       setProfileOpen,
       addLog,
+      addLogWithPersistence,
       addLogs,
       updateLog,
+      updateLogWithPersistence,
       deleteLog,
       logAuthor,
       addDiary,
@@ -1401,8 +1451,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       chatHistory,
       profileOpen,
       addLog,
+      addLogWithPersistence,
       addLogs,
       updateLog,
+      updateLogWithPersistence,
       deleteLog,
       logAuthor,
       addDiary,
