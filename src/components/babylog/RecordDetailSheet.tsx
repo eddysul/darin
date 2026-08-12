@@ -348,31 +348,6 @@ export function RecordDetailSheet({
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {(builtinId === "breast" || builtinId === "formula" || builtinId === "storedMilk") && (
             <>
-              <Text style={styles.fieldLabel}>수유 방식</Text>
-              <View style={styles.chipRow}>
-                {(
-                  [
-                    { id: "breast" as const, label: "모유" },
-                    { id: "formula" as const, label: "분유" },
-                    { id: "storedMilk" as const, label: "저장 모유" },
-                  ] as const
-                ).map((option) => (
-                  <Pressable
-                    key={option.id}
-                    style={[styles.chip, effectiveCat === option.id && styles.chipSel]}
-                    onPress={() => {
-                      setSelectedCat(option.id);
-                      if (option.id !== "breast") setChip("");
-                    }}
-                  >
-                    <Text
-                      style={[styles.chipText, effectiveCat === option.id && styles.chipTextSel]}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
               {builtinId === "breast" ? (
                 <>
                   <Text style={styles.fieldLabel}>모유수유 방식</Text>
