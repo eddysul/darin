@@ -113,6 +113,7 @@ export function RecordDetailSheet({
   const [nextAt, setNextAt] = useState("");
   const [voice, setVoice] = useState(false);
   const [timeError, setTimeError] = useState("");
+  const [diaperError, setDiaperError] = useState("");
   const [timePickerTarget, setTimePickerTarget] = useState<"time" | "end" | "nextAt" | null>(null);
   const [durationPickerOpen, setDurationPickerOpen] = useState(false);
 
@@ -121,6 +122,7 @@ export function RecordDetailSheet({
     const nextCat = prefill?.cat ?? catKey;
     setSelectedCat(nextCat);
     setTimeError("");
+    setDiaperError("");
     setTime(isValidClockInput(prefill?.time ?? "") ? prefill!.time! : nowTime());
     setChip(nextCat === "diaper" ? normalizeDiaperChip(prefill?.chip ?? "") : prefill?.chip ?? "");
     setChip2(prefill?.chip2 ?? "");
@@ -213,9 +215,10 @@ export function RecordDetailSheet({
     }
     setTimeError("");
     if (builtinId === "diaper" && !["소변", "대변", "소변+대변"].includes(chip)) {
-      setTimeError("소변, 대변 또는 소변+대변 중 하나를 선택해 주세요.");
+      setDiaperError("소변, 대변 또는 소변+대변 중 하나를 선택해 주세요.");
       return;
     }
+    setDiaperError("");
     const isFood = builtinId === "food" || builtinId === "snack";
     const isMed = builtinId === "med";
     const customInputMode = c.isCustom ? c.inputMode ?? "memo" : null;
@@ -282,7 +285,7 @@ export function RecordDetailSheet({
           <View style={[styles.dot, { backgroundColor: c.color }]} />
           <LogCategoryIcon categoryKey={effectiveCat} customCategories={customCategories} size={18} />
           <Text style={styles.title}>
-            {c.label} 기록{isEdit ? " 수정" : ""}
+            {c.label} 기록 {isEdit ? "수정" : "추가"}
           </Text>
         </View>
 
@@ -372,7 +375,12 @@ export function RecordDetailSheet({
           {builtinId === "diaper" && (
             <>
               <Text style={styles.fieldLabel}>무엇이 있었나요?</Text>
-              <ChipRow options={["소변", "대변", "소변+대변"]} value={chip} onChange={setChip} />
+              <ChipRow
+                options={["소변", "대변", "소변+대변"]}
+                value={chip}
+                onChange={(value) => { setChip(value); setDiaperError(""); }}
+              />
+              {diaperError ? <Text style={styles.inputError}>{diaperError}</Text> : null}
               {(chip === "소변" || chip === "소변+대변") ? (
                 <>
                   <Text style={styles.fieldLabel}>소변 양</Text>
@@ -396,7 +404,7 @@ export function RecordDetailSheet({
 
           {(builtinId === "food" || builtinId === "snack") && (
             <>
-              <Text style={styles.fieldLabel}>음식명</Text>
+              <Text style={styles.fieldLabel}>음식/재료</Text>
               <TextInput
                 style={styles.input}
                 value={foodName}

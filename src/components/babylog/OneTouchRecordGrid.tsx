@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getCategory } from "../../constants/babyLogCategories";
 import {
@@ -66,7 +66,7 @@ export function OneTouchRecordGrid({
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
           <Text style={styles.title}>빠르게 기록하기</Text>
-          <Text style={styles.subtitle}>짧게 탭 기록 추가 · 길게 탭 기록 시작</Text>
+          <Text style={styles.subtitle}>탭 기록 작성 · 길게 눌러 타이머 시작</Text>
         </View>
         {onAdd ? (
           <Pressable
@@ -241,6 +241,7 @@ function ActionTile({
   const activeSleep = action.id === "sleep" && sleepActive;
   const inProgress = timerActive || activeSleep;
   const ActionIcon = CATEGORY_ICONS[action.cat];
+  const longPressedRef = useRef(false);
 
   return (
     <Pressable
@@ -252,9 +253,16 @@ function ActionTile({
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
       ]}
-      onPressIn={() => onInteractionChange?.(true)}
+      onPressIn={() => {
+        longPressedRef.current = false;
+        onInteractionChange?.(true);
+      }}
       onPressOut={() => onInteractionChange?.(false)}
       onPress={() => {
+        if (longPressedRef.current) {
+          longPressedRef.current = false;
+          return;
+        }
         // An in-progress timer must never open a second quick-record flow.
         // Open its sheet so the user can pause or finish the same timer.
         if (inProgress && onOpenActiveTimer) {
@@ -264,6 +272,7 @@ function ActionTile({
         onSelect(action.id);
       }}
       onLongPress={() => {
+        longPressedRef.current = true;
         if (inProgress && onOpenActiveTimer) {
           onOpenActiveTimer(action.id);
           return;
@@ -273,7 +282,7 @@ function ActionTile({
       delayLongPress={380}
       accessibilityLabel={`${
         activeSleep ? "수면 종료" : inProgress ? `${action.label} 진행 중` : action.label
-      } 즉시 기록`}
+      } 기록 작성`}
     >
       {inProgress ? (
         <View style={styles.progressBadge}>

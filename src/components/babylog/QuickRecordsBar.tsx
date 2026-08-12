@@ -35,10 +35,7 @@ export function QuickRecordsBar({
         return QUICK_RECORD_ACTIONS.some(
           (action) =>
             visibleActions.includes(action.id) &&
-            action.cat === record.defaults.cat &&
-            (action.cat !== "diaper" ||
-              !record.defaults.chip ||
-              action.chip === record.defaults.chip),
+            action.cat === record.defaults.cat,
         );
       }),
     [records, visibleActions],
@@ -59,7 +56,10 @@ export function QuickRecordsBar({
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Text style={styles.title}>자주 쓰는 기록</Text>
+        <View style={styles.headingCopy}>
+          <Text style={styles.title}>자주 쓰는 기록</Text>
+          <Text style={styles.subtitle}>한 번 탭하면 바로 기록돼요.</Text>
+        </View>
         <Pressable
           style={[styles.editBtn, disabled && styles.disabled]}
           disabled={disabled}
@@ -73,6 +73,12 @@ export function QuickRecordsBar({
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {pinned.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>아직 자주 쓰는 기록이 없어요.</Text>
+            <Text style={styles.emptyBody}>자주 쓰는 조합을 저장해두면 한 번에 기록할 수 있어요.</Text>
+          </View>
+        ) : null}
         {pinned.map((record) => (
           <Pressable
             key={record.id}
@@ -155,7 +161,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 11,
   },
+  headingCopy: { flex: 1, paddingRight: 8 },
   title: { fontSize: 17, fontWeight: "800", color: colors.text },
+  subtitle: { marginTop: 2, fontSize: 11, lineHeight: 15, color: colors.faint },
   editBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -168,6 +176,9 @@ const styles = StyleSheet.create({
   },
   edit: { fontSize: 11.5, color: colors.amber, fontWeight: "700" },
   row: { gap: 7, paddingRight: 6 },
+  emptyState: { maxWidth: 230, justifyContent: "center", paddingRight: 4 },
+  emptyTitle: { fontSize: 12, fontWeight: "700", color: colors.muted },
+  emptyBody: { marginTop: 2, fontSize: 10.5, lineHeight: 15, color: colors.faint },
   chip: {
     flexDirection: "row",
     alignItems: "center",

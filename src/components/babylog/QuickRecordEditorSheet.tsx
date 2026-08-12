@@ -95,7 +95,11 @@ export function QuickRecordEditorSheet({
         ? volumeFromMl(r.defaults.amount, settings.units.volume)
         : r.defaults.amount ?? "",
     );
-    setChip(r.defaults.chip ?? "");
+    setChip(
+      r.defaults.cat === "diaper" && ["둘다", "둘 다"].includes(r.defaults.chip ?? "")
+        ? "소변+대변"
+        : r.defaults.chip ?? "",
+    );
     setDuration(r.defaults.duration ?? "");
     setNotes(r.defaults.notes ?? "");
     setPinned(r.pinned);
@@ -126,7 +130,10 @@ export function QuickRecordEditorSheet({
     setMode(startInForm ? "form" : "list");
   }, [visible, editing, startInForm]);
 
-  const canSave = useMemo(() => label.trim().length > 0, [label]);
+  const canSave = useMemo(
+    () => label.trim().length > 0 && (cat !== "diaper" || ["소변", "대변", "소변+대변"].includes(chip)),
+    [cat, chip, label],
+  );
 
   const saveForm = () => {
     if (!canSave) return;
@@ -254,7 +261,7 @@ export function QuickRecordEditorSheet({
                 placeholderTextColor={colors.faint}
                 autoFocus={startInForm && !editing}
               />
-              {!canSave ? (
+              {!label.trim() ? (
                 <Text style={styles.hint}>이름을 입력해야 저장할 수 있어요.</Text>
               ) : null}
 
@@ -312,14 +319,34 @@ export function QuickRecordEditorSheet({
                 />
               ) : null}
 
-              {STATE_CATS.includes(cat) ? (
+              {cat === "diaper" ? (
+                <>
+                  <Text style={styles.label}>기저귀 종류</Text>
+                  <View style={styles.chipRow}>
+                    {["소변", "대변", "소변+대변"].map((option) => (
+                      <Pressable
+                        key={option}
+                        style={[styles.chip, chip === option && styles.chipActive]}
+                        onPress={() => setChip(option)}
+                      >
+                        <Text style={[styles.chipText, chip === option && styles.chipTextActive]}>
+                          {option}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  {!["소변", "대변", "소변+대변"].includes(chip) ? (
+                    <Text style={styles.hint}>종류를 선택해야 바로 기록할 수 있어요.</Text>
+                  ) : null}
+                </>
+              ) : STATE_CATS.includes(cat) ? (
                 <>
                   <Text style={styles.label}>기본 상태</Text>
                   <TextInput
                     style={styles.input}
                     value={chip}
                     onChangeText={setChip}
-                    placeholder={cat === "diaper" ? "예: 소변 또는 대변" : cat === "sleep" ? "예: 낮잠 또는 밤잠" : "선택 사항"}
+                    placeholder={cat === "sleep" ? "예: 낮잠 또는 밤잠" : "선택 사항"}
                     placeholderTextColor={colors.faint}
                   />
                 </>

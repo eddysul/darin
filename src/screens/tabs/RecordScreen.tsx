@@ -70,27 +70,6 @@ type Props = {
   onOpenConsult: (initialQuestion?: string) => void;
 };
 
-const ACTION_TOAST: Record<OneTouchAction, string> = {
-  breastfeeding: "모유수유 기록 완료",
-  formula: "분유 기록 완료",
-  diaper: "기저귀 기록 완료",
-  sleep: "수면 기록 완료",
-  pump: "유축 기록 완료",
-  storedMilk: "저장 모유 수유 기록 완료",
-  food: "이유식 기록 완료",
-  water: "물 기록 완료",
-  snack: "간식 기록 완료",
-  milk: "우유 기록 완료",
-  tummy: "터미타임 기록 완료",
-  bath: "목욕 기록 완료",
-  play: "놀이 기록 완료",
-  temp: "체온 기록 완료",
-  med: "약 기록 완료",
-  doctor: "진료 기록 완료",
-  memo: "빠른 메모 생성 완료",
-  other: "기타 기록 생성 완료",
-};
-
 const TIMER_LABEL: Record<ActiveTimer["kind"], string> = {
   breastfeeding: "모유수유",
   sleep: "수면",
@@ -289,48 +268,12 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
 
   const handleOneTouch = (action: OneTouchAction) => {
     if (!allowAdd) return;
-    const time = nowTime();
-    if (action === "sleep") {
-      // Short tap is a normal record-add flow. Only a long press starts the
-      // timer, preventing an accidental open sleep record from being restored.
-      openSheet("sleep", {
-        cat: "sleep",
-        time,
-        dateKey: todayKey,
-        source: "manual",
-        chip: "낮잠",
-      });
-      return;
-    }
-    if (action === "diaper") {
-      openSheet("diaper", {
-        cat: "diaper",
-        time,
-        dateKey: todayKey,
-        source: "manual",
-      });
-      return;
-    }
-
-    const base = { time, dateKey: todayKey, source: "manual" as const };
-    let created: BabyLogEntry | null = null;
-    if (action === "breastfeeding") created = addLog({ ...base, cat: "breast" });
-    if (action === "formula") created = addLog({ ...base, cat: "formula" });
-    if (action === "pump") created = addLog({ ...base, cat: "pump" });
-    if (action === "storedMilk") created = addLog({ ...base, cat: "storedMilk" });
-    if (action === "food") created = addLog({ ...base, cat: "food" });
-    if (action === "water") created = addLog({ ...base, cat: "water" });
-    if (action === "snack") created = addLog({ ...base, cat: "snack" });
-    if (action === "milk") created = addLog({ ...base, cat: "milk" });
-    if (action === "tummy") created = addLog({ ...base, cat: "tummy" });
-    if (action === "bath") created = addLog({ ...base, cat: "bath" });
-    if (action === "play") created = addLog({ ...base, cat: "play" });
-    if (action === "med") created = addLog({ ...base, cat: "med" });
-    if (action === "temp") created = addLog({ ...base, cat: "temp" });
-    if (action === "doctor") created = addLog({ ...base, cat: "doctor" });
-    if (action === "memo") created = addLog({ ...base, cat: "memo" });
-    if (action === "other") created = addLog({ ...base, cat: "other", title: "기타" });
-    if (created) announceCreated(created, ACTION_TOAST[action]);
+    const next = longPressSheetPrefill(action);
+    openSheet(next.cat ?? actionToCategory(action), {
+      ...next,
+      time: nowTime(),
+      dateKey: todayKey,
+    });
   };
 
   const startOrOpenTimer = (action: OneTouchAction) => {
@@ -360,17 +303,12 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
         setTimerSheetId(linked.id);
         return;
       }
-      const created = addLog({
-        time: nowTime(),
+      const timer = createActiveTimer("sleep", "sleep", {
+        startTime: nowTime(),
         dateKey: todayKey,
-        source: "manual",
-        cat: "sleep",
-        chip: "낮잠",
       });
-      const timer = timerFromOpenSleep(created);
       setActiveTimers((prev) => [...prev.filter((t) => t.kind !== "sleep"), timer]);
       setTimerSheetId(timer.id);
-      announceCreated(created, "수면 시작");
       return;
     }
 
@@ -443,6 +381,9 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
           title = "수면 종료 완료";
           if (saved) suppressedRestoredSleepId.current = id;
         }
+      } else if (timer.kind === "sleep") {
+        saved = await addLogWithPersistence({ ...base, cat: "sleep", chip: "낮잠" });
+        title = "수면 타이머 저장";
       } else if (timer.kind === "breastfeeding") {
         saved = await addLogWithPersistence({ ...base, cat: "breast" });
         title = "모유수유 타이머 저장";

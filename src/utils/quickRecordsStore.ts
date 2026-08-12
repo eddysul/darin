@@ -29,12 +29,12 @@ function isQuickRecord(item: unknown): item is QuickRecord {
 function normalize(raw: unknown): QuickRecord[] {
   if (!Array.isArray(raw)) return [...DEFAULT_QUICK_RECORDS];
   const parsed = raw.filter(isQuickRecord).map((record) =>
-    record.id === "qr-diaper-pee"
+    record.id === "qr-diaper" && record.defaults.cat === "diaper" && !record.defaults.chip
       ? {
           ...record,
-          id: "qr-diaper",
-          label: "기저귀",
-          defaults: { ...record.defaults, chip: undefined, chip2: undefined, stoolState: undefined },
+          id: "qr-diaper-pee",
+          label: "기저귀 소변",
+          defaults: { ...record.defaults, chip: "소변" },
         }
       : record,
   );

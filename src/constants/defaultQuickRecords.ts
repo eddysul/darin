@@ -20,13 +20,13 @@ export const DEFAULT_QUICK_RECORDS: QuickRecord[] = [
     defaults: { cat: "sleep", sleepAction: "start", chip: "낮잠" },
   },
   {
-    id: "qr-diaper",
-    label: "기저귀",
+    id: "qr-diaper-pee",
+    label: "기저귀 소변",
     color: "#5CB87A",
     icon: "",
     pinned: true,
     isCustom: false,
-    defaults: { cat: "diaper" },
+    defaults: { cat: "diaper", chip: "소변" },
   },
 ];
 

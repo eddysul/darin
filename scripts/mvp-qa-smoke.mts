@@ -28,6 +28,8 @@ import { isCustomCategoryKey } from "../src/types/logCategory";
 import { elapsedClockMinutes } from "../src/utils/formatLog";
 import { QUICK_RECORD_ACTIONS } from "../src/constants/quickRecordActions";
 import { diaperCounts, diaperTypeLabel } from "../src/utils/diaperLog";
+import { DEFAULT_QUICK_RECORDS } from "../src/constants/defaultQuickRecords";
+import { actionToCategory, longPressSheetPrefill } from "../src/utils/longPressActions";
 import {
   buildTimerStopResult,
   createActiveTimer,
@@ -639,6 +641,14 @@ function log(
     [undefined],
   );
   assert.equal(QUICK_RECORD_ACTIONS.find((action) => action.id === "storedMilk")?.label, "저장 모유 수유");
+  for (const action of QUICK_RECORD_ACTIONS) {
+    const prefill = longPressSheetPrefill(action.id);
+    assert.equal(prefill.cat, actionToCategory(action.id), `${action.id} opens its detail category`);
+    assert.ok(prefill.time, `${action.id} detail prefill includes time`);
+    assert.ok(prefill.dateKey, `${action.id} detail prefill includes date`);
+  }
+  const diaperFavorite = DEFAULT_QUICK_RECORDS.find((record) => record.defaults.cat === "diaper");
+  assert.equal(diaperFavorite?.defaults.chip, "소변", "the default diaper favorite is one-tap complete");
 }
 
 // --- Diaper records: legacy labels and a combined change retain correct counts ---
