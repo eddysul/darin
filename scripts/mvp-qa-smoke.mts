@@ -645,16 +645,17 @@ function log(
   assert.equal(isTimerAction("storedMilk"), true, "stored milk supports long-press timing");
 }
 
-// --- Record home quick actions: 6 core + 12 expanded = 18, with one diaper action ---
+// --- Record home quick actions: 6 core + 13 expanded = 19, with diaper and vaccination actions ---
 {
-  assert.equal(QUICK_RECORD_ACTIONS.length, 18);
+  assert.equal(QUICK_RECORD_ACTIONS.length, 19);
   assert.equal(QUICK_RECORD_ACTIONS.filter((action) => action.core).length, 6);
-  assert.equal(new Set(QUICK_RECORD_ACTIONS.map((action) => action.id)).size, 18);
+  assert.equal(new Set(QUICK_RECORD_ACTIONS.map((action) => action.id)).size, 19);
   assert.deepEqual(
     QUICK_RECORD_ACTIONS.filter((action) => action.cat === "diaper").map((action) => action.chip).sort(),
     [undefined],
   );
   assert.equal(QUICK_RECORD_ACTIONS.find((action) => action.id === "storedMilk")?.label, "저장 모유 수유");
+  assert.equal(QUICK_RECORD_ACTIONS.find((action) => action.id === "vaccination")?.cat, "vaccination");
   for (const action of QUICK_RECORD_ACTIONS) {
     const prefill = longPressSheetPrefill(action.id);
     assert.equal(prefill.cat, actionToCategory(action.id), `${action.id} opens its detail category`);

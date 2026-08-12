@@ -57,8 +57,6 @@ type Props = {
   onDelete?: (id: string) => void;
   /** Render as overlay inside a parent Modal (iOS nested-Modal safe). */
   embedded?: boolean;
-  /** Opens the separate growth-record flow from a clinic visit. */
-  onOpenGrowthRecord?: () => void;
   sessionLabel?: string;
   logs?: BabyLogEntry[];
   foodIngredients?: FoodIngredient[];
@@ -145,7 +143,6 @@ export function RecordDetailSheet({
   onSave,
   onDelete,
   embedded = false,
-  onOpenGrowthRecord,
   sessionLabel,
   logs = [],
   foodIngredients = [],
@@ -193,13 +190,26 @@ export function RecordDetailSheet({
   const [doctorName, setDoctorName] = useState("");
   const [cautions, setCautions] = useState("");
   const [cautionReminderEnabled, setCautionReminderEnabled] = useState(false);
+  const [vaccineName, setVaccineName] = useState("");
+  const [vaccinationRound, setVaccinationRound] = useState<BabyLogEntry["vaccinationRound"]>();
+  const [vaccinationRoundText, setVaccinationRoundText] = useState("");
+  const [vaccinationHospitalName, setVaccinationHospitalName] = useState("");
+  const [vaccinationDoctorName, setVaccinationDoctorName] = useState("");
+  const [injectionSite, setInjectionSite] = useState<BabyLogEntry["injectionSite"]>();
+  const [injectionSiteText, setInjectionSiteText] = useState("");
+  const [aftercareNotes, setAftercareNotes] = useState<string[]>([]);
+  const [vaccinationReminderSetting, setVaccinationReminderSetting] = useState<BabyLogEntry["vaccinationReminderSetting"]>("none");
+  const [vaccinationDateKey, setVaccinationDateKey] = useState("");
+  const [vaccinationCustomReminderAt, setVaccinationCustomReminderAt] = useState("");
   const [voice, setVoice] = useState(false);
   const [timeError, setTimeError] = useState("");
   const [diaperError, setDiaperError] = useState("");
   const [feedingAmountError, setFeedingAmountError] = useState("");
-  const [timePickerTarget, setTimePickerTarget] = useState<"time" | "end" | "nextAt" | null>(null);
+  const [timePickerTarget, setTimePickerTarget] = useState<"time" | "end" | "nextAt" | "vaccinationReminder" | null>(null);
   const [durationPickerOpen, setDurationPickerOpen] = useState(false);
   const [nextDatePickerOpen, setNextDatePickerOpen] = useState(false);
+  const [vaccinationDatePickerOpen, setVaccinationDatePickerOpen] = useState(false);
+  const [vaccinationReminderDatePickerOpen, setVaccinationReminderDatePickerOpen] = useState(false);
   const [sideDurationTarget, setSideDurationTarget] = useState<"left" | "right" | null>(null);
 
   useEffect(() => {
@@ -284,6 +294,17 @@ export function RecordDetailSheet({
     setDoctorName(prefill?.doctorName ?? "");
     setCautions(prefill?.cautions ?? "");
     setCautionReminderEnabled(prefill?.cautionReminderEnabled ?? false);
+    setVaccineName(prefill?.vaccineName ?? "");
+    setVaccinationRound(prefill?.vaccinationRound);
+    setVaccinationRoundText(prefill?.vaccinationRoundText ?? "");
+    setVaccinationHospitalName(prefill?.vaccinationHospitalName ?? "");
+    setVaccinationDoctorName(prefill?.vaccinationDoctorName ?? "");
+    setInjectionSite(prefill?.injectionSite);
+    setInjectionSiteText(prefill?.injectionSiteText ?? "");
+    setAftercareNotes(prefill?.aftercareNotes ?? []);
+    setVaccinationReminderSetting(prefill?.vaccinationReminderSetting ?? "none");
+    setVaccinationDateKey(prefill?.dateKey ?? new Date().toLocaleDateString("sv-SE"));
+    setVaccinationCustomReminderAt(prefill?.vaccinationCustomReminderAt ?? "");
     const note = prefill?.notes ?? "";
     if (nextCat === "food" || nextCat === "snack") {
       const [namePart, ...rest] = note.split(" · ");
@@ -312,6 +333,8 @@ export function RecordDetailSheet({
     setTimePickerTarget(null);
     setDurationPickerOpen(false);
     setNextDatePickerOpen(false);
+    setVaccinationDatePickerOpen(false);
+    setVaccinationReminderDatePickerOpen(false);
     setSideDurationTarget(null);
     setAddingIngredient(false);
     setNewIngredientName("");
@@ -363,6 +386,9 @@ export function RecordDetailSheet({
   const nextAtMatch = /(?:^|\s)(\d{1,2}):(\d{2})$/.exec(nextAt.trim());
   const nextAtTime = nextAtMatch ? formatHHmm(Number(nextAtMatch[1]), Number(nextAtMatch[2])) : "";
   const nextAtDate = nextAtMatch ? nextAt.slice(0, nextAtMatch.index).trim() : nextAt;
+  const customReminderMatch = /(?:^|\s)(\d{1,2}):(\d{2})$/.exec(vaccinationCustomReminderAt.trim());
+  const customReminderTime = customReminderMatch ? formatHHmm(Number(customReminderMatch[1]), Number(customReminderMatch[2])) : "";
+  const customReminderDate = customReminderMatch ? vaccinationCustomReminderAt.slice(0, customReminderMatch.index).trim() : vaccinationCustomReminderAt;
   const normalizedDoseValue = doseValue.trim().replace(",", ".");
   const resolvedDoseUnit = doseUnit === CUSTOM_DOSE_UNIT ? customDoseUnit.trim() : doseUnit;
   const numericDoseValue = Number.parseFloat(normalizedDoseValue);
@@ -422,6 +448,8 @@ export function RecordDetailSheet({
     setTimeError("");
     if (target === "nextAt") {
       setNextAt([nextAtDate, valueHHmm].filter(Boolean).join(" "));
+    } else if (target === "vaccinationReminder") {
+      setVaccinationCustomReminderAt([customReminderDate, valueHHmm].filter(Boolean).join(" "));
     } else if (target === "end") {
       setEndTime(valueHHmm);
       if (isValidClockInput(time)) setDuration(String(elapsedClockMinutes(time, valueHHmm)));
@@ -499,6 +527,22 @@ export function RecordDetailSheet({
     }
     if (builtinId === "other" && !recordTitle.trim()) {
       Alert.alert("기록 이름을 입력해 주세요");
+      return;
+    }
+    if (builtinId === "vaccination" && (!vaccineName.trim() || !vaccinationRound || (vaccinationRound === "other" && !vaccinationRoundText.trim()))) {
+      Alert.alert("예방접종 정보를 확인해 주세요", "백신 이름과 접종 회차를 입력해 주세요.");
+      return;
+    }
+    if (builtinId === "vaccination" && injectionSite === "other" && !injectionSiteText.trim()) {
+      Alert.alert("접종 부위를 입력해 주세요");
+      return;
+    }
+    if (builtinId === "vaccination" && vaccinationReminderSetting !== "none" && (!nextAtDate || !nextAtTime)) {
+      Alert.alert("다음 접종 일정을 확인해 주세요", "알림을 사용하려면 다음 접종 날짜와 시간을 모두 선택해 주세요.");
+      return;
+    }
+    if (builtinId === "vaccination" && vaccinationReminderSetting === "custom" && (!customReminderDate || !customReminderTime)) {
+      Alert.alert("직접 알림 시간을 확인해 주세요", "알림 날짜와 시간을 모두 선택해 주세요.");
       return;
     }
     const isFood = builtinId === "food" || builtinId === "snack";
@@ -581,13 +625,23 @@ export function RecordDetailSheet({
         doctorName: builtinId === "doctor" ? doctorName.trim() || undefined : undefined,
         cautions: builtinId === "doctor" ? cautions.trim() || undefined : undefined,
         cautionReminderEnabled: builtinId === "doctor" ? cautionReminderEnabled : undefined,
+        vaccineName: builtinId === "vaccination" ? vaccineName.trim() : undefined,
+        vaccinationRound: builtinId === "vaccination" ? vaccinationRound : undefined,
+        vaccinationRoundText: builtinId === "vaccination" && vaccinationRound === "other" ? vaccinationRoundText.trim() || undefined : undefined,
+        vaccinationHospitalName: builtinId === "vaccination" ? vaccinationHospitalName.trim() || undefined : undefined,
+        vaccinationDoctorName: builtinId === "vaccination" ? vaccinationDoctorName.trim() || undefined : undefined,
+        injectionSite: builtinId === "vaccination" ? injectionSite : undefined,
+        injectionSiteText: builtinId === "vaccination" && injectionSite === "other" ? injectionSiteText.trim() || undefined : undefined,
+        aftercareNotes: builtinId === "vaccination" && aftercareNotes.length ? aftercareNotes : undefined,
+        vaccinationReminderSetting: builtinId === "vaccination" ? vaccinationReminderSetting : undefined,
+        vaccinationCustomReminderAt: builtinId === "vaccination" && vaccinationReminderSetting === "custom" ? vaccinationCustomReminderAt || undefined : undefined,
         voice,
         source: prefill?.source ?? (voice ? "voice" : "manual"),
         rawTranscript: prefill?.rawTranscript,
         confidence: prefill?.confidence,
         flags: prefill?.flags,
         createdBy: prefill?.createdBy,
-        dateKey: prefill?.dateKey,
+        dateKey: builtinId === "vaccination" ? vaccinationDateKey : prefill?.dateKey,
       },
       prefill?.editId,
     );
@@ -901,6 +955,56 @@ export function RecordDetailSheet({
             </>
           )}
 
+          {builtinId === "vaccination" && (
+            <>
+              <Text style={styles.fieldLabel}>백신 이름</Text>
+              <TextInput style={styles.input} value={vaccineName} onChangeText={setVaccineName} placeholder="예: B형간염, DTaP, Hib, 폐렴구균" placeholderTextColor={colors.faint} />
+              <Text style={styles.fieldLabel}>접종 회차</Text>
+              <LabeledChipRow options={[
+                { value: "first", label: "1차" }, { value: "second", label: "2차" }, { value: "third", label: "3차" }, { value: "booster", label: "추가" }, { value: "other", label: "기타" },
+              ]} value={vaccinationRound ?? ""} onChange={(value) => setVaccinationRound(value as BabyLogEntry["vaccinationRound"] || undefined)} />
+              {vaccinationRound === "other" ? <TextInput style={[styles.input, { marginTop: 8 }]} value={vaccinationRoundText} onChangeText={setVaccinationRoundText} placeholder="회차를 입력해 주세요" placeholderTextColor={colors.faint} /> : null}
+              <DatePickerField label="접종일" valueDateKey={vaccinationDateKey} onPress={() => setVaccinationDatePickerOpen(true)} />
+              <TimeOfDayPickerField label="접종 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
+              <Text style={styles.fieldLabel}>병원 이름 (선택)</Text>
+              <TextInput style={styles.input} value={vaccinationHospitalName} onChangeText={setVaccinationHospitalName} placeholder="예: ○○소아과" placeholderTextColor={colors.faint} />
+              <Text style={styles.fieldLabel}>의사 이름 (선택)</Text>
+              <TextInput style={styles.input} value={vaccinationDoctorName} onChangeText={setVaccinationDoctorName} placeholder="의사 이름" placeholderTextColor={colors.faint} />
+              <Text style={styles.fieldLabel}>접종 부위 (선택)</Text>
+              <LabeledChipRow options={[
+                { value: "left_thigh", label: "왼쪽 허벅지" }, { value: "right_thigh", label: "오른쪽 허벅지" }, { value: "left_arm", label: "왼쪽 팔" }, { value: "right_arm", label: "오른쪽 팔" }, { value: "other", label: "기타" },
+              ]} value={injectionSite ?? ""} onChange={(value) => setInjectionSite(value as BabyLogEntry["injectionSite"] || undefined)} />
+              {injectionSite === "other" ? <TextInput style={[styles.input, { marginTop: 8 }]} value={injectionSiteText} onChangeText={setInjectionSiteText} placeholder="접종 부위를 입력해 주세요" placeholderTextColor={colors.faint} /> : null}
+              <Text style={styles.fieldLabel}>접종 후 메모 (선택)</Text>
+              <View style={styles.chipRow}>
+                {["미열", "붓기", "보챔", "평소와 같음", "잘 먹음", "잠이 많음"].map((item) => {
+                  const selected = aftercareNotes.includes(item);
+                  return <Pressable key={item} style={[styles.chip, selected && styles.chipSel]} onPress={() => setAftercareNotes((current) => selected ? current.filter((value) => value !== item) : [...current, item])}><Text style={[styles.chipText, selected && styles.chipTextSel]}>{item}</Text></Pressable>;
+                })}
+              </View>
+              <DatePickerField label="다음 접종 날짜 (선택)" valueDateKey={nextAtDate} onPress={() => setNextDatePickerOpen(true)} />
+              <TimeOfDayPickerField label="다음 접종 시간 (선택)" valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
+              <Text style={styles.fieldLabel}>다음 접종 알림</Text>
+              <LabeledChipRow options={[
+                { value: "none", label: "없음" }, { value: "one_day_before", label: "하루 전" }, { value: "three_days_before", label: "3일 전" }, { value: "custom", label: "직접 설정" },
+              ]} value={vaccinationReminderSetting ?? "none"} onChange={(value) => {
+                const next = (value || "none") as BabyLogEntry["vaccinationReminderSetting"];
+                if (next !== "none" && (!nextAtDate || !nextAtTime)) {
+                  Alert.alert("다음 접종 일정을 먼저 선택해 주세요");
+                  return;
+                }
+                setVaccinationReminderSetting(next);
+              }} />
+              {!nextAtDate || !nextAtTime ? <Text style={styles.readOnlyHint}>다음 접종 날짜와 시간을 선택하면 알림 옵션을 사용할 수 있어요.</Text> : null}
+              {vaccinationReminderSetting === "custom" ? (
+                <>
+                  <DatePickerField label="알림 날짜" valueDateKey={customReminderDate} onPress={() => setVaccinationReminderDatePickerOpen(true)} />
+                  <TimeOfDayPickerField label="알림 시간" valueHHmm={customReminderTime} onPress={() => setTimePickerTarget("vaccinationReminder")} />
+                </>
+              ) : null}
+            </>
+          )}
+
           {builtinId === "doctor" && (
             <>
               <Text style={styles.fieldLabel}>방문 유형</Text>
@@ -955,21 +1059,6 @@ export function RecordDetailSheet({
                 </View>
                 <Switch value={cautionReminderEnabled} onValueChange={setCautionReminderEnabled} disabled={!nextAtDate || !nextAtTime} trackColor={{ false: colors.border, true: colors.amber }} />
               </View>
-              {onOpenGrowthRecord ? (
-                <Pressable
-                  style={styles.growthLink}
-                  onPress={() => {
-                    handleSave();
-                    setTimeout(onOpenGrowthRecord, 120);
-                  }}
-                >
-                  <View style={styles.growthLinkCopy}>
-                    <Text style={styles.growthLinkTitle}>이번 방문 성장 기록 추가</Text>
-                    <Text style={styles.growthLinkBody}>키·몸무게·머리둘레는 별도 성장 기록으로 저장돼요.</Text>
-                  </View>
-                  <Text style={styles.growthLinkArrow}>›</Text>
-                </Pressable>
-              ) : null}
             </>
           )}
 
@@ -997,7 +1086,7 @@ export function RecordDetailSheet({
             </>
           )}
 
-          {builtinId !== "sleep" && builtinId !== "breast" && builtinId !== "pump" && builtinId !== "med" && builtinId !== "doctor" && builtinId !== "memo" && builtinId !== "other" && !(c.isCustom && (c.inputMode ?? "memo") === "duration") && (
+          {builtinId !== "sleep" && builtinId !== "breast" && builtinId !== "pump" && builtinId !== "med" && builtinId !== "doctor" && builtinId !== "vaccination" && builtinId !== "memo" && builtinId !== "other" && !(c.isCustom && (c.inputMode ?? "memo") === "duration") && (
             <TimeOfDayPickerField label="시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
           )}
 
@@ -1099,20 +1188,20 @@ export function RecordDetailSheet({
       </Pressable>
       <TimePickerSheet
         visible={timePickerTarget !== null}
-        valueHHmm={timePickerTarget === "end" ? endTime : timePickerTarget === "nextAt" ? nextAtTime : time}
-        title={timePickerTarget === "end" ? "종료 시간" : timePickerTarget === "nextAt" ? (builtinId === "med" ? "다음 투약 시간" : "다음 예약 시간") : "시간 선택"}
+        valueHHmm={timePickerTarget === "end" ? endTime : timePickerTarget === "nextAt" ? nextAtTime : timePickerTarget === "vaccinationReminder" ? customReminderTime : time}
+        title={timePickerTarget === "end" ? "종료 시간" : timePickerTarget === "nextAt" ? (builtinId === "med" ? "다음 투약 시간" : builtinId === "vaccination" ? "다음 접종 시간" : "다음 예약 시간") : timePickerTarget === "vaccinationReminder" ? "알림 시간" : "시간 선택"}
         onCancel={() => setTimePickerTarget(null)}
         onConfirm={confirmTimePicker}
         onClear={timePickerTarget === "end"
           ? () => { setEndTime(""); setDuration(""); setTimePickerTarget(null); }
           : timePickerTarget === "nextAt"
-            ? () => { setNextAt(nextAtDate); setMedicationReminderEnabled(false); setCautionReminderEnabled(false); setTimePickerTarget(null); }
+            ? () => { setNextAt(nextAtDate); setMedicationReminderEnabled(false); setCautionReminderEnabled(false); setVaccinationReminderSetting("none"); setVaccinationCustomReminderAt(""); setTimePickerTarget(null); }
             : undefined}
       />
       <DatePickerSheet
         visible={nextDatePickerOpen}
         valueDateKey={nextAtDate}
-        title={builtinId === "med" ? "다음 투약 날짜" : "다음 예약 날짜"}
+        title={builtinId === "med" ? "다음 투약 날짜" : builtinId === "vaccination" ? "다음 접종 날짜" : "다음 예약 날짜"}
         minYear={new Date().getFullYear() - 1}
         maxYear={new Date().getFullYear() + 10}
         onCancel={() => setNextDatePickerOpen(false)}
@@ -1124,8 +1213,28 @@ export function RecordDetailSheet({
           setNextAt(nextAtTime);
           setMedicationReminderEnabled(false);
           setCautionReminderEnabled(false);
+          setVaccinationReminderSetting("none");
+          setVaccinationCustomReminderAt("");
           setNextDatePickerOpen(false);
         }}
+      />
+      <DatePickerSheet
+        visible={vaccinationDatePickerOpen}
+        valueDateKey={vaccinationDateKey}
+        title="접종일 선택"
+        minYear={1900}
+        maxYear={new Date().getFullYear()}
+        onCancel={() => setVaccinationDatePickerOpen(false)}
+        onConfirm={(dateKey) => { setVaccinationDateKey(dateKey); setVaccinationDatePickerOpen(false); }}
+      />
+      <DatePickerSheet
+        visible={vaccinationReminderDatePickerOpen}
+        valueDateKey={customReminderDate}
+        title="알림 날짜"
+        minYear={new Date().getFullYear() - 1}
+        maxYear={new Date().getFullYear() + 10}
+        onCancel={() => setVaccinationReminderDatePickerOpen(false)}
+        onConfirm={(dateKey) => { setVaccinationCustomReminderAt([dateKey, customReminderTime].filter(Boolean).join(" ")); setVaccinationReminderDatePickerOpen(false); }}
       />
       <DurationPickerSheet
         visible={durationPickerOpen}

@@ -17,6 +17,7 @@ export type BabyAgeFormat = "days" | "monthsDays" | "weeks";
 export type LoginMethod = "apple" | "google" | "kakao" | "email" | "demo";
 
 export type AppSettings = {
+  settingsSchemaVersion: 2;
   timers: {
     breastfeeding: boolean;
     switchBreastSide: boolean;
@@ -75,6 +76,7 @@ export const DEFAULT_CORE_ACTIONS: OneTouchAction[] = [
 ];
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
+  settingsSchemaVersion: 2,
   timers: {
     breastfeeding: true,
     switchBreastSide: true,
@@ -147,7 +149,10 @@ export function normalizeAppSettings(value: Partial<AppSettings> | null | undefi
     ...order,
     ...ALL_ONE_TOUCH_ACTIONS.filter((action) => !order.includes(action)),
   ];
-  const requestedVisible = visible.length ? visible : [...ALL_ONE_TOUCH_ACTIONS];
+  const requestedVisible = visible.length ? [...visible] : [...ALL_ONE_TOUCH_ACTIONS];
+  if (value?.settingsSchemaVersion !== 2 && !requestedVisible.includes("vaccination")) {
+    requestedVisible.push("vaccination");
+  }
   const normalizedVisible = [
     ...requestedVisible,
     ...completeOrder.filter((action) => !requestedVisible.includes(action)),

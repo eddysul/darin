@@ -17,6 +17,7 @@ export type OneTouchAction =
   | "temp"
   | "med"
   | "doctor"
+  | "vaccination"
   | "memo"
   | "other";
 
@@ -45,6 +46,7 @@ export const QUICK_RECORD_ACTIONS: QuickRecordActionDefinition[] = [
   { id: "temp", label: "체온", cat: "temp", core: false },
   { id: "med", label: "약", cat: "med", core: false },
   { id: "doctor", label: "진료", cat: "doctor", core: false },
+  { id: "vaccination", label: "예방접종", cat: "vaccination", core: false },
   { id: "memo", label: "빠른 메모", cat: "memo", core: false },
   { id: "other", label: "기타", cat: "other", core: false },
 ];

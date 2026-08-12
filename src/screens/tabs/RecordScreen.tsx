@@ -296,6 +296,16 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
         doctorName: entry.doctorName,
         cautions: entry.cautions,
         cautionReminderEnabled: entry.cautionReminderEnabled,
+        vaccineName: entry.vaccineName,
+        vaccinationRound: entry.vaccinationRound,
+        vaccinationRoundText: entry.vaccinationRoundText,
+        vaccinationHospitalName: entry.vaccinationHospitalName,
+        vaccinationDoctorName: entry.vaccinationDoctorName,
+        injectionSite: entry.injectionSite,
+        injectionSiteText: entry.injectionSiteText,
+        aftercareNotes: entry.aftercareNotes,
+        vaccinationReminderSetting: entry.vaccinationReminderSetting,
+        vaccinationCustomReminderAt: entry.vaccinationCustomReminderAt,
       });
     },
     [allowAdd, me, myFamilyRole],
@@ -784,14 +794,6 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
           setPrefill(null);
         }}
         onSave={handleSave}
-        onOpenGrowthRecord={
-          sheetCat === "doctor"
-            ? () => {
-                setGrowthMeasuredAt(prefill?.dateKey ?? selectedDateKey);
-                setTimeout(() => setGrowthRecordOpen(true), 120);
-              }
-            : undefined
-        }
         onDelete={
           allowDelete
             ? (id) => {

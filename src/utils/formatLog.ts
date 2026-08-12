@@ -32,6 +32,11 @@ export function formatLogMeta(
     visitType?: "checkup" | "illness";
     doctorName?: string;
     cautions?: string;
+    vaccineName?: string;
+    vaccinationRound?: "first" | "second" | "third" | "booster" | "other";
+    vaccinationRoundText?: string;
+    vaccinationHospitalName?: string;
+    aftercareNotes?: string[];
   },
   customCategories: CustomCategory[] = [],
 ): string {
@@ -52,6 +57,13 @@ export function formatLogMeta(
   }
   if (entry.cat === "doctor" && entry.visitType) parts.push(entry.visitType === "checkup" ? "검진" : "질환");
   if (entry.cat === "doctor" && entry.doctorName) parts.push(entry.doctorName);
+  if (entry.cat === "vaccination") {
+    if (entry.vaccineName) parts.push(entry.vaccineName);
+    const roundLabels = { first: "1차", second: "2차", third: "3차", booster: "추가", other: entry.vaccinationRoundText ?? "기타" } as const;
+    if (entry.vaccinationRound) parts.push(roundLabels[entry.vaccinationRound]);
+    if (entry.vaccinationHospitalName) parts.push(entry.vaccinationHospitalName);
+    if (entry.aftercareNotes?.length) parts.push(entry.aftercareNotes.join(", "));
+  }
   if (entry.chip) parts.push(entry.chip);
   if (entry.chip2) parts.push(entry.chip2);
   if (entry.stoolState) parts.push(entry.stoolState);

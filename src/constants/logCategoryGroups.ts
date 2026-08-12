@@ -6,7 +6,7 @@ export const LOG_GROUP_CATEGORIES: Record<LogCategoryGroup, BabyLogCategoryId[]>
   sleep: ["sleep"],
   diaper: ["diaper"],
   medication: ["med"],
-  health: ["temp", "doctor", "bath"],
+  health: ["temp", "doctor", "vaccination", "bath"],
   mood: ["tummy", "play"],
   note: ["memo", "other"],
 };

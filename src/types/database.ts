@@ -78,6 +78,16 @@ export type CareLogPayload = {
   doctorName?: string;
   cautions?: string;
   cautionReminderEnabled?: boolean;
+  vaccineName?: string;
+  vaccinationRound?: "first" | "second" | "third" | "booster" | "other";
+  vaccinationRoundText?: string;
+  vaccinationHospitalName?: string;
+  vaccinationDoctorName?: string;
+  injectionSite?: "left_thigh" | "right_thigh" | "left_arm" | "right_arm" | "other";
+  injectionSiteText?: string;
+  aftercareNotes?: string[];
+  vaccinationReminderSetting?: "none" | "one_day_before" | "three_days_before" | "custom";
+  vaccinationCustomReminderAt?: string;
   voice?: boolean;
   rawTranscript?: string;
   confidence?: number;

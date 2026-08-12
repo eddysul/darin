@@ -43,6 +43,7 @@ export const categoryColors = {
   pump: "#ec7fb8",
   bath: "#4fa8e0",
   doctor: "#6fcf7a",
+  vaccination: "#6E9FD8",
   temp: "#e8654a",
   med: "#3fa66e",
   snack: "#e0a6a6",

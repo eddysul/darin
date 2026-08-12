@@ -41,6 +41,8 @@ export function longPressSheetPrefill(action: OneTouchAction): RecordSheetPrefil
       return { ...base, cat: "med" };
     case "doctor":
       return { ...base, cat: "doctor" };
+    case "vaccination":
+      return { ...base, cat: "vaccination" };
     case "memo":
       return { ...base, cat: "memo" };
     case "other":

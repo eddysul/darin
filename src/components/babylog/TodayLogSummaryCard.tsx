@@ -180,6 +180,18 @@ export function TodayLogSummaryCard({
       { key: "tummy", label: "터미타임", cats: ["tummy"], cat: "tummy" },
       { key: "play", label: "놀이", cats: ["play"], cat: "play" },
       { key: "doctor", label: "진료", cats: ["doctor"], cat: "doctor" },
+      {
+        key: "vaccination",
+        label: "예방접종",
+        cats: ["vaccination"],
+        cat: "vaccination",
+        detail: () => {
+          const latest = [...logs].filter((entry) => entry.cat === "vaccination").sort((a, b) => b.time.localeCompare(a.time))[0];
+          if (!latest?.vaccineName) return undefined;
+          const round = latest.vaccinationRound === "first" ? "1차" : latest.vaccinationRound === "second" ? "2차" : latest.vaccinationRound === "third" ? "3차" : latest.vaccinationRound === "booster" ? "추가" : latest.vaccinationRoundText;
+          return [latest.vaccineName, round].filter(Boolean).join(" · ");
+        },
+      },
       { key: "water", label: "물", cats: ["water"], cat: "water" },
     ];
 

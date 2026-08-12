@@ -12,6 +12,7 @@ export type BabyLogCategoryId =
   | "pump"
   | "bath"
   | "doctor"
+  | "vaccination"
   | "temp"
   | "med"
   | "snack"
@@ -49,6 +50,7 @@ export const BABY_LOG_CATEGORIES: BabyLogCategory[] = [
   { id: "pump", label: "유축", emoji: "🍼", color: categoryColors.pump, amount: "ml", duration: true },
   { id: "bath", label: "목욕", emoji: "🛁", color: categoryColors.bath, duration: true },
   { id: "doctor", label: "진료", emoji: "🩺", color: categoryColors.doctor },
+  { id: "vaccination", label: "예방접종", emoji: "", color: categoryColors.vaccination },
   { id: "temp", label: "체온", emoji: "🌡️", color: categoryColors.temp, amount: "℃" },
   { id: "med", label: "투약", emoji: "💊", color: categoryColors.med },
   { id: "snack", label: "간식", emoji: "🍎", color: categoryColors.snack },
@@ -80,6 +82,7 @@ export const CAT_HISTORY: Record<BabyLogCategoryId, number[]> = {
   pump: [2, 3, 2, 3, 2, 2],
   bath: [1, 1, 1, 1, 1, 1],
   doctor: [0, 0, 0, 1, 0, 0],
+  vaccination: [0, 0, 0, 0, 0, 0],
   temp: [0, 0, 1, 0, 0, 0],
   med: [1, 1, 1, 0, 1, 1],
   snack: [1, 2, 1, 2, 1, 1],
