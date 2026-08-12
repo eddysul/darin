@@ -67,7 +67,7 @@ export function OneTouchRecordGrid({
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
           <Text style={styles.title}>빠르게 기록하기</Text>
-          <Text style={styles.subtitle}>짧게 탭 · 길게 눌러 상세</Text>
+          <Text style={styles.subtitle}>짧게 탭 기록 추가 · 길게 탭 기록 시작</Text>
         </View>
         {onAdd ? (
           <Pressable
@@ -260,9 +260,17 @@ function ActionTile({
       ]}
       onPressIn={() => onInteractionChange?.(true)}
       onPressOut={() => onInteractionChange?.(false)}
-      onPress={() => onSelect(action.id)}
+      onPress={() => {
+        // An in-progress timer must never open a second quick-record flow.
+        // Open its sheet so the user can pause or finish the same timer.
+        if (inProgress && onOpenActiveTimer) {
+          onOpenActiveTimer(action.id);
+          return;
+        }
+        onSelect(action.id);
+      }}
       onLongPress={() => {
-        if (timerActive && onOpenActiveTimer) {
+        if (inProgress && onOpenActiveTimer) {
           onOpenActiveTimer(action.id);
           return;
         }
@@ -296,7 +304,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 11,
   },
-  headingCopy: { flexDirection: "row", alignItems: "baseline", gap: 10, flexShrink: 1 },
+  headingCopy: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 10, rowGap: 2, flex: 1, paddingRight: 8 },
   title: { fontSize: 18, fontWeight: "800", color: colors.text, letterSpacing: -0.2 },
   subtitle: { fontSize: 11.5, color: colors.faint, flexShrink: 1 },
   countBadge: {

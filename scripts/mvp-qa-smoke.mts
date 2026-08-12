@@ -28,6 +28,12 @@ import { isCustomCategoryKey } from "../src/types/logCategory";
 import { elapsedClockMinutes } from "../src/utils/formatLog";
 import { QUICK_RECORD_ACTIONS } from "../src/constants/quickRecordActions";
 import {
+  buildTimerStopResult,
+  createActiveTimer,
+  pauseTimer,
+  resumeTimer,
+} from "../src/utils/activeTimerOps";
+import {
   clearStorageIssue,
   getStorageIssue,
   reportStorageIssue,
@@ -602,6 +608,24 @@ function log(
     (e) => !isCustomCategoryKey(e.cat) && FEEDING_CATS.includes(e.cat as (typeof FEEDING_CATS)[number]),
   ).length;
   assert.equal(cardCount, buildTodaySummary(sample).feedCount);
+}
+
+// --- Timer lifecycle: fresh starts never inherit the prior timer duration ---
+{
+  const first = createActiveTimer("sleep", "sleep", {
+    segmentStartedAt: new Date(Date.now() - 90_000).toISOString(),
+  });
+  const paused = pauseTimer(first);
+  assert.equal(paused.status, "paused");
+  assert.ok(paused.accumulatedMs >= 89_000, "pause banks the elapsed segment");
+  const resumed = resumeTimer(paused);
+  assert.equal(resumed.status, "running");
+  assert.ok(resumed.accumulatedMs >= paused.accumulatedMs, "resume keeps the paused duration");
+  assert.ok(buildTimerStopResult(resumed).durationMinutes >= 1, "a timer stop persists a positive duration");
+
+  const fresh = createActiveTimer("sleep", "sleep");
+  assert.equal(fresh.accumulatedMs, 0, "a new timer starts with no banked duration");
+  assert.ok(Date.parse(fresh.segmentStartedAt) >= Date.now() - 1_000, "a new timer uses a fresh start timestamp");
 }
 
 // --- Record home quick actions: 6 core + 13 expanded = 19, unique and diaper split ---

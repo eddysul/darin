@@ -14,6 +14,7 @@ import { getCategory } from "../../constants/babyLogCategories";
 import type { BabyLogEntry } from "../../types/babyLog";
 import { dayNavLabel, formatDateKey } from "../../utils/dateKey";
 import { FEEDING_CATS } from "../../utils/reportAggregates";
+import { toMinutes } from "../../utils/formatLog";
 import { isCustomCategoryKey } from "../../types/logCategory";
 import { colors, radius } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
@@ -34,6 +35,7 @@ type MetricCard = {
   label: string;
   value: string;
   detail?: string;
+  recentTime?: string;
   cat: BabyLogCategoryId;
 };
 
@@ -74,6 +76,15 @@ function sumSleepMinutes(logs: BabyLogEntry[]): number {
     .reduce((total, entry) => total + (Number.parseInt(entry.duration ?? "0", 10) || 0), 0);
 }
 
+function latestTime(logs: BabyLogEntry[], predicate: (entry: BabyLogEntry) => boolean): string | undefined {
+  return logs
+    .filter(predicate)
+    .reduce<BabyLogEntry | undefined>(
+      (latest, entry) => (!latest || toMinutes(entry.time) > toMinutes(latest.time) ? entry : latest),
+      undefined,
+    )?.time;
+}
+
 export function TodayLogSummaryCard({
   logs,
   dateKey = formatDateKey(),
@@ -94,6 +105,12 @@ export function TodayLogSummaryCard({
     const sleepCount = countCat(logs, ["sleep"]);
     const sleepMinutes = sumSleepMinutes(logs);
     const diaperCount = countCat(logs, ["diaper"]);
+    const lastFeedingTime = latestTime(
+      logs,
+      (entry) => !isCustomCategoryKey(entry.cat) && FEEDING_CATS.includes(entry.cat as BabyLogCategoryId),
+    );
+    const lastSleepTime = latestTime(logs, (entry) => entry.cat === "sleep");
+    const lastDiaperTime = latestTime(logs, (entry) => entry.cat === "diaper");
 
     const core: MetricCard[] = [
       {
@@ -101,6 +118,7 @@ export function TodayLogSummaryCard({
         label: "수유",
         value: `${feedingCount}회`,
         detail: feedingAmount > 0 ? formatVolume(Math.round(feedingAmount)) : undefined,
+        recentTime: lastFeedingTime,
         cat: "formula",
       },
       {
@@ -108,12 +126,14 @@ export function TodayLogSummaryCard({
         label: "수면",
         value: `${sleepCount}회`,
         detail: sleepMinutes > 0 ? formatDuration(sleepMinutes) : undefined,
+        recentTime: lastSleepTime,
         cat: "sleep",
       },
       {
         key: "diaper",
         label: "기저귀",
         value: `${diaperCount}회`,
+        recentTime: lastDiaperTime,
         cat: "diaper",
       },
     ];
@@ -256,6 +276,9 @@ export function TodayLogSummaryCard({
               <Text style={[styles.metricDetail, !metric.detail && styles.metricDetailEmpty]}>
                 {metric.detail ?? " "}
               </Text>
+              <Text style={[styles.metricRecent, !metric.recentTime && styles.metricRecentEmpty]}>
+                {metric.recentTime ? `최근 ${metric.recentTime}` : "최근 없음"}
+              </Text>
             </View>
           );
         })}
@@ -330,7 +353,7 @@ const styles = StyleSheet.create({
     paddingRight: SIDE_PAD + 8,
   },
   metricCard: {
-    minHeight: 118,
+    minHeight: 134,
     paddingHorizontal: 6,
     paddingVertical: 12,
     alignItems: "center",
@@ -356,6 +379,14 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   metricDetailEmpty: { color: "transparent" },
+  metricRecent: {
+    marginTop: 3,
+    fontSize: 9.5,
+    color: colors.muted,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  metricRecentEmpty: { color: "transparent" },
   pageDots: {
     marginTop: 12,
     flexDirection: "row",

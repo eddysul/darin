@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Keyboard,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -287,15 +288,15 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
   const handleOneTouch = (action: OneTouchAction) => {
     if (!allowAdd) return;
     const time = nowTime();
-    if (action === "sleep" && activeSleep) {
-      const elapsed = Math.max(1, elapsedClockMinutes(activeSleep.time, time));
-      const { id, ...entry } = activeSleep;
-      updateLog(id, { ...entry, duration: String(elapsed) });
-      announceCreated({ ...entry, id, duration: String(elapsed) }, "수면 종료 완료");
-      setActiveTimers((prev) => prev.filter((t) => t.kind !== "sleep"));
-      setTimerSheetId((cur) => {
-        const sleep = activeTimers.find((t) => t.kind === "sleep");
-        return sleep && cur === sleep.id ? null : cur;
+    if (action === "sleep") {
+      // Short tap is a normal record-add flow. Only a long press starts the
+      // timer, preventing an accidental open sleep record from being restored.
+      openSheet("sleep", {
+        cat: "sleep",
+        time,
+        dateKey: todayKey,
+        source: "manual",
+        chip: "낮잠",
       });
       return;
     }
@@ -304,7 +305,6 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     let created: BabyLogEntry | null = null;
     if (action === "breastfeeding") created = addLog({ ...base, cat: "breast" });
     if (action === "formula") created = addLog({ ...base, cat: "formula" });
-    if (action === "sleep") created = addLog({ ...base, cat: "sleep", chip: "낮잠" });
     if (action === "urine") created = addLog({ ...base, cat: "diaper", chip: "소변" });
     if (action === "bowel") created = addLog({ ...base, cat: "diaper", chip: "대변" });
     if (action === "pump") created = addLog({ ...base, cat: "pump" });
@@ -329,6 +329,15 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     const existing = activeTimers.find((t) => t.action === action);
     if (existing) {
       setTimerSheetId(existing.id);
+      return;
+    }
+
+    const otherActiveTimer = activeTimers[0];
+    if (otherActiveTimer) {
+      Alert.alert(
+        "진행 중인 기록이 있어요",
+        `${TIMER_LABEL[otherActiveTimer.kind]} 타이머를 먼저 종료해 주세요.`,
+      );
       return;
     }
 
@@ -422,6 +431,9 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
           { ...entry, id, duration: String(result.durationMinutes) },
           "수면 종료 완료",
         );
+        // The log update is optimistic. Suppress the old open sleep record
+        // until its duration reaches state, so it cannot resurrect this timer.
+        suppressedRestoredSleepId.current = id;
       }
     } else if (timer.kind === "breastfeeding") {
       const created = addLog({ ...base, cat: "breast" });
@@ -452,6 +464,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
         const { id, ...entry } = activeSleep;
         updateLog(id, { ...entry, duration: String(elapsed) });
         announceCreated({ ...entry, id, duration: String(elapsed) }, `${record.label} 완료`);
+        suppressedRestoredSleepId.current = id;
         return;
       }
       if (activeSleep && defaults.sleepAction === "start") {
@@ -459,6 +472,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
         const { id, ...entry } = activeSleep;
         updateLog(id, { ...entry, duration: String(elapsed) });
         announceCreated({ ...entry, id, duration: String(elapsed) }, "수면 종료 완료");
+        suppressedRestoredSleepId.current = id;
         return;
       }
     }
