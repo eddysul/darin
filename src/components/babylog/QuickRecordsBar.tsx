@@ -57,7 +57,7 @@ export function QuickRecordsBar({
     <View style={styles.card}>
       <View style={styles.header}>
         <View style={styles.headingCopy}>
-          <Text style={styles.title}>자주 쓰는 기록</Text>
+          <Text style={styles.title}>저장해둔 빠른 기록</Text>
           <Text style={styles.subtitle}>한 번 탭하면 바로 기록돼요.</Text>
         </View>
         <Pressable
@@ -75,7 +75,7 @@ export function QuickRecordsBar({
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {pinned.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>아직 자주 쓰는 기록이 없어요.</Text>
+            <Text style={styles.emptyTitle}>아직 저장해둔 빠른 기록이 없어요.</Text>
             <Text style={styles.emptyBody}>자주 쓰는 조합을 저장해두면 한 번에 기록할 수 있어요.</Text>
           </View>
         ) : null}

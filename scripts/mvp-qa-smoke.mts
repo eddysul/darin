@@ -27,6 +27,7 @@ import { DEMO_CARE_SETUP } from "../src/types/careSetup";
 import { isCustomCategoryKey } from "../src/types/logCategory";
 import { elapsedClockMinutes } from "../src/utils/formatLog";
 import { QUICK_RECORD_ACTIONS } from "../src/constants/quickRecordActions";
+import { FALLBACK_TOP_ACTIONS, rankQuickActions } from "../src/utils/quickCategoryRanking";
 import { diaperCounts, diaperTypeLabel } from "../src/utils/diaperLog";
 import { formatTimelineLabel, formatTimelineSubtitle } from "../src/utils/logSummary";
 import { DEFAULT_QUICK_RECORDS } from "../src/constants/defaultQuickRecords";
@@ -664,6 +665,23 @@ function log(
   }
   const diaperFavorite = DEFAULT_QUICK_RECORDS.find((record) => record.defaults.cat === "diaper");
   assert.equal(diaperFavorite?.defaults.chip, "소변", "the default diaper favorite is one-tap complete");
+}
+
+// --- Collapsed quick grid is recent Top 6; expanded order stays canonical ---
+{
+  const visible = QUICK_RECORD_ACTIONS.map((action) => action.id);
+  assert.deepEqual(rankQuickActions([], visible, new Date("2026-08-12T12:00:00")), FALLBACK_TOP_ACTIONS);
+  const frequent = [
+    ...Array.from({ length: 5 }, (_, index) => log({ id: `med-${index}`, cat: "med", time: `0${index}:00`, dateKey: "2026-08-12" })),
+    ...Array.from({ length: 4 }, (_, index) => log({ id: `temp-${index}`, cat: "temp", time: `0${index}:30`, dateKey: "2026-08-12" })),
+    log({ id: "doctor-a", cat: "doctor", time: "10:00", dateKey: "2026-08-11" }),
+  ];
+  const ranked = rankQuickActions(frequent, visible, new Date("2026-08-12T12:00:00"));
+  assert.equal(ranked.length, 6);
+  assert.equal(ranked[0], "med");
+  assert.equal(ranked[1], "temp");
+  assert.ok(ranked.includes("doctor"));
+  assert.deepEqual(QUICK_RECORD_ACTIONS.slice(0, 6).map((action) => action.id), FALLBACK_TOP_ACTIONS);
 }
 
 // --- Diaper records: legacy labels and a combined change retain correct counts ---

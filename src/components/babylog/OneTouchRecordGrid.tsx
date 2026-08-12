@@ -1,15 +1,16 @@
-import { Fragment, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Fragment, useMemo, useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { getCategory } from "../../constants/babyLogCategories";
 import {
   QUICK_RECORD_ACTIONS,
   type OneTouchAction,
 } from "../../constants/quickRecordActions";
-import { DEFAULT_CORE_ACTIONS } from "../../types/appSettings";
 import type { CustomCategory } from "../../types/logCategory";
 import { colors } from "../../theme";
 import { BabyLogIcon, CATEGORY_ICONS } from "./BabyLogIcon";
 import { CustomTemplateIcon } from "./CustomTemplateIcon";
+import type { BabyLogEntry } from "../../types/babyLog";
+import { rankQuickActions } from "../../utils/quickCategoryRanking";
 
 export type { OneTouchAction } from "../../constants/quickRecordActions";
 
@@ -30,6 +31,8 @@ type Props = {
   /** Opens create flow for a new custom category (header "새로 추가"). */
   onAdd?: () => void;
   onSelectCustom?: (category: CustomCategory) => void;
+  logs?: BabyLogEntry[];
+  babyScopeKey?: string;
 };
 
 export function OneTouchRecordGrid({
@@ -46,27 +49,23 @@ export function OneTouchRecordGrid({
   onOpenGrowth,
   onAdd,
   onSelectCustom,
+  logs = [],
+  babyScopeKey,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const orderedVisible = visibleActions ?? QUICK_RECORD_ACTIONS.map((action) => action.id);
-  const coreIds = coreActions ?? DEFAULT_CORE_ACTIONS;
-  const core = QUICK_RECORD_ACTIONS.filter(
-    (action) => orderedVisible.includes(action.id) && coreIds.includes(action.id),
-  ).sort(
-    (a, b) => orderedVisible.indexOf(a.id) - orderedVisible.indexOf(b.id),
-  );
-  const extra = QUICK_RECORD_ACTIONS.filter(
-    (action) => orderedVisible.includes(action.id) && !coreIds.includes(action.id),
-  ).sort((a, b) => orderedVisible.indexOf(a.id) - orderedVisible.indexOf(b.id));
-  const visible = expanded ? [...core, ...extra] : core;
-  const canExpand = extra.length > 0 || customCategories.length > 0;
+  void coreActions;
+  const allVisible = QUICK_RECORD_ACTIONS.filter((action) => orderedVisible.includes(action.id));
+  const topIds = useMemo(() => rankQuickActions(logs, orderedVisible), [babyScopeKey, logs, orderedVisible.join("|")]);
+  const visible = expanded ? allVisible : QUICK_RECORD_ACTIONS.filter((action) => topIds.includes(action.id)).sort((a, b) => topIds.indexOf(a.id) - topIds.indexOf(b.id));
+  const canExpand = allVisible.length > visible.length || customCategories.length > 0;
 
   return (
     <View style={styles.section}>
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
           <Text style={styles.title}>빠르게 기록하기</Text>
-          <Text style={styles.subtitle}>탭 기록 작성 · 길게 눌러 타이머 시작</Text>
+          <Text style={styles.subtitle}>탭해서 자세히 기록 · 길게 눌러 타이머 시작</Text>
         </View>
         {onAdd ? (
           <Pressable
@@ -96,12 +95,12 @@ export function OneTouchRecordGrid({
                 onOpenActiveTimer={onOpenActiveTimer}
                 onInteractionChange={onInteractionChange}
               />
-              {action.id === "doctor" && onOpenGrowth ? (
+              {action.id === "vaccination" && onOpenGrowth ? (
                 <GrowthTile disabled={disabled} onPress={onOpenGrowth} />
               ) : null}
             </Fragment>
           ))}
-          {!visible.some((action) => action.id === "doctor") && onOpenGrowth ? (
+          {!visible.some((action) => action.id === "vaccination") && onOpenGrowth ? (
             <GrowthTile disabled={disabled} onPress={onOpenGrowth} />
           ) : null}
           {customCategories.map((category) => (
@@ -115,11 +114,7 @@ export function OneTouchRecordGrid({
           ))}
         </View>
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.row}
-        >
+        <View style={styles.gridExpanded}>
           {visible.map((action) => (
             <ActionTile
               key={action.id}
@@ -131,20 +126,13 @@ export function OneTouchRecordGrid({
               onLongPress={onLongPress}
               onOpenActiveTimer={onOpenActiveTimer}
               onInteractionChange={onInteractionChange}
+              expanded
             />
           ))}
-          {canExpand ? (
-            <Pressable
-              style={({ pressed }) => [styles.expandTile, pressed && styles.pressed]}
-              onPress={() => setExpanded(true)}
-              accessibilityRole="button"
-              accessibilityLabel="더 보기"
-            >
-              <Text style={styles.expandTileLabel}>더 보기</Text>
-            </Pressable>
-          ) : null}
-        </ScrollView>
+        </View>
       )}
+
+      {!expanded && canExpand ? <Pressable style={({ pressed }) => [styles.collapseButton, pressed && styles.expandPressed]} onPress={() => setExpanded(true)} accessibilityRole="button" accessibilityLabel="더 보기"><Text style={styles.expandText}>더 보기</Text></Pressable> : null}
 
       {expanded && canExpand ? (
         <Pressable

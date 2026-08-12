@@ -687,6 +687,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
             settings.categories.visible.includes(action),
           )}
           coreActions={settings.categories.core}
+          logs={logs}
+          babyScopeKey={localDataScope?.babyId}
           customCategories={customCategories}
           disabled={!allowAdd}
           onSelect={handleOneTouch}
