@@ -66,10 +66,10 @@ export const ALL_ONE_TOUCH_ACTIONS = QUICK_RECORD_ACTIONS.map((action) => action
 export const DEFAULT_CORE_ACTIONS: OneTouchAction[] = [
   "breastfeeding",
   "formula",
-  "bowel",
-  "urine",
+  "diaper",
   "sleep",
   "pump",
+  "storedMilk",
 ];
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -121,10 +121,18 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 function validActions(value: unknown): OneTouchAction[] {
   if (!Array.isArray(value)) return [];
   const allowed = new Set<string>(ALL_ONE_TOUCH_ACTIONS);
+  const legacyActionMap: Record<string, OneTouchAction> = {
+    bowel: "diaper",
+    urine: "diaper",
+  };
   return value.filter(
     (item, index, values): item is OneTouchAction =>
-      typeof item === "string" && allowed.has(item) && values.indexOf(item) === index,
-  );
+      typeof item === "string" &&
+      allowed.has(legacyActionMap[item] ?? item) &&
+      values.findIndex((candidate) =>
+        typeof candidate === "string" && (legacyActionMap[candidate] ?? candidate) === (legacyActionMap[item] ?? item),
+      ) === index,
+  ).map((item) => legacyActionMap[item] ?? item) as OneTouchAction[];
 }
 
 export function normalizeAppSettings(value: Partial<AppSettings> | null | undefined): AppSettings {

@@ -34,6 +34,10 @@ import {
   TimePickerSheet,
 } from "../inputs/TimePickerFields";
 
+function normalizeDiaperChip(value: string): string {
+  return value === "둘다" || value === "둘 다" ? "소변+대변" : value;
+}
+
 export type RecordSheetPrefill = Partial<BabyLogEntry> & { editId?: string };
 
 type Props = {
@@ -118,7 +122,7 @@ export function RecordDetailSheet({
     setSelectedCat(nextCat);
     setTimeError("");
     setTime(isValidClockInput(prefill?.time ?? "") ? prefill!.time! : nowTime());
-    setChip(prefill?.chip ?? "");
+    setChip(nextCat === "diaper" ? normalizeDiaperChip(prefill?.chip ?? "") : prefill?.chip ?? "");
     setChip2(prefill?.chip2 ?? "");
     setStoolState(prefill?.stoolState ?? "");
     const storedAmount = prefill?.amount ?? "";
@@ -208,6 +212,10 @@ export function RecordDetailSheet({
       return;
     }
     setTimeError("");
+    if (builtinId === "diaper" && !["소변", "대변", "소변+대변"].includes(chip)) {
+      setTimeError("소변, 대변 또는 소변+대변 중 하나를 선택해 주세요.");
+      return;
+    }
     const isFood = builtinId === "food" || builtinId === "snack";
     const isMed = builtinId === "med";
     const customInputMode = c.isCustom ? c.inputMode ?? "memo" : null;
@@ -228,14 +236,21 @@ export function RecordDetailSheet({
         : effectiveCat === "temp"
           ? temperatureToCelsius(amount, settings.units.temperature)
           : amount;
+    const diaperType = builtinId === "diaper" ? chip : "";
     onSave(
       {
         cat: effectiveCat,
         time,
         chip: chip || undefined,
-        chip2: chip2 || undefined,
-        stoolState: stoolState || undefined,
-        amount: canonicalAmount || undefined,
+        // The existing payload fields let us add this without a schema change:
+        // amount = urine amount; chip2 = stool amount; stoolState = consistency.
+        chip2: builtinId === "diaper" && diaperType === "소변" ? undefined : chip2 || undefined,
+        stoolState:
+          builtinId === "diaper" && diaperType === "소변" ? undefined : stoolState || undefined,
+        amount:
+          builtinId === "diaper" && diaperType === "대변"
+            ? undefined
+            : canonicalAmount || undefined,
         duration: timedDuration || undefined,
         notes: composedNotes || undefined,
         title: recordTitle.trim() || undefined,
@@ -356,26 +371,26 @@ export function RecordDetailSheet({
 
           {builtinId === "diaper" && (
             <>
-              <Text style={styles.fieldLabel}>기저귀 종류</Text>
-              <ChipRow options={["소변", "대변", "둘 다"]} value={chip} onChange={setChip} />
-              {chip !== "소변" ? (
+              <Text style={styles.fieldLabel}>무엇이 있었나요?</Text>
+              <ChipRow options={["소변", "대변", "소변+대변"]} value={chip} onChange={setChip} />
+              {(chip === "소변" || chip === "소변+대변") ? (
                 <>
-                  <Text style={styles.fieldLabel}>색깔</Text>
+                  <Text style={styles.fieldLabel}>소변 양</Text>
+                  <ChipRow options={["적음", "보통", "많음"]} value={amount} onChange={setAmount} />
+                </>
+              ) : null}
+              {(chip === "대변" || chip === "소변+대변") ? (
+                <>
+                  <Text style={styles.fieldLabel}>대변 상태</Text>
                   <ChipRow
-                    options={["노란색", "황금색", "녹색", "갈색", "검정"]}
-                    value={chip2}
-                    onChange={setChip2}
-                  />
-                  <Text style={styles.fieldLabel}>상태</Text>
-                  <ChipRow
-                    options={["보통", "묽음", "딱딱함", "설사", "변비"]}
+                    options={["보통", "묽음", "딱딱함", "설사", "기타"]}
                     value={stoolState}
                     onChange={setStoolState}
                   />
+                  <Text style={styles.fieldLabel}>대변 양</Text>
+                  <ChipRow options={["적음", "보통", "많음"]} value={chip2} onChange={setChip2} />
                 </>
               ) : null}
-              <Text style={styles.fieldLabel}>양</Text>
-              <ChipRow options={["적음", "보통", "많음"]} value={amount} onChange={setAmount} />
             </>
           )}
 

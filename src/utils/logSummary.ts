@@ -5,6 +5,7 @@ import { isCustomCategoryKey } from "../types/logCategory";
 import { resolveLogCategory } from "./resolveLogCategory";
 import { getAppSettings } from "./appSettingsStore";
 import { formatTemperature, formatVolume } from "./measurementFormat";
+import { diaperTypeLabel } from "./diaperLog";
 
 export function formatDisplayTime(
   time: string,
@@ -34,8 +35,11 @@ export function formatTimelineLabel(entry: BabyLogEntry, customCategories: Custo
       return "낮잠 시작";
     }
     if (entry.cat === "diaper") {
-      const parts = ["기저귀 교체"];
-      if (entry.chip) parts.push(entry.chip);
+      const parts = ["기저귀"];
+      const typeLabel = diaperTypeLabel(entry);
+      if (typeLabel) parts.push(typeLabel);
+      // New records use chip2 for stool amount. Historic colour values remain
+      // readable, so no existing care log needs migration.
       if (entry.chip2) parts.push(entry.chip2);
       if (entry.stoolState) parts.push(entry.stoolState);
       return parts.join(" · ");

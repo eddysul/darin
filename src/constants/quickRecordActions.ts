@@ -3,8 +3,7 @@ import type { BabyLogCategoryId } from "./babyLogCategories";
 export type OneTouchAction =
   | "breastfeeding"
   | "formula"
-  | "bowel"
-  | "urine"
+  | "diaper"
   | "sleep"
   | "pump"
   | "storedMilk"
@@ -32,11 +31,10 @@ export type QuickRecordActionDefinition = {
 export const QUICK_RECORD_ACTIONS: QuickRecordActionDefinition[] = [
   { id: "breastfeeding", label: "모유수유", cat: "breast", core: true },
   { id: "formula", label: "분유", cat: "formula", core: true },
-  { id: "bowel", label: "대변", cat: "diaper", chip: "대변", core: true },
-  { id: "urine", label: "소변", cat: "diaper", chip: "소변", core: true },
+  { id: "diaper", label: "기저귀", cat: "diaper", core: true },
   { id: "sleep", label: "수면", cat: "sleep", core: true },
   { id: "pump", label: "유축", cat: "pump", core: true },
-  { id: "storedMilk", label: "저장 모유 수유", cat: "storedMilk", core: false },
+  { id: "storedMilk", label: "저장 모유 수유", cat: "storedMilk", core: true },
   { id: "food", label: "이유식", cat: "food", core: false },
   { id: "water", label: "물", cat: "water", core: false },
   { id: "snack", label: "간식", cat: "snack", core: false },

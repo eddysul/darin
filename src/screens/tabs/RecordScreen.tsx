@@ -73,8 +73,7 @@ type Props = {
 const ACTION_TOAST: Record<OneTouchAction, string> = {
   breastfeeding: "모유수유 기록 완료",
   formula: "분유 기록 완료",
-  bowel: "대변 기록 완료",
-  urine: "소변 기록 완료",
+  diaper: "기저귀 기록 완료",
   sleep: "수면 기록 완료",
   pump: "유축 기록 완료",
   storedMilk: "저장 모유 수유 기록 완료",
@@ -303,13 +302,20 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
       });
       return;
     }
+    if (action === "diaper") {
+      openSheet("diaper", {
+        cat: "diaper",
+        time,
+        dateKey: todayKey,
+        source: "manual",
+      });
+      return;
+    }
 
     const base = { time, dateKey: todayKey, source: "manual" as const };
     let created: BabyLogEntry | null = null;
     if (action === "breastfeeding") created = addLog({ ...base, cat: "breast" });
     if (action === "formula") created = addLog({ ...base, cat: "formula" });
-    if (action === "urine") created = addLog({ ...base, cat: "diaper", chip: "소변" });
-    if (action === "bowel") created = addLog({ ...base, cat: "diaper", chip: "대변" });
     if (action === "pump") created = addLog({ ...base, cat: "pump" });
     if (action === "storedMilk") created = addLog({ ...base, cat: "storedMilk" });
     if (action === "food") created = addLog({ ...base, cat: "food" });
@@ -467,6 +473,16 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     if (!allowAdd) return;
     const time = nowTime();
     const { defaults } = record;
+
+    if (defaults.cat === "diaper" && !defaults.chip) {
+      openSheet("diaper", {
+        cat: "diaper",
+        time,
+        dateKey: todayKey,
+        source: "manual",
+      });
+      return;
+    }
 
     if (defaults.cat === "sleep" && (defaults.sleepAction === "start" || !defaults.duration)) {
       if (activeSleep && defaults.sleepAction !== "start") {

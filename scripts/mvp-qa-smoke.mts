@@ -27,6 +27,7 @@ import { DEMO_CARE_SETUP } from "../src/types/careSetup";
 import { isCustomCategoryKey } from "../src/types/logCategory";
 import { elapsedClockMinutes } from "../src/utils/formatLog";
 import { QUICK_RECORD_ACTIONS } from "../src/constants/quickRecordActions";
+import { diaperCounts, diaperTypeLabel } from "../src/utils/diaperLog";
 import {
   buildTimerStopResult,
   createActiveTimer,
@@ -384,10 +385,10 @@ function log(
   assert.deepEqual(DEFAULT_CORE_ACTIONS, [
     "breastfeeding",
     "formula",
-    "bowel",
-    "urine",
+    "diaper",
     "sleep",
     "pump",
+    "storedMilk",
   ]);
   assert.equal(volumeFromMl("120", "oz"), "4.1");
   assert.equal(volumeToMl(volumeFromMl("120", "oz"), "oz"), "121");
@@ -628,16 +629,27 @@ function log(
   assert.ok(Date.parse(fresh.segmentStartedAt) >= Date.now() - 1_000, "a new timer uses a fresh start timestamp");
 }
 
-// --- Record home quick actions: 6 core + 13 expanded = 19, unique and diaper split ---
+// --- Record home quick actions: 6 core + 12 expanded = 18, with one diaper action ---
 {
-  assert.equal(QUICK_RECORD_ACTIONS.length, 19);
+  assert.equal(QUICK_RECORD_ACTIONS.length, 18);
   assert.equal(QUICK_RECORD_ACTIONS.filter((action) => action.core).length, 6);
-  assert.equal(new Set(QUICK_RECORD_ACTIONS.map((action) => action.id)).size, 19);
+  assert.equal(new Set(QUICK_RECORD_ACTIONS.map((action) => action.id)).size, 18);
   assert.deepEqual(
     QUICK_RECORD_ACTIONS.filter((action) => action.cat === "diaper").map((action) => action.chip).sort(),
-    ["대변", "소변"].sort(),
+    [undefined],
   );
   assert.equal(QUICK_RECORD_ACTIONS.find((action) => action.id === "storedMilk")?.label, "저장 모유 수유");
+}
+
+// --- Diaper records: legacy labels and a combined change retain correct counts ---
+{
+  const diapers: BabyLogEntry[] = [
+    log({ id: "diaper-urine", cat: "diaper", time: "08:00", chip: "소변" }),
+    log({ id: "diaper-stool", cat: "diaper", time: "09:00", chip: "대변" }),
+    log({ id: "diaper-both", cat: "diaper", time: "10:00", chip: "둘다" }),
+  ];
+  assert.deepEqual(diaperCounts(diapers), { total: 3, urine: 2, stool: 2 });
+  assert.equal(diaperTypeLabel(diapers[2]), "소변+대변");
 }
 
 // --- Diary compose live summary vs frozen snapshot ---

@@ -19,6 +19,7 @@ import { isCustomCategoryKey } from "../../types/logCategory";
 import { colors, radius } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { formatTemperature, formatVolume } from "../../utils/measurementFormat";
+import { diaperCounts } from "../../utils/diaperLog";
 
 type Props = {
   logs: BabyLogEntry[];
@@ -104,7 +105,7 @@ export function TodayLogSummaryCard({
     const feedingAmount = sumAmount(logs, FEEDING_CATS);
     const sleepCount = countCat(logs, ["sleep"]);
     const sleepMinutes = sumSleepMinutes(logs);
-    const diaperCount = countCat(logs, ["diaper"]);
+    const diaper = diaperCounts(logs);
     const lastFeedingTime = latestTime(
       logs,
       (entry) => !isCustomCategoryKey(entry.cat) && FEEDING_CATS.includes(entry.cat as BabyLogCategoryId),
@@ -132,7 +133,11 @@ export function TodayLogSummaryCard({
       {
         key: "diaper",
         label: "기저귀",
-        value: `${diaperCount}회`,
+        value: `${diaper.total}회`,
+        detail:
+          diaper.urine || diaper.stool
+            ? `소변 ${diaper.urine} · 대변 ${diaper.stool}`
+            : undefined,
         recentTime: lastDiaperTime,
         cat: "diaper",
       },

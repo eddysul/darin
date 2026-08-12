@@ -30,10 +30,8 @@ export function longPressSheetPrefill(action: OneTouchAction): RecordSheetPrefil
     case "water":
     case "milk":
       return { ...base, cat: actionToCategory(action), amount: "" };
-    case "bowel":
-      return { ...base, cat: "diaper", chip: "대변" };
-    case "urine":
-      return { ...base, cat: "diaper", chip: "소변" };
+    case "diaper":
+      return { ...base, cat: "diaper" };
     case "food":
     case "snack":
       return { ...base, cat: actionToCategory(action) };

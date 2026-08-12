@@ -40,11 +40,10 @@ export const BABY_LOG_CATEGORIES: BabyLogCategory[] = [
   { id: "milk", label: "우유", emoji: "", color: categoryColors.milk, amount: "ml" },
   {
     id: "diaper",
-    label: "배변",
+    label: "기저귀",
     emoji: "🧷",
     color: categoryColors.diaper,
-    chips: ["소변", "대변", "둘다"],
-    chips2: ["노란색", "황금색", "녹색", "갈색", "검정"],
+    chips: ["소변", "대변", "소변+대변"],
   },
   { id: "sleep", label: "수면", emoji: "😴", color: categoryColors.sleep, duration: true },
   { id: "pump", label: "유축", emoji: "🍼", color: categoryColors.pump, amount: "ml", duration: true },

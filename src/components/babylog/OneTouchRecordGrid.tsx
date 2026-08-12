@@ -10,7 +10,6 @@ import type { CustomCategory } from "../../types/logCategory";
 import { colors } from "../../theme";
 import { BabyLogIcon, CATEGORY_ICONS } from "./BabyLogIcon";
 import { CustomTemplateIcon } from "./CustomTemplateIcon";
-import { DiaperBowelIcon, DiaperUrineIcon } from "./icons/DiaperActionIcons";
 
 export type { OneTouchAction } from "../../constants/quickRecordActions";
 
@@ -241,12 +240,7 @@ function ActionTile({
   const category = getCategory(action.cat);
   const activeSleep = action.id === "sleep" && sleepActive;
   const inProgress = timerActive || activeSleep;
-  const ActionIcon =
-    action.id === "bowel"
-      ? DiaperBowelIcon
-      : action.id === "urine"
-        ? DiaperUrineIcon
-        : CATEGORY_ICONS[action.cat];
+  const ActionIcon = CATEGORY_ICONS[action.cat];
 
   return (
     <Pressable
