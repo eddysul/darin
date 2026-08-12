@@ -15,15 +15,20 @@ import { formatDateKey } from "../../utils/dateKey";
 import {
   buildTodaySummary,
   categoryCountsLast7,
+  completedSixDaySummary,
   FEEDING_CATS,
   formatSleepDuration,
   getLogsForDay,
+  recentFeedingSleepPattern,
+  summarizeFeedingVolumes,
+  weeklyTrend,
+  type FeedingSleepPatternBucket,
 } from "../../utils/reportAggregates";
 import { colors, radius } from "../../theme";
 import { formatDisplayTime } from "../../utils/logSummary";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import type { GrowthRecord } from "../../types/growthRecord";
-import { formatWeight, lengthFromCm } from "../../utils/measurementFormat";
+import { formatTemperature, formatWeight, lengthFromCm } from "../../utils/measurementFormat";
 
 type Props = {
   onOpenProfile: () => void;
@@ -32,7 +37,7 @@ type Props = {
   onOpenRecord: () => void;
 };
 
-type ReportCat = "all" | BabyLogCategoryId;
+type ReportCat = "all" | "feeding" | BabyLogCategoryId;
 
 export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult, onOpenRecord }: Props) {
   const { logs, babyName, careSetup, diaryEntries, growthRecords, addGrowthRecord, updateGrowthRecord } = useBabyLog();
@@ -84,12 +89,30 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
     () => todayLogs.some((entry) => entry.cat === "sleep" || entry.cat === "diaper" || isFeedingLog(entry)),
     [todayLogs],
   );
-  const recordedDayCount = useMemo(
-    () => new Set(logs.map((entry) => entry.dateKey).filter(Boolean)).size,
+  const weeklySummary = useMemo(() => completedSixDaySummary(logs), [logs]);
+  const recentPattern = useMemo(() => recentFeedingSleepPattern(logs), [logs]);
+  const latestTempLog = useMemo(
+    () => [...todayLogs].reverse().find((entry) => entry.cat === "temp") ?? null,
+    [todayLogs],
+  );
+  const nextCheckup = useMemo(
+    () => findNextUserSchedule(logs, (entry) => entry.cat === "doctor" && entry.visitType === "checkup"),
     [logs],
   );
+  const nextVaccination = useMemo(
+    () => findNextUserSchedule(logs, (entry) => entry.cat === "vaccination"),
+    [logs],
+  );
+  const isBirthday = useMemo(() => {
+    const birthDate = careSetup.child.birthDate;
+    if (!birthDate) return false;
+    const today = formatDateKey();
+    return birthDate.slice(5) === today.slice(5);
+  }, [careSetup.child.birthDate]);
 
-  const todayFor = (catId: BabyLogCategoryId) => todayLogs.filter((l) => l.cat === catId);
+  const todayFor = (catId: Exclude<ReportCat, "all">) => todayLogs.filter((entry) => (
+    catId === "feeding" ? isFeedingLog(entry) : entry.cat === catId
+  ));
 
   return (
     <View style={styles.root}>
@@ -97,13 +120,28 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
       <ScrollView showsVerticalScrollIndicator={false} {...scrollProps}>
         {reportCat === "all" ? (
           <View style={styles.pad}>
+            <DashboardCard title="건강 신호">
+              {latestTempLog ? (
+                <View style={styles.healthSignal}>
+                  <View style={styles.healthSignalIcon}><BabyLogIcon catId="temp" size={22} /></View>
+                  <View style={styles.healthSignalBody}>
+                    <Text style={styles.healthSignalTitle}>오늘 체온 기록이 있어요.</Text>
+                    <Text style={styles.healthSignalValue}>
+                      최근 체온 {formatTemperature(latestTempLog.amount ?? latestTempLog.amountValue ?? "")} · {latestTempLog.chip ? `${latestTempLog.chip} · ` : ""}{formatDisplayTime(latestTempLog.time)}
+                    </Text>
+                    <Text style={styles.healthSignalHelp}>측정 부위와 아기 상태를 함께 확인해 주세요. 필요하면 담당 의료진과 확인해 주세요.</Text>
+                  </View>
+                </View>
+              ) : <DashboardEmpty title="오늘 체온 기록이 없어요." compact />}
+            </DashboardCard>
+
             <DashboardCard title="오늘 요약" caption={`${new Date().getMonth() + 1}월 ${new Date().getDate()}일 기준`}>
               {summary.totalCount > 0 ? (
                 <View style={styles.summaryGrid}>
-                  <SummaryMetric icon="formula" label="수유" value={`${summary.feedCount}회`} sub={dashboard.feedMl > 0 ? `총 ${dashboard.feedMl}ml` : "총량 기록 없음"} onPress={() => setReportCat("formula")} />
+                  <SummaryMetric icon="formula" label="수유" value={`${summary.feedCount}회`} sub={dashboard.feedVolumeLabel} onPress={() => setReportCat("feeding")} />
                   <SummaryMetric icon="sleep" label="수면" value={formatSleepDuration(summary.totalSleepMinutes)} sub={`낮잠 ${summary.sleepCount}회`} onPress={() => setReportCat("sleep")} />
                   <SummaryMetric icon="diaper" label="기저귀" value={`${summary.diaperCount}회`} sub={`대변 ${dashboard.stoolCount}회`} onPress={() => setReportCat("diaper")} />
-                  <SummaryMetric icon="clock" label="마지막 수유" value={dashboard.lastFeedAgo} sub={summary.lastFeedAt ? formatDisplayTime(summary.lastFeedAt) : "기록 없음"} onPress={() => setReportCat("formula")} last />
+                  <SummaryMetric icon="clock" label="마지막 수유" value={dashboard.lastFeedAgo} sub={summary.lastFeedAt ? formatDisplayTime(summary.lastFeedAt) : "기록 없음"} onPress={() => setReportCat("feeding")} last />
                 </View>
               ) : (
                 <DashboardEmpty
@@ -115,14 +153,30 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
               )}
             </DashboardCard>
 
+            <DashboardCard title="주간 요약" caption="오늘을 제외한 지난 6일">
+              {weeklySummary.recordedDayCount >= 3 ? (
+                <>
+                  <View style={styles.weeklyGrid}>
+                    <WeeklyMetric label="평균 수유" value={`${formatAverage(weeklySummary.averageFeedingCount)}회`} />
+                    <WeeklyMetric label="평균 수면" value={formatSleepDuration(Math.round(weeklySummary.averageSleepMinutes))} />
+                    <WeeklyMetric label="평균 기저귀" value={`${formatAverage(weeklySummary.averageDiaperCount)}회`} last />
+                  </View>
+                  <View style={styles.evidenceBadge}><Text style={styles.evidenceBadgeText}>지난 6일 중 기록된 {weeklySummary.recordedDayCount}일 기준</Text></View>
+                </>
+              ) : (
+                <DashboardEmpty title={`기록이 3일 이상 쌓이면 주간 흐름을 보여드릴게요. 현재 ${weeklySummary.recordedDayCount}일 기록`} compact />
+              )}
+            </DashboardCard>
+
             <DashboardCard title="성장" caption={latestGrowthRecord ? `${formatGrowthDate(latestGrowthRecord.measuredAt)} 업데이트` : undefined}>
               {latestGrowthRecord ? (
                 <>
                   <View style={styles.growthGrid}>
-                    <GrowthMetric label="몸무게" value={latestWeightRecord?.weightKg === undefined ? "기록 없음" : formatWeight(latestWeightRecord.weightKg, settings.units.weight)} note={latestWeightRecord ? (latestWeightRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color="#E8918A" values={sortedGrowthRecords.flatMap((record) => record.weightKg === undefined ? [] : [record.weightKg])} />
-                    <GrowthMetric label="키" value={latestHeightRecord?.heightCm === undefined ? "기록 없음" : formatGrowthLength(latestHeightRecord.heightCm, settings.units.height)} note={latestHeightRecord ? (latestHeightRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color="#9B82D7" values={sortedGrowthRecords.flatMap((record) => record.heightCm === undefined ? [] : [record.heightCm])} />
-                    <GrowthMetric label="머리둘레" value={latestHeadRecord?.headCircumferenceCm === undefined ? "기록 없음" : formatGrowthLength(latestHeadRecord.headCircumferenceCm, settings.units.height)} note={latestHeadRecord ? (latestHeadRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color="#69C3AE" values={sortedGrowthRecords.flatMap((record) => record.headCircumferenceCm === undefined ? [] : [record.headCircumferenceCm])} last />
+                    <GrowthMetric label="몸무게" value={latestWeightRecord?.weightKg === undefined ? "기록 없음" : formatWeight(latestWeightRecord.weightKg, settings.units.weight)} note={latestWeightRecord ? (latestWeightRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color="#E8918A" points={sortedGrowthRecords.flatMap((record) => record.weightKg === undefined ? [] : [{ value: record.weightKg, source: record.source }])} />
+                    <GrowthMetric label="키" value={latestHeightRecord?.heightCm === undefined ? "기록 없음" : formatGrowthLength(latestHeightRecord.heightCm, settings.units.height)} note={latestHeightRecord ? (latestHeightRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color="#9B82D7" points={sortedGrowthRecords.flatMap((record) => record.heightCm === undefined ? [] : [{ value: record.heightCm, source: record.source }])} />
+                    <GrowthMetric label="머리둘레" value={latestHeadRecord?.headCircumferenceCm === undefined ? "기록 없음" : formatGrowthLength(latestHeadRecord.headCircumferenceCm, settings.units.height)} note={latestHeadRecord ? (latestHeadRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color="#69C3AE" points={sortedGrowthRecords.flatMap((record) => record.headCircumferenceCm === undefined ? [] : [{ value: record.headCircumferenceCm, source: record.source }])} last />
                   </View>
+                  <View style={styles.growthLegend}><Text style={styles.growthLegendText}>● 병원 기록</Text><Text style={styles.growthLegendText}>○ 집 기록</Text></View>
                   <View style={styles.growthActions}>
                     <Pressable style={styles.growthSecondaryBtn} onPress={() => { setEditingGrowthRecord(null); setGrowthModalOpen(true); }}><Text style={styles.growthSecondaryText}>+ 성장 기록 추가</Text></Pressable>
                     <Pressable style={styles.growthEditBtn} onPress={() => { setEditingGrowthRecord(latestGrowthRecord); setGrowthModalOpen(true); }}><Text style={styles.growthEditText}>최근 기록 수정</Text></Pressable>
@@ -136,16 +190,6 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
                   <Pressable style={styles.growthEmptyBtn} onPress={() => { setEditingGrowthRecord(null); setGrowthModalOpen(true); }}><Text style={styles.growthEmptyBtnText}>성장 기록 추가</Text></Pressable>
                 </View>
               )}
-            </DashboardCard>
-
-            <DashboardCard title="오늘 하이라이트" icon="sparkles">
-              {todayLogs.length > 0 ? (
-                <View style={styles.highlightList}>
-                  {dashboard.highlights.map((text, index) => (
-                    <HighlightRow key={`${index}-${text}`} text={text} color={["#9B82D7", "#E8918A", "#69C3AE"][index] ?? colors.amber} />
-                  ))}
-                </View>
-              ) : <DashboardEmpty title="오늘 기록을 조금만 남겨주시면, 평소와 달라진 흐름을 알려드릴게요." compact />}
             </DashboardCard>
 
             <DashboardCard title="오늘의 리듬">
@@ -166,17 +210,23 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
               ) : <DashboardEmpty title="수유/수면/기저귀 기록이 쌓이면 하루 리듬을 보여드릴게요." compact />}
             </DashboardCard>
 
-            <DashboardCard title="최근 경향" icon="sparkles">
-              <View style={styles.compactInsight}>
-                <View style={styles.trendIcon}><Text style={styles.trendIconText}>↗</Text></View>
-                <Text style={styles.compactInsightText}>{recordedDayCount < 3 ? "최근 3일 이상 기록이 쌓이면 변화 흐름을 알려드릴게요." : dashboard.trend}</Text>
-                {recordedDayCount >= 3 ? <Pressable style={styles.detailBtn} onPress={() => setReportCat("sleep")}>
-                  <Text style={styles.detailBtnText}>자세히 보기</Text>
-                </Pressable> : null}
-              </View>
+            <DashboardCard title="최근 21일 패턴" icon="sparkles">
+              {recentPattern.validDayCount >= 9 ? (
+                <>
+                  <Text style={styles.patternIntro}>마지막 수유 시각과 같은 날의 총 수면 기록을 세 구간으로 나눠 비교했어요.</Text>
+                  <View style={styles.patternGrid}>
+                    {recentPattern.buckets.map((bucket, index) => (
+                      <PatternMetric key={bucket.key} bucket={bucket} last={index === recentPattern.buckets.length - 1} />
+                    ))}
+                  </View>
+                  <View style={styles.evidenceBadge}><Text style={styles.evidenceBadgeText}>유효 기록일 {recentPattern.validDayCount}일 기준</Text></View>
+                  <Text style={styles.patternDisclaimer}>최근 기록에서 함께 나타난 흐름이며, 수유 시각이 수면을 원인적으로 바꾼다는 뜻은 아니에요.</Text>
+                </>
+              ) : <DashboardEmpty title={`최근 기록이 조금 더 쌓이면 패턴을 보여드릴게요. 현재 유효 기록일 ${recentPattern.validDayCount}일`} compact />}
             </DashboardCard>
 
             <DashboardCard title="마일스톤">
+              {isBirthday ? <View style={styles.birthdayBanner}><Text style={styles.birthdayText}>🎉 오늘은 {babyName}의 생일이에요.</Text></View> : null}
               <View style={styles.milestoneRow}>
                 <View style={styles.milestoneIcon}><Text style={styles.milestoneEmoji}>🐻</Text></View>
                 <View style={styles.milestoneBody}>
@@ -188,6 +238,12 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
                   <Text style={styles.tipBtnText}>팁 보기</Text>
                 </Pressable>
               </View>
+              <View style={styles.scheduleList}>
+                <ScheduleRow label="다음 검진" schedule={nextCheckup} />
+                <ScheduleRow label="다음 예방접종" schedule={nextVaccination} last />
+              </View>
+              {!nextCheckup && !nextVaccination ? <Text style={styles.scheduleEmpty}>다음 검진이나 예방접종 일정을 직접 추가해 보세요.</Text> : null}
+              <Text style={styles.scheduleFootnote}>사용자가 기록한 일정만 표시해요.</Text>
             </DashboardCard>
           </View>
         ) : (
@@ -224,12 +280,10 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
 }
 
 type DashboardData = {
-  feedMl: number;
+  feedVolumeLabel: string;
   stoolCount: number;
   lastFeedAgo: string;
-  highlights: string[];
   rhythmNotes: string[];
-  trend: string;
   milestone: { current: string; tip: string };
 };
 
@@ -274,24 +328,8 @@ function buildDashboardData(input: {
 }): DashboardData {
   const { todayLogs, summary } = input;
   const feeds = todayLogs.filter(isFeedingLog);
-  const feedMl = feeds
-    .filter((entry) => !entry.amountUnit || entry.amountUnit === "ml" || entry.amountUnit === "oz")
-    .reduce((sum, entry) => sum + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
-  const stoolCount = todayLogs.filter((entry) => entry.cat === "diaper" && ["대변", "둘다"].includes(entry.chip ?? "")).length;
-  const highlights: string[] = [];
-
-  const sleepDiff = summary.totalSleepMinutes - summary.yesterdaySleepMinutes;
-  if (summary.yesterdaySleepMinutes > 0 && Math.abs(sleepDiff) >= 20) {
-    highlights.push(`오늘 수면이 어제보다 ${formatSleepDuration(Math.abs(sleepDiff))} ${sleepDiff > 0 ? "길었어요" : "짧았어요"}.`);
-  } else if (summary.sleepCount > 0) {
-    highlights.push(`오늘 낮잠은 ${summary.sleepCount}회, 모두 ${formatSleepDuration(summary.totalSleepMinutes)}였어요.`);
-  }
-  if (summary.flags.includes("feeding_up")) highlights.push("오늘 수유 횟수가 최근 평균보다 조금 많았어요.");
-  else if (summary.flags.includes("feeding_down")) highlights.push("오늘 수유 횟수가 최근 평균보다 조금 적었어요.");
-  else if (summary.feedCount > 0) highlights.push("오늘 수유 횟수는 최근 흐름과 비슷해요.");
-  if (stoolCount > 0) highlights.push(`오늘 대변 기록이 ${stoolCount}회 있었어요.`);
-  else if (summary.diaperCount > 0) highlights.push(`기저귀 교체가 ${summary.diaperCount}회 기록됐어요.`);
-  if (highlights.length === 0) highlights.push("오늘 기록이 쌓이면 평소와 달라진 흐름을 알려드릴게요.");
+  const feedingVolumes = summarizeFeedingVolumes(feeds);
+  const stoolCount = todayLogs.filter((entry) => entry.cat === "diaper" && ["대변", "둘다", "소변+대변"].includes(entry.chip ?? "")).length;
 
   const feedTimes = feeds.map((entry) => toMinutes(entry.time));
   const gaps = feedTimes.slice(1).map((time, index) => time - feedTimes[index]).filter((gap) => gap >= 0);
@@ -301,21 +339,11 @@ function buildDashboardData(input: {
     summary.sleepCount > 0 ? `오늘 낮잠은 총 ${summary.sleepCount}회였어요.` : "아직 오늘 수면 기록이 없어요.",
   ];
 
-  let trend = "최근 기록이 더 쌓이면 3일·7일 흐름을 비교해드릴게요.";
-  if (!summary.flags.includes("sparse_week")) {
-    if (summary.flags.includes("feeding_normal") && summary.flags.includes("diaper_normal")) trend = "최근 7일 동안 수유와 기저귀 패턴이 비교적 일정해요.";
-    else if (summary.flags.includes("sleep_more_than_yesterday")) trend = "최근 흐름과 비교해 오늘 수면 시간이 조금 길었어요.";
-    else if (summary.flags.includes("sleep_less_than_yesterday")) trend = "최근 흐름과 비교해 오늘 수면 시간이 조금 짧았어요.";
-    else trend = "최근 7일 기록이 큰 변화 없이 이어지고 있어요.";
-  }
-
   return {
-    feedMl: Math.round(feedMl),
+    feedVolumeLabel: feedingVolumes.label,
     stoolCount,
     lastFeedAgo: elapsedLabel(summary.lastFeedAt),
-    highlights: highlights.slice(0, 3),
     rhythmNotes,
-    trend,
     milestone: milestoneCopy(ageInMonths(input.birthDate)),
   };
 }
@@ -367,7 +395,7 @@ function SummaryMetric({
       </View>
       <Text style={styles.summaryLabel}>{label}</Text>
       <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-      <Text style={styles.summarySub} numberOfLines={1}>{sub}</Text>
+      <Text style={styles.summarySub} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{sub}</Text>
     </Pressable>
   );
 }
@@ -391,6 +419,80 @@ function formatGrowthLength(value: number, unit: "cm" | "inch"): string {
   return `${lengthFromCm(value, unit)}${unit === "inch" ? "in" : "cm"}`;
 }
 
+function formatAverage(value: number): string {
+  return Number(value.toFixed(1)).toString();
+}
+
+function formatMinutesAsTime(minutes: number): string {
+  const hour24 = Math.floor(minutes / 60) % 24;
+  const minute = minutes % 60;
+  const period = hour24 < 12 ? "오전" : "오후";
+  const hour12 = hour24 % 12 || 12;
+  return `${period} ${hour12}:${String(minute).padStart(2, "0")}`;
+}
+
+type UserSchedule = { dateKey: string; time?: string };
+
+function parseUserSchedule(nextAt?: string): UserSchedule | null {
+  if (!nextAt) return null;
+  const match = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/.exec(nextAt.trim());
+  return match ? { dateKey: match[1], time: match[2] } : null;
+}
+
+function findNextUserSchedule(
+  logs: BabyLogEntry[],
+  predicate: (entry: BabyLogEntry) => boolean,
+  now = new Date(),
+): UserSchedule | null {
+  const todayKey = formatDateKey(now);
+  return logs
+    .filter(predicate)
+    .flatMap((entry) => {
+      const schedule = parseUserSchedule(entry.nextAt);
+      return schedule && schedule.dateKey >= todayKey ? [schedule] : [];
+    })
+    .sort((a, b) => `${a.dateKey} ${a.time ?? "00:00"}`.localeCompare(`${b.dateKey} ${b.time ?? "00:00"}`))[0] ?? null;
+}
+
+function scheduleDayLabel(schedule: UserSchedule): string {
+  const today = new Date();
+  const target = new Date(`${schedule.dateKey}T00:00:00`);
+  const current = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const days = Math.max(0, Math.round((target.getTime() - current.getTime()) / 86_400_000));
+  const [, month, day] = schedule.dateKey.split("-");
+  const date = `${Number(month)}월 ${Number(day)}일${schedule.time ? ` · ${formatDisplayTime(schedule.time)}` : ""}`;
+  return days === 0 ? `${date} · 오늘` : `${date} · ${days}일 남음`;
+}
+
+function WeeklyMetric({ label, value, last }: { label: string; value: string; last?: boolean }) {
+  return (
+    <View style={[styles.weeklyMetric, last && styles.metricLast]}>
+      <Text style={styles.weeklyLabel}>{label}</Text>
+      <Text style={styles.weeklyValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+    </View>
+  );
+}
+
+function PatternMetric({ bucket, last }: { bucket: FeedingSleepPatternBucket; last?: boolean }) {
+  return (
+    <View style={[styles.patternMetric, last && styles.metricLast]}>
+      <Text style={styles.patternLabel}>{bucket.label}</Text>
+      <Text style={styles.patternTime}>{formatMinutesAsTime(bucket.averageLastFeedMinutes)}</Text>
+      <Text style={styles.patternSleep}>수면 {formatSleepDuration(bucket.averageSleepMinutes)}</Text>
+      <Text style={styles.patternCount}>{bucket.dayCount}일</Text>
+    </View>
+  );
+}
+
+function ScheduleRow({ label, schedule, last }: { label: string; schedule: UserSchedule | null; last?: boolean }) {
+  return (
+    <View style={[styles.scheduleRow, last && styles.scheduleRowLast]}>
+      <Text style={styles.scheduleLabel}>{label}</Text>
+      <Text style={[styles.scheduleValue, !schedule && styles.scheduleValueEmpty]}>{schedule ? scheduleDayLabel(schedule) : "입력된 일정 없음"}</Text>
+    </View>
+  );
+}
+
 function growthTrendPath(values: number[]): string {
   if (values.length === 0) return "M4 18 L68 18";
   if (values.length === 1) return "M4 14 L68 14";
@@ -404,25 +506,31 @@ function growthTrendPath(values: number[]): string {
   }).join(" ");
 }
 
-function growthTrendLastPoint(values: number[]): { x: number; y: number } | null {
-  if (!values.length) return null;
-  if (values.length === 1) return { x: 68, y: 14 };
+function growthTrendPoints(values: number[]): { x: number; y: number }[] {
+  if (!values.length) return [];
+  if (values.length === 1) return [{ x: 68, y: 14 }];
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = Math.max(max - min, 0.01);
-  return { x: 68, y: 20 - ((values[values.length - 1] - min) / range) * 14 };
+  return values.map((value, index) => ({
+    x: 4 + (64 * index) / (values.length - 1),
+    y: 20 - ((value - min) / range) * 14,
+  }));
 }
 
-function GrowthMetric({ label, value, note, color, values, last }: { label: string; value: string; note: string; color: string; values: number[]; last?: boolean }) {
+function GrowthMetric({ label, value, note, color, points, last }: { label: string; value: string; note: string; color: string; points: { value: number; source: GrowthRecord["source"] }[]; last?: boolean }) {
   const hasValue = value !== "기록 없음";
-  const lastPoint = growthTrendLastPoint(values);
+  const values = points.map((point) => point.value);
+  const chartPoints = growthTrendPoints(values);
   return (
     <View style={[styles.growthMetric, last && styles.metricLast]}>
       <Text style={styles.growthLabel}>{label}</Text>
       <Text style={[styles.growthValue, !hasValue && styles.growthValueEmpty]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
       <Svg width="72" height="25" viewBox="0 0 72 25">
         <Path d={growthTrendPath(values)} fill="none" stroke={hasValue ? color : colors.border} strokeWidth="2" strokeDasharray={hasValue ? undefined : "3 4"} />
-        {hasValue && lastPoint ? <Circle cx={lastPoint.x} cy={lastPoint.y} r="3" fill="#FFF" stroke={color} strokeWidth="2" /> : null}
+        {hasValue ? chartPoints.map((point, index) => (
+          <Circle key={`${point.x}-${index}`} cx={point.x} cy={point.y} r="2.7" fill={points[index].source === "hospital" ? color : "#FFF"} stroke={color} strokeWidth="1.7" />
+        )) : null}
       </Svg>
       <Text style={styles.growthNote}>{note}</Text>
     </View>
@@ -561,16 +669,19 @@ function CategoryDetail({
   todayLogs,
   allLogs,
 }: {
-  catId: BabyLogCategoryId;
+  catId: BabyLogCategoryId | "feeding";
   todayLogs: BabyLogEntry[];
   allLogs: BabyLogEntry[];
 }) {
-  const c = getCategory(catId);
+  const isFeedingGroup = catId === "feeding";
+  const c = isFeedingGroup ? { ...getCategory("formula"), label: "수유" } : getCategory(catId);
   const lastTime = todayLogs.length
     ? formatDisplayTime(todayLogs[todayLogs.length - 1].time)
     : "없음";
-  const trend = categoryCountsLast7(allLogs, catId);
-  const values = trend.map((t) => (catId === "sleep" ? (t.sleepMinutes ?? 0) : t.count));
+  const trend: { dateKey: string; label: string; count: number; sleepMinutes?: number }[] = isFeedingGroup
+    ? weeklyTrend(allLogs).map((day) => ({ dateKey: day.dateKey, label: day.label, count: day.feedingCount }))
+    : categoryCountsLast7(allLogs, catId);
+  const values = trend.map((item) => (catId === "sleep" ? (item.sleepMinutes ?? 0) : item.count));
   const pastVals = values.slice(0, 6);
   const pastAvg = pastVals.length ? pastVals.reduce((a, b) => a + b, 0) / pastVals.length : 0;
   const todayVal = values[values.length - 1] ?? 0;
@@ -591,7 +702,7 @@ function CategoryDetail({
     <View style={styles.pad}>
       <View style={styles.statRow}>
         <StatCard
-          icon={<BabyLogIcon catId={catId} size={18} />}
+          icon={<BabyLogIcon catId={isFeedingGroup ? "formula" : catId} size={18} />}
           num={catId === "sleep" ? `${todayVal}분` : `${todayLogs.length}회`}
           lbl={catId === "sleep" ? "오늘 수면" : "오늘 횟수"}
         />
@@ -732,6 +843,18 @@ const styles = StyleSheet.create({
   dashboardEmptyText: { color: colors.muted, fontSize: 12.5, lineHeight: 19, textAlign: "center" },
   dashboardEmptyBtn: { marginTop: 12, minWidth: 140, alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.amber },
   dashboardEmptyBtnText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+  healthSignal: { flexDirection: "row", alignItems: "flex-start", gap: 11, borderRadius: 14, padding: 12, backgroundColor: "rgba(233,163,83,0.10)" },
+  healthSignalIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
+  healthSignalBody: { flex: 1, minWidth: 0 },
+  healthSignalTitle: { fontSize: 13, fontWeight: "800", color: colors.text },
+  healthSignalValue: { marginTop: 4, fontSize: 12, fontWeight: "700", color: colors.muted, lineHeight: 18 },
+  healthSignalHelp: { marginTop: 5, fontSize: 10.5, lineHeight: 16, color: colors.faint },
+  weeklyGrid: { flexDirection: "row", alignItems: "stretch" },
+  weeklyMetric: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 6, borderRightWidth: 1, borderRightColor: colors.border },
+  weeklyLabel: { fontSize: 10.5, fontWeight: "700", color: colors.muted },
+  weeklyValue: { width: "100%", marginTop: 7, textAlign: "center", fontSize: 14, fontWeight: "900", color: colors.text },
+  evidenceBadge: { alignSelf: "center", marginTop: 13, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.backgroundSecondary },
+  evidenceBadgeText: { fontSize: 10, fontWeight: "700", color: colors.faint },
   growthGrid: { flexDirection: "row" },
   growthMetric: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 7, borderRightWidth: 1, borderRightColor: colors.border },
   metricLast: { borderRightWidth: 0 },
@@ -739,6 +862,8 @@ const styles = StyleSheet.create({
   growthValue: { width: "100%", fontSize: 16, fontWeight: "900", color: colors.text, marginTop: 6 },
   growthValueEmpty: { fontSize: 12, color: colors.faint, fontWeight: "700" },
   growthNote: { width: "100%", fontSize: 9.5, color: colors.faint, marginTop: 3 },
+  growthLegend: { flexDirection: "row", justifyContent: "center", gap: 14, marginTop: 10 },
+  growthLegendText: { fontSize: 9.5, fontWeight: "700", color: colors.faint },
   growthActions: { flexDirection: "row", gap: 8, marginTop: 14 },
   growthSecondaryBtn: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberSoft },
   growthSecondaryText: { fontSize: 11.5, fontWeight: "800", color: colors.amber },
@@ -754,9 +879,9 @@ const styles = StyleSheet.create({
   highlightRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   highlightDot: { width: 9, height: 9, borderRadius: 5, marginTop: 5 },
   highlightText: { flex: 1, fontSize: 12.5, lineHeight: 19, color: colors.muted },
-  rhythmContent: { flexDirection: "row", alignItems: "center", gap: 2 },
-  dialWrap: { width: 224, height: 224, marginLeft: -12 },
-  rhythmNotes: { flex: 1, gap: 10, paddingRight: 2 },
+  rhythmContent: { alignItems: "center", gap: 2 },
+  dialWrap: { width: 224, height: 224 },
+  rhythmNotes: { width: "100%", gap: 6, paddingHorizontal: 4 },
   rhythmNote: { fontSize: 11.5, lineHeight: 17, color: colors.muted },
   rhythmLegend: { flexDirection: "row", justifyContent: "center", gap: 16, marginTop: -4 },
   compactInsight: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -765,7 +890,17 @@ const styles = StyleSheet.create({
   compactInsightText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: colors.muted },
   detailBtn: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.cardHi },
   detailBtnText: { fontSize: 10.5, fontWeight: "700", color: colors.text },
+  patternIntro: { fontSize: 11.5, lineHeight: 17, color: colors.muted, marginBottom: 12 },
+  patternGrid: { flexDirection: "row", alignItems: "stretch" },
+  patternMetric: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 5, borderRightWidth: 1, borderRightColor: colors.border },
+  patternLabel: { fontSize: 10, fontWeight: "800", color: colors.muted },
+  patternTime: { width: "100%", marginTop: 5, textAlign: "center", fontSize: 11.5, fontWeight: "800", color: colors.text },
+  patternSleep: { width: "100%", marginTop: 4, textAlign: "center", fontSize: 10, color: colors.muted },
+  patternCount: { marginTop: 3, fontSize: 9.5, color: colors.faint },
+  patternDisclaimer: { marginTop: 11, fontSize: 10, lineHeight: 15, textAlign: "center", color: colors.faint },
   milestoneRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  birthdayBanner: { marginBottom: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 13, backgroundColor: colors.amberSoft },
+  birthdayText: { textAlign: "center", fontSize: 12.5, fontWeight: "800", color: colors.amberDark },
   milestoneIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(233,163,83,0.18)" },
   milestoneEmoji: { fontSize: 23 },
   milestoneBody: { flex: 1, minWidth: 0 },
@@ -775,6 +910,14 @@ const styles = StyleSheet.create({
   milestoneTip: { fontSize: 10.5, color: colors.faint, lineHeight: 16, marginTop: 3 },
   tipBtn: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.cardHi },
   tipBtnText: { fontSize: 10.5, fontWeight: "700", color: colors.text },
+  scheduleList: { marginTop: 13, borderTopWidth: 1, borderTopColor: colors.border },
+  scheduleRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  scheduleRowLast: { borderBottomWidth: 0 },
+  scheduleLabel: { width: 82, fontSize: 11, fontWeight: "800", color: colors.text },
+  scheduleValue: { flex: 1, textAlign: "right", fontSize: 10.5, fontWeight: "700", color: colors.muted },
+  scheduleValueEmpty: { color: colors.faint, fontWeight: "500" },
+  scheduleEmpty: { marginTop: 5, fontSize: 10.5, lineHeight: 16, textAlign: "center", color: colors.faint },
+  scheduleFootnote: { marginTop: 5, fontSize: 9.5, textAlign: "center", color: colors.faint },
   backToOverview: { alignSelf: "flex-start", marginHorizontal: 18, marginBottom: 10, paddingHorizontal: 10, paddingVertical: 6 },
   backToOverviewText: { color: colors.amber, fontSize: 12.5, fontWeight: "800" },
   filterRow: { paddingHorizontal: 18, paddingVertical: 2, gap: 8, paddingBottom: 14 },

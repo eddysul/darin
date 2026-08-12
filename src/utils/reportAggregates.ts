@@ -135,6 +135,115 @@ export function weeklyTrend(logs: BabyLogEntry[], now = new Date()): DayAggregat
   return aggregateLogsByDate(logs, lastNDateKeys(7, now), todayKey);
 }
 
+export type CompletedWeekSummary = {
+  days: DayAggregate[];
+  recordedDayCount: number;
+  averageFeedingCount: number;
+  averageSleepMinutes: number;
+  averageDiaperCount: number;
+};
+
+/** The previous six completed calendar days. Empty days are kept as evidence but excluded from averages. */
+export function completedSixDaySummary(
+  logs: BabyLogEntry[],
+  now = new Date(),
+): CompletedWeekSummary {
+  const todayKey = formatDateKey(now);
+  const dateKeys = Array.from({ length: 6 }, (_, index) => offsetDateKey(todayKey, index - 6));
+  const days = aggregateLogsByDate(logs, dateKeys, todayKey);
+  const recordedDays = days.filter((day) => day.totalCount > 0);
+  const average = (values: number[]) => values.length
+    ? values.reduce((sum, value) => sum + value, 0) / values.length
+    : 0;
+  return {
+    days,
+    recordedDayCount: recordedDays.length,
+    averageFeedingCount: average(recordedDays.map((day) => day.feedingCount)),
+    averageSleepMinutes: average(recordedDays.map((day) => day.sleepMinutes)),
+    averageDiaperCount: average(recordedDays.map((day) => day.diaperCount)),
+  };
+}
+
+export type FeedingVolumeSummary = {
+  ml: number;
+  oz: number;
+  label: string;
+};
+
+/** Bottle volumes only. Direct breastfeeding remains count/time based and ml/oz are never mixed. */
+export function summarizeFeedingVolumes(logs: BabyLogEntry[]): FeedingVolumeSummary {
+  let ml = 0;
+  let oz = 0;
+  for (const entry of logs) {
+    if (entry.cat !== "formula" && entry.cat !== "storedMilk") continue;
+    const amount = Number.parseFloat(String(entry.amountValue ?? entry.amount ?? ""));
+    if (!(amount > 0)) continue;
+    const legacyUnit = /(?:^|\s)(oz|ml)\s*$/i.exec(entry.amountText ?? "")?.[1];
+    const unit = (entry.amountUnit || legacyUnit || "ml").trim().toLowerCase();
+    if (unit === "ml") ml += amount;
+    else if (unit === "oz") oz += amount;
+  }
+  const parts: string[] = [];
+  if (ml > 0) parts.push(`${Number(ml.toFixed(1))} ml`);
+  if (oz > 0) parts.push(`${Number(oz.toFixed(1))} oz`);
+  return { ml, oz, label: parts.length ? parts.join(" + ") : "총량 기록 없음" };
+}
+
+export type FeedingSleepPatternBucket = {
+  key: "early" | "typical" | "late";
+  label: string;
+  averageLastFeedMinutes: number;
+  averageSleepMinutes: number;
+  dayCount: number;
+};
+
+export type FeedingSleepPattern = {
+  validDayCount: number;
+  buckets: FeedingSleepPatternBucket[];
+};
+
+/** Observational pattern over the previous 21 completed days; this does not imply causation. */
+export function recentFeedingSleepPattern(
+  logs: BabyLogEntry[],
+  now = new Date(),
+): FeedingSleepPattern {
+  const todayKey = formatDateKey(now);
+  const dateKeys = Array.from({ length: 21 }, (_, index) => offsetDateKey(todayKey, index - 21));
+  const validDays = dateKeys.flatMap((dateKey) => {
+    const dayLogs = getLogsForDay(logs, dateKey, todayKey);
+    const feedingLogs = dayLogs.filter((entry) => isFeeding(entry.cat));
+    const sleepMinutes = dayLogs
+      .filter((entry) => entry.cat === "sleep")
+      .reduce((sum, entry) => sum + (Number.parseInt(entry.duration ?? "0", 10) || 0), 0);
+    if (!feedingLogs.length || sleepMinutes <= 0) return [];
+    return [{
+      lastFeedMinutes: Math.max(...feedingLogs.map((entry) => toMinutes(entry.time))),
+      sleepMinutes,
+    }];
+  }).sort((a, b) => a.lastFeedMinutes - b.lastFeedMinutes);
+
+  const definitions = [
+    { key: "early" as const, label: "이른 구간" },
+    { key: "typical" as const, label: "중간 구간" },
+    { key: "late" as const, label: "늦은 구간" },
+  ];
+  const grouped = definitions.map(() => [] as typeof validDays);
+  validDays.forEach((day, index) => {
+    grouped[Math.min(2, Math.floor((index * 3) / validDays.length))].push(day);
+  });
+  const buckets = definitions.flatMap((definition, index) => {
+    const group = grouped[index];
+    if (!group.length) return [];
+    return [{
+      ...definition,
+      averageLastFeedMinutes: Math.round(group.reduce((sum, day) => sum + day.lastFeedMinutes, 0) / group.length),
+      averageSleepMinutes: Math.round(group.reduce((sum, day) => sum + day.sleepMinutes, 0) / group.length),
+      dayCount: group.length,
+    }];
+  });
+  return { validDayCount: validDays.length, buckets };
+}
+
 /** Current calendar week, ordered by the user's Sunday/Monday preference. */
 export function currentWeekTrend(
   logs: BabyLogEntry[],
