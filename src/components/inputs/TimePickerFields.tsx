@@ -39,6 +39,21 @@ export function DurationPickerField({ label, valueMinutes, placeholder = "기간
   );
 }
 
+export function VolumePickerField({ label, value, unit = "ml", placeholder = "양 선택", onPress, disabled = false, error }: { label: string; value?: string | null; unit?: string; placeholder?: string; onPress: () => void; disabled?: boolean; error?: string }) {
+  const numeric = Number.parseFloat(value ?? "");
+  const hasValue = Number.isFinite(numeric) && numeric >= 0;
+  return (
+    <View style={styles.fieldBlock}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${hasValue ? `${value}${unit}` : placeholder}`}>
+        <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{hasValue ? `${value}${unit}` : placeholder}</Text>
+        <Text style={styles.fieldArrow}>›</Text>
+      </Pressable>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </View>
+  );
+}
+
 export function TimePickerSheet({ visible, valueHHmm, title = "시간 선택", onCancel, onConfirm, onClear }: { visible: boolean; valueHHmm?: string | null; title?: string; onCancel: () => void; onConfirm: (valueHHmm: string) => void; onClear?: () => void }) {
   const insets = useSafeAreaInsets();
   const [periodIndex, setPeriodIndex] = useState(0);
@@ -95,6 +110,28 @@ export function DurationPickerSheet({ visible, valueMinutes, title = "기간 선
         <WheelColumn options={MINUTES} selectedIndex={minute} onSelect={setMinute} label="분" />
       </View>
       <View style={styles.wheelLabels}><Text style={styles.wheelLabel}>시간</Text><Text style={styles.wheelLabel}>분</Text></View>
+    </PickerOverlay>
+  );
+}
+
+export function VolumePickerSheet({ visible, value, title = "양 선택", unit = "ml", max = 500, step = 5, allowZero = false, onCancel, onConfirm, onClear }: { visible: boolean; value?: string | null; title?: string; unit?: string; max?: number; step?: number; allowZero?: boolean; onCancel: () => void; onConfirm: (value: string) => void; onClear?: () => void }) {
+  const insets = useSafeAreaInsets();
+  const minimum = allowZero ? 0 : step;
+  const options = Array.from({ length: Math.floor((max - minimum) / step) + 1 }, (_, index) => `${minimum + index * step}`);
+  const initial = Math.max(minimum, Math.min(max, Math.round((Number.parseFloat(value ?? "") || minimum) / step) * step));
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  useEffect(() => {
+    if (!visible) return;
+    setSelectedIndex(Math.max(0, options.indexOf(String(initial))));
+  }, [initial, visible]);
+  if (!visible) return null;
+  return (
+    <PickerOverlay title={title} onCancel={onCancel} onConfirm={() => onConfirm(options[selectedIndex] ?? String(minimum))} bottomInset={insets.bottom} help={`선택한 양은 ${unit} 단위로 저장해요.`} onClear={onClear}>
+      <View style={styles.singleWheelArea}>
+        <View pointerEvents="none" style={styles.selection} />
+        <WheelColumn options={options} selectedIndex={selectedIndex} onSelect={setSelectedIndex} label={unit} />
+      </View>
+      <Text style={styles.singleWheelLabel}>{unit}</Text>
     </PickerOverlay>
   );
 }
@@ -168,6 +205,8 @@ const styles = StyleSheet.create({
   wheelTextSelected: { color: colors.text, fontSize: 21, fontWeight: "800" },
   wheelLabels: { marginHorizontal: 18, flexDirection: "row" },
   wheelLabel: { flex: 1, textAlign: "center", color: colors.faint, fontSize: 10.5, fontWeight: "700" },
+  singleWheelArea: { alignSelf: "center", width: 180, height: ITEM_HEIGHT * 5 },
+  singleWheelLabel: { textAlign: "center", color: colors.faint, fontSize: 11, fontWeight: "700" },
   help: { marginTop: 12, paddingHorizontal: 20, textAlign: "center", color: colors.muted, fontSize: 12, lineHeight: 18 },
   clearButton: { alignSelf: "center", minHeight: 38, justifyContent: "center", paddingHorizontal: 16 },
   clearText: { color: colors.faint, fontSize: 12.5, fontWeight: "700" },

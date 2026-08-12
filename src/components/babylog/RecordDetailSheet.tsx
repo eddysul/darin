@@ -32,6 +32,8 @@ import {
   formatHHmm,
   TimeOfDayPickerField,
   TimePickerSheet,
+  VolumePickerField,
+  VolumePickerSheet,
 } from "../inputs/TimePickerFields";
 
 function normalizeDiaperChip(value: string): string {
@@ -52,6 +54,7 @@ type Props = {
   embedded?: boolean;
   /** Opens the separate growth-record flow from a clinic visit. */
   onOpenGrowthRecord?: () => void;
+  sessionLabel?: string;
 };
 
 function minutesToHhMm(start: string, minutes: number): string {
@@ -95,6 +98,7 @@ export function RecordDetailSheet({
   onDelete,
   embedded = false,
   onOpenGrowthRecord,
+  sessionLabel,
 }: Props) {
   const { settings } = useAppSettings();
   const [time, setTime] = useState(nowTime());
@@ -105,6 +109,15 @@ export function RecordDetailSheet({
   const [stoolState, setStoolState] = useState("");
   const [amount, setAmount] = useState("");
   const [duration, setDuration] = useState("");
+  const [leftDuration, setLeftDuration] = useState("");
+  const [rightDuration, setRightDuration] = useState("");
+  const [leftAmount, setLeftAmount] = useState("");
+  const [rightAmount, setRightAmount] = useState("");
+  const [feedingMethod, setFeedingMethod] = useState<BabyLogEntry["feedingMethod"]>();
+  const [burped, setBurped] = useState<BabyLogEntry["burped"]>();
+  const [spitUp, setSpitUp] = useState<BabyLogEntry["spitUp"]>();
+  const [supplement, setSupplement] = useState("");
+  const [feedingNote, setFeedingNote] = useState("");
   const [notes, setNotes] = useState("");
   const [foodName, setFoodName] = useState("");
   const [medName, setMedName] = useState("");
@@ -114,8 +127,11 @@ export function RecordDetailSheet({
   const [voice, setVoice] = useState(false);
   const [timeError, setTimeError] = useState("");
   const [diaperError, setDiaperError] = useState("");
+  const [feedingAmountError, setFeedingAmountError] = useState("");
   const [timePickerTarget, setTimePickerTarget] = useState<"time" | "end" | "nextAt" | null>(null);
   const [durationPickerOpen, setDurationPickerOpen] = useState(false);
+  const [sideDurationTarget, setSideDurationTarget] = useState<"left" | "right" | null>(null);
+  const [volumeTarget, setVolumeTarget] = useState<"amount" | "left" | "right" | null>(null);
 
   useEffect(() => {
     if (!visible || !catKey) return;
@@ -123,6 +139,7 @@ export function RecordDetailSheet({
     setSelectedCat(nextCat);
     setTimeError("");
     setDiaperError("");
+    setFeedingAmountError("");
     setTime(isValidClockInput(prefill?.time ?? "") ? prefill!.time! : nowTime());
     setChip(nextCat === "diaper" ? normalizeDiaperChip(prefill?.chip ?? "") : prefill?.chip ?? "");
     setChip2(prefill?.chip2 ?? "");
@@ -140,6 +157,15 @@ export function RecordDetailSheet({
       setAmount(storedAmount);
     }
     setDuration(prefill?.duration ?? "");
+    setLeftDuration(prefill?.leftDuration ?? "");
+    setRightDuration(prefill?.rightDuration ?? "");
+    setLeftAmount(prefill?.leftAmount ? volumeFromMl(prefill.leftAmount, settings.units.volume) : "");
+    setRightAmount(prefill?.rightAmount ? volumeFromMl(prefill.rightAmount, settings.units.volume) : "");
+    setFeedingMethod(prefill?.feedingMethod);
+    setBurped(prefill?.burped);
+    setSpitUp(prefill?.spitUp);
+    setSupplement(prefill?.supplement ?? "");
+    setFeedingNote(prefill?.feedingNote ?? "");
     setVoice(prefill?.voice ?? false);
     setRecordTitle(prefill?.title ?? "");
     setDetails(prefill?.details ?? "");
@@ -160,13 +186,15 @@ export function RecordDetailSheet({
       setMedName("");
       setNotes(note);
     }
-    if ((nextCat === "sleep" || nextCat === "breast") && prefill?.time && prefill?.duration) {
+    if (["sleep", "breast", "pump"].includes(nextCat) && prefill?.time && prefill?.duration) {
       setEndTime(minutesToHhMm(prefill.time, Number.parseInt(prefill.duration, 10) || 0));
     } else {
       setEndTime("");
     }
     setTimePickerTarget(null);
     setDurationPickerOpen(false);
+    setSideDurationTarget(null);
+    setVolumeTarget(null);
   }, [visible, catKey, prefill, settings.units.temperature, settings.units.volume]);
 
   const computedDuration = useMemo(() => {
@@ -176,6 +204,10 @@ export function RecordDetailSheet({
 
   const durationMinutes = Number.parseInt(computedDuration || duration, 10);
   const durationValue = Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : null;
+  const leftDurationValue = Number.parseInt(leftDuration, 10) || null;
+  const rightDurationValue = Number.parseInt(rightDuration, 10) || null;
+  const sideDurationTotal = (leftDurationValue ?? 0) + (rightDurationValue ?? 0);
+  const sideAmountTotal = (Number.parseFloat(leftAmount) || 0) + (Number.parseFloat(rightAmount) || 0);
   const nextAtMatch = /(?:^|\s)(\d{1,2}):(\d{2})$/.exec(nextAt.trim());
   const nextAtTime = nextAtMatch ? formatHHmm(Number(nextAtMatch[1]), Number(nextAtMatch[2])) : "";
   const nextAtDate = nextAtMatch ? nextAt.slice(0, nextAtMatch.index).trim() : nextAt;
@@ -219,6 +251,11 @@ export function RecordDetailSheet({
       return;
     }
     setDiaperError("");
+    if ((builtinId === "formula" || builtinId === "storedMilk") && !(Number.parseFloat(amount) > 0)) {
+      setFeedingAmountError("먹은 양을 선택해 주세요.");
+      return;
+    }
+    setFeedingAmountError("");
     const isFood = builtinId === "food" || builtinId === "snack";
     const isMed = builtinId === "med";
     const customInputMode = c.isCustom ? c.inputMode ?? "memo" : null;
@@ -239,6 +276,15 @@ export function RecordDetailSheet({
         : effectiveCat === "temp"
           ? temperatureToCelsius(amount, settings.units.temperature)
           : amount;
+    const canonicalLeftAmount = leftAmount ? volumeToMl(leftAmount, settings.units.volume) : "";
+    const canonicalRightAmount = rightAmount ? volumeToMl(rightAmount, settings.units.volume) : "";
+    const sideTotalDuration = sideDurationTotal ? String(sideDurationTotal) : "";
+    const finalDuration = ["breast", "pump"].includes(effectiveCat)
+      ? sideTotalDuration || timedDuration
+      : timedDuration;
+    const finalAmount = effectiveCat === "pump" && sideAmountTotal > 0
+      ? volumeToMl(String(sideAmountTotal), settings.units.volume)
+      : canonicalAmount;
     const diaperType = builtinId === "diaper" ? chip : "";
     onSave(
       {
@@ -253,8 +299,17 @@ export function RecordDetailSheet({
         amount:
           builtinId === "diaper" && diaperType === "대변"
             ? undefined
-            : canonicalAmount || undefined,
-        duration: timedDuration || undefined,
+            : finalAmount || undefined,
+        duration: finalDuration || undefined,
+        feedingMethod: effectiveCat === "breast" ? feedingMethod : undefined,
+        leftDuration: ["breast", "pump"].includes(effectiveCat) ? leftDuration || undefined : undefined,
+        rightDuration: ["breast", "pump"].includes(effectiveCat) ? rightDuration || undefined : undefined,
+        leftAmount: effectiveCat === "pump" ? canonicalLeftAmount || undefined : undefined,
+        rightAmount: effectiveCat === "pump" ? canonicalRightAmount || undefined : undefined,
+        burped: effectiveCat === "breast" ? burped : undefined,
+        spitUp: ["breast", "formula", "storedMilk"].includes(effectiveCat) ? spitUp : undefined,
+        supplement: ["formula", "storedMilk"].includes(effectiveCat) ? supplement.trim() || undefined : undefined,
+        feedingNote: effectiveCat === "breast" ? feedingNote || undefined : undefined,
         notes: composedNotes || undefined,
         title: recordTitle.trim() || undefined,
         details: details.trim() || undefined,
@@ -287,6 +342,7 @@ export function RecordDetailSheet({
           <Text style={styles.title}>
             {c.label} 기록 {isEdit ? "수정" : "추가"}
           </Text>
+          {sessionLabel ? <Text style={styles.sessionBadge}>{sessionLabel}</Text> : null}
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -319,45 +375,45 @@ export function RecordDetailSheet({
               </View>
               {builtinId === "breast" ? (
                 <>
-                  <Text style={styles.fieldLabel}>좌/우/양쪽</Text>
-                  <ChipRow options={["좌측", "우측", "양쪽"]} value={chip} onChange={setChip} />
+                  <Text style={styles.fieldLabel}>모유수유 방식</Text>
+                  <ChipRow
+                    options={["직수", "젖병수유", "혼합"]}
+                    value={feedingMethod === "direct" ? "직수" : feedingMethod === "bottle" ? "젖병수유" : feedingMethod === "mixed" ? "혼합" : ""}
+                    onChange={(value) => setFeedingMethod(value === "직수" ? "direct" : value === "젖병수유" ? "bottle" : value === "혼합" ? "mixed" : undefined)}
+                  />
+                  <DurationPickerField label="왼쪽 시간" valueMinutes={leftDurationValue} onPress={() => setSideDurationTarget("left")} />
+                  <DurationPickerField label="오른쪽 시간" valueMinutes={rightDurationValue} onPress={() => setSideDurationTarget("right")} />
+                  <View style={styles.calculatedCard}>
+                    <Text style={styles.calculatedLabel}>총 수유 시간</Text>
+                    <Text style={styles.calculatedValue}>{sideDurationTotal || durationValue || 0}분</Text>
+                  </View>
                 </>
               ) : null}
               {builtinId !== "breast" ? (
                 <>
-                  <Text style={styles.fieldLabel}>양 ({settings.units.volume})</Text>
-                  <View style={styles.chipRow}>
-                    {["60", "80", "100", "120", "150", "180"].map((ml) => {
-                      const displayAmount = volumeFromMl(ml, settings.units.volume);
-                      return (
-                      <Pressable
-                        key={ml}
-                        style={[styles.chip, amount === displayAmount && styles.chipSel]}
-                        onPress={() => setAmount(displayAmount)}
-                      >
-                        <Text style={[styles.chipText, amount === displayAmount && styles.chipTextSel]}>
-                          {displayAmount}
-                        </Text>
-                      </Pressable>
-                      );
-                    })}
-                  </View>
-                  <TextInput
-                    style={[styles.input, { marginTop: 8 }]}
-                    value={amount}
-                    onChangeText={setAmount}
-                    keyboardType="numeric"
-                    placeholder="직접 입력"
-                    placeholderTextColor={colors.faint}
-                  />
+                  <VolumePickerField label="먹은 양" value={amount} unit={settings.units.volume} onPress={() => { setFeedingAmountError(""); setVolumeTarget("amount"); }} error={feedingAmountError || undefined} />
+                  <DurationPickerField label="소요 시간 (선택)" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+                  <Text style={styles.fieldLabel}>영양제 (선택)</Text>
+                  <TextInput style={styles.input} value={supplement} onChangeText={setSupplement} placeholder="예: 비타민D" placeholderTextColor={colors.faint} />
                 </>
               ) : null}
               {builtinId === "breast" ? (
                 <>
+                  <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
                   <TimeOfDayPickerField label="종료 시간" valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
-                  <DurationPickerField label="총 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
                 </>
               ) : null}
+              <Text style={styles.fieldLabel}>게워냄 여부</Text>
+              <ChipRow options={["있었어요", "없었어요"]} value={spitUp === "yes" ? "있었어요" : spitUp === "no" ? "없었어요" : ""} onChange={(value) => setSpitUp(value === "있었어요" ? "yes" : value === "없었어요" ? "no" : undefined)} />
+              {builtinId === "breast" ? (
+                <>
+                  <Text style={styles.fieldLabel}>트림 여부</Text>
+                  <ChipRow options={["했어요", "안 했어요"]} value={burped === "yes" ? "했어요" : burped === "no" ? "안 했어요" : ""} onChange={(value) => setBurped(value === "했어요" ? "yes" : value === "안 했어요" ? "no" : undefined)} />
+                  <Text style={styles.fieldLabel}>수유 메모 (선택)</Text>
+                  <ChipRow options={["졸려했어요", "잘 먹었어요", "조금 먹었어요", "보챘어요", "기타"]} value={feedingNote} onChange={setFeedingNote} />
+                </>
+              ) : null}
+              {builtinId === "storedMilk" ? <Text style={styles.readOnlyHint}>저장 모유 재고는 별도 수정하지 않으며, 기록된 수유량만 저장해요.</Text> : null}
             </>
           )}
 
@@ -430,18 +486,16 @@ export function RecordDetailSheet({
 
           {(builtinId === "pump") && (
             <>
-              <Text style={styles.fieldLabel}>좌/우/양쪽</Text>
-              <ChipRow options={["좌측", "우측", "양쪽"]} value={chip} onChange={setChip} />
-              <Text style={styles.fieldLabel}>양 ({settings.units.volume})</Text>
-              <TextInput
-                style={styles.input}
-                value={amount}
-                onChangeText={setAmount}
-                keyboardType="numeric"
-                placeholder="예: 90"
-                placeholderTextColor={colors.faint}
-              />
-              <DurationPickerField label="유축 지속 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+              <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
+              <TimeOfDayPickerField label="종료 시간" valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
+              <DurationPickerField label="왼쪽 시간" valueMinutes={leftDurationValue} onPress={() => setSideDurationTarget("left")} />
+              <DurationPickerField label="오른쪽 시간" valueMinutes={rightDurationValue} onPress={() => setSideDurationTarget("right")} />
+              <VolumePickerField label="왼쪽 유축량" value={leftAmount} unit={settings.units.volume} onPress={() => setVolumeTarget("left")} />
+              <VolumePickerField label="오른쪽 유축량" value={rightAmount} unit={settings.units.volume} onPress={() => setVolumeTarget("right")} />
+              <View style={styles.calculatedRow}>
+                <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>총 시간</Text><Text style={styles.calculatedValue}>{sideDurationTotal || durationValue || 0}분</Text></View>
+                <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>총 유축량</Text><Text style={styles.calculatedValue}>{sideAmountTotal}{settings.units.volume}</Text></View>
+              </View>
             </>
           )}
 
@@ -602,8 +656,8 @@ export function RecordDetailSheet({
             </>
           )}
 
-          {builtinId !== "sleep" && !(c.isCustom && (c.inputMode ?? "memo") === "duration") && (
-            <TimeOfDayPickerField label={builtinId === "breast" ? "시작 시간" : "시간"} valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+          {builtinId !== "sleep" && builtinId !== "breast" && builtinId !== "pump" && !(c.isCustom && (c.inputMode ?? "memo") === "duration") && (
+            <TimeOfDayPickerField label="시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
           )}
 
           {c.isCustom ? (
@@ -721,6 +775,43 @@ export function RecordDetailSheet({
         onConfirm={confirmDurationPicker}
         onClear={() => { setDuration(""); setEndTime(""); setDurationPickerOpen(false); }}
       />
+      <DurationPickerSheet
+        visible={sideDurationTarget !== null}
+        valueMinutes={sideDurationTarget === "left" ? leftDurationValue : rightDurationValue}
+        title={sideDurationTarget === "left" ? "왼쪽 시간" : "오른쪽 시간"}
+        maxMinutes={180}
+        onCancel={() => setSideDurationTarget(null)}
+        onConfirm={(minutes) => {
+          if (sideDurationTarget === "left") setLeftDuration(String(minutes));
+          if (sideDurationTarget === "right") setRightDuration(String(minutes));
+          setSideDurationTarget(null);
+        }}
+        onClear={() => {
+          if (sideDurationTarget === "left") setLeftDuration("");
+          if (sideDurationTarget === "right") setRightDuration("");
+          setSideDurationTarget(null);
+        }}
+      />
+      <VolumePickerSheet
+        visible={volumeTarget !== null}
+        value={volumeTarget === "left" ? leftAmount : volumeTarget === "right" ? rightAmount : amount}
+        title={volumeTarget === "left" ? "왼쪽 유축량" : volumeTarget === "right" ? "오른쪽 유축량" : "먹은 양"}
+        unit={settings.units.volume}
+        allowZero={volumeTarget === "left" || volumeTarget === "right"}
+        onCancel={() => setVolumeTarget(null)}
+        onConfirm={(value) => {
+          if (volumeTarget === "left") setLeftAmount(value);
+          else if (volumeTarget === "right") setRightAmount(value);
+          else setAmount(value);
+          setVolumeTarget(null);
+        }}
+        onClear={() => {
+          if (volumeTarget === "left") setLeftAmount("");
+          else if (volumeTarget === "right") setRightAmount("");
+          else setAmount("");
+          setVolumeTarget(null);
+        }}
+      />
     </KeyboardAvoidingView>
   );
 
@@ -763,7 +854,8 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 },
   dot: { width: 12, height: 12, borderRadius: 6 },
-  title: { fontSize: 17, fontWeight: "700", color: colors.text },
+  title: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.text },
+  sessionBadge: { color: colors.amber, fontSize: 10.5, fontWeight: "800", backgroundColor: colors.amberSoft, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999, overflow: "hidden" },
   fieldLabel: {
     fontSize: 12,
     color: colors.faint,
@@ -784,6 +876,11 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   inputError: { color: colors.dangerText, fontSize: 12, marginTop: 12 },
+  calculatedRow: { flexDirection: "row", gap: 8, marginTop: 14 },
+  calculatedCard: { flex: 1, marginTop: 14, minHeight: 54, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 9, justifyContent: "center" },
+  calculatedLabel: { color: colors.faint, fontSize: 10.5, fontWeight: "700" },
+  calculatedValue: { marginTop: 3, color: colors.text, fontSize: 15, fontWeight: "800" },
+  readOnlyHint: { color: colors.muted, fontSize: 11.5, lineHeight: 17, marginTop: 12 },
   overnightHint: { color: colors.muted, fontSize: 11.5, lineHeight: 17, marginTop: 4 },
   notes: { height: 64, textAlignVertical: "top" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

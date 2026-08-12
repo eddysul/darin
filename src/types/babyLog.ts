@@ -25,6 +25,16 @@ export type BabyLogEntry = {
   stoolState?: string;
   amount?: string;
   duration?: string;
+  /** Feeding/pumping detail fields stored inside the existing JSON payload. */
+  feedingMethod?: "direct" | "bottle" | "mixed";
+  leftDuration?: string;
+  rightDuration?: string;
+  leftAmount?: string;
+  rightAmount?: string;
+  burped?: "yes" | "no";
+  spitUp?: "yes" | "no";
+  supplement?: string;
+  feedingNote?: string;
   notes?: string;
   /** User-editable short label, used by other/doctor/custom-like records. */
   title?: string;

@@ -10,6 +10,10 @@ export function formatLogMeta(
     stoolState?: string;
     amount?: string;
     duration?: string;
+    leftDuration?: string;
+    rightDuration?: string;
+    leftAmount?: string;
+    rightAmount?: string;
     notes?: string;
     title?: string;
     details?: string;
@@ -33,6 +37,10 @@ export function formatLogMeta(
     }
   }
   if (entry.duration) parts.push(`${entry.duration}분`);
+  if (entry.leftDuration) parts.push(`왼쪽 ${entry.leftDuration}분`);
+  if (entry.rightDuration) parts.push(`오른쪽 ${entry.rightDuration}분`);
+  if (entry.leftAmount) parts.push(`왼쪽 ${formatVolume(entry.leftAmount)}`);
+  if (entry.rightAmount) parts.push(`오른쪽 ${formatVolume(entry.rightAmount)}`);
   if (entry.details) parts.push(entry.details.length > 16 ? `${entry.details.slice(0, 16)}…` : entry.details);
   if (entry.nextAt) parts.push(`다음 ${entry.nextAt}`);
   if (entry.notes) parts.push(entry.notes.length > 16 ? `${entry.notes.slice(0, 16)}…` : entry.notes);

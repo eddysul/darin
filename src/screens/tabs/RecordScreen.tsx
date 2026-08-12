@@ -21,6 +21,7 @@ import {
 } from "../../components/babylog/OneTouchRecordGrid";
 import { QuickRecordsBar } from "../../components/babylog/QuickRecordsBar";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
+import { LogCategoryIcon } from "../../components/babylog/LogCategoryIcon";
 import { RecordCreatedToast } from "../../components/babylog/RecordCreatedToast";
 import { RecordDetailSheet, type RecordSheetPrefill } from "../../components/babylog/RecordDetailSheet";
 import { RecordHomeHeader } from "../../components/babylog/RecordHomeHeader";
@@ -35,7 +36,7 @@ import type { ActiveTimer, TimerSide } from "../../types/activeTimer";
 import { formatElapsedClock, elapsedMsNow, isTimerAction } from "../../types/activeTimer";
 import type { BabyLogEntry } from "../../types/babyLog";
 import type { CustomCategory, LogCategoryKey } from "../../types/logCategory";
-import { customCategoryKey } from "../../types/logCategory";
+import { customCategoryKey, isCustomCategoryKey } from "../../types/logCategory";
 import type { QuickRecord } from "../../types/quickRecord";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
 import { createId } from "../../utils/id";
@@ -61,7 +62,7 @@ import {
   longPressModeFor,
   longPressSheetPrefill,
 } from "../../utils/longPressActions";
-import { getLogsForDay } from "../../utils/reportAggregates";
+import { FEEDING_CATS, getLogsForDay } from "../../utils/reportAggregates";
 import { colors } from "../../theme";
 
 type Props = {
@@ -72,6 +73,8 @@ type Props = {
 
 const TIMER_LABEL: Record<ActiveTimer["kind"], string> = {
   breastfeeding: "모유수유",
+  formula: "분유 수유",
+  storedMilk: "저장 모유 수유",
   sleep: "수면",
   pump: "유축",
   tummy: "터미타임",
@@ -233,6 +236,15 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
         stoolState: entry.stoolState,
         amount: entry.amount,
         duration: entry.duration,
+        feedingMethod: entry.feedingMethod,
+        leftDuration: entry.leftDuration,
+        rightDuration: entry.rightDuration,
+        leftAmount: entry.leftAmount,
+        rightAmount: entry.rightAmount,
+        burped: entry.burped,
+        spitUp: entry.spitUp,
+        supplement: entry.supplement,
+        feedingNote: entry.feedingNote,
         notes: entry.notes,
         voice: entry.voice,
         source: entry.source,
@@ -352,7 +364,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     setActiveTimers((prev) => prev.map((t) => (t.id === id ? updater(t) : t)));
   };
 
-  const handleStopTimer = async (opts?: { amount?: string }) => {
+  const handleStopTimer = async (opts?: { amount?: string; leftAmount?: string; rightAmount?: string }) => {
     const timer = activeTimers.find((t) => t.id === timerSheetId);
     if (!timer || timerSaving) return;
     setTimerSaving(true);
@@ -365,6 +377,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
       chip: result.chip,
       notes: result.notes,
       amount: result.amount,
+      leftDuration: result.leftMinutes ? String(result.leftMinutes) : undefined,
+      rightDuration: result.rightMinutes ? String(result.rightMinutes) : undefined,
+      leftAmount: result.leftAmount,
+      rightAmount: result.rightAmount,
     };
 
     try {
@@ -387,8 +403,15 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
       } else if (timer.kind === "breastfeeding") {
         saved = await addLogWithPersistence({ ...base, cat: "breast" });
         title = "모유수유 타이머 저장";
+      } else if (timer.kind === "formula") {
+        saved = await addLogWithPersistence({ ...base, cat: "formula" });
+        title = "분유 수유 저장";
+      } else if (timer.kind === "storedMilk") {
+        saved = await addLogWithPersistence({ ...base, cat: "storedMilk" });
+        title = "저장 모유 수유 저장";
       } else if (timer.kind === "pump") {
-        saved = await addLogWithPersistence({ ...base, cat: "pump" });
+        const totalAmount = (Number.parseFloat(result.leftAmount ?? "0") || 0) + (Number.parseFloat(result.rightAmount ?? "0") || 0);
+        saved = await addLogWithPersistence({ ...base, cat: "pump", amount: totalAmount > 0 ? String(totalAmount) : undefined });
         title = "유축 타이머 저장";
       } else if (timer.kind === "tummy") {
         saved = await addLogWithPersistence({ ...base, cat: "tummy" });
@@ -399,7 +422,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
       }
 
       if (!saved) {
-        Alert.alert("기록 저장에 실패했어요.", "타이머는 계속 유지돼요. 다시 종료해 주세요.");
+        Alert.alert("기록 저장에 실패했어요.", "다시 시도해 주세요. 진행 중인 타이머는 유지돼요.");
         return;
       }
       announceCreated(saved, title);
@@ -468,6 +491,26 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
   const sheetTimer = activeTimers.find((t) => t.id === timerSheetId) ?? null;
   const activeTimerActions = activeTimers.map((t) => t.action);
   const primaryTimer = activeTimers[0];
+  const sessionLabelFor = (cat: LogCategoryKey | null, editId?: string, dateKey?: string) => {
+    if (!cat || isCustomCategoryKey(cat)) return undefined;
+    const targetDate = dateKey ?? selectedDateKey;
+    const targetLogs = getLogsForDay(logs, targetDate, todayKey);
+    const cats = cat === "pump" ? ["pump"] : FEEDING_CATS;
+    if (!cats.includes(cat as never)) return undefined;
+    const ordered = targetLogs
+      .filter((entry) => cats.includes(entry.cat as never))
+      .sort((a, b) => a.time.localeCompare(b.time));
+    const index = editId ? ordered.findIndex((entry) => entry.id === editId) + 1 : ordered.length + 1;
+    return `오늘 ${Math.max(1, index)}회차 ${cat === "pump" ? "유축" : "수유"}`;
+  };
+  const activeSessionLabel = primaryTimer
+    ? sessionLabelFor(primaryTimer.kind === "breastfeeding" ? "breast" : primaryTimer.kind, undefined, primaryTimer.dateKey)
+    : undefined;
+  const primaryTimerCategory: LogCategoryKey | null = primaryTimer
+    ? primaryTimer.kind === "breastfeeding"
+      ? "breast"
+      : primaryTimer.kind
+    : null;
   void timerTick;
 
   useEffect(() => {
@@ -528,22 +571,27 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
           <Text style={styles.viewerBanner}>보기 전용 계정이에요. 기록 추가·수정은 제한돼요.</Text>
         )}
         {primaryTimer ? (
-          <Pressable
-            style={({ pressed }) => [styles.timerBanner, pressed && styles.timerBannerPressed]}
-            onPress={() => setTimerSheetId(primaryTimer.id)}
-          >
-            <View style={styles.timerBannerDot} />
-            <View style={styles.timerBannerCopy}>
+          <View style={styles.timerBanner}>
+            {primaryTimerCategory ? <View style={styles.timerBannerIcon}><LogCategoryIcon categoryKey={primaryTimerCategory} customCategories={customCategories} size={18} color={colors.amber} /></View> : null}
+            <Pressable style={styles.timerBannerCopy} onPress={() => setTimerSheetId(primaryTimer.id)}>
               <Text style={styles.timerBannerTitle}>
                 {TIMER_LABEL[primaryTimer.kind]} 진행 중
                 {activeTimers.length > 1 ? ` · +${activeTimers.length - 1}` : ""}
               </Text>
               <Text style={styles.timerBannerMeta}>
-                {formatElapsedClock(elapsedMsNow(primaryTimer))} · 탭해서 이어서
+                {[activeSessionLabel, formatElapsedClock(elapsedMsNow(primaryTimer)), "탭해서 이어서"].filter(Boolean).join(" · ")}
               </Text>
-            </View>
-            <Text style={styles.timerBannerCta}>열기</Text>
-          </Pressable>
+            </Pressable>
+            <Pressable
+              style={styles.timerBannerAction}
+              onPress={() => patchTimer(primaryTimer.id, primaryTimer.status === "paused" ? resumeTimer : pauseTimer)}
+            >
+              <Text style={styles.timerBannerActionText}>{primaryTimer.status === "paused" ? "다시 시작" : "일시정지"}</Text>
+            </Pressable>
+            <Pressable style={styles.timerBannerAction} onPress={() => setTimerSheetId(primaryTimer.id)}>
+              <Text style={styles.timerBannerActionText}>종료</Text>
+            </Pressable>
+          </View>
         ) : null}
         <TodayLogSummaryCard
           logs={dayLogs}
@@ -658,6 +706,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
         catKey={sheetCat}
         customCategories={customCategories}
         prefill={prefill}
+        sessionLabel={sessionLabelFor(sheetCat, prefill?.editId, prefill?.dateKey)}
         onClose={() => {
           setSheetCat(null);
           setPrefill(null);
@@ -708,6 +757,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
         visible={Boolean(sheetTimer)}
         timer={sheetTimer}
         saving={timerSaving}
+        sessionLabel={sheetTimer ? sessionLabelFor(sheetTimer.kind === "breastfeeding" ? "breast" : sheetTimer.kind, undefined, sheetTimer.dateKey) : undefined}
         allowSideSwitch={settings.timers.switchBreastSide}
         onClose={() => setTimerSheetId(null)}
         onChangeSide={(side: TimerSide) => {
@@ -768,15 +818,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 12,
   },
-  timerBannerPressed: { opacity: 0.85 },
-  timerBannerDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.amber,
-  },
+  timerBannerIcon: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
   timerBannerCopy: { flex: 1 },
   timerBannerTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
   timerBannerMeta: { fontSize: 12, color: colors.muted, marginTop: 2, fontWeight: "600" },
-  timerBannerCta: { fontSize: 13, fontWeight: "800", color: colors.amber },
+  timerBannerAction: { minHeight: 36, paddingHorizontal: 8, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: colors.amberSoft },
+  timerBannerActionText: { fontSize: 10.5, fontWeight: "800", color: colors.amberDark },
 });

@@ -1,12 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors } from "../../theme";
 import type { ActiveTimer, TimerSide } from "../../types/activeTimer";
 import {
@@ -16,7 +9,8 @@ import {
   sideLabel,
 } from "../../types/activeTimer";
 import { useAppSettings } from "../../context/AppSettingsContext";
-import { volumeFromMl, volumeToMl } from "../../utils/measurementFormat";
+import { volumeToMl } from "../../utils/measurementFormat";
+import { VolumePickerField, VolumePickerSheet } from "../inputs/TimePickerFields";
 type Props = {
   visible: boolean;
   timer: ActiveTimer | null;
@@ -24,15 +18,19 @@ type Props = {
   onChangeSide: (side: TimerSide) => void;
   onPause: () => void;
   onResume: () => void;
-  onStop: (opts?: { amount?: string }) => void;
+  onStop: (opts?: { amount?: string; leftAmount?: string; rightAmount?: string }) => void;
   allowSideSwitch?: boolean;
   saving?: boolean;
+  sessionLabel?: string;
 };
 
-const SIDE_OPTIONS: TimerSide[] = ["left", "right", "both"];
+// One side runs at a time; switching banks the current side before starting the other.
+const SIDE_OPTIONS: TimerSide[] = ["left", "right"];
 
 const TITLES: Record<ActiveTimer["kind"], string> = {
   breastfeeding: "모유수유 타이머",
+  formula: "분유 수유 타이머",
+  storedMilk: "저장 모유 수유 타이머",
   sleep: "수면 타이머",
   pump: "유축 타이머",
   tummy: "터미타임 타이머",
@@ -49,11 +47,14 @@ export function ActiveTimerSheet({
   onStop,
   allowSideSwitch = true,
   saving = false,
+  sessionLabel,
 }: Props) {
   const { settings } = useAppSettings();
   const [tick, setTick] = useState(0);
-  const [finishingPump, setFinishingPump] = useState(false);
-  const [pumpAmount, setPumpAmount] = useState("");
+  const [leftAmount, setLeftAmount] = useState("");
+  const [rightAmount, setRightAmount] = useState("");
+  const [feedingAmount, setFeedingAmount] = useState("");
+  const [volumeTarget, setVolumeTarget] = useState<"left" | "right" | "feeding" | null>(null);
 
   useEffect(() => {
     if (!visible || !timer || timer.status !== "running") return;
@@ -63,8 +64,10 @@ export function ActiveTimerSheet({
 
   useEffect(() => {
     if (!visible) {
-      setFinishingPump(false);
-      setPumpAmount("");
+      setLeftAmount("");
+      setRightAmount("");
+      setFeedingAmount("");
+      setVolumeTarget(null);
     }
   }, [visible]);
 
@@ -77,43 +80,42 @@ export function ActiveTimerSheet({
   const leftElapsed = useMemo(() => {
     if (!timer) return 0;
     void tick;
-    const live =
-      timer.status === "running" && timer.side === "left"
-        ? Math.max(0, Date.now() - Date.parse(timer.segmentStartedAt))
-        : 0;
+    const segment = timer.status === "running" ? Math.max(0, Date.now() - Date.parse(timer.segmentStartedAt)) : 0;
+    const live = timer.side === "left" ? segment : timer.side === "both" ? Math.floor(segment / 2) : 0;
     return timer.leftMs + live;
   }, [timer, tick]);
 
   const rightElapsed = useMemo(() => {
     if (!timer) return 0;
     void tick;
-    const live =
-      timer.status === "running" && timer.side === "right"
-        ? Math.max(0, Date.now() - Date.parse(timer.segmentStartedAt))
-        : 0;
+    const segment = timer.status === "running" ? Math.max(0, Date.now() - Date.parse(timer.segmentStartedAt)) : 0;
+    const live = timer.side === "right" ? segment : timer.side === "both" ? Math.ceil(segment / 2) : 0;
     return timer.rightMs + live;
   }, [timer, tick]);
 
   if (!timer) return null;
 
   const needsSide = timer.kind === "breastfeeding" || timer.kind === "pump";
+  const needsFeedingAmount = timer.kind === "formula" || timer.kind === "storedMilk";
   const paused = timer.status === "paused";
 
   const handleStopPress = () => {
-    if (timer.kind === "pump" && !finishingPump) {
-      setFinishingPump(true);
-      return;
-    }
     onStop(
-      timer.kind === "pump"
+      needsFeedingAmount
         ? {
-            amount: pumpAmount.trim()
-              ? volumeToMl(pumpAmount.trim(), settings.units.volume)
+            amount: feedingAmount
+              ? volumeToMl(feedingAmount, settings.units.volume)
               : undefined,
           }
+        : timer.kind === "pump"
+          ? {
+              leftAmount: leftAmount ? volumeToMl(leftAmount, settings.units.volume) : undefined,
+              rightAmount: rightAmount ? volumeToMl(rightAmount, settings.units.volume) : undefined,
+            }
         : undefined,
     );
   };
+  const canSave = !needsFeedingAmount || Number.parseFloat(feedingAmount) > 0;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -123,7 +125,7 @@ export function ActiveTimerSheet({
           <View style={styles.titleRow}>
             <View style={styles.liveDot} />
             <Text style={styles.title}>{TITLES[timer.kind]}</Text>
-            <Text style={styles.badge}>{paused ? "일시정지" : "진행 중"}</Text>
+            <Text style={styles.badge}>{sessionLabel ?? (paused ? "일시정지" : "진행 중")}</Text>
           </View>
 
           <Text style={styles.clock}>{formatElapsedClock(elapsed)}</Text>
@@ -152,7 +154,7 @@ export function ActiveTimerSheet({
                   </View>
                 </>
               ) : null}
-              {timer.kind === "breastfeeding" ? (
+              {(timer.kind === "breastfeeding" || timer.kind === "pump") ? (
                 <Text style={styles.sideSplit}>
                   좌 {formatElapsedClock(leftElapsed)} · 우 {formatElapsedClock(rightElapsed)}
                 </Text>
@@ -160,36 +162,17 @@ export function ActiveTimerSheet({
             </>
           ) : null}
 
-          {finishingPump ? (
+          {timer.kind === "pump" ? (
             <>
-              <Text style={styles.fieldLabel}>유축량 ({settings.units.volume})</Text>
-              <TextInput
-                style={styles.input}
-                value={pumpAmount}
-                onChangeText={setPumpAmount}
-                keyboardType="numeric"
-                placeholder="예: 90"
-                placeholderTextColor={colors.faint}
-                autoFocus
-              />
-              <View style={styles.suggestRow}>
-                {["40", "60", "80", "100", "120"].map((ml) => {
-                  const displayAmount = volumeFromMl(ml, settings.units.volume);
-                  return (
-                  <Pressable
-                    key={ml}
-                    style={[styles.suggestChip, pumpAmount === displayAmount && styles.chipSel]}
-                    onPress={() => setPumpAmount(displayAmount)}
-                  >
-                    <Text
-                      style={[styles.chipText, pumpAmount === displayAmount && styles.chipTextSel]}
-                    >{`${displayAmount}${settings.units.volume}`}</Text>
-                  </Pressable>
-                  );
-                })}
+              <View style={styles.amountRow}>
+                <View style={styles.amountField}><VolumePickerField label="왼쪽 유축량" value={leftAmount} unit={settings.units.volume} onPress={() => setVolumeTarget("left")} /></View>
+                <View style={styles.amountField}><VolumePickerField label="오른쪽 유축량" value={rightAmount} unit={settings.units.volume} onPress={() => setVolumeTarget("right")} /></View>
               </View>
+              <Text style={styles.totalAmount}>총 유축량 {(Number.parseFloat(leftAmount) || 0) + (Number.parseFloat(rightAmount) || 0)}{settings.units.volume}</Text>
             </>
           ) : null}
+
+          {needsFeedingAmount ? <VolumePickerField label="먹은 양" value={feedingAmount} unit={settings.units.volume} onPress={() => setVolumeTarget("feeding")} error={!feedingAmount ? "먹은 양을 선택하면 종료 및 저장할 수 있어요." : undefined} /> : null}
 
           <View style={styles.actions}>
             <Pressable disabled={saving} style={[styles.btn, styles.btnGhost, saving && styles.btnDisabled]} onPress={onClose}>
@@ -204,12 +187,32 @@ export function ActiveTimerSheet({
                 <Text style={styles.btnSecondaryText}>일시정지</Text>
               </Pressable>
             )}
-            <Pressable disabled={saving} style={[styles.btn, styles.btnPrimary, saving && styles.btnDisabled]} onPress={handleStopPress}>
+            <Pressable disabled={saving || !canSave} style={[styles.btn, styles.btnPrimary, (saving || !canSave) && styles.btnDisabled]} onPress={handleStopPress}>
               <Text style={styles.btnPrimaryText}>
-                {saving ? "저장 중" : finishingPump ? "저장" : "종료"}
+                {saving ? "저장 중" : "종료 및 저장"}
               </Text>
             </Pressable>
           </View>
+          <VolumePickerSheet
+            visible={volumeTarget !== null}
+            value={volumeTarget === "left" ? leftAmount : volumeTarget === "right" ? rightAmount : feedingAmount}
+            title={volumeTarget === "left" ? "왼쪽 유축량" : volumeTarget === "right" ? "오른쪽 유축량" : "먹은 양"}
+            unit={settings.units.volume}
+            allowZero={volumeTarget === "left" || volumeTarget === "right"}
+            onCancel={() => setVolumeTarget(null)}
+            onConfirm={(value) => {
+              if (volumeTarget === "left") setLeftAmount(value);
+              else if (volumeTarget === "right") setRightAmount(value);
+              else setFeedingAmount(value);
+              setVolumeTarget(null);
+            }}
+            onClear={() => {
+              if (volumeTarget === "left") setLeftAmount("");
+              else if (volumeTarget === "right") setRightAmount("");
+              else setFeedingAmount("");
+              setVolumeTarget(null);
+            }}
+          />
         </Pressable>
       </Pressable>
     </Modal>
@@ -293,25 +296,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
   },
-  input: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    color: colors.text,
-    fontSize: 15,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  suggestRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
-  suggestChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    backgroundColor: colors.card,
-  },
+  amountRow: { flexDirection: "row", gap: 8 },
+  amountField: { flex: 1 },
+  totalAmount: { marginTop: 10, textAlign: "center", color: colors.text, fontSize: 13, fontWeight: "800" },
   actions: { flexDirection: "row", gap: 8, marginTop: 22 },
   btn: {
     flex: 1,

@@ -44,6 +44,15 @@ export type CareLogPayload = {
   stoolState?: string;
   amount?: string;
   duration?: string;
+  feedingMethod?: "direct" | "bottle" | "mixed";
+  leftDuration?: string;
+  rightDuration?: string;
+  leftAmount?: string;
+  rightAmount?: string;
+  burped?: "yes" | "no";
+  spitUp?: "yes" | "no";
+  supplement?: string;
+  feedingNote?: string;
   notes?: string;
   title?: string;
   details?: string;

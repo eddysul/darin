@@ -28,6 +28,7 @@ import { isCustomCategoryKey } from "../src/types/logCategory";
 import { elapsedClockMinutes } from "../src/utils/formatLog";
 import { QUICK_RECORD_ACTIONS } from "../src/constants/quickRecordActions";
 import { diaperCounts, diaperTypeLabel } from "../src/utils/diaperLog";
+import { formatTimelineLabel, formatTimelineSubtitle } from "../src/utils/logSummary";
 import { DEFAULT_QUICK_RECORDS } from "../src/constants/defaultQuickRecords";
 import { actionToCategory, longPressSheetPrefill } from "../src/utils/longPressActions";
 import {
@@ -36,6 +37,7 @@ import {
   pauseTimer,
   resumeTimer,
 } from "../src/utils/activeTimerOps";
+import { isTimerAction } from "../src/types/activeTimer";
 import {
   clearStorageIssue,
   getStorageIssue,
@@ -629,6 +631,8 @@ function log(
   const fresh = createActiveTimer("sleep", "sleep");
   assert.equal(fresh.accumulatedMs, 0, "a new timer starts with no banked duration");
   assert.ok(Date.parse(fresh.segmentStartedAt) >= Date.now() - 1_000, "a new timer uses a fresh start timestamp");
+  assert.equal(isTimerAction("formula"), true, "formula supports long-press timing");
+  assert.equal(isTimerAction("storedMilk"), true, "stored milk supports long-press timing");
 }
 
 // --- Record home quick actions: 6 core + 12 expanded = 18, with one diaper action ---
@@ -660,6 +664,22 @@ function log(
   ];
   assert.deepEqual(diaperCounts(diapers), { total: 3, urine: 2, stool: 2 });
   assert.equal(diaperTypeLabel(diapers[2]), "소변+대변");
+}
+
+// --- Feeding/pumping details remain readable without changing the care_logs schema ---
+{
+  const breast = log({ id: "breast-detail", cat: "breast", time: "11:00", leftDuration: "10", rightDuration: "8", burped: "yes", spitUp: "no" });
+  assert.equal(formatTimelineLabel(breast), "모유수유 · 왼쪽 10분 · 오른쪽 8분");
+  assert.match(formatTimelineSubtitle(breast) ?? "", /트림했어요/);
+  const pump = log({ id: "pump-detail", cat: "pump", time: "12:00", leftAmount: "50", rightAmount: "40", amount: "90" });
+  assert.equal(formatTimelineLabel(pump), "유축 · 왼쪽 50ml · 오른쪽 40ml");
+  const feeding = buildTodaySummary([
+    log({ id: "feed-1", cat: "breast", time: "08:00", duration: "12" }),
+    log({ id: "feed-2", cat: "formula", time: "09:00", amount: "80" }),
+    log({ id: "feed-3", cat: "storedMilk", time: "10:00", amount: "70" }),
+    log({ id: "not-feed", cat: "pump", time: "10:30", amount: "90" }),
+  ]);
+  assert.equal(feeding.feedCount, 3);
 }
 
 // --- Diary compose live summary vs frozen snapshot ---

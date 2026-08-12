@@ -4,6 +4,8 @@ export type TimerSide = "left" | "right" | "both";
 
 export type ActiveTimerKind =
   | "breastfeeding"
+  | "formula"
+  | "storedMilk"
   | "sleep"
   | "pump"
   | "tummy"
@@ -31,6 +33,8 @@ export type ActiveTimer = {
 
 export const TIMER_ACTIONS: OneTouchAction[] = [
   "breastfeeding",
+  "formula",
+  "storedMilk",
   "sleep",
   "pump",
   "tummy",

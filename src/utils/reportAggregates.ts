@@ -14,7 +14,7 @@ import type { WeekStart } from "../types/appSettings";
 import { offsetDateKey, parseDateKey } from "./dateKey";
 
 /** Intake events shown as feeding; pumping and solid food are tracked separately. */
-export const FEEDING_CATS: BabyLogCategoryId[] = ["breast", "formula", "storedMilk", "milk"];
+export const FEEDING_CATS: BabyLogCategoryId[] = ["breast", "formula", "storedMilk"];
 
 export type DayAggregate = {
   dateKey: string;

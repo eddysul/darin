@@ -101,11 +101,13 @@ export type TimerStopResult = {
   leftMinutes: number;
   rightMinutes: number;
   amount?: string;
+  leftAmount?: string;
+  rightAmount?: string;
 };
 
 export function buildTimerStopResult(
   timer: ActiveTimer,
-  opts?: { amount?: string },
+  opts?: { amount?: string; leftAmount?: string; rightAmount?: string },
 ): TimerStopResult {
   const banked = bankCurrentSegment(timer);
   const totalMs = banked.accumulatedMs;
@@ -139,6 +141,8 @@ export function buildTimerStopResult(
     leftMinutes,
     rightMinutes,
     amount: opts?.amount,
+    leftAmount: opts?.leftAmount,
+    rightAmount: opts?.rightAmount,
   };
 }
 

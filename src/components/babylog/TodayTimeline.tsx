@@ -4,7 +4,7 @@ import { BabyLogIcon } from "./BabyLogIcon";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
 import type { CustomCategory } from "../../types/logCategory";
-import { formatDisplayTime, formatTimelineLabel, sortLogsNewest } from "../../utils/logSummary";
+import { formatDisplayTime, formatTimelineLabel, formatTimelineSubtitle, sortLogsNewest } from "../../utils/logSummary";
 import { formatLogProvenance } from "../../utils/logProvenance";
 import { resolveLogCategory } from "../../utils/resolveLogCategory";
 import { colors, radius } from "../../theme";
@@ -141,6 +141,7 @@ function SwipeableTimelineRow({
               />
               <Text style={styles.entryText}>{formatTimelineLabel(entry, customCategories)}</Text>
             </View>
+            {formatTimelineSubtitle(entry) ? <Text style={styles.entryMeta}>{formatTimelineSubtitle(entry)}</Text> : null}
             {formatLogProvenance(entry) ? (
               <Text style={styles.actor}>{formatLogProvenance(entry)}</Text>
             ) : null}
@@ -225,6 +226,7 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   entryRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   entryText: { flex: 1, fontSize: 14.5, fontWeight: "700", color: colors.text },
+  entryMeta: { fontSize: 11, lineHeight: 16, color: colors.muted, marginTop: 3 },
   actor: { fontSize: 11, color: colors.faint, marginTop: 3 },
   editChip: {
     borderWidth: 1,
