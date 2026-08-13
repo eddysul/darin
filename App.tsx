@@ -439,7 +439,10 @@ function RootApp() {
     }
     if (familyDisplays.length) {
       const { saveFamilyMembers } = await import("./src/utils/familyMembersStore");
-      await saveFamilyMembers(familyDisplays);
+      await saveFamilyMembers(
+        familyDisplays,
+        authenticatedUser ? { userId: authenticatedUser.id, babyId: serverBaby.id } : null,
+      );
     }
     if (authenticatedUser) {
       await rehydrateFromServer({ userId: authenticatedUser.id, babyId: serverBaby.id });

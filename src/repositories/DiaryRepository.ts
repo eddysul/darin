@@ -40,6 +40,18 @@ function isRemotePhoto(uri: string): boolean {
   return /^https?:\/\//i.test(uri);
 }
 
+function signedDiaryStoragePath(uri: string): string | null {
+  if (!isRemotePhoto(uri)) return null;
+  try {
+    const marker = `/${DIARY_MEDIA_BUCKET}/`;
+    const pathname = decodeURIComponent(new URL(uri).pathname);
+    const markerIndex = pathname.indexOf(marker);
+    return markerIndex >= 0 ? pathname.slice(markerIndex + marker.length) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function requireUserId(): Promise<string> {
   const user = await AuthRepository.getUser();
   if (!user) throw new Error("Diary requires an authenticated user.");
@@ -305,14 +317,24 @@ export const DiaryRepository = {
 
   async updateWithPhotos(babyId: string, entry: DiaryEntry): Promise<DiaryWriteResult> {
     const updated = await this.update(babyId, entry.id, entry);
-    let photoUploadFailed = 0;
+    const existing = await this.listMedia(entry.id);
+    const desiredRemotePaths = new Set(entry.photos.map(signedDiaryStoragePath).filter((path): path is string => Boolean(path)));
     const localPhotos = entry.photos.filter((uri) => !isRemotePhoto(uri));
-    if (entry.photos.length === 0) {
-      photoUploadFailed = await this.replacePhotos(babyId, entry.id, []);
-    } else if (localPhotos.length > 0) {
-      photoUploadFailed = await this.replacePhotos(babyId, entry.id, localPhotos);
+    const uploaded: DiaryMedia[] = [];
+    for (const photoUri of localPhotos) {
+      try {
+        uploaded.push(await this.uploadLocalPhoto({ babyId, diaryEntryId: entry.id, photoUri }));
+      } catch {
+        for (const media of uploaded) {
+          try { await this.deleteMedia(media.id); } catch { /* keep tracked cleanup failures */ }
+        }
+        return { entry: (await this.getById(updated.id)) ?? updated, photoUploadFailed: 1 };
+      }
     }
-    return { entry: (await this.getById(updated.id)) ?? updated, photoUploadFailed };
+    for (const media of existing) {
+      if (!desiredRemotePaths.has(media.storagePath)) await this.deleteMedia(media.id);
+    }
+    return { entry: (await this.getById(updated.id)) ?? updated, photoUploadFailed: 0 };
   },
 
   async hydrate(babyId: string): Promise<DiaryEntry[]> {

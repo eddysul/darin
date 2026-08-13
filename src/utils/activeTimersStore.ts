@@ -2,12 +2,14 @@ import type { ActiveTimer } from "../types/activeTimer";
 import { qaStorage } from "./qaStorage";
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
+import { isValidLocalDataScope, localDataScopeId, scopedStorageKey, type LocalDataScope } from "./scopedLocalStorage";
 
 const STORAGE_KEY = STORAGE_KEYS.activeTimers;
 
 let memory: ActiveTimer[] | null = null;
 let hydrated = false;
 let hydratePromise: Promise<boolean> | null = null;
+let activeScopeId: string | null = null;
 
 function isTimer(item: unknown): item is ActiveTimer {
   if (typeof item !== "object" || item === null) return false;
@@ -32,7 +34,10 @@ function normalize(raw: unknown): ActiveTimer[] {
   }));
 }
 
-export async function hydrateActiveTimers(force = false): Promise<boolean> {
+export async function hydrateActiveTimers(scope: LocalDataScope | null, force = false): Promise<boolean> {
+  if (!isValidLocalDataScope(scope)) { memory = []; hydrated = true; activeScopeId = null; return true; }
+  const scopeId = localDataScopeId(scope);
+  if (activeScopeId !== scopeId) { memory = null; hydrated = false; hydratePromise = null; activeScopeId = scopeId; }
   if (force) {
     hydrated = false;
     hydratePromise = null;
@@ -41,7 +46,7 @@ export async function hydrateActiveTimers(force = false): Promise<boolean> {
   if (!hydratePromise) {
     hydratePromise = (async () => {
       try {
-        const raw = await qaStorage.getItem(STORAGE_KEY);
+        const raw = await qaStorage.getItem(scopedStorageKey(STORAGE_KEY, scope));
         memory = raw ? normalize(JSON.parse(raw)) : null;
         hydrated = true;
         return true;
@@ -58,11 +63,12 @@ export function getActiveTimers(): ActiveTimer[] | null {
   return memory;
 }
 
-export async function saveActiveTimers(timers: ActiveTimer[]): Promise<void> {
+export async function saveActiveTimers(timers: ActiveTimer[], scope: LocalDataScope | null): Promise<void> {
+  if (!isValidLocalDataScope(scope) || activeScopeId !== localDataScopeId(scope)) return;
   memory = timers;
   hydrated = true;
   try {
-    await qaStorage.setItem(STORAGE_KEY, JSON.stringify(timers));
+    await qaStorage.setItem(scopedStorageKey(STORAGE_KEY, scope), JSON.stringify(timers));
   } catch {
     reportStorageIssue("save", STORAGE_KEY);
   }

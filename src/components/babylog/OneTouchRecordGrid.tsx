@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getCategory } from "../../constants/babyLogCategories";
 import {
   QUICK_RECORD_ACTIONS,
@@ -57,8 +57,11 @@ export function OneTouchRecordGrid({
   void coreActions;
   const allVisible = QUICK_RECORD_ACTIONS.filter((action) => orderedVisible.includes(action.id));
   const topIds = useMemo(() => rankQuickActions(logs, orderedVisible), [babyScopeKey, logs, orderedVisible.join("|")]);
-  const visible = expanded ? allVisible : QUICK_RECORD_ACTIONS.filter((action) => topIds.includes(action.id)).sort((a, b) => topIds.indexOf(a.id) - topIds.indexOf(b.id));
-  const canExpand = allVisible.length > visible.length || customCategories.length > 0;
+  const collapsedVisible = QUICK_RECORD_ACTIONS
+    .filter((action) => topIds.includes(action.id))
+    .sort((a, b) => topIds.indexOf(a.id) - topIds.indexOf(b.id));
+  const visible = expanded ? allVisible : collapsedVisible;
+  const canExpand = allVisible.length > collapsedVisible.length || customCategories.length > 0;
 
   return (
     <View style={styles.section}>
@@ -114,7 +117,11 @@ export function OneTouchRecordGrid({
           ))}
         </View>
       ) : (
-        <View style={styles.gridExpanded}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.row}
+        >
           {visible.map((action) => (
             <ActionTile
               key={action.id}
@@ -126,13 +133,20 @@ export function OneTouchRecordGrid({
               onLongPress={onLongPress}
               onOpenActiveTimer={onOpenActiveTimer}
               onInteractionChange={onInteractionChange}
-              expanded
             />
           ))}
-        </View>
+          {canExpand ? (
+            <Pressable
+              style={({ pressed }) => [styles.expandTile, pressed && styles.pressed]}
+              onPress={() => setExpanded(true)}
+              accessibilityRole="button"
+              accessibilityLabel="더 보기"
+            >
+              <Text style={styles.expandTileLabel}>더 보기</Text>
+            </Pressable>
+          ) : null}
+        </ScrollView>
       )}
-
-      {!expanded && canExpand ? <Pressable style={({ pressed }) => [styles.collapseButton, pressed && styles.expandPressed]} onPress={() => setExpanded(true)} accessibilityRole="button" accessibilityLabel="더 보기"><Text style={styles.expandText}>더 보기</Text></Pressable> : null}
 
       {expanded && canExpand ? (
         <Pressable

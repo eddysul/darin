@@ -143,6 +143,17 @@ export type BabyMemberRow = {
   updated_at: string;
 };
 
+export type BabyCautionFoodRow = {
+  id: string;
+  baby_id: string;
+  food_name: string;
+  normalized_food_name: string;
+  source: "preset" | "custom";
+  created_by: string;
+  created_at: string;
+  archived_at: string | null;
+};
+
 export type InviteCodeRow = {
   id: string;
   baby_id: string | null;
@@ -294,6 +305,7 @@ export type MemoryPostRow = {
   author_id: string | null;
   caption: string | null;
   privacy_type: MemoryPrivacyType;
+  is_family_moment: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -465,6 +477,12 @@ export type Database = {
         Insert: Partial<BabyMemberRow> &
           Pick<BabyMemberRow, "baby_id" | "user_id" | "permission_role">;
         Update: Partial<BabyMemberRow>;
+        Relationships: [];
+      };
+      baby_caution_foods: {
+        Row: BabyCautionFoodRow;
+        Insert: Partial<BabyCautionFoodRow> & Pick<BabyCautionFoodRow, "baby_id" | "food_name" | "normalized_food_name" | "created_by">;
+        Update: Partial<BabyCautionFoodRow>;
         Relationships: [];
       };
       invite_codes: {

@@ -40,7 +40,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { babyName, familyMembers, myFamilyRole, logAuthor, babyStickers, addBabySticker, deleteBabySticker } = useBabyLog();
   const [bundle, setBundle] = useState<MemoryPostBundle | null>(null);
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [userId, setUserId] = useState("");
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
@@ -55,14 +55,13 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const load = useCallback(async (showSpinner = true) => {
     if (showSpinner) setLoading(true);
     setError("");
-    if (showSpinner) setImageUrl(""); // drop stale URL when entering; keep current media stable during inline mutations
+    if (showSpinner) setImageUrls([]); // drop stale URLs when entering; keep current media stable during inline mutations
     try {
       const next = await MemoriesRepository.getBundleById(route.params.memoryPostId);
       if (!next) throw new Error("삭제되었거나 볼 수 없는 추억이에요.");
       setBundle(next);
       setIsSaved(await MemoriesRepository.isSaved(next.post.id));
-      const cover = next.media[0];
-      setImageUrl(cover ? await MemoriesRepository.createSignedUrl(cover.storagePath) : "");
+      setImageUrls(await Promise.all(next.media.map((media) => MemoriesRepository.createSignedUrl(media.storagePath))));
     } catch (cause) {
       setBundle(null);
       setError(cause instanceof Error ? cause.message : "추억을 불러오지 못했어요.");
@@ -228,7 +227,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
-        <MemoryMediaViewer media={bundle.media} imageUrl={imageUrl} onDoubleTap={() => void likeFromDoubleTap()} />
+        <MemoryMediaViewer media={bundle.media} imageUrls={imageUrls} onDoubleTap={() => void likeFromDoubleTap()} />
 
         <View style={[styles.postCard, { borderColor: privacy.accent }]}>
           <View style={styles.metaRow}>

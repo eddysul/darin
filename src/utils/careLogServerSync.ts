@@ -37,7 +37,10 @@ async function bindBaby(careSetup: CareSetup): Promise<{ userId: string; babyId:
   // Drop stale baby pointer from a previous auth user.
   const babyIdHint = sync.userId === session.user.id ? sync.babyId : null;
 
-  const baby = await BabyRepository.ensureFromCareSetup(careSetup, babyIdHint);
+  // An existing active pointer is server-authoritative. Never overwrite a selected
+  // sibling's profile with the device's previous single-baby CareSetup cache.
+  const hintedBaby = babyIdHint ? await BabyRepository.getBaby(babyIdHint) : null;
+  const baby = hintedBaby ?? await BabyRepository.ensureFromCareSetup(careSetup, null);
   await saveSupabaseSync({
     userId: session.user.id,
     babyId: baby.id,
@@ -132,12 +135,12 @@ export async function bootstrapCareLogsFromServer(opts: {
   }
 }
 
-export async function syncCareLogCreate(entry: BabyLogEntry): Promise<BabyLogEntry | null> {
+export async function syncCareLogCreate(entry: BabyLogEntry, babyIdOverride?: string): Promise<BabyLogEntry | null> {
   if (!isSupabaseConfigured()) {
     console.warn("[supabase] skip create: not configured");
     return null;
   }
-  const babyId = await ensureCareLogBabyId();
+  const babyId = babyIdOverride ?? await ensureCareLogBabyId();
   if (!babyId) {
     console.warn("[supabase] skip create: no babyId (auth/bootstrap failed)");
     return null;
@@ -155,9 +158,10 @@ export async function syncCareLogCreate(entry: BabyLogEntry): Promise<BabyLogEnt
 export async function syncCareLogUpdate(
   id: string,
   entry: Omit<BabyLogEntry, "id">,
+  babyIdOverride?: string,
 ): Promise<BabyLogEntry | null> {
   if (!isSupabaseConfigured()) return null;
-  const babyId = await ensureCareLogBabyId();
+  const babyId = babyIdOverride ?? await ensureCareLogBabyId();
   if (!babyId) return null;
   try {
     const remote = await CareLogRepository.updateCareLog(babyId, id, entry);
@@ -169,9 +173,9 @@ export async function syncCareLogUpdate(
   }
 }
 
-export async function syncCareLogDelete(id: string): Promise<boolean> {
+export async function syncCareLogDelete(id: string, babyIdOverride?: string): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
-  const babyId = await ensureCareLogBabyId();
+  const babyId = babyIdOverride ?? await ensureCareLogBabyId();
   if (!babyId) return false;
   try {
     await CareLogRepository.deleteCareLog(babyId, id);

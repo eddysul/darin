@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,11 +11,12 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
+import { BabySwitcher } from "../components/babylog/BabySwitcher";
 import { RecordDatePickerModal } from "../components/babylog/RecordDatePickerModal";
 import { ProfileAvatar } from "../components/profile/ProfileAvatar";
 import { EmptyState } from "../components/states/FeedbackStates";
@@ -32,20 +33,22 @@ import {
   FAMILY_STATUS_LABELS,
   type FamilyRole,
 } from "../types/family";
-import type { FamilyMemberDisplay } from "../types/profileSettings";
+import type { FamilyMemberDisplay, UploadAvatarInput } from "../types/profileSettings";
 import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
 import { familyRoleToPermission, permissionToFamilyRole } from "../utils/supabaseMappers";
 import { formatBabyAge } from "../utils/childDisplay";
 import { isValidBirthDate } from "../utils/dateInput";
 import { formatDateKey } from "../utils/dateKey";
-import { getSupabaseSync } from "../utils/supabaseSyncStore";
 import { presentAvatarPicker } from "../utils/profileAvatarPicker";
 import { colors, radius } from "../theme";
+import { CAUTION_FOOD_PRESETS } from "../types/cautionFood";
 
 const MEMBER_COLORS = [colors.amber, "#7c83fd", "#5CB87A", "#c98a54"];
 
 export function BabyProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, "BabyProfile">>();
+  const isCreating = route.params?.mode === "create";
   const insets = useSafeAreaInsets();
   const { careSetup, setCareSetup } = useApp();
   const { settings } = useAppSettings();
@@ -57,12 +60,17 @@ export function BabyProfileScreen() {
     setFamilyMemberStatus,
     removeFamilyMember,
     rehydrateFromServer,
+    cautionFoods,
+    addCautionFood,
+    removeCautionFood,
+    activeBabyId,
+    addBaby,
   } = useBabyLog();
 
-  const babyId = getSupabaseSync().babyId;
+  const babyId = activeBabyId;
   const allowInvite = canInvite(myFamilyRole);
   const allowManage = canManageMembers(myFamilyRole);
-  const canEditBaby = myFamilyRole === "owner" || myFamilyRole === "admin" || myFamilyRole === "editor" || myFamilyRole === "caregiver";
+  const canEditBaby = isCreating || myFamilyRole === "owner" || myFamilyRole === "admin" || myFamilyRole === "editor" || myFamilyRole === "caregiver";
 
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -76,6 +84,12 @@ export function BabyProfileScreen() {
   const [gender, setGender] = useState(careSetup.child.gender ?? "unknown");
   const [note, setNote] = useState(careSetup.child.specialNotes ?? "");
   const [members, setMembers] = useState<FamilyMemberDisplay[]>([]);
+  const [customCautionFood, setCustomCautionFood] = useState("");
+  const [pendingAvatar, setPendingAvatar] = useState<UploadAvatarInput | null>(null);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ title: isCreating ? "아기 추가" : "아기 프로필" });
+  }, [isCreating, navigation]);
 
   const configuredAge = formatBabyAge(
     { ...careSetup.child, childName: name, birthDate: birthDate || undefined },
@@ -85,6 +99,19 @@ export function BabyProfileScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    if (isCreating) {
+      setName("");
+      setNickname("");
+      setBirthDate("");
+      setGender("unknown");
+      setNote("");
+      setAvatarUrl(undefined);
+      setPendingAvatar(null);
+      setEditing(true);
+      setMembers([]);
+      setLoading(false);
+      return;
+    }
     try {
       if (babyId) {
         const profile = await BabyProfileRepository.getBabyProfile(babyId);
@@ -110,7 +137,7 @@ export function BabyProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, [babyId, careSetup.child]);
+  }, [babyId, careSetup.child, isCreating]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
@@ -152,6 +179,36 @@ export function BabyProfileScreen() {
     setSaving(true);
     setError("");
     try {
+      if (isCreating) {
+        const created = await addBaby({
+          name: trimmed,
+          birthDate: birthDate.trim() || undefined,
+          gender: gender === "unknown" ? undefined : gender,
+          specialNotes: note.trim() || undefined,
+        });
+        let profileFollowupFailed = false;
+        try {
+          if (nickname.trim()) {
+            await BabyProfileRepository.updateBabyProfile({
+              babyId: created.id,
+              name: trimmed,
+              nickname,
+              birthDate: birthDate.trim() || null,
+              gender: gender === "unknown" ? null : gender,
+              note,
+            });
+          }
+          if (pendingAvatar) await BabyProfileRepository.uploadBabyAvatar(created.id, pendingAvatar);
+        } catch {
+          profileFollowupFailed = true;
+        }
+        await rehydrateFromServer().catch(() => undefined);
+        navigation.replace("BabyProfile");
+        if (profileFollowupFailed) {
+          Alert.alert("아기는 추가했어요", "사진 또는 별명은 저장하지 못했어요. 아기 프로필에서 다시 입력해 주세요.");
+        }
+        return;
+      }
       if (!babyId) throw new Error("현재 아기 정보를 서버에서 찾지 못했어요. 다시 로그인해 주세요.");
       const next = await BabyProfileRepository.updateBabyProfile({
         babyId,
@@ -180,13 +237,19 @@ export function BabyProfileScreen() {
   };
 
   const pickAvatar = () => {
-    if (!canEditBaby || !babyId) {
+    if (!canEditBaby || (!babyId && !isCreating)) {
       setError("이 정보를 수정할 권한이 없어요.");
       return;
     }
     presentAvatarPicker({
       hasAvatar: Boolean(avatarUrl),
       onPick: (avatar) => {
+        if (isCreating) {
+          setPendingAvatar(avatar);
+          setAvatarUrl(avatar.uri);
+          return;
+        }
+        if (!babyId) return;
         setSaving(true);
         setError("");
         void BabyProfileRepository.uploadBabyAvatar(babyId, avatar)
@@ -205,6 +268,12 @@ export function BabyProfileScreen() {
           .finally(() => setSaving(false));
       },
       onClear: () => {
+        if (isCreating) {
+          setPendingAvatar(null);
+          setAvatarUrl(undefined);
+          return;
+        }
+        if (!babyId) return;
         setSaving(true);
         void BabyProfileRepository.updateBabyProfile({
           babyId,
@@ -243,10 +312,64 @@ export function BabyProfileScreen() {
     );
   }
 
+  if (isCreating) {
+    return (
+      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={88}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 24, 36) }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+          <View style={styles.babyCard}>
+            <ProfileAvatar
+              uri={avatarUrl}
+              size={96}
+              fallback="baby"
+              editable
+              onPress={pickAvatar}
+              label="아기 사진 추가"
+              imageFit="contain"
+            />
+            <View style={styles.babyCopy}>
+              <Text style={styles.label}>아기 이름 *</Text>
+              <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="아기 이름" placeholderTextColor={colors.faint} maxLength={40} />
+              <Text style={styles.label}>별명</Text>
+              <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder="선택 사항" placeholderTextColor={colors.faint} maxLength={40} />
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.label}>생년월일</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="생년월일 선택" style={styles.dateInput} onPress={() => setBirthPickerOpen(true)}>
+              <Text style={[styles.dateInputText, !birthDate && styles.datePlaceholder]}>{birthDate || "날짜를 선택해 주세요"}</Text>
+              <BabyLogIcon kind="calendar" size={18} color={colors.amber} />
+            </Pressable>
+            <Text style={styles.label}>성별</Text>
+            <View style={styles.chips}>
+              {([[
+                "unknown", "선택 안 함",
+              ], ["girl", "여아"], ["boy", "남아"]] as const).map(([value, label]) => (
+                <Pressable key={value} style={[styles.chip, gender === value && styles.chipActive]} onPress={() => setGender(value)}>
+                  <Text style={[styles.chipText, gender === value && styles.chipTextActive]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.label}>메모</Text>
+            <TextInput style={[styles.input, styles.note]} value={note} onChangeText={setNote} placeholder="가족에게만 보이는 메모" placeholderTextColor={colors.faint} multiline maxLength={400} />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <Pressable style={[styles.save, saving && styles.disabled]} onPress={() => void save()} disabled={saving}>
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>추가하고 선택</Text>}
+            </Pressable>
+          </View>
+        </ScrollView>
+        <RecordDatePickerModal visible={birthPickerOpen} selectedDateKey={birthDate || formatDateKey()} maxDateKey={formatDateKey()} title="생년월일 선택" onSelect={setBirthDate} onClose={() => setBirthPickerOpen(false)} />
+      </KeyboardAvoidingView>
+    );
+  }
+
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={88}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 24, 36) }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <View style={styles.babyCard}>
+          <View style={styles.switcherBtn}>
+            <BabySwitcher variant="switchButton" />
+          </View>
           <ProfileAvatar
             uri={avatarUrl}
             size={96}
@@ -342,6 +465,39 @@ export function BabyProfileScreen() {
             ) : null}
           </View>
         )}
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>주의 식품</Text>
+          <Text style={styles.cautionHelp}>보호자가 입력한 주의 식품이에요. 의학적 진단이나 권장 사항은 아니에요. 필요하면 담당 의료진과 확인해 주세요.</Text>
+          <View style={styles.chips}>
+            {CAUTION_FOOD_PRESETS.filter((food) => food !== "기타").map((food) => {
+              const selected = cautionFoods.find((item) => item.foodName === food);
+              return (
+                <Pressable
+                  key={food}
+                  style={[styles.chip, selected && styles.chipActive]}
+                  onPress={() => void (selected ? removeCautionFood(selected.id) : addCautionFood(food, "preset")).catch((cause) => setError(cause instanceof Error ? cause.message : "주의 식품을 저장하지 못했어요."))}
+                >
+                  <Text style={[styles.chipText, selected && styles.chipTextActive]}>{selected ? "✓ " : ""}{food}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.customFoodRow}>
+            <TextInput style={[styles.input, styles.customFoodInput]} value={customCautionFood} onChangeText={setCustomCautionFood} placeholder="직접 추가" placeholderTextColor={colors.faint} maxLength={40} />
+            <Pressable style={styles.customFoodButton} onPress={() => {
+              void addCautionFood(customCautionFood, "custom")
+                .then(() => setCustomCautionFood(""))
+                .catch((cause) => setError(cause instanceof Error ? cause.message : "주의 식품을 저장하지 못했어요."));
+            }}><Text style={styles.customFoodButtonText}>추가</Text></Pressable>
+          </View>
+          {cautionFoods.filter((food) => food.source === "custom").map((food) => (
+            <View key={food.id} style={styles.customFoodItem}>
+              <Text style={styles.customFoodName}>{food.foodName}</Text>
+              <Pressable onPress={() => void removeCautionFood(food.id)}><Text style={styles.customFoodRemove}>삭제</Text></Pressable>
+            </View>
+          ))}
+        </View>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>함께 보는 가족</Text>
@@ -493,7 +649,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 18,
+    paddingHorizontal: 18,
+    paddingBottom: 18,
+    paddingTop: 54,
     alignItems: "center",
     gap: 12,
   },
@@ -501,6 +659,7 @@ const styles = StyleSheet.create({
   babyName: { color: colors.text, fontSize: 22, fontWeight: "800" },
   nickname: { color: colors.amber, fontSize: 13, fontWeight: "700" },
   babyAge: { color: colors.muted, fontSize: 13 },
+  switcherBtn: { position: "absolute", top: 14, left: 14, zIndex: 2 },
   editBtn: { position: "absolute", top: 14, right: 14, minHeight: 36, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
   editBtnText: { color: colors.muted, fontWeight: "700", fontSize: 12.5 },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 10 },
@@ -511,6 +670,14 @@ const styles = StyleSheet.create({
   datePlaceholder: { color: colors.faint, fontWeight: "500" },
   inputHint: { color: colors.faint, fontSize: 11.5, lineHeight: 16 },
   note: { minHeight: 88, paddingTop: 12, textAlignVertical: "top" },
+  cautionHelp: { color: colors.faint, fontSize: 11.5, lineHeight: 17 },
+  customFoodRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  customFoodInput: { flex: 1 },
+  customFoodButton: { minHeight: 46, paddingHorizontal: 16, borderRadius: radius.md, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  customFoodButtonText: { color: "#fff", fontSize: 12.5, fontWeight: "800" },
+  customFoodItem: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 40, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: colors.backgroundSecondary },
+  customFoodName: { color: colors.text, fontSize: 13, fontWeight: "700" },
+  customFoodRemove: { color: colors.dangerText, fontSize: 11.5, fontWeight: "700" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { minHeight: 40, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },

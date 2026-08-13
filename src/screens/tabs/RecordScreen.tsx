@@ -124,6 +124,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
   const [foodIngredients, setFoodIngredients] = useState<FoodIngredient[]>([]);
   const scrollHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerRestoreInitialized = useRef(false);
+  const activeTimersScopeRef = useRef<string | null>(null);
   const activeSleepRef = useRef<BabyLogEntry | undefined>(undefined);
   const suppressedRestoredSleepId = useRef<string | null>(null);
 
@@ -176,22 +177,32 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
 
   useEffect(() => {
     if (!settingsReady) return;
+    let cancelled = false;
+    const scopeKey = localDataScope ? `${localDataScope.userId}:${localDataScope.babyId}` : null;
+    activeTimersScopeRef.current = null;
+    timerRestoreInitialized.current = false;
+    setActiveTimers([]);
     void (async () => {
-      await hydrateActiveTimers();
+      await hydrateActiveTimers(localDataScope);
+      if (cancelled) return;
       const restored = settings.timers.restoreAfterRestart ? getActiveTimers() ?? [] : [];
       suppressedRestoredSleepId.current = settings.timers.restoreAfterRestart
         ? null
         : activeSleepRef.current?.id ?? null;
       setActiveTimers(restored);
-      if (!settings.timers.restoreAfterRestart) await saveActiveTimers([]);
+      activeTimersScopeRef.current = scopeKey;
+      if (!settings.timers.restoreAfterRestart) await saveActiveTimers([], localDataScope);
       timerRestoreInitialized.current = true;
     })();
-  }, [settingsReady, settings.timers.restoreAfterRestart]);
+    return () => { cancelled = true; };
+  }, [localDataScope, settingsReady, settings.timers.restoreAfterRestart]);
 
   useEffect(() => {
     if (!storageReady) return;
-    void saveActiveTimers(activeTimers);
-  }, [activeTimers, storageReady]);
+    const scopeKey = localDataScope ? `${localDataScope.userId}:${localDataScope.babyId}` : null;
+    if (activeTimersScopeRef.current !== scopeKey) return;
+    void saveActiveTimers(activeTimers, localDataScope);
+  }, [activeTimers, localDataScope, storageReady]);
 
   // Keep sleep timer in sync with open sleep log (short-tap start / restore).
   useEffect(() => {
@@ -635,7 +646,6 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
 
   return (
     <View style={styles.root}>
-      <RecordHomeHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -645,6 +655,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
         onMomentumScrollEnd={handleScrollEnd}
         scrollEventThrottle={16}
       >
+        <RecordHomeHeader embedded onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
         {!allowAdd && (
           <Text style={styles.viewerBanner}>보기 전용 계정이에요. 기록 추가·수정은 제한돼요.</Text>
         )}
@@ -680,57 +691,62 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
           onNextDay={() => setSelectedDateKey((key) => offsetDateKey(key, 1))}
           onPressDate={() => setDatePickerOpen(true)}
         />
-        <OneTouchRecordGrid
-          sleepActive={Boolean(activeSleep)}
-          activeTimerActions={activeTimerActions}
-          visibleActions={settings.categories.order.filter((action) =>
-            settings.categories.visible.includes(action),
-          )}
-          coreActions={settings.categories.core}
-          logs={logs}
-          babyScopeKey={localDataScope?.babyId}
-          customCategories={customCategories}
-          disabled={!allowAdd}
-          onSelect={handleOneTouch}
-          onLongPress={handleLongPress}
-          onInteractionChange={setCategoryPressing}
-          onAdd={allowAdd ? () => setAddCategoryOpen(true) : undefined}
-          onSelectCustom={(category: CustomCategory) => {
-            if (!allowAdd) return;
-            openSheet(customCategoryKey(category.id), {
-              cat: customCategoryKey(category.id),
-              dateKey: selectedDateKey,
-              time: nowTime(),
-              source: "manual",
-            });
-          }}
-          onOpenGrowth={() => {
-            setGrowthMeasuredAt(selectedDateKey);
-            setGrowthRecordOpen(true);
-          }}
-          onOpenActiveTimer={(action) => {
-            const found = activeTimers.find((t) => t.action === action);
-            if (found) setTimerSheetId(found.id);
-          }}
-        />
-        <QuickRecordsBar
-          records={quickRecords}
-          visibleActions={settings.categories.visible}
-          disabled={!allowAdd}
-          onTap={handleQuickRecord}
-          onSaveRecords={setQuickRecords}
-        />
-        {!storageReady ? null : dayLogs.length === 0 ? (
-          <EmptyState
-            title={isViewingToday ? "아직 기록이 없어요." : "이 날의 기록이 없어요."}
-            body={
-              isViewingToday
-                ? "첫 기록을 남겨보세요."
-                : `${dayNavLabel(selectedDateKey)}에 남긴 기록이 없습니다.`
-            }
-            ctaLabel={allowAdd && isViewingToday ? "기록 추가하기" : undefined}
-            onPressCta={allowAdd && isViewingToday ? () => handleOneTouch("formula") : undefined}
+        <View style={styles.addSection}>
+          <View style={styles.sectionIntro}>
+            <Text style={styles.sectionTitle}>기록 추가</Text>
+            <Text style={styles.sectionDescription}>카테고리를 탭해 자세히 기록하거나 저장해둔 조합을 바로 사용하세요.</Text>
+          </View>
+          <OneTouchRecordGrid
+            sleepActive={Boolean(activeSleep)}
+            activeTimerActions={activeTimerActions}
+            visibleActions={settings.categories.order.filter((action) =>
+              settings.categories.visible.includes(action),
+            )}
+            coreActions={settings.categories.core}
+            logs={logs}
+            babyScopeKey={localDataScope?.babyId}
+            customCategories={customCategories}
+            disabled={!allowAdd}
+            onSelect={handleOneTouch}
+            onLongPress={handleLongPress}
+            onInteractionChange={setCategoryPressing}
+            onAdd={allowAdd ? () => setAddCategoryOpen(true) : undefined}
+            onSelectCustom={(category: CustomCategory) => {
+              if (!allowAdd) return;
+              openSheet(customCategoryKey(category.id), {
+                cat: customCategoryKey(category.id),
+                dateKey: selectedDateKey,
+                time: nowTime(),
+                source: "manual",
+              });
+            }}
+            onOpenGrowth={() => {
+              setGrowthMeasuredAt(selectedDateKey);
+              setGrowthRecordOpen(true);
+            }}
+            onOpenActiveTimer={(action) => {
+              const found = activeTimers.find((t) => t.action === action);
+              if (found) setTimerSheetId(found.id);
+            }}
           />
+          <QuickRecordsBar
+            records={quickRecords}
+            visibleActions={settings.categories.visible}
+            disabled={!allowAdd}
+            onTap={handleQuickRecord}
+            onSaveRecords={setQuickRecords}
+          />
+        </View>
+        {!storageReady ? null : dayLogs.length === 0 ? (
+          <View style={styles.historySection}>
+            <View style={styles.historyHeader}><Text style={styles.historyTitle}>{timelineTitle}</Text><Text style={styles.historyCount}>0개</Text></View>
+            <EmptyState
+              title={isViewingToday ? "아직 기록이 없어요." : "이 날의 기록이 없어요."}
+              body={isViewingToday ? "첫 기록을 남겨보세요." : `${dayNavLabel(selectedDateKey)}에 남긴 기록이 없습니다.`}
+              ctaLabel={allowAdd && isViewingToday ? "기록 추가하기" : undefined}
+              onPressCta={allowAdd && isViewingToday ? () => handleOneTouch("formula") : undefined}
+            />
+          </View>
         ) : (
           <TodayTimeline
             logs={dayLogs}
@@ -900,4 +916,12 @@ const styles = StyleSheet.create({
   timerBannerMeta: { fontSize: 12, color: colors.muted, marginTop: 2, fontWeight: "600" },
   timerBannerAction: { minHeight: 36, paddingHorizontal: 8, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: colors.amberSoft },
   timerBannerActionText: { fontSize: 10.5, fontWeight: "800", color: colors.amberDark },
+  addSection: { marginBottom: 6, paddingTop: 2 },
+  sectionIntro: { marginBottom: 14 },
+  sectionTitle: { color: colors.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.35 },
+  sectionDescription: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
+  historySection: { marginBottom: 24 },
+  historyHeader: { minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  historyTitle: { color: colors.text, fontSize: 19, fontWeight: "800", letterSpacing: -0.3 },
+  historyCount: { color: colors.amber, fontSize: 12, fontWeight: "800" },
 });

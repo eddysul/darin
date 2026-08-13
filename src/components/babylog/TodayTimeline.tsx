@@ -35,7 +35,10 @@ export function TodayTimeline({
   return (
     <View style={styles.section}>
       <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>{title}</Text>
+          <View style={styles.countBadge}><Text style={styles.countText}>{sorted.length}개</Text></View>
+        </View>
         {sorted.length > limit ? (
           <Pressable onPress={() => setExpanded((value) => !value)} hitSlop={8}>
             <Text style={styles.viewAll}>{expanded ? "접기" : "더 많은 기록 보기 ›"}</Text>
@@ -164,6 +167,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   title: { fontSize: 19, fontWeight: "800", color: colors.text, letterSpacing: -0.3 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 },
+  countBadge: { minWidth: 34, height: 24, borderRadius: 12, paddingHorizontal: 8, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
+  countText: { color: colors.amber, fontSize: 10.5, fontWeight: "800" },
   viewAll: { fontSize: 12.5, fontWeight: "800", color: colors.amber },
   empty: {
     textAlign: "center",

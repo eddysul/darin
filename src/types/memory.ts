@@ -16,6 +16,7 @@ export type MemoryPost = {
   authorId: string;
   caption?: string;
   privacyType: MemoryPrivacyType;
+  isFamilyMoment: boolean;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -80,10 +81,19 @@ export type MemoryCard = {
   post: MemoryPost;
   coverMedia?: MemoryMedia;
   coverUrl?: string;
+  mediaCount: number;
   tags: MemoryTag[];
   commentCount: number;
   reactionCount: number;
   isSaved: boolean;
+};
+
+export type MemoryImageDraft = {
+  uri: string;
+  fileSize?: number;
+  mimeType?: string;
+  width?: number;
+  height?: number;
 };
 
 export type MemoryTagDraft =
@@ -96,6 +106,7 @@ export type CreateMemoryPostInput = {
   babyId: string;
   caption?: string;
   privacyType: MemoryPrivacyType;
+  isFamilyMoment?: boolean;
   selectedUserIds?: string[];
 };
 
@@ -116,8 +127,13 @@ export type CreateMemoryWithImageInput = {
   height?: number;
   caption?: string;
   privacyType: MemoryPrivacyType;
+  isFamilyMoment?: boolean;
   selectedUserIds?: string[];
   tags?: MemoryTagDraft[];
+};
+
+export type CreateMemoryWithImagesInput = Omit<CreateMemoryWithImageInput, "imageUri" | "imageSizeBytes" | "mimeType" | "width" | "height"> & {
+  images: MemoryImageDraft[];
 };
 
 export type AddMemoryMediaInput = {

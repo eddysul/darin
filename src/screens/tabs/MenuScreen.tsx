@@ -87,9 +87,9 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
   const hasServerDeletion = hasAccountDeletionApi();
 
   useEffect(() => {
-    void hydrateDiaryReminder().then(() => setReminder(getDiaryReminder()));
+    void hydrateDiaryReminder(localDataScope).then(() => setReminder(getDiaryReminder()));
     void AuthRepository.getUser().then(setAuthUser).catch(() => setAuthUser(null));
-  }, []);
+  }, [localDataScope]);
 
   useEffect(() => {
     if (hasServerDeletion) setDeleteError("");
@@ -288,7 +288,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         onClose={() => setReminderOpen(false)}
         onSave={(next) => {
           setReminder(next);
-          void saveDiaryReminder(next);
+          void saveDiaryReminder(next, localDataScope);
         }}
         onTestNotification={() => void sendDiaryNotificationPreview(babyName)}
       />

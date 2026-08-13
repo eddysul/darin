@@ -40,6 +40,8 @@ import {
   TimePickerSheet,
 } from "../inputs/TimePickerFields";
 import { AmountInput, CUSTOM_AMOUNT_UNIT, isPositiveAmount } from "../inputs/AmountInput";
+import { useBabyLog } from "../../context/BabyLogContext";
+import { matchCautionFoods } from "../../utils/cautionFoodsStore";
 
 function normalizeDiaperChip(value: string): string {
   return value === "둘다" || value === "둘 다" ? "소변+대변" : value;
@@ -150,6 +152,7 @@ export function RecordDetailSheet({
   storedMilkEstimatedAvailableMl,
 }: Props) {
   const { settings } = useAppSettings();
+  const { babyName, activeBabyId, cautionFoods } = useBabyLog();
   const [time, setTime] = useState(nowTime());
   const [endTime, setEndTime] = useState("");
   const [selectedCat, setSelectedCat] = useState<LogCategoryKey | null>(catKey);
@@ -576,8 +579,12 @@ export function RecordDetailSheet({
       ? convertibleVolumeUnit ? volumeToMl(String(sideAmountTotal), convertibleVolumeUnit) : String(sideAmountTotal)
       : canonicalAmount;
     const diaperType = builtinId === "diaper" ? chip : "";
-    onSave(
-      {
+    if (!activeBabyId) {
+      Alert.alert("아기를 선택해 주세요", "기록할 아기를 선택한 뒤 다시 시도해 주세요.");
+      return;
+    }
+    const entryToSave: Omit<BabyLogEntry, "id"> = {
+        babyId: activeBabyId,
         cat: effectiveCat,
         time,
         chip: chip || undefined,
@@ -642,10 +649,21 @@ export function RecordDetailSheet({
         flags: prefill?.flags,
         createdBy: prefill?.createdBy,
         dateKey: builtinId === "vaccination" ? vaccinationDateKey : prefill?.dateKey,
-      },
-      prefill?.editId,
-    );
-    onClose();
+      };
+    const commit = () => {
+      onSave(entryToSave, prefill?.editId);
+      onClose();
+    };
+    const matchedFoods = isFood ? matchCautionFoods(selectedIngredients, cautionFoods) : [];
+    if (matchedFoods.length) {
+      Alert.alert(
+        "주의 식품이 포함되어 있어요",
+        `${matchedFoods.join(", ")}은(는) ${babyName}의 주의 식품으로 등록되어 있어요. 그래도 기록할까요?`,
+        [{ text: "취소", style: "cancel" }, { text: "기록하기", onPress: commit }],
+      );
+      return;
+    }
+    commit();
   };
 
   const sheet = (
@@ -665,6 +683,7 @@ export function RecordDetailSheet({
           </Text>
           {sessionLabel ? <Text style={styles.sessionBadge}>{sessionLabel}</Text> : null}
         </View>
+        <Text style={styles.activeBabyLabel}>기록 대상 · {babyName}</Text>
 
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {(builtinId === "breast" || builtinId === "formula" || builtinId === "storedMilk") && (
@@ -1303,6 +1322,7 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 },
   dot: { width: 12, height: 12, borderRadius: 6 },
   title: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.text },
+  activeBabyLabel: { marginTop: -4, marginBottom: 10, fontSize: 11.5, fontWeight: "700", color: colors.amber },
   sessionBadge: { color: colors.amber, fontSize: 10.5, fontWeight: "800", backgroundColor: colors.amberSoft, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999, overflow: "hidden" },
   fieldLabel: {
     fontSize: 12,

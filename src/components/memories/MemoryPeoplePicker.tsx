@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { FamilyMember } from "../../types/family";
 import { memberRelationshipLabel } from "../../types/family";
 import { colors, radius } from "../../theme";
@@ -8,19 +8,15 @@ export function MemoryPeoplePicker({
   taggedIds,
   selectedIds,
   showSelectedPeople,
-  manualGuests,
   onToggleTagged,
   onToggleSelected,
-  onChangeManualGuests,
 }: {
   members: FamilyMember[];
   taggedIds: string[];
   selectedIds: string[];
   showSelectedPeople: boolean;
-  manualGuests: string;
   onToggleTagged: (id: string) => void;
   onToggleSelected: (id: string) => void;
-  onChangeManualGuests: (value: string) => void;
 }) {
   const activeMembers = members.filter((member) => member.status === "active" && !member.isMe);
   return (
@@ -58,17 +54,6 @@ export function MemoryPeoplePicker({
           </View>
         </>
       ) : null}
-
-      <Text style={styles.label}>계정 없는 가족 태그</Text>
-      <TextInput
-        style={styles.input}
-        value={manualGuests}
-        onChangeText={onChangeManualGuests}
-        placeholder="예: 할머니, Grandpa"
-        placeholderTextColor={colors.faint}
-        maxLength={160}
-      />
-      <Text style={styles.hint}>쉼표로 구분해 주세요. 표시용 태그이며 사진 접근 권한은 생기지 않아요.</Text>
     </View>
   );
 }
@@ -82,5 +67,4 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   chipText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   chipTextActive: { color: colors.amber },
-  input: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, color: colors.text, paddingHorizontal: 13, fontSize: 14 },
 });

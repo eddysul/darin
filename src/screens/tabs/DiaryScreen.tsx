@@ -118,7 +118,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
 
   useEffect(() => {
     void (async () => {
-      await Promise.all([hydrateDiaryDraft(localDataScope, true), hydrateDiaryReminder()]);
+      await Promise.all([hydrateDiaryDraft(localDataScope, true), hydrateDiaryReminder(localDataScope)]);
       setDraftMemory(getDiaryDraft());
       setReminder(getDiaryReminder());
     })();
@@ -227,7 +227,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
       if (reminder.lastFiredDateKey === key) return;
       const next = { ...reminder, lastFiredDateKey: key };
       setReminder(next);
-      void saveDiaryReminder(next);
+      void saveDiaryReminder(next, localDataScope);
       setPushVisible(true);
     };
     const id = setInterval(tick, 20_000);
@@ -568,7 +568,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
         onClose={() => setSettingsOpen(false)}
         onSave={(next) => {
           setReminder(next);
-          void saveDiaryReminder(next);
+          void saveDiaryReminder(next, localDataScope);
         }}
         onTestNotification={() => setPushVisible(true)}
       />
@@ -603,7 +603,10 @@ function DiaryCard({
   return (
     <Pressable style={styles.card} onPress={onOpen}>
       {photo ? (
-        <Image source={{ uri: photo }} style={styles.thumb} contentFit="cover" />
+        <View style={styles.thumbWrap}>
+          <Image source={{ uri: photo }} style={styles.thumb} contentFit="cover" />
+          {entry.photos.length > 1 ? <View style={styles.photoCountBadge}><Text style={styles.photoCountText}>+{entry.photos.length - 1}</Text></View> : null}
+        </View>
       ) : (
         <View style={styles.thumbPlaceholder}>
           {entry.moodStamp ? (
@@ -727,7 +730,10 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
   },
-  thumb: { width: 64, height: 64, borderRadius: 12 },
+  thumbWrap: { width: 64, height: 64, borderRadius: 12, overflow: "hidden" },
+  thumb: { width: "100%", height: "100%" },
+  photoCountBadge: { position: "absolute", right: 4, bottom: 4, minWidth: 24, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: "rgba(46,42,38,0.72)", alignItems: "center", justifyContent: "center" },
+  photoCountText: { color: "#fff", fontSize: 10, fontWeight: "800" },
   thumbPlaceholder: {
     width: 64,
     height: 64,

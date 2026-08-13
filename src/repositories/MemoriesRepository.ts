@@ -14,6 +14,7 @@ import type {
   AddMemoryMediaInput,
   CreateMemoryPostInput,
   CreateMemoryWithImageInput,
+  CreateMemoryWithImagesInput,
   MemoryCard,
   MemoryComment,
   MemoryMedia,
@@ -44,6 +45,7 @@ export function memoryPostRowToModel(row: MemoryPostRow): MemoryPost {
     authorId: row.author_id ?? "deleted-user",
     caption: row.caption ?? undefined,
     privacyType: row.privacy_type,
+    isFamilyMoment: row.is_family_moment ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? undefined,
@@ -158,6 +160,50 @@ async function requireUserId(): Promise<string> {
   return user.id;
 }
 
+async function uploadMemoryImage(input: {
+  memoryPostId: string;
+  babyId: string;
+  image: CreateMemoryWithImagesInput["images"][number];
+}): Promise<MemoryMedia> {
+  if (input.image.fileSize !== undefined && input.image.fileSize > MAX_IMAGE_BYTES) {
+    throw new Error("사진은 25MB 이하만 올릴 수 있어요.");
+  }
+  const mediaId = createId();
+  const storagePath = `${input.babyId}/${input.memoryPostId}/${mediaId}.${imageExtension(input.image.mimeType)}`;
+  const response = await fetch(input.image.uri);
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength === 0) throw new Error("선택한 사진을 읽지 못했어요.");
+  if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("사진은 25MB 이하만 올릴 수 있어요.");
+  const sb = requireSupabase();
+  const { error: uploadError } = await sb.storage.from(MEMORIES_BUCKET).upload(storagePath, bytes, {
+    contentType: input.image.mimeType ?? "image/jpeg",
+    upsert: false,
+  });
+  if (uploadError) throw uploadError;
+  const { data, error } = await sb.from("memory_media").insert({
+    id: mediaId,
+    memory_post_id: input.memoryPostId,
+    baby_id: input.babyId,
+    storage_path: storagePath,
+    media_type: "image",
+    width: input.image.width ?? null,
+    height: input.image.height ?? null,
+  }).select("*").single();
+  if (error) {
+    await sb.storage.from(MEMORIES_BUCKET).remove([storagePath]);
+    throw error;
+  }
+  return memoryMediaRowToModel(data);
+}
+
+async function removeMemoryMedia(media: MemoryMedia): Promise<void> {
+  const sb = requireSupabase();
+  const { error: storageError } = await sb.storage.from(MEMORIES_BUCKET).remove([media.storagePath]);
+  if (storageError) throw storageError;
+  const { error: rowError } = await sb.from("memory_media").delete().eq("id", media.id);
+  if (rowError) throw rowError;
+}
+
 export const MemoriesRepository = {
   async listByBabyId(babyId: string): Promise<MemoryPost[]> {
     const sb = requireSupabase();
@@ -195,6 +241,7 @@ export const MemoriesRepository = {
         author_id: authorId,
         caption: normalizeCaption(input.caption),
         privacy_type: input.privacyType,
+        is_family_moment: input.isFamilyMoment ?? false,
       })
       .select("*")
       .single();
@@ -481,6 +528,37 @@ export const MemoriesRepository = {
     return (data ?? []).map(memoryMediaRowToModel);
   },
 
+  async updateMemoryMedia(input: {
+    memoryPostId: string;
+    babyId: string;
+    retainedMediaIds: string[];
+    newImages: CreateMemoryWithImagesInput["images"];
+  }): Promise<MemoryMedia[]> {
+    const existing = await this.listMedia(input.memoryPostId);
+    const retained = new Set(input.retainedMediaIds);
+    if (retained.size + input.newImages.length === 0) throw new Error("사진을 한 장 이상 추가해 주세요.");
+    if (retained.size + input.newImages.length > 5) throw new Error("사진은 최대 5장까지 추가할 수 있어요.");
+    const uploaded: MemoryMedia[] = [];
+    try {
+      for (const image of input.newImages) {
+        uploaded.push(await uploadMemoryImage({ memoryPostId: input.memoryPostId, babyId: input.babyId, image }));
+      }
+    } catch (error) {
+      for (const media of uploaded) {
+        try { await removeMemoryMedia(media); } catch { /* leave tracked cleanup failures for server cleanup */ }
+      }
+      throw new Error("새 사진 업로드를 완료하지 못했어요. 기존 사진은 유지했어요.", { cause: error });
+    }
+    try {
+      for (const media of existing) {
+        if (!retained.has(media.id)) await removeMemoryMedia(media);
+      }
+    } catch (error) {
+      throw new Error("새 사진은 저장됐지만 일부 사진 삭제를 완료하지 못했어요. 다시 열어 확인해 주세요.", { cause: error });
+    }
+    return this.listMedia(input.memoryPostId);
+  },
+
   async listTags(memoryPostId: string): Promise<MemoryTag[]> {
     const sb = requireSupabase();
     const { data, error } = await sb
@@ -542,6 +620,7 @@ export const MemoriesRepository = {
         post,
         coverMedia,
         coverUrl,
+        mediaCount: media.length,
         tags,
         commentCount: comments.length,
         reactionCount: reactions.length,
@@ -550,15 +629,12 @@ export const MemoriesRepository = {
     }));
   },
 
-  async createMemoryWithImage(input: CreateMemoryWithImageInput): Promise<MemoryPostBundle> {
-    if (input.imageSizeBytes !== undefined && input.imageSizeBytes > MAX_IMAGE_BYTES) {
-      throw new Error("사진은 25MB 이하만 올릴 수 있어요.");
-    }
+  async createMemoryWithImages(input: CreateMemoryWithImagesInput): Promise<MemoryPostBundle> {
+    if (input.images.length === 0) throw new Error("사진을 한 장 이상 추가해 주세요.");
+    if (input.images.length > 5) throw new Error("사진은 최대 5장까지 추가할 수 있어요.");
     const postId = createId();
-    const mediaId = createId();
-    const storagePath = `${input.babyId}/${postId}/${mediaId}.${imageExtension(input.mimeType)}`;
     const sb = requireSupabase();
-    let objectUploaded = false;
+    const uploaded: MemoryMedia[] = [];
     let postCreated = false;
     try {
       await this.createMemoryPost({
@@ -566,36 +642,31 @@ export const MemoriesRepository = {
         babyId: input.babyId,
         caption: input.caption,
         privacyType: input.privacyType,
+        isFamilyMoment: input.isFamilyMoment,
         selectedUserIds: input.selectedUserIds,
       });
       postCreated = true;
-      const response = await fetch(input.imageUri);
-      const bytes = await response.arrayBuffer();
-      if (bytes.byteLength === 0) throw new Error("선택한 사진을 읽지 못했어요.");
-      if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("사진은 25MB 이하만 올릴 수 있어요.");
-      const { error: uploadError } = await sb.storage.from(MEMORIES_BUCKET).upload(storagePath, bytes, {
-        contentType: input.mimeType ?? "image/jpeg",
-        upsert: false,
-      });
-      if (uploadError) throw uploadError;
-      objectUploaded = true;
-      await this.addMedia({
-        id: mediaId,
-        memoryPostId: postId,
-        babyId: input.babyId,
-        storagePath,
-        mediaType: "image",
-        width: input.width,
-        height: input.height,
-      });
+      for (const image of input.images) uploaded.push(await uploadMemoryImage({ memoryPostId: postId, babyId: input.babyId, image }));
       await replaceTags(postId, input.tags ?? [{ tagType: "baby", babyId: input.babyId }]);
       const bundle = await this.getBundleById(postId);
       if (!bundle) throw new Error("업로드한 추억을 다시 불러오지 못했어요.");
       return bundle;
     } catch (error) {
-      if (objectUploaded) await sb.storage.from(MEMORIES_BUCKET).remove([storagePath]);
+      for (const media of uploaded) await sb.storage.from(MEMORIES_BUCKET).remove([media.storagePath]);
       if (postCreated) await sb.from("memory_posts").delete().eq("id", postId);
       throw error;
     }
+  },
+
+  async createMemoryWithImage(input: CreateMemoryWithImageInput): Promise<MemoryPostBundle> {
+    return this.createMemoryWithImages({
+      babyId: input.babyId,
+      images: [{ uri: input.imageUri, fileSize: input.imageSizeBytes, mimeType: input.mimeType, width: input.width, height: input.height }],
+      caption: input.caption,
+      privacyType: input.privacyType,
+      isFamilyMoment: input.isFamilyMoment,
+      selectedUserIds: input.selectedUserIds,
+      tags: input.tags,
+    });
   },
 };

@@ -24,7 +24,6 @@ import { FamilyRepository } from "../repositories/FamilyRepository";
 import { ProfileRepository } from "../repositories/ProfileRepository";
 import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
 import type { RelationshipLabel } from "../types/growthBook";
-import { getSupabaseSync } from "../utils/supabaseSyncStore";
 import { presentAvatarPicker } from "../utils/profileAvatarPicker";
 import { colors, radius } from "../theme";
 import { FAMILY_ROLE_LABELS } from "../types/family";
@@ -43,7 +42,7 @@ export function MyProfileScreen() {
   const insets = useSafeAreaInsets();
   const { careSetup, setCareSetup } = useApp();
   const { setSettings } = useAppSettings();
-  const { myFamilyRole, applyOwnerFromSetup, rehydrateFromServer } = useBabyLog();
+  const { activeBabyId, myFamilyRole, applyOwnerFromSetup, rehydrateFromServer } = useBabyLog();
   const { setLocale } = useLanguage();
   const [nickname, setNickname] = useState(careSetup.parent.parentName);
   const [realName, setRealName] = useState(careSetup.parent.nickname ?? "");
@@ -89,7 +88,7 @@ export function MyProfileScreen() {
         setRealName(careSetup.parent.nickname ?? "");
       }
 
-      const babyId = getSupabaseSync().babyId;
+      const babyId = activeBabyId;
       if (babyId && user?.id) {
         const members = await FamilyRepository.listMembers(babyId);
         const mine = members.find((row) => row.user_id === user.id);
@@ -100,7 +99,7 @@ export function MyProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, [careSetup.parent.nickname, careSetup.parent.parentName]);
+  }, [activeBabyId, careSetup.parent.nickname, careSetup.parent.parentName]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
@@ -131,7 +130,7 @@ export function MyProfileScreen() {
         residenceCountry,
         guardianBirthDate,
       });
-      const babyId = getSupabaseSync().babyId;
+      const babyId = activeBabyId;
       const user = await AuthRepository.getUser();
       if (babyId && user?.id) {
         await FamilyRepository.updateMemberRelation({

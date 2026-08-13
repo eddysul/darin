@@ -14,6 +14,8 @@ export type BabyLogSource = "manual" | "voice" | "diary" | "caregiver";
 
 export type BabyLogEntry = {
   id: string;
+  /** Local guard/cache scope. Server remains authoritative through care_logs.baby_id. */
+  babyId?: string;
   cat: import("./logCategory").LogCategoryKey;
   /** HH:MM local wall clock */
   time: string;

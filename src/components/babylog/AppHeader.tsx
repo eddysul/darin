@@ -4,6 +4,7 @@ import { BabyLogIcon } from "./BabyLogIcon";
 import { SharedCaregiversRow } from "./SharedCaregiversRow";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { colors, radius } from "../../theme";
+import { BabySwitcher } from "./BabySwitcher";
 
 type Props = {
   onOpenProfile: () => void;
@@ -20,8 +21,7 @@ export function AppHeader({ onOpenProfile, onOpenSettings, onOpenShared }: Props
       <View style={styles.row}>
         <View style={styles.left}>
           <View style={styles.chip}>
-            <BabyLogIcon kind="baby" size={16} color={colors.amber} />
-            <Text style={styles.chipText}>{babyName}</Text>
+            <BabySwitcher compact />
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{babyBadge}</Text>
             </View>

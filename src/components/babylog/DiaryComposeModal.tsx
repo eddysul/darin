@@ -52,6 +52,7 @@ type Props = {
 };
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
+const MAX_DIARY_PHOTOS = 5;
 
 function formatTodayLabel(d = new Date()): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`;
@@ -192,13 +193,43 @@ export function DiaryComposeModal({
   ]);
 
   const pickPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-      allowsMultipleSelection: false,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setPhotos([result.assets[0].uri]);
+    const remaining = MAX_DIARY_PHOTOS - photos.length;
+    if (remaining <= 0) {
+      Alert.alert("사진은 최대 5장까지", "사진을 더 추가하려면 먼저 한 장을 삭제해 주세요.");
+      return;
+    }
+    try {
+      const permission = await ImagePicker.getMediaLibraryPermissionsAsync();
+      const resolvedPermission = permission.granted
+        ? permission
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!resolvedPermission.granted) {
+        Alert.alert("사진 접근 권한이 필요해요", "설정에서 사진 접근을 허용한 뒤 다시 시도해 주세요.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+        allowsMultipleSelection: true,
+        selectionLimit: remaining,
+        orderedSelection: true,
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        setPhotos((current) => {
+          const next = [...current];
+          for (const asset of result.assets) {
+            if (!next.includes(asset.uri) && next.length < MAX_DIARY_PHOTOS) next.push(asset.uri);
+          }
+          return next;
+        });
+      }
+    } catch (error) {
+      if (__DEV__) console.warn("[diary-photo-picker] open failed", error instanceof Error ? error.name : "unknown");
+      Alert.alert(
+        "사진을 불러오지 못했어요",
+        "iCloud 사진이라면 사진 앱에서 원본을 먼저 열어 다운로드한 뒤 다시 선택해 주세요.",
+      );
     }
   };
 
@@ -314,29 +345,46 @@ export function DiaryComposeModal({
 
             <Text style={styles.fieldLabel}>사진</Text>
             <View style={styles.mediaActions}>
-              <Pressable style={styles.mediaBtn} onPress={() => void pickPhoto()}>
+              <Pressable style={[styles.mediaBtn, photos.length >= MAX_DIARY_PHOTOS && styles.mediaBtnDisabled]} onPress={() => void pickPhoto()}>
                 <Text style={styles.mediaBtnText}>사진 추가</Text>
               </Pressable>
               <Pressable style={styles.mediaBtnSecondary} onPress={() => setStickerPickerOpen(true)}>
                 <Text style={styles.mediaBtnSecondaryText}>스티커 추가</Text>
               </Pressable>
             </View>
-            <Pressable style={styles.photoBox} onPress={() => void pickPhoto()}>
-              {photos[0] ? (
-                <>
-                  <Image source={{ uri: photos[0] }} style={styles.photo} contentFit="cover" />
-                  <Pressable style={styles.photoClear} onPress={() => setPhotos([])} hitSlop={8}>
-                    <Text style={styles.photoClearText}>제거</Text>
+            <Text style={styles.photoLimit}>최대 5장까지 추가할 수 있어요. 첫 번째 사진이 대표 이미지로 표시돼요.</Text>
+            {photos.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+                {photos.map((uri, index) => (
+                  <View key={`${uri}-${index}`} style={styles.photoThumbWrap}>
+                    <Image source={{ uri }} style={styles.photoThumb} contentFit="cover" />
+                    {index === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>대표</Text></View> : null}
+                    <Pressable
+                      style={styles.photoRemove}
+                      onPress={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}
+                      accessibilityRole="button"
+                      accessibilityLabel={`사진 ${index + 1} 삭제`}
+                    >
+                      <Text style={styles.photoRemoveText}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+                {photos.length < MAX_DIARY_PHOTOS ? (
+                  <Pressable style={styles.photoAddTile} onPress={() => void pickPhoto()}>
+                    <Text style={styles.photoAddPlus}>＋</Text>
+                    <Text style={styles.photoAddText}>사진 추가</Text>
                   </Pressable>
-                </>
-              ) : (
+                ) : null}
+              </ScrollView>
+            ) : (
+              <Pressable style={styles.photoBox} onPress={() => void pickPhoto()}>
                 <View style={styles.photoHintWrap}>
                   {mood ? <DiaryMoodStamp id={mood} selected size="lg" /> : null}
                   <Text style={styles.photoHint}>사진 추가하기</Text>
                   <Text style={styles.photoHintSub}>사진만 있어도 저장할 수 있어요</Text>
                 </View>
-              )}
-            </Pressable>
+              </Pressable>
+            )}
 
             {stickerIds.length > 0 ? (
               <>
@@ -568,20 +616,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
-  photo: { width: "100%", height: "100%" },
   photoHintWrap: { alignItems: "center", gap: 6 },
   photoHint: { color: colors.muted, fontSize: 13, fontWeight: "700" },
   photoHintSub: { color: colors.faint, fontSize: 11.5 },
-  photoClear: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    backgroundColor: "rgba(46,42,38,0.65)",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  photoClearText: { color: "#fff", fontSize: 11.5, fontWeight: "700" },
   mediaActions: { flexDirection: "row", gap: 8, marginBottom: 10 },
   mediaBtn: {
     flex: 1,
@@ -591,6 +628,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   mediaBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 },
+  mediaBtnDisabled: { opacity: 0.5 },
   mediaBtnSecondary: {
     flex: 1,
     backgroundColor: colors.card,
@@ -601,6 +639,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   mediaBtnSecondaryText: { color: colors.amber, fontWeight: "800", fontSize: 13 },
+  photoLimit: { color: colors.faint, fontSize: 11.5, lineHeight: 17, marginBottom: 8 },
+  photoRow: { gap: 10, paddingRight: 4 },
+  photoThumbWrap: { width: 112, height: 112, borderRadius: 16, overflow: "hidden", backgroundColor: colors.cardHi },
+  photoThumb: { width: "100%", height: "100%" },
+  coverBadge: { position: "absolute", left: 7, bottom: 7, borderRadius: 999, backgroundColor: "rgba(46,42,38,0.72)", paddingHorizontal: 7, paddingVertical: 3 },
+  coverBadgeText: { color: "#fff", fontSize: 9.5, fontWeight: "800" },
+  photoRemove: { position: "absolute", right: 6, top: 6, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(46,42,38,0.72)" },
+  photoRemoveText: { color: "#fff", fontSize: 21, lineHeight: 23, fontWeight: "500" },
+  photoAddTile: { width: 96, height: 112, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center", gap: 4 },
+  photoAddPlus: { color: colors.amber, fontSize: 26, lineHeight: 28 },
+  photoAddText: { color: colors.amber, fontSize: 11.5, fontWeight: "800" },
   stickerRow: { gap: 10, paddingVertical: 4 },
   notes: {
     backgroundColor: colors.card,

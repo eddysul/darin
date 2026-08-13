@@ -25,7 +25,6 @@ import { ProfileRepository } from "../repositories/ProfileRepository";
 import type { InviteType } from "../types/database";
 import { FAMILY_ROLE_LABELS } from "../types/family";
 import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
-import { getSupabaseSync } from "../utils/supabaseSyncStore";
 import { colors, radius } from "../theme";
 
 type InvitePreview = NonNullable<Awaited<ReturnType<typeof FamilyRepository.previewInviteCode>>>;
@@ -74,8 +73,8 @@ function previewTitle(preview: InvitePreview): string {
 
 export function FamilyShareScreen() {
   const insets = useSafeAreaInsets();
-  const { babyName, myFamilyRole, familyMembers, rehydrateFromServer } = useBabyLog();
-  const babyId = getSupabaseSync().babyId;
+  const { babyName, myFamilyRole, familyMembers, rehydrateFromServer, activeBabyId } = useBabyLog();
+  const babyId = activeBabyId;
   const isAdmin = myFamilyRole === "owner" || myFamilyRole === "admin";
   const [activeTab, setActiveTab] = useState<ShareTab>("create");
   const [inviteType, setInviteType] = useState<VisibleInviteType>(() => (isAdmin ? "family" : "baby_friend"));

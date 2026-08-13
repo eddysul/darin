@@ -15,7 +15,7 @@ import {
   saveCustomCategories,
 } from "../utils/customCategoriesStore";
 import { getQuickRecords, hydrateQuickRecords, saveQuickRecords } from "../utils/quickRecordsStore";
-import { getBabyLogs, hydrateBabyLogs, saveBabyLogs } from "../utils/babyLogsStore";
+import { getBabyLogs, hydrateBabyLogs, resetBabyLogsMemory, saveBabyLogs } from "../utils/babyLogsStore";
 import {
   bootstrapCareLogsFromServer,
   ensureCareLogBabyId,
@@ -23,7 +23,7 @@ import {
   syncCareLogDelete,
   syncCareLogUpdate,
 } from "../utils/careLogServerSync";
-import { clearSupabaseSync, getSupabaseSync, hydrateSupabaseSync } from "../utils/supabaseSyncStore";
+import { clearSupabaseSync, getSupabaseSync, hydrateSupabaseSync, saveSupabaseSync } from "../utils/supabaseSyncStore";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { FamilyRepository } from "../repositories/FamilyRepository";
 import { isSupabaseConfigured } from "../lib/supabase";
@@ -40,7 +40,12 @@ import {
   syncDiaryUpdate,
 } from "../utils/diaryServerSync";
 import { getChatHistory, hydrateChatHistory, saveChatHistory } from "../utils/chatHistoryStore";
-import { getFamilyMembers, hydrateFamilyMembers, saveFamilyMembers } from "../utils/familyMembersStore";
+import {
+  getFamilyMembers,
+  hydrateFamilyMembers,
+  resetFamilyMembersMemory,
+  saveFamilyMembers,
+} from "../utils/familyMembersStore";
 import {
   ensureGrowthBookEdit,
   getGrowthBookEdit,
@@ -67,6 +72,7 @@ import { createId } from "../utils/id";
 import {
   getGrowthRecords,
   hydrateGrowthRecords,
+  resetGrowthRecordsMemory,
   saveGrowthRecords,
 } from "../utils/growthRecordsStore";
 import {
@@ -90,7 +96,11 @@ import {
   localDataScopeId,
   type LocalDataScope,
 } from "../utils/scopedLocalStorage";
-import { BabyRepository } from "../repositories/BabyRepository";
+import { BabyRepository, type CreateBabyInput } from "../repositories/BabyRepository";
+import type { BabyRow } from "../types/database";
+import type { CautionFood, CautionFoodSource } from "../types/cautionFood";
+import { CautionFoodRepository } from "../repositories/CautionFoodRepository";
+import { loadCautionFoods, normalizeCautionFoodName, saveCautionFoods } from "../utils/cautionFoodsStore";
 import { getDiaryReminder, saveDiaryReminder } from "../utils/diaryReminderStore";
 import { saveCareSetup } from "../utils/careSetupStore";
 import {
@@ -292,6 +302,14 @@ type BabyLogContextValue = {
   logs: BabyLogEntry[];
   diaryEntries: DiaryEntry[];
   localDataScope: LocalDataScope | null;
+  babies: BabyRow[];
+  activeBabyId: string | null;
+  switchActiveBaby: (babyId: string) => Promise<boolean>;
+  addBaby: (input: CreateBabyInput) => Promise<BabyRow>;
+  refreshBabies: () => Promise<BabyRow[]>;
+  cautionFoods: CautionFood[];
+  addCautionFood: (foodName: string, source: CautionFoodSource) => Promise<CautionFood>;
+  removeCautionFood: (id: string) => Promise<void>;
   familyMembers: FamilyMember[];
   growthBookEdit: GrowthBookEdit;
   setGrowthBookEdit: (edit: GrowthBookEdit | ((prev: GrowthBookEdit) => GrowthBookEdit)) => void;
@@ -360,12 +378,14 @@ type BabyLogContextValue = {
 const BabyLogContext = createContext<BabyLogContextValue | null>(null);
 
 export function BabyLogProvider({ children }: { children: ReactNode }) {
-  const { careSetup, hasSavedCareSetup } = useApp();
+  const { careSetup, hasSavedCareSetup, setCareSetup } = useApp();
   const [logs, setLogs] = useState<BabyLogEntry[]>([]);
   const [logsHydrated, setLogsHydrated] = useState(false);
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
   const [diaryHydrated, setDiaryHydrated] = useState(false);
   const [localDataScope, setLocalDataScope] = useState<LocalDataScope | null>(null);
+  const [babies, setBabies] = useState<BabyRow[]>([]);
+  const [cautionFoods, setCautionFoods] = useState<CautionFood[]>([]);
   const localDataScopeRef = useRef<LocalDataScope | null>(null);
   const storageHydrationRunRef = useRef(0);
   const growthBookDirtyRef = useRef(false);
@@ -393,19 +413,40 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const resolveLocalDataScope = useCallback(async (
     override?: LocalDataScope,
   ): Promise<LocalDataScope | null> => {
-    if (isValidLocalDataScope(override)) return override;
     if (!isSupabaseConfigured()) return null;
     const session = await AuthRepository.getSession();
     if (!session) return null;
 
     await hydrateSupabaseSync();
     const sync = getSupabaseSync();
-    if (sync.userId === session.user.id && sync.babyId) {
-      return { userId: session.user.id, babyId: sync.babyId };
+    const accessibleBabies = await BabyRepository.listMyBabies();
+    setBabies(accessibleBabies);
+    const requested = isValidLocalDataScope(override) && override.userId === session.user.id
+      ? accessibleBabies.find((baby) => baby.id === override.babyId)
+      : null;
+    const persisted = requested ?? (sync.userId === session.user.id
+      ? accessibleBabies.find((baby) => baby.id === sync.babyId)
+      : null);
+    if (persisted) {
+      if (sync.userId !== session.user.id || sync.babyId !== persisted.id) {
+        await saveSupabaseSync({
+          userId: session.user.id,
+          babyId: persisted.id,
+          migrationCandidateCount: 0,
+          lastHydratedAt: new Date().toISOString(),
+        });
+      }
+      return { userId: session.user.id, babyId: persisted.id };
     }
-
-    const babies = await BabyRepository.listMyBabies();
-    if (babies[0]) return { userId: session.user.id, babyId: babies[0].id };
+    if (accessibleBabies[0]) {
+      await saveSupabaseSync({
+        userId: session.user.id,
+        babyId: accessibleBabies[0].id,
+        migrationCandidateCount: 0,
+        lastHydratedAt: new Date().toISOString(),
+      });
+      return { userId: session.user.id, babyId: accessibleBabies[0].id };
+    }
     if (!hasSavedCareSetup) return null;
     const babyId = await ensureCareLogBabyId();
     return babyId ? { userId: session.user.id, babyId } : null;
@@ -429,13 +470,25 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       growthBookDirtyRef.current = false;
       growthBookSyncRunRef.current += 1;
       setDiaryHydrated(false);
+      setLogsHydrated(false);
+      setFamilyHydrated(false);
+      setStickersHydrated(false);
+      setGrowthRecordsHydrated(false);
       setGrowthBookHydrated(false);
       setDiaryEntries([]);
+      setLogs([]);
+      setGrowthRecords([]);
+      setCautionFoods([]);
+      setFamilyMembers([]);
+      setBabyStickers([]);
       setGrowthBookEditState(createEmptyGrowthBookEdit({ babyId: scope?.babyId ?? "", babyName: careSetup.child.childName }));
       resetDiaryEntriesMemory();
+      resetBabyLogsMemory();
       resetGrowthBookEditMemory();
       resetDiaryDraftMemory();
       resetBabyStickersMemory();
+      resetGrowthRecordsMemory();
+      resetFamilyMembersMemory();
       resetCustomCategoriesMemory();
       setCustomCategoriesState([]);
       localDataScopeRef.current = scope;
@@ -446,13 +499,13 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       await Promise.all([
       hydrateCustomCategories(scope, force),
       hydrateQuickRecords(force),
-      hydrateBabyLogs(force),
+      hydrateBabyLogs(scope, force),
       hydrateDiaryEntries(scope, force),
       hydrateChatHistory(force),
-      hydrateFamilyMembers(force),
+      hydrateFamilyMembers(scope, force),
       hydrateGrowthBookEdit(scope, force),
       hydrateBabyStickers(scope, force),
-      hydrateGrowthRecords(force),
+      hydrateGrowthRecords(scope, force),
       hydrateSupabaseSync(force),
     ]);
     if (hydrationRun !== storageHydrationRunRef.current) return false;
@@ -487,7 +540,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
       if (boot.usedServer && boot.logs !== null) {
         setLogs(boot.logs);
-        void saveBabyLogs(boot.logs);
+        void saveBabyLogs(boot.logs, scope);
       } else if (boot.usedServer && boot.logs === null && nextLogs !== null) {
         // Server bound but empty — keep local cache (migration pending).
         setLogs(nextLogs);
@@ -522,7 +575,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       if (storedFamily !== null) {
         const cleanedFamily = removeLegacySampleFamily(storedFamily);
         setFamilyMembers(cleanedFamily);
-        if (cleanedFamily.length !== storedFamily.length) void saveFamilyMembers(cleanedFamily);
+        if (cleanedFamily.length !== storedFamily.length) void saveFamilyMembers(cleanedFamily, scope);
       }
       if (scope?.babyId && isSupabaseConfigured()) {
         try {
@@ -530,7 +583,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
           if (hydrationRun !== storageHydrationRunRef.current) return false;
           if (serverFamily.length) {
             setFamilyMembers(serverFamily);
-            void saveFamilyMembers(serverFamily);
+            void saveFamilyMembers(serverFamily, scope);
           }
         } catch {
           // Keep local family cache when co-member profile join is unavailable.
@@ -585,11 +638,39 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       if (hydrationRun !== storageHydrationRunRef.current) return false;
       if (boot.usedServer && boot.records !== null) {
         setGrowthRecords(boot.records);
-        void saveGrowthRecords(boot.records);
+        void saveGrowthRecords(boot.records, scope);
       } else if (storedGrowthRecords !== null) {
         setGrowthRecords(storedGrowthRecords);
       }
       setGrowthRecordsHydrated(true);
+    }
+    if (scope) {
+      const localCautionFoods = await loadCautionFoods(scope);
+      let nextCautionFoods = localCautionFoods;
+      if (isSupabaseConfigured()) {
+        try {
+          const serverFoods = await CautionFoodRepository.list(scope.babyId);
+          const merged = [...serverFoods];
+          const serverNames = new Set(serverFoods.map((food) => food.normalizedFoodName));
+          for (const localFood of localCautionFoods) {
+            if (serverNames.has(localFood.normalizedFoodName)) continue;
+            try {
+              const migrated = await CautionFoodRepository.add(scope.babyId, localFood.foodName, localFood.source);
+              merged.push(migrated);
+              serverNames.add(migrated.normalizedFoodName);
+            } catch {
+              // Keep an unsynced local item visible and retry on the next hydration.
+              merged.push(localFood);
+            }
+          }
+          nextCautionFoods = merged;
+        } catch {
+          // Migration may not be applied yet; keep the baby-scoped device cache.
+        }
+      }
+      if (hydrationRun !== storageHydrationRunRef.current) return false;
+      setCautionFoods(nextCautionFoods);
+      void saveCautionFoods(scope, nextCautionFoods);
     }
     const allLoaded =
       customOk && quickOk && logsOk && diaryOk && chatOk && familyOk && growthOk && stickersOk && growthRecordsOk;
@@ -608,8 +689,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!logsHydrated) return;
     // Cache only — server is source of truth when active.
-    void saveBabyLogs(logs);
-  }, [logs, logsHydrated]);
+    void saveBabyLogs(logs, localDataScope);
+  }, [logs, logsHydrated, localDataScope]);
 
   useEffect(() => {
     if (!diaryHydrated) return;
@@ -623,8 +704,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!familyHydrated) return;
-    void saveFamilyMembers(familyMembers);
-  }, [familyMembers, familyHydrated]);
+    void saveFamilyMembers(familyMembers, localDataScope);
+  }, [familyMembers, familyHydrated, localDataScope]);
 
   useEffect(() => {
     if (!growthBookHydrated) return;
@@ -663,8 +744,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!growthRecordsHydrated) return;
-    void saveGrowthRecords(growthRecords);
-  }, [growthRecords, growthRecordsHydrated]);
+    void saveGrowthRecords(growthRecords, localDataScope);
+  }, [growthRecords, growthRecordsHydrated, localDataScope]);
 
   const setGrowthBookEdit = useCallback(
     (edit: GrowthBookEdit | ((prev: GrowthBookEdit) => GrowthBookEdit)) => {
@@ -675,9 +756,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   );
 
   const addBabySticker = useCallback(async (sticker: BabySticker): Promise<BabySticker> => {
-    setBabyStickers((prev) => [sticker, ...prev.filter((item) => item.id !== sticker.id)]);
     const scope = localDataScopeRef.current;
-    if (!scope || sticker.babyId !== scope.babyId) return sticker;
+    if (!scope || sticker.babyId !== scope.babyId) {
+      throw new Error("현재 선택된 아기의 스티커만 저장할 수 있어요.");
+    }
+    setBabyStickers((prev) => [sticker, ...prev.filter((item) => item.id !== sticker.id)]);
     try {
       const remote = await BabyStickerRepository.uploadSticker(sticker);
       if (sameLocalDataScope(localDataScopeRef.current, scope)) {
@@ -692,13 +775,17 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteBabySticker = useCallback(async (id: string): Promise<void> => {
+    const scope = localDataScopeRef.current;
     const previous = babyStickers.find((item) => item.id === id);
+    if (!scope || (previous && previous.babyId !== scope.babyId)) return;
     setBabyStickers((prev) => prev.filter((item) => item.id !== id));
     if (!previous?.serverBacked) return;
     try {
       await BabyStickerRepository.deleteSticker(id);
     } catch {
-      if (previous) setBabyStickers((prev) => [previous, ...prev.filter((item) => item.id !== id)]);
+      if (previous && sameLocalDataScope(localDataScopeRef.current, scope)) {
+        setBabyStickers((prev) => [previous, ...prev.filter((item) => item.id !== id)]);
+      }
     }
   }, [babyStickers]);
 
@@ -714,16 +801,21 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const addGrowthRecord = useCallback((draft: GrowthRecordDraft) => {
     const now = new Date().toISOString();
     const sync = getSupabaseSync();
+    const scope = localDataScopeRef.current;
+    if (isSupabaseConfigured() && !scope) {
+      throw new Error("현재 선택된 아기가 없어 성장 기록을 저장할 수 없어요.");
+    }
     const record: GrowthRecord = {
       ...draft,
       id: createId(),
-      babyId: sync.babyId ?? "baby-1",
+      babyId: scope?.babyId ?? sync.babyId ?? "baby-1",
       createdBy: sync.userId ?? logAuthor.userId,
       createdAt: now,
       updatedAt: now,
     };
     setGrowthRecords((current) => [record, ...current]);
-    void syncGrowthRecordCreate(record).then((remote) => {
+    void syncGrowthRecordCreate(record, scope?.babyId).then((remote) => {
+      if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
       if (remote) {
         setGrowthRecords((current) => current.map((item) => item.id === record.id ? remote : item));
       } else if (isSupabaseConfigured()) {
@@ -735,6 +827,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   }, [logAuthor.userId]);
 
   const updateGrowthRecord = useCallback((id: string, draft: GrowthRecordDraft) => {
+    const scope = localDataScopeRef.current;
     const previous = growthRecords.find((record) => record.id === id);
     setGrowthRecords((current) => current.map((record) => record.id === id ? {
       ...record,
@@ -742,7 +835,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       id,
       updatedAt: new Date().toISOString(),
     } : record));
-    void syncGrowthRecordUpdate(id, draft).then((remote) => {
+    void syncGrowthRecordUpdate(id, draft, scope?.babyId).then((remote) => {
+      if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
       if (remote) {
         setGrowthRecords((current) => current.map((record) => record.id === id ? remote : record));
       } else if (isSupabaseConfigured() && previous) {
@@ -752,9 +846,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   }, [growthRecords]);
 
   const deleteGrowthRecord = useCallback((id: string) => {
+    const scope = localDataScopeRef.current;
     const previous = growthRecords.find((record) => record.id === id);
     setGrowthRecords((current) => current.filter((record) => record.id !== id));
-    void syncGrowthRecordDelete(id).then((deleted) => {
+    void syncGrowthRecordDelete(id, scope?.babyId).then((deleted) => {
+      if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
       if (!deleted && isSupabaseConfigured() && previous) {
         setGrowthRecords((current) => current.some((record) => record.id === id) ? current : [previous, ...current]);
       }
@@ -848,11 +944,16 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   const normalizeEntry = useCallback(
     (entry: Omit<BabyLogEntry, "id">): BabyLogEntry => {
+      const activeBabyId = localDataScopeRef.current?.babyId;
+      if (isSupabaseConfigured() && !activeBabyId) {
+        throw new Error("현재 선택된 아기가 없어 기록을 저장할 수 없어요.");
+      }
       const createdBy = entry.createdBy ?? logAuthor;
       let source: BabyLogSource = entry.source ?? (entry.voice ? "voice" : "manual");
       if (!entry.source && !entry.voice && createdBy.role === "caregiver") source = "caregiver";
       return {
         ...entry,
+        babyId: activeBabyId ?? entry.babyId,
         source,
         createdBy,
         dateKey: entry.dateKey ?? formatDateKey(),
@@ -864,9 +965,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   const addLog = useCallback(
     (entry: Omit<BabyLogEntry, "id">) => {
+      const scope = localDataScopeRef.current;
       const next = normalizeEntry(entry);
       setLogs((prev) => [...prev, next]);
-      void syncCareLogCreate(next).then((remote) => {
+      void syncCareLogCreate(next, scope?.babyId).then((remote) => {
+        if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
         if (remote) {
           setLogs((prev) => prev.map((log) => (log.id === next.id ? remote : log)));
         } else if (isSupabaseConfigured()) {
@@ -882,9 +985,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   const addLogWithPersistence = useCallback(
     async (entry: Omit<BabyLogEntry, "id">): Promise<BabyLogEntry | null> => {
+      const scope = localDataScopeRef.current;
       const next = normalizeEntry(entry);
       setLogs((prev) => [...prev, next]);
-      const remote = await syncCareLogCreate(next);
+      const remote = await syncCareLogCreate(next, scope?.babyId);
+      if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return remote ?? null;
       if (remote) {
         setLogs((prev) => prev.map((log) => (log.id === next.id ? remote : log)));
         return remote;
@@ -901,9 +1006,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const addLogs = useCallback(
     (entries: Omit<BabyLogEntry, "id">[]) => {
       if (!entries.length) return;
+      const scope = localDataScopeRef.current;
       const nextEntries = entries.map(normalizeEntry);
       setLogs((prev) => [...prev, ...nextEntries]);
-      void Promise.all(nextEntries.map((entry) => syncCareLogCreate(entry))).then((remotes) => {
+      void Promise.all(nextEntries.map((entry) => syncCareLogCreate(entry, scope?.babyId))).then((remotes) => {
+        if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
         const resultsByLocalId = new Map(
           nextEntries.map((entry, index) => [entry.id, remotes[index]] as const),
         );
@@ -921,6 +1028,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   );
 
   const updateLog = useCallback((id: string, entry: Omit<BabyLogEntry, "id">) => {
+    const scope = localDataScopeRef.current;
     const previous = logs.find((log) => log.id === id);
     setLogs((prev) =>
       prev.map((l) =>
@@ -928,6 +1036,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
           ? {
               ...entry,
               id,
+              babyId: entry.babyId ?? l.babyId ?? scope?.babyId,
               dateKey: entry.dateKey ?? l.dateKey ?? formatDateKey(),
               createdBy: entry.createdBy ?? l.createdBy,
               source: entry.source ?? l.source,
@@ -935,7 +1044,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
           : l,
       ),
     );
-    void syncCareLogUpdate(id, entry).then((remote) => {
+    void syncCareLogUpdate(id, entry, scope?.babyId).then((remote) => {
+      if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
       if (remote) {
         setLogs((current) => current.map((log) => (log.id === id ? remote : log)));
       } else if (isSupabaseConfigured() && previous) {
@@ -946,17 +1056,20 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   const updateLogWithPersistence = useCallback(
     async (id: string, entry: Omit<BabyLogEntry, "id">): Promise<BabyLogEntry | null> => {
+      const scope = localDataScopeRef.current;
       const previous = logs.find((log) => log.id === id);
       if (!previous) return null;
       const next: BabyLogEntry = {
         ...entry,
         id,
+        babyId: entry.babyId ?? previous.babyId ?? scope?.babyId,
         dateKey: entry.dateKey ?? previous.dateKey ?? formatDateKey(),
         createdBy: entry.createdBy ?? previous.createdBy,
         source: entry.source ?? previous.source,
       };
       setLogs((current) => current.map((log) => (log.id === id ? next : log)));
-      const remote = await syncCareLogUpdate(id, entry);
+      const remote = await syncCareLogUpdate(id, entry, scope?.babyId);
+      if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return remote ?? null;
       if (remote) {
         setLogs((current) => current.map((log) => (log.id === id ? remote : log)));
         return remote;
@@ -971,9 +1084,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   );
 
   const deleteLog = useCallback((id: string) => {
+    const scope = localDataScopeRef.current;
     const previous = logs.find((log) => log.id === id);
     setLogs((prev) => prev.filter((l) => l.id !== id));
-    void syncCareLogDelete(id).then((deleted) => {
+    void syncCareLogDelete(id, scope?.babyId).then((deleted) => {
+      if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
       if (!deleted && isSupabaseConfigured() && previous) {
         setLogs((current) => current.some((log) => log.id === id) ? current : [...current, previous]);
       }
@@ -1087,17 +1202,19 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setGrowthBookEditState(emptyGrowthBook);
     setBabyStickers([]);
     setGrowthRecords([]);
+    setBabies([]);
+    setCautionFoods([]);
     setChatHistory([]);
     setCustomCategoriesState([]);
     setQuickRecordsState([]);
     await Promise.all([
-      saveBabyLogs([]),
+      saveBabyLogs([], localDataScope),
       saveDiaryEntries([], localDataScope),
-      saveFamilyMembers([]),
+      saveFamilyMembers([], localDataScope),
       saveGrowthBookEdit(emptyGrowthBook, localDataScope),
       clearDiaryDraft(localDataScope),
       saveBabyStickers([], localDataScope),
-      saveGrowthRecords([]),
+      saveGrowthRecords([], localDataScope),
       clearGrowthRecordsMigrationState(),
       saveChatHistory([]),
       saveCustomCategories([], localDataScope),
@@ -1232,16 +1349,16 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     const reminder = getDiaryReminder();
     await Promise.all([
       saveCareSetup(careSetup),
-      saveBabyLogs(logs),
+      saveBabyLogs(logs, localDataScope),
       saveDiaryEntries(diaryEntries, localDataScope),
       saveChatHistory(chatHistory),
-      saveFamilyMembers(familyMembers),
+      saveFamilyMembers(familyMembers, localDataScope),
       saveGrowthBookEdit(growthBookEdit, localDataScope),
       saveBabyStickers(babyStickers, localDataScope),
-      saveGrowthRecords(growthRecords),
+      saveGrowthRecords(growthRecords, localDataScope),
       saveQuickRecords(quickRecords),
       saveCustomCategories(customCategories, localDataScope),
-      saveDiaryReminder(reminder),
+      saveDiaryReminder(reminder, localDataScope),
       ...(draft ? [saveDiaryDraft(draft, localDataScope)] : []),
     ]);
   }, [
@@ -1263,6 +1380,105 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const rehydrateFromServer = useCallback(async (scope?: LocalDataScope) => {
     await hydrateStorageState(true, scope);
   }, [hydrateStorageState]);
+
+  const applyBabyRowToLocalProfile = useCallback((baby: BabyRow) => {
+    setCareSetup({
+      ...careSetup,
+      child: {
+        ...careSetup.child,
+        childName: baby.name,
+        nickname: baby.nickname ?? undefined,
+        birthDate: baby.birth_date ?? undefined,
+        dueDate: baby.due_date ?? undefined,
+        gender: baby.gender === "girl" || baby.gender === "boy" ? baby.gender : "unknown",
+        photoUri: baby.photo_url ?? undefined,
+        birthWeight: baby.birth_weight ?? undefined,
+        specialNotes: baby.special_notes ?? undefined,
+      },
+    });
+  }, [careSetup, setCareSetup]);
+
+  const refreshBabies = useCallback(async (): Promise<BabyRow[]> => {
+    if (!isSupabaseConfigured()) return babies;
+    const next = await BabyRepository.listMyBabies();
+    setBabies(next);
+    return next;
+  }, [babies]);
+
+  const switchActiveBaby = useCallback(async (babyId: string): Promise<boolean> => {
+    if (!isSupabaseConfigured()) return false;
+    const session = await AuthRepository.getSession();
+    if (!session) return false;
+    const available = await BabyRepository.listMyBabies();
+    setBabies(available);
+    const selected = available.find((baby) => baby.id === babyId);
+    if (!selected) {
+      const fallback = available[0];
+      if (!fallback) return false;
+      await saveSupabaseSync({
+        userId: session.user.id,
+        babyId: fallback.id,
+        migrationCandidateCount: 0,
+        lastHydratedAt: new Date().toISOString(),
+      });
+      applyBabyRowToLocalProfile(fallback);
+      await hydrateStorageState(true, { userId: session.user.id, babyId: fallback.id });
+      return false;
+    }
+    await saveSupabaseSync({
+      userId: session.user.id,
+      babyId: selected.id,
+      migrationCandidateCount: 0,
+      lastHydratedAt: new Date().toISOString(),
+    });
+    applyBabyRowToLocalProfile(selected);
+    await hydrateStorageState(true, { userId: session.user.id, babyId: selected.id });
+    return true;
+  }, [applyBabyRowToLocalProfile, hydrateStorageState]);
+
+  const addBaby = useCallback(async (input: CreateBabyInput): Promise<BabyRow> => {
+    if (!input.name.trim()) throw new Error("아기 이름을 입력해 주세요.");
+    const created = await BabyRepository.createBaby(input);
+    setBabies((current) => [...current.filter((baby) => baby.id !== created.id), created]);
+    await switchActiveBaby(created.id);
+    return created;
+  }, [switchActiveBaby]);
+
+  const addCautionFood = useCallback(async (foodName: string, source: CautionFoodSource): Promise<CautionFood> => {
+    const scope = localDataScopeRef.current;
+    if (!scope) throw new Error("현재 선택된 아기가 없어요.");
+    const trimmed = foodName.trim().replace(/\s+/g, " ").slice(0, 40);
+    const normalized = normalizeCautionFoodName(trimmed);
+    if (!normalized) throw new Error("주의 식품 이름을 입력해 주세요.");
+    if (cautionFoods.some((food) => food.normalizedFoodName === normalized && !food.archivedAt)) {
+      throw new Error("이미 등록된 주의 식품이에요.");
+    }
+    let created: CautionFood = {
+      id: createId(), babyId: scope.babyId, foodName: trimmed, normalizedFoodName: normalized,
+      source, createdAt: new Date().toISOString(),
+    };
+    if (isSupabaseConfigured()) {
+      try { created = await CautionFoodRepository.add(scope.babyId, trimmed, source); } catch { /* pending migration: local fallback */ }
+    }
+    if (!sameLocalDataScope(localDataScopeRef.current, scope)) return created;
+    const next = [...cautionFoods, created];
+    setCautionFoods(next);
+    await saveCautionFoods(scope, next);
+    return created;
+  }, [cautionFoods]);
+
+  const removeCautionFood = useCallback(async (id: string): Promise<void> => {
+    const scope = localDataScopeRef.current;
+    if (!scope) return;
+    const current = cautionFoods.find((food) => food.id === id);
+    if (current?.createdBy && isSupabaseConfigured()) {
+      await CautionFoodRepository.archive(id, scope.babyId);
+    }
+    if (!sameLocalDataScope(localDataScopeRef.current, scope)) return;
+    const next = cautionFoods.filter((food) => food.id !== id);
+    setCautionFoods(next);
+    await saveCautionFoods(scope, next);
+  }, [cautionFoods]);
 
   const prepareForLogout = useCallback(async () => {
     storageHydrationRunRef.current += 1;
@@ -1288,9 +1504,12 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     localDataScopeRef.current = null;
     setLocalDataScope(null);
     resetDiaryEntriesMemory();
+    resetBabyLogsMemory();
     resetGrowthBookEditMemory();
     resetDiaryDraftMemory();
     resetBabyStickersMemory();
+    resetGrowthRecordsMemory();
+    resetFamilyMembersMemory();
     resetCustomCategoriesMemory();
     const emptyGrowthBook = createEmptyGrowthBookEdit({ babyId: "", babyName: "" });
     setLogs([]);
@@ -1300,11 +1519,13 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setBabyStickers([]);
     setGrowthRecords([]);
     setCustomCategoriesState([]);
+    setBabies([]);
+    setCautionFoods([]);
     setChatHistory([DEFAULT_GREETING]);
     await Promise.all([
-      saveBabyLogs([]),
-      saveFamilyMembers([]),
-      saveGrowthRecords([]),
+      saveBabyLogs([], scope),
+      saveFamilyMembers([], scope),
+      saveGrowthRecords([], scope),
       saveChatHistory([DEFAULT_GREETING]),
       clearSupabaseSync(),
     ]);
@@ -1325,10 +1546,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setChatHydrated(true);
       setFamilyHydrated(true);
       await Promise.all([
-        saveBabyLogs(sampleLogs),
+        saveBabyLogs(sampleLogs, localDataScope),
         saveDiaryEntries(SEED_DIARY, localDataScope),
         saveChatHistory([DEFAULT_GREETING]),
-        saveFamilyMembers(SEED_FAMILY),
+        saveFamilyMembers(SEED_FAMILY, localDataScope),
       ]);
     };
 
@@ -1375,6 +1596,14 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       logs,
       diaryEntries,
       localDataScope,
+      babies,
+      activeBabyId: localDataScope?.babyId ?? null,
+      switchActiveBaby,
+      addBaby,
+      refreshBabies,
+      cautionFoods,
+      addCautionFood,
+      removeCautionFood,
       familyMembers,
       growthBookEdit,
       setGrowthBookEdit,
@@ -1430,6 +1659,13 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       logs,
       diaryEntries,
       localDataScope,
+      babies,
+      switchActiveBaby,
+      addBaby,
+      refreshBabies,
+      cautionFoods,
+      addCautionFood,
+      removeCautionFood,
       familyMembers,
       growthBookEdit,
       setGrowthBookEdit,

@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
+import { ShieldCheck } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "./BabyLogIcon";
-import { SharedCaregiversRow } from "./SharedCaregiversRow";
 import { useApp } from "../../context/AppContext";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { BabyProfileRepository } from "../../repositories/BabyProfileRepository";
@@ -12,19 +12,20 @@ import { colors } from "../../theme";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { formatWeight } from "../../utils/measurementFormat";
 import { formatBabyAge } from "../../utils/childDisplay";
-import { getSupabaseSync } from "../../utils/supabaseSyncStore";
+import { BabySwitcher } from "./BabySwitcher";
 
 type Props = {
   onOpenProfile: () => void;
   onOpenSettings?: () => void;
+  embedded?: boolean;
 };
 
-export function RecordHomeHeader({ onOpenProfile, onOpenSettings }: Props) {
+export function RecordHomeHeader({ onOpenProfile, onOpenSettings, embedded = false }: Props) {
   const insets = useSafeAreaInsets();
   const { careSetup, setCareSetup } = useApp();
   const careSetupRef = useRef(careSetup);
   careSetupRef.current = careSetup;
-  const { babyName, babyBadge, babyBirthMeta } = useBabyLog();
+  const { babyName, babyBadge, babyBirthMeta, activeBabyId } = useBabyLog();
   const { settings } = useAppSettings();
   const dDay = babyBadge.match(/D\+\d+/)?.[0];
   const birthWeight = careSetup.child.birthWeight?.trim();
@@ -34,7 +35,7 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings }: Props) {
   useFocusEffect(
     useCallback(() => {
       setBabyPhoto(careSetupRef.current.child.photoUri);
-      const babyId = getSupabaseSync().babyId;
+      const babyId = activeBabyId;
       if (!babyId) return;
       let cancelled = false;
       void BabyProfileRepository.getBabyProfile(babyId)
@@ -65,54 +66,64 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings }: Props) {
       return () => {
         cancelled = true;
       };
-    }, [setCareSetup]),
+    }, [activeBabyId, setCareSetup]),
   );
 
   return (
-    <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 12) }]}>
-      <View style={styles.row}>
-        <Pressable style={styles.avatarCircle} onPress={onOpenProfile} accessibilityRole="button" accessibilityLabel="아기 프로필 열기">
-          {babyPhoto ? (
-            <Image source={{ uri: babyPhoto }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
-          ) : (
-            <BabyLogIcon kind="baby" size={26} color={colors.amber} />
-          )}
-        </Pressable>
+    <View style={[styles.wrap, embedded && styles.wrapEmbedded, { paddingTop: Math.max(insets.top, 12) }]}>
+      <View style={styles.headerRow}>
+        <View style={styles.card}>
+          <Pressable style={styles.avatarCircle} onPress={onOpenProfile} accessibilityRole="button" accessibilityLabel="아기 프로필 열기">
+            {babyPhoto ? (
+              <Image source={{ uri: babyPhoto }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+            ) : (
+              <BabyLogIcon kind="baby" size={27} color={colors.amber} />
+            )}
+          </Pressable>
 
-        <Pressable style={styles.info} onPress={onOpenProfile} accessibilityRole="button">
-          <View style={styles.nameRow}>
-            <Text style={styles.name}>{careSetup.child.childName || babyName}</Text>
-            {dDay ? <Text style={styles.dayBadge}>{dDay}</Text> : null}
+          <View style={styles.info}>
+            <Pressable style={styles.nameRow} onPress={onOpenProfile} accessibilityRole="button" accessibilityLabel={`${babyName} 아기 프로필 열기`}>
+              <Text style={styles.name} numberOfLines={1}>{babyName}</Text>
+              <ShieldCheck size={18} color={colors.amber} strokeWidth={2.2} />
+            </Pressable>
+            <View style={styles.sharedMeta}>
+              <BabyLogIcon kind="profile" size={16} color={colors.amber} strokeWidth={2.1} />
+              <Text style={styles.sharedText} numberOfLines={1}>나와 공유 중</Text>
+            </View>
+            <View style={styles.actionRow}>
+              <Text style={styles.age} numberOfLines={1}>
+                {dDay ?? configuredAge ?? babyBirthMeta}
+                {birthWeight ? ` · ${formatWeight(birthWeight, settings.units.weight)}` : ""}
+              </Text>
+              <View style={styles.switchWrap}><BabySwitcher variant="switchButton" /></View>
+            </View>
           </View>
-          <Text style={styles.age}>
-            {configuredAge ?? babyBirthMeta}
-            {birthWeight ? ` · ${formatWeight(birthWeight, settings.units.weight)}` : ""}
-          </Text>
-          <View style={styles.sharedWrap}>
-            <SharedCaregiversRow onPress={onOpenProfile} size="sm" />
-          </View>
-        </Pressable>
-
-        <Pressable
-          style={styles.profileBtn}
-          onPress={onOpenSettings ?? onOpenProfile}
-          accessibilityRole="button"
-          accessibilityLabel={onOpenSettings ? "설정 열기" : "아기 프로필 열기"}
-        >
-          <BabyLogIcon kind={onOpenSettings ? "settings" : "profile"} size={18} color={colors.muted} />
-        </Pressable>
+        </View>
+        {onOpenSettings ? <Pressable style={styles.settingsBtn} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel="설정 열기"><BabyLogIcon kind="settings" size={18} color={colors.muted} /></Pressable> : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 20, paddingBottom: 18 },
-  row: { flexDirection: "row", alignItems: "center", gap: 14 },
+  wrap: { paddingHorizontal: 16, paddingBottom: 18 },
+  wrapEmbedded: { paddingHorizontal: 0 },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  card: {
+    width: "70%",
+    flexShrink: 1,
+    minHeight: 104,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 13,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    backgroundColor: "transparent",
+  },
   avatarCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
@@ -121,19 +132,21 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     shadowColor: "#4A3428",
     shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
   },
-  info: { flex: 1 },
+  info: { flex: 1, minWidth: 0, justifyContent: "center" },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  name: { fontSize: 21, fontWeight: "800", color: colors.text, letterSpacing: -0.35 },
-  dayBadge: { color: colors.amber, backgroundColor: colors.amberSoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, fontSize: 11, fontWeight: "800", overflow: "hidden" },
-  age: { fontSize: 13, color: colors.muted, marginTop: 2, fontWeight: "500" },
-  sharedWrap: { marginTop: 8 },
-  profileBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  name: { flexShrink: 1, fontSize: 21, fontWeight: "900", color: colors.text, letterSpacing: -0.4 },
+  actionRow: { minWidth: 0, marginTop: 4, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 5 },
+  age: { flexShrink: 1, fontSize: 16, color: colors.text, fontWeight: "800" },
+  sharedMeta: { minWidth: 0, marginTop: 3, flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 5 },
+  sharedText: { flexShrink: 1, color: colors.muted, fontSize: 13.5, fontWeight: "700" },
+  switchWrap: { flexShrink: 0, alignItems: "flex-end" },
+  settingsBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,

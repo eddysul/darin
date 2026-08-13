@@ -1,0 +1,154 @@
+import { useEffect, useState } from "react";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useBabyLog } from "../../context/BabyLogContext";
+import type { RootStackParamList } from "../../navigation/types";
+import { BabyProfileRepository } from "../../repositories/BabyProfileRepository";
+import { colors, radius } from "../../theme";
+import { BabyLogIcon } from "./BabyLogIcon";
+
+function babyAgeLabel(birthDate: string | null): string {
+  if (!birthDate) return "생년월일 미입력";
+  const birth = new Date(`${birthDate}T00:00:00`);
+  if (!Number.isFinite(birth.getTime())) return birthDate;
+  const days = Math.floor((Date.now() - birth.getTime()) / 86_400_000);
+  if (days < 0) return `D-${Math.abs(days)}`;
+  if (days < 31) return `D+${days}`;
+  const months = Math.max(1, Math.floor(days / 30.4375));
+  if (months < 24) return `${months}개월`;
+  return `${Math.floor(months / 12)}세`;
+}
+
+export function BabySwitcher({ compact = false, variant = "default" }: { compact?: boolean; variant?: "default" | "switchButton" }) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { babies, activeBabyId, babyName, switchActiveBaby } = useBabyLog();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void Promise.all(babies.map(async (baby) => {
+      const profile = await BabyProfileRepository.getBabyProfile(baby.id).catch(() => null);
+      return [baby.id, profile?.avatarUrl ?? profile?.photoUrl ?? baby.photo_url ?? ""] as const;
+    })).then((entries) => {
+      if (!cancelled) setAvatarUrls(Object.fromEntries(entries));
+    });
+    return () => { cancelled = true; };
+  }, [babies, open]);
+
+  return (
+    <>
+      <Pressable style={[styles.trigger, compact && styles.triggerCompact, variant === "switchButton" && styles.switchTrigger]} onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel={`현재 아기 ${babyName}. 아기 전환`}>
+        <BabyLogIcon kind="baby" size={variant === "switchButton" ? 14 : compact ? 15 : 17} color={colors.amber} />
+        <Text style={[styles.triggerText, compact && styles.triggerTextCompact, variant === "switchButton" && styles.switchTriggerText]} numberOfLines={1}>{variant === "switchButton" ? "아기 바꾸기" : babyName}</Text>
+        <Text style={styles.chevron}>⌄</Text>
+      </Pressable>
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
+          <View style={styles.sheet}>
+            <View style={styles.handle} />
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetTitleCopy}>
+                <Text style={styles.title}>아기 바꾸기</Text>
+                <Text style={styles.subtitle}>보고 싶은 아기를 선택해 주세요.</Text>
+              </View>
+              <Pressable style={styles.closeButton} onPress={() => setOpen(false)} accessibilityRole="button" accessibilityLabel="닫기">
+                <Text style={styles.closeText}>×</Text>
+              </Pressable>
+            </View>
+            <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+              {babies.length ? babies.map((baby) => {
+                const selected = baby.id === activeBabyId;
+                const avatarUrl = avatarUrls[baby.id];
+                return (
+                    <Pressable
+                      key={baby.id}
+                      style={[styles.babyRow, selected && styles.babyRowActive]}
+                      disabled={busy}
+                      onPress={() => {
+                        setBusy(true);
+                        setError("");
+                        void switchActiveBaby(baby.id)
+                          .then((selected) => {
+                            if (!selected) throw new Error("아기 접근 권한을 다시 확인해 주세요.");
+                            setOpen(false);
+                          })
+                          .catch((cause) => setError(cause instanceof Error ? cause.message : "아기를 전환하지 못했어요."))
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      <View style={styles.babyIcon}>
+                        {avatarUrl ? <Image source={{ uri: avatarUrl }} style={StyleSheet.absoluteFillObject} contentFit="cover" /> : <BabyLogIcon kind="baby" size={28} color={selected ? colors.amber : colors.muted} />}
+                      </View>
+                      <View style={styles.babyCopy}>
+                        <Text style={[styles.babyName, selected && styles.babyNameActive]} numberOfLines={1}>{baby.name}</Text>
+                        <View style={styles.babyMetaRow}>
+                          <Text style={styles.babyMeta}>{babyAgeLabel(baby.birth_date)}</Text>
+                          <Text style={styles.metaDot}>·</Text>
+                          <BabyLogIcon kind="profile" size={15} color={colors.amber} strokeWidth={2.1} />
+                          <Text style={styles.sharedText}>나와 공유 중</Text>
+                        </View>
+                      </View>
+                      {selected ? <View style={styles.selectedCircle}><Text style={styles.selectedCheck}>✓</Text></View> : null}
+                    </Pressable>
+                );
+              }) : <Text style={styles.empty}>접근 가능한 아기가 없어요.</Text>}
+              <Pressable style={styles.addButton} onPress={() => { setOpen(false); setError(""); navigation.navigate("BabyProfile", { mode: "create" }); }} disabled={busy}>
+                <View style={styles.addIcon}><Text style={styles.addIconText}>＋</Text></View>
+                <Text style={styles.addButtonText}>아기 추가하기</Text>
+              </Pressable>
+            </ScrollView>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  trigger: { maxWidth: 210, minHeight: 36, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.amberSoft },
+  triggerCompact: { minHeight: 32, paddingHorizontal: 8 },
+  switchTrigger: { alignSelf: "flex-end", minHeight: 30, maxWidth: "100%", paddingHorizontal: 10, gap: 5 },
+  triggerText: { flexShrink: 1, color: colors.amber, fontSize: 15, fontWeight: "800" },
+  switchTriggerText: { fontSize: 12.5 },
+  triggerTextCompact: { fontSize: 14 }, chevron: { color: colors.amber, fontSize: 14, fontWeight: "800" },
+  overlay: { flex: 1, justifyContent: "flex-end" }, backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(33,25,22,0.38)" },
+  sheet: { maxHeight: "88%", backgroundColor: colors.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 20, paddingBottom: 34 },
+  handle: { alignSelf: "center", width: 38, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 14 },
+  sheetHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 18 },
+  sheetTitleCopy: { flex: 1 },
+  title: { fontSize: 24, fontWeight: "900", color: colors.text },
+  subtitle: { marginTop: 7, color: colors.muted, fontSize: 14, lineHeight: 20 },
+  closeButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.cardHi, alignItems: "center", justifyContent: "center" },
+  closeText: { color: colors.muted, fontSize: 31, lineHeight: 33, fontWeight: "300" },
+  list: { maxHeight: 500 },
+  listContent: { gap: 10, paddingBottom: 2 },
+  babyRow: { minHeight: 84, flexDirection: "row", alignItems: "center", gap: 13, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 22, backgroundColor: colors.cardHi, borderWidth: 1.5, borderColor: "transparent" },
+  babyRowActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  babyIcon: { width: 58, height: 58, borderRadius: 29, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  babyCopy: { flex: 1, minWidth: 0 },
+  babyName: { fontSize: 19, fontWeight: "800", color: colors.text },
+  babyNameActive: { color: colors.amber },
+  babyMetaRow: { marginTop: 5, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5 },
+  babyMeta: { fontSize: 13, color: colors.muted, fontWeight: "600" },
+  metaDot: { color: colors.faint, fontSize: 13 },
+  sharedText: { color: colors.muted, fontSize: 12.5, fontWeight: "600" },
+  selectedCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  selectedCheck: { color: "#FFFFFF", fontSize: 24, lineHeight: 27, fontWeight: "800" },
+  addButton: { minHeight: 66, marginTop: 2, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center" },
+  addIcon: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  addIconText: { color: colors.amber, fontSize: 22, lineHeight: 24, fontWeight: "500" },
+  addButtonText: { color: colors.amber, fontSize: 16, fontWeight: "800" },
+  label: { marginTop: 10, marginBottom: 6, color: colors.text, fontSize: 12.5, fontWeight: "800" }, input: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card, paddingHorizontal: 12, color: colors.text, fontSize: 15 },
+  avatarWrap: { alignItems: "center", marginBottom: 6 },
+  genderRow: { flexDirection: "row", gap: 8 }, genderChip: { minHeight: 40, minWidth: 74, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border }, genderChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft }, genderText: { color: colors.muted, fontWeight: "700" }, genderTextActive: { color: colors.amber },
+  error: { marginTop: 10, color: colors.dangerText, fontSize: 12 }, actionRow: { flexDirection: "row", gap: 8, marginTop: 18 }, secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border }, secondaryText: { color: colors.muted, fontWeight: "800" }, primary: { flex: 2, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, backgroundColor: colors.amber }, primaryText: { color: "#fff", fontWeight: "800" },
+  empty: { color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center", paddingVertical: 18 },
+});

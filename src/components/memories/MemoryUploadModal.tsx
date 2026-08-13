@@ -21,6 +21,9 @@ import { MemoriesRepository } from "../../repositories/MemoriesRepository";
 import { colors, radius } from "../../theme";
 import { MemoryPeoplePicker } from "./MemoryPeoplePicker";
 import { MemoryPrivacyPicker } from "./MemoryPrivacyPicker";
+import type { BabyRow } from "../../types/database";
+
+const MAX_MEMORY_PHOTOS = 5;
 
 type PickedImage = {
   uri: string;
@@ -34,16 +37,12 @@ function toggle(list: string[], id: string): string[] {
   return list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
 }
 
-function manualTagDrafts(value: string): MemoryTagDraft[] {
-  return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))]
-    .map((manualLabel) => ({ tagType: "manual_guest" as const, manualLabel }));
-}
-
 export function MemoryUploadModal({
   visible,
   babyId,
   babyName,
   familyMembers,
+  babies,
   onClose,
   onCreated,
 }: {
@@ -51,39 +50,41 @@ export function MemoryUploadModal({
   babyId: string;
   babyName: string;
   familyMembers: FamilyMember[];
+  babies: BabyRow[];
   onClose: () => void;
   onCreated: (bundle: MemoryPostBundle) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const [image, setImage] = useState<PickedImage | null>(null);
+  const [images, setImages] = useState<PickedImage[]>([]);
   const [caption, setCaption] = useState("");
   const [privacy, setPrivacy] = useState<MemoryPrivacyType>("family_circle");
   const [taggedIds, setTaggedIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [manualGuests, setManualGuests] = useState("");
+  const [selectedBabyIds, setSelectedBabyIds] = useState<string[]>([babyId]);
+  const [familyMoment, setFamilyMoment] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const dirty = Boolean(image || caption.trim() || taggedIds.length || selectedIds.length || manualGuests.trim() || privacy !== "family_circle");
-  const canSubmit = Boolean(image && !saving);
+  const dirty = Boolean(images.length || caption.trim() || taggedIds.length || selectedIds.length || privacy !== "family_circle");
+  const canSubmit = images.length > 0 && !saving;
 
   useEffect(() => {
     if (visible) return;
-    setImage(null);
+    setImages([]);
     setCaption("");
     setPrivacy("family_circle");
     setTaggedIds([]);
     setSelectedIds([]);
-    setManualGuests("");
+    setSelectedBabyIds([babyId]);
+    setFamilyMoment(false);
     setSaving(false);
     setError("");
-  }, [visible]);
+  }, [babyId, visible]);
 
   const tags = useMemo<MemoryTagDraft[]>(() => [
-    { tagType: "baby", babyId },
+    ...(!familyMoment ? selectedBabyIds.map((selectedBabyId) => ({ tagType: "baby" as const, babyId: selectedBabyId })) : []),
     ...taggedIds.map((taggedUserId) => ({ tagType: "family_member" as const, taggedUserId })),
-    ...manualTagDrafts(manualGuests),
-  ], [babyId, manualGuests, taggedIds]);
+  ], [familyMoment, selectedBabyIds, taggedIds]);
 
   const closeSafely = () => {
     if (saving) return;
@@ -96,33 +97,47 @@ export function MemoryUploadModal({
 
   const pickImage = async () => {
     setError("");
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError("사진을 선택하려면 사진 보관함 접근 권한이 필요해요.");
+    const remaining = MAX_MEMORY_PHOTOS - images.length;
+    if (remaining <= 0) {
+      setError("사진을 더 추가하려면 먼저 한 장을 삭제해 주세요.");
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: false,
-      quality: 0.9,
-    });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    if (asset.fileSize !== undefined && asset.fileSize > 25 * 1024 * 1024) {
-      setError("사진은 25MB 이하만 올릴 수 있어요.");
-      return;
+    try {
+      const permission = await ImagePicker.getMediaLibraryPermissionsAsync();
+      const resolvedPermission = permission.granted ? permission : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!resolvedPermission.granted) {
+        setError("사진을 선택하려면 설정에서 사진 보관함 접근을 허용해 주세요.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: true,
+        selectionLimit: remaining,
+        orderedSelection: true,
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+        quality: 0.9,
+      });
+      if (result.canceled) return;
+      if (result.assets.some((asset) => asset.fileSize !== undefined && asset.fileSize > 25 * 1024 * 1024)) {
+        setError("사진은 25MB 이하만 올릴 수 있어요.");
+        return;
+      }
+      setImages((current) => {
+        const next = [...current];
+        for (const asset of result.assets) {
+          if (next.some((item) => item.uri === asset.uri) || next.length >= MAX_MEMORY_PHOTOS) continue;
+          next.push({ uri: asset.uri, width: asset.width, height: asset.height, fileSize: asset.fileSize, mimeType: asset.mimeType });
+        }
+        return next;
+      });
+    } catch (cause) {
+      if (__DEV__) console.warn("[memory-photo-picker] open failed", cause instanceof Error ? cause.name : "unknown");
+      setError("iCloud 사진이라면 사진 앱에서 원본을 먼저 열어 다운로드한 뒤 다시 선택해 주세요.");
     }
-    setImage({
-      uri: asset.uri,
-      width: asset.width,
-      height: asset.height,
-      fileSize: asset.fileSize,
-      mimeType: asset.mimeType,
-    });
   };
 
   const submit = async () => {
-    if (!image || saving) return;
+    if (images.length === 0 || saving) return;
     if (privacy === "tagged_family" && taggedIds.length === 0) {
       setError("태그된 가족만 공개하려면 가족을 한 명 이상 태그해주세요.");
       return;
@@ -134,15 +149,12 @@ export function MemoryUploadModal({
     setSaving(true);
     setError("");
     try {
-      const bundle = await MemoriesRepository.createMemoryWithImage({
+      const bundle = await MemoriesRepository.createMemoryWithImages({
         babyId,
-        imageUri: image.uri,
-        imageSizeBytes: image.fileSize,
-        mimeType: image.mimeType,
-        width: image.width,
-        height: image.height,
+        images,
         caption,
         privacyType: privacy,
+        isFamilyMoment: familyMoment,
         selectedUserIds: privacy === "selected_people" ? selectedIds : [],
         tags,
       });
@@ -179,15 +191,28 @@ export function MemoryUploadModal({
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
         >
-          <Pressable style={styles.photo} onPress={() => void pickImage()}>
-            {image ? <Image source={{ uri: image.uri }} style={StyleSheet.absoluteFill} contentFit="cover" /> : (
+          {images.length === 0 ? (
+            <Pressable style={styles.photo} onPress={() => void pickImage()}>
               <View style={styles.photoEmpty}>
                 <Text style={styles.photoPlus}>＋</Text>
                 <Text style={styles.photoLabel}>사진을 선택해 주세요</Text>
               </View>
-            )}
-          </Pressable>
-          {image ? <Pressable onPress={() => void pickImage()}><Text style={styles.changePhoto}>사진 바꾸기</Text></Pressable> : null}
+            </Pressable>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+              {images.map((image, index) => (
+                <View key={`${image.uri}-${index}`} style={styles.photoThumbWrap}>
+                  <Image source={{ uri: image.uri }} style={styles.photoThumb} contentFit="cover" />
+                  {index === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>대표</Text></View> : null}
+                  <Pressable style={styles.photoRemove} onPress={() => setImages((current) => current.filter((_, photoIndex) => photoIndex !== index))} accessibilityLabel={`사진 ${index + 1} 삭제`}>
+                    <Text style={styles.photoRemoveText}>×</Text>
+                  </Pressable>
+                </View>
+              ))}
+              {images.length < MAX_MEMORY_PHOTOS ? <Pressable style={styles.photoAddTile} onPress={() => void pickImage()}><Text style={styles.photoPlus}>＋</Text><Text style={styles.photoAddText}>사진 추가</Text></Pressable> : null}
+            </ScrollView>
+          )}
+          <Text style={styles.photoGuide}>최대 5장까지 추가할 수 있어요. 첫 번째 사진이 대표 이미지로 표시돼요.</Text>
 
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>짧은 이야기</Text>
@@ -210,16 +235,22 @@ export function MemoryUploadModal({
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.babyTag}>아기 태그 · {babyName}</Text>
+            <Text style={styles.fieldLabel}>이 순간에 함께한 아기</Text>
+            <View style={styles.babyTargetRow}>
+              {babies.map((baby) => {
+                const selected = !familyMoment && selectedBabyIds.includes(baby.id);
+                return <Pressable key={baby.id} style={[styles.babyTargetChip, selected && styles.babyTargetChipActive]} onPress={() => { setFamilyMoment(false); setSelectedBabyIds((current) => { const next = toggle(current, baby.id); return next.length ? next : [baby.id]; }); }}><Text style={[styles.babyTargetText, selected && styles.babyTargetTextActive]}>{baby.name}</Text></Pressable>;
+              })}
+              <Pressable style={[styles.babyTargetChip, familyMoment && styles.babyTargetChipActive]} onPress={() => { setFamilyMoment(true); setSelectedBabyIds([]); }}><Text style={[styles.babyTargetText, familyMoment && styles.babyTargetTextActive]}>가족 순간</Text></Pressable>
+            </View>
+            <Text style={styles.babyTag}>{familyMoment ? "가족 모두의 순간으로 표시돼요." : `${selectedBabyIds.length || 1}명의 아기와 연결돼요.`}</Text>
             <MemoryPeoplePicker
               members={familyMembers}
               taggedIds={taggedIds}
               selectedIds={selectedIds}
               showSelectedPeople={privacy === "selected_people"}
-              manualGuests={manualGuests}
               onToggleTagged={(id) => setTaggedIds((current) => toggle(current, id))}
               onToggleSelected={(id) => setSelectedIds((current) => toggle(current, id))}
-              onChangeManualGuests={setManualGuests}
             />
           </View>
 
@@ -245,11 +276,25 @@ const styles = StyleSheet.create({
   photoEmpty: { flex: 1, alignItems: "center", justifyContent: "center" },
   photoPlus: { color: colors.amber, fontSize: 38, fontWeight: "300" },
   photoLabel: { color: colors.muted, fontSize: 13, fontWeight: "700" },
-  changePhoto: { minHeight: 36, textAlign: "center", color: colors.amber, fontWeight: "700" },
+  photoGuide: { color: colors.faint, fontSize: 11.5, lineHeight: 17 },
+  photoRow: { gap: 10, paddingRight: 4 },
+  photoThumbWrap: { width: 132, height: 132, borderRadius: 18, overflow: "hidden", backgroundColor: colors.cardHi },
+  photoThumb: { width: "100%", height: "100%" },
+  coverBadge: { position: "absolute", left: 7, bottom: 7, borderRadius: 999, backgroundColor: "rgba(46,42,38,0.72)", paddingHorizontal: 7, paddingVertical: 3 },
+  coverBadgeText: { color: "#fff", fontSize: 9.5, fontWeight: "800" },
+  photoRemove: { position: "absolute", right: 6, top: 6, width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(46,42,38,0.72)" },
+  photoRemoveText: { color: "#fff", fontSize: 22, lineHeight: 24 },
+  photoAddTile: { width: 104, height: 132, borderRadius: 18, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center", gap: 4 },
+  photoAddText: { color: colors.amber, fontSize: 11.5, fontWeight: "800" },
   field: { gap: 8, padding: 14, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   fieldLabel: { color: colors.text, fontSize: 14, fontWeight: "800" },
   caption: { minHeight: 100, color: colors.text, fontSize: 14, lineHeight: 21, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
   counter: { color: colors.faint, fontSize: 10.5, textAlign: "right" },
   babyTag: { color: colors.amber, fontSize: 13, fontWeight: "800", marginBottom: 2 },
+  babyTargetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  babyTargetChip: { minHeight: 40, maxWidth: "100%", paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  babyTargetChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  babyTargetText: { color: colors.muted, fontSize: 12.5, fontWeight: "700" },
+  babyTargetTextActive: { color: colors.amber },
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: 12, fontSize: 12.5, lineHeight: 18 },
 });

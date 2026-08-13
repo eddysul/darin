@@ -2,12 +2,20 @@ import { DEFAULT_DIARY_REMINDER, type DiaryReminderSettings } from "../types/dia
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
 import { qaStorage } from "./qaStorage";
+import {
+  isValidLocalDataScope,
+  localDataScopeId,
+  readScopedWithLegacyMigration,
+  scopedStorageKey,
+  type LocalDataScope,
+} from "./scopedLocalStorage";
 
 const KEY = STORAGE_KEYS.diaryReminder;
 
 let memory: DiaryReminderSettings = { ...DEFAULT_DIARY_REMINDER };
 let hydrated = false;
 let hydratePromise: Promise<void> | null = null;
+let activeScopeId: string | null = null;
 
 function isSettings(item: unknown): item is DiaryReminderSettings {
   if (typeof item !== "object" || item === null) return false;
@@ -15,15 +23,34 @@ function isSettings(item: unknown): item is DiaryReminderSettings {
   return typeof s.enabled === "boolean" && typeof s.hour === "number" && typeof s.minute === "number";
 }
 
-export async function hydrateDiaryReminder(): Promise<void> {
+export async function hydrateDiaryReminder(scope: LocalDataScope | null): Promise<void> {
+  if (!isValidLocalDataScope(scope)) {
+    memory = { ...DEFAULT_DIARY_REMINDER };
+    hydrated = true;
+    hydratePromise = null;
+    activeScopeId = null;
+    return;
+  }
+  const scopeId = localDataScopeId(scope);
+  if (activeScopeId !== scopeId) { hydrated = false; hydratePromise = null; memory = { ...DEFAULT_DIARY_REMINDER }; activeScopeId = scopeId; }
   if (hydrated) return;
   if (!hydratePromise) {
     hydratePromise = (async () => {
       try {
-        const raw = await qaStorage.getItem(KEY);
-        const parsed = raw ? (JSON.parse(raw) as unknown) : null;
-        memory = isSettings(parsed)
-          ? { ...DEFAULT_DIARY_REMINDER, ...parsed, repeat: parsed.repeat ?? "daily" }
+        const requestedScopeId = scopeId;
+        const result = await readScopedWithLegacyMigration({
+          baseKey: KEY,
+          scope,
+          parse: (raw) => {
+            const parsed = JSON.parse(raw) as unknown;
+            return isSettings(parsed) ? parsed : null;
+          },
+          serialize: JSON.stringify,
+          merge: (scoped, legacy) => scoped ?? legacy,
+        });
+        if (activeScopeId !== requestedScopeId) return;
+        memory = result.value
+          ? { ...DEFAULT_DIARY_REMINDER, ...result.value, repeat: result.value.repeat ?? "daily" }
           : { ...DEFAULT_DIARY_REMINDER };
       } catch {
         memory = { ...DEFAULT_DIARY_REMINDER };
@@ -39,11 +66,12 @@ export function getDiaryReminder(): DiaryReminderSettings {
   return memory;
 }
 
-export async function saveDiaryReminder(settings: DiaryReminderSettings): Promise<void> {
+export async function saveDiaryReminder(settings: DiaryReminderSettings, scope: LocalDataScope | null): Promise<void> {
+  if (!isValidLocalDataScope(scope) || activeScopeId !== localDataScopeId(scope)) return;
   memory = settings;
   hydrated = true;
   try {
-    await qaStorage.setItem(KEY, JSON.stringify(settings));
+    await qaStorage.setItem(scopedStorageKey(KEY, scope), JSON.stringify(settings));
   } catch {
     reportStorageIssue("save", KEY);
   }

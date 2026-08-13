@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -20,7 +20,6 @@ import { useBabyLog } from "../../context/BabyLogContext";
 import { MemoriesRepository } from "../../repositories/MemoriesRepository";
 import type { MemoryCard } from "../../types/memory";
 import { memberRelationshipLabel } from "../../types/family";
-import { getSupabaseSync } from "../../utils/supabaseSyncStore";
 import { colors, radius } from "../../theme";
 
 type Props = {
@@ -31,6 +30,7 @@ type Props = {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type MemoryFilter = "all" | "family_circle" | "friend_circle" | "only_me" | "tagged" | "saved";
+type BabyTargetFilter = "all" | "family" | string;
 
 const FILTERS: Array<{ key: MemoryFilter; label: string }> = [
   { key: "all", label: "전체" },
@@ -58,6 +58,7 @@ type FeedCardProps = {
   onOpen: () => void;
   onToggleSave: () => void;
   saveWorking: boolean;
+  targetLabel: string;
 };
 
 const MemoryFeedCard = memo(function MemoryFeedCard({
@@ -68,6 +69,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
   onOpen,
   onToggleSave,
   saveWorking,
+  targetLabel,
 }: FeedCardProps) {
   const privacy = memoryPrivacyPresentation(item.post.privacyType);
   const createdAt = new Date(item.post.createdAt);
@@ -85,6 +87,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
           <Text style={[styles.privacyIcon, { color: privacy.accent }]}>{privacy.icon}</Text>
           <Text style={[styles.privacyText, { color: privacy.accent }]}>{privacy.label}</Text>
         </View>
+        {item.mediaCount > 1 ? <View style={styles.mediaCountBadge}><Text style={styles.mediaCountText}>+{item.mediaCount - 1}</Text></View> : null}
       </Pressable>
       <View style={styles.cardBody}>
         <Pressable onPress={onOpen} accessibilityRole="button">
@@ -93,7 +96,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
               <BabyLogIcon kind="profile" size={15} color={privacy.accent} />
             </View>
             <View style={styles.metaCopy}>
-              <Text style={styles.author}>{authorName}</Text>
+              <View style={styles.authorLine}><Text style={styles.author}>{authorName}</Text><View style={styles.targetBadge}><Text style={styles.targetBadgeText}>{targetLabel}</Text></View></View>
               <Text style={styles.meta}>
                 {createdAt.toLocaleDateString("ko-KR", { month: "long", day: "numeric" })} · {createdAt.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}
               </Text>
@@ -134,17 +137,18 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
 
 export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: Props) {
   const insets = useSafeAreaInsets();
-  const { babyName, careSetup, familyMembers, myFamilyRole, logAuthor, storageReady } = useBabyLog();
+  const { babyName, careSetup, familyMembers, myFamilyRole, logAuthor, storageReady, babies, activeBabyId } = useBabyLog();
   const [cards, setCards] = useState<MemoryCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [filter, setFilter] = useState<MemoryFilter>("all");
+  const [babyFilter, setBabyFilter] = useState<BabyTargetFilter>(activeBabyId ?? "all");
   const [expandedCaptions, setExpandedCaptions] = useState<Set<string>>(() => new Set());
   const [savingPostIds, setSavingPostIds] = useState<Set<string>>(() => new Set());
   const savingPostIdsRef = useRef<Set<string>>(new Set());
-  const babyId = getSupabaseSync().babyId;
+  const babyId = activeBabyId;
   const canCreate = myFamilyRole !== "viewer";
   const serverFamilyMembers = useMemo(
     () => familyMembers.filter((member) => UUID_PATTERN.test(member.id)),
@@ -160,14 +164,30 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
     if (!Number.isFinite(startedAt) || startedAt > Date.now()) return null;
     return Math.max(1, Math.floor((Date.now() - startedAt) / 86_400_000) + 1);
   }, [careSetup.child.birthDate]);
+  useEffect(() => { setBabyFilter(activeBabyId ?? "all"); }, [activeBabyId]);
+  const targetBabyIds = useCallback((card: MemoryCard) => card.tags.filter((tag) => tag.tagType === "baby" && tag.babyId).map((tag) => tag.babyId!), []);
+  const targetLabel = useCallback((card: MemoryCard) => {
+    if (card.post.isFamilyMoment) return "가족 순간";
+    const ids = targetBabyIds(card);
+    if (!ids.length) return babies.length === 1 ? (babies[0]?.name ?? babyName) : "가족 순간";
+    return ids.map((id) => babies.find((baby) => baby.id === id)?.name).filter(Boolean).join(" · ") || babyName;
+  }, [babies, babyName, targetBabyIds]);
   const filteredCards = useMemo(() => cards.filter((card) => {
+    const ids = targetBabyIds(card);
+    const isFamilyMoment = card.post.isFamilyMoment || (!ids.length && babies.length > 1);
+    if (babyFilter === "family" && !isFamilyMoment) return false;
+    if (
+      babyFilter !== "all"
+      && babyFilter !== "family"
+      && !(!isFamilyMoment && (ids.includes(babyFilter) || (!ids.length && babies.length === 1 && card.post.babyId === babyFilter)))
+    ) return false;
     if (filter === "all") return true;
     if (filter === "family_circle") return card.post.privacyType === "family_circle";
     if (filter === "friend_circle") return card.post.privacyType === "friend_circle";
     if (filter === "only_me") return card.post.privacyType === "only_me";
     if (filter === "saved") return card.isSaved;
     return card.post.privacyType === "tagged_family" || card.tags.some((tag) => tag.taggedUserId === logAuthor.userId);
-  }), [cards, filter, logAuthor.userId]);
+  }), [babyFilter, babies.length, cards, filter, logAuthor.userId, targetBabyIds]);
   const emptyCopy = EMPTY_COPY[filter];
 
   const load = useCallback(async (refresh = false) => {
@@ -183,14 +203,16 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
     else setLoading(true);
     setError("");
     try {
-      setCards(await MemoriesRepository.listCardsByBabyId(babyId));
+      const lists = await Promise.all(babies.map((baby) => MemoriesRepository.listCardsByBabyId(baby.id)));
+      const unique = new Map(lists.flat().map((card) => [card.post.id, card]));
+      setCards([...unique.values()].sort((a, b) => b.post.createdAt.localeCompare(a.post.createdAt)));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "추억을 불러오지 못했어요.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [babyId, storageReady]);
+  }, [babies, babyId, storageReady]);
 
   // Refetch on every focus so privacy/selection changes and short-lived signed URLs refresh.
   useFocusEffect(useCallback(() => {
@@ -275,14 +297,30 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
       >
-          {FILTERS.map((item) => {
-            const active = filter === item.key;
-            return (
-              <Pressable key={item.key} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => setFilter(item.key)}>
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>{item.label}</Text>
-              </Pressable>
-            );
-          })}
+        <Pressable
+          style={[styles.filterChip, babyFilter === "all" && filter === "all" && styles.filterChipActive]}
+          onPress={() => { setBabyFilter("all"); setFilter("all"); }}
+        >
+          <Text style={[styles.filterText, babyFilter === "all" && filter === "all" && styles.filterTextActive]}>전체</Text>
+        </Pressable>
+        {babies.map((baby) => {
+          const active = babyFilter === baby.id && filter === "all";
+          return <Pressable key={baby.id} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => { setBabyFilter(baby.id); setFilter("all"); }}><Text style={[styles.filterText, active && styles.filterTextActive]}>{baby.name}</Text></Pressable>;
+        })}
+        <Pressable
+          style={[styles.filterChip, babyFilter === "family" && filter === "all" && styles.filterChipActive]}
+          onPress={() => { setBabyFilter("family"); setFilter("all"); }}
+        >
+          <Text style={[styles.filterText, babyFilter === "family" && filter === "all" && styles.filterTextActive]}>가족 순간</Text>
+        </Pressable>
+        {FILTERS.filter((item) => item.key !== "all").map((item) => {
+          const active = babyFilter === "all" && filter === item.key;
+          return (
+            <Pressable key={item.key} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => { setBabyFilter("all"); setFilter(item.key); }}>
+              <Text style={[styles.filterText, active && styles.filterTextActive]}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
       </ScrollView>
 
       {loading ? (
@@ -314,6 +352,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
               onOpen={() => onOpenDetail(item.post.id)}
               onToggleSave={() => void toggleSave(item)}
               saveWorking={savingPostIds.has(item.post.id)}
+              targetLabel={targetLabel(item)}
               onToggleCaption={() => setExpandedCaptions((current) => {
                 const next = new Set(current);
                 if (next.has(item.post.id)) next.delete(item.post.id);
@@ -331,6 +370,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
           babyId={babyId}
           babyName={babyName}
           familyMembers={serverFamilyMembers}
+          babies={babies}
           onClose={() => setUploadOpen(false)}
           onCreated={() => void load(true)}
         />
@@ -382,11 +422,16 @@ const styles = StyleSheet.create({
   privacyBadge: { position: "absolute", left: 12, top: 12, minHeight: 28, paddingHorizontal: 9, borderRadius: radius.full, flexDirection: "row", alignItems: "center", gap: 4 },
   privacyIcon: { fontSize: 11, fontWeight: "900" },
   privacyText: { fontSize: 10.5, fontWeight: "800" },
+  mediaCountBadge: { position: "absolute", right: 12, top: 12, minWidth: 30, height: 28, paddingHorizontal: 8, borderRadius: 14, backgroundColor: "rgba(46,42,38,0.72)", alignItems: "center", justifyContent: "center" },
+  mediaCountText: { color: "#fff", fontSize: 11, fontWeight: "800" },
   cardBody: { paddingHorizontal: 14, paddingVertical: 13 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 9 },
   authorAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   metaCopy: { flex: 1 },
+  authorLine: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
   author: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  targetBadge: { maxWidth: 180, paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.full, backgroundColor: colors.amberSoft },
+  targetBadgeText: { color: colors.amber, fontSize: 9.5, fontWeight: "800" },
   meta: { color: colors.faint, fontSize: 10.5, marginTop: 2 },
   caption: { color: colors.text, fontSize: 14, lineHeight: 21, marginTop: 11 },
   moreButton: { alignSelf: "flex-start", minHeight: 32, justifyContent: "center", marginTop: 2 },

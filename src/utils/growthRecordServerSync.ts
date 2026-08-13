@@ -64,9 +64,9 @@ export async function bootstrapGrowthRecordsFromServer(localRecords: GrowthRecor
   }
 }
 
-export async function syncGrowthRecordCreate(record: GrowthRecord): Promise<GrowthRecord | null> {
+export async function syncGrowthRecordCreate(record: GrowthRecord, babyIdOverride?: string): Promise<GrowthRecord | null> {
   if (!isSupabaseConfigured()) return null;
-  const babyId = await ensureCareLogBabyId();
+  const babyId = babyIdOverride ?? await ensureCareLogBabyId();
   if (!babyId) return null;
   try {
     const remote = await GrowthRecordRepository.create(babyId, record);
@@ -78,9 +78,9 @@ export async function syncGrowthRecordCreate(record: GrowthRecord): Promise<Grow
   }
 }
 
-export async function syncGrowthRecordUpdate(id: string, draft: GrowthRecordDraft): Promise<GrowthRecord | null> {
+export async function syncGrowthRecordUpdate(id: string, draft: GrowthRecordDraft, babyIdOverride?: string): Promise<GrowthRecord | null> {
   if (!isSupabaseConfigured()) return null;
-  const babyId = await ensureCareLogBabyId();
+  const babyId = babyIdOverride ?? await ensureCareLogBabyId();
   if (!babyId) return null;
   try {
     const remote = await GrowthRecordRepository.update(babyId, id, draft);
@@ -92,9 +92,9 @@ export async function syncGrowthRecordUpdate(id: string, draft: GrowthRecordDraf
   }
 }
 
-export async function syncGrowthRecordDelete(id: string): Promise<boolean> {
+export async function syncGrowthRecordDelete(id: string, babyIdOverride?: string): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
-  const babyId = await ensureCareLogBabyId();
+  const babyId = babyIdOverride ?? await ensureCareLogBabyId();
   if (!babyId) return false;
   try {
     await GrowthRecordRepository.delete(babyId, id);
