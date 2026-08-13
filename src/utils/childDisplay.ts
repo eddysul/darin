@@ -8,6 +8,54 @@ function parseFlexibleDate(value?: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function startOfLocalDay(value: Date): Date {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function parseCalendarDate(value?: string): Date | null {
+  const match = value?.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return parseFlexibleDate(value);
+  const [, year, month, day] = match;
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function calendarDayDifference(later: Date, earlier: Date): number {
+  const laterUtc = Date.UTC(later.getFullYear(), later.getMonth(), later.getDate());
+  const earlierUtc = Date.UTC(earlier.getFullYear(), earlier.getMonth(), earlier.getDate());
+  return Math.floor((laterUtc - earlierUtc) / 86_400_000);
+}
+
+/** Compact, non-abbreviated age label used in the record header. */
+export function formatRecordHeaderAge(child: ChildProfile, now = new Date()): string | null {
+  const today = startOfLocalDay(now);
+  const birthDate = parseCalendarDate(child.birthDate);
+
+  if (!birthDate) {
+    const dueDate = parseCalendarDate(child.dueDate);
+    if (!dueDate) return null;
+    const remainingDays = calendarDayDifference(startOfLocalDay(dueDate), today);
+    return remainingDays >= 0 ? `출산 예정 D-${remainingDays}` : `출산 예정 D+${Math.abs(remainingDays)}`;
+  }
+
+  const birth = startOfLocalDay(birthDate);
+  const ageDays = Math.max(0, calendarDayDifference(today, birth));
+  if (ageDays <= 30) return `생후 ${ageDays}일`;
+
+  let completedMonths = (today.getFullYear() - birth.getFullYear()) * 12 + today.getMonth() - birth.getMonth();
+  if (today.getDate() < birth.getDate()) completedMonths -= 1;
+  completedMonths = Math.max(0, completedMonths);
+
+  const anchorYear = birth.getFullYear() + Math.floor((birth.getMonth() + completedMonths) / 12);
+  const anchorMonth = (birth.getMonth() + completedMonths) % 12;
+  const lastAnchorDay = new Date(anchorYear, anchorMonth + 1, 0).getDate();
+  const monthAnchor = new Date(anchorYear, anchorMonth, Math.min(birth.getDate(), lastAnchorDay));
+  const remainingDays = Math.max(0, calendarDayDifference(today, monthAnchor));
+  if (completedMonths < 24) return `${completedMonths}개월 ${remainingDays}일`;
+
+  return `만 ${Math.floor(completedMonths / 12)}세 ${completedMonths % 12}개월`;
+}
+
 function formatDateLabel(value: string, locale: Locale): string {
   const d = parseFlexibleDate(value);
   if (!d) return value;

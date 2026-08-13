@@ -44,9 +44,9 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
   return (
     <>
       <Pressable style={[styles.trigger, compact && styles.triggerCompact, variant === "switchButton" && styles.switchTrigger]} onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel={`현재 아기 ${babyName}. 아기 전환`}>
-        <BabyLogIcon kind="baby" size={variant === "switchButton" ? 14 : compact ? 15 : 17} color={colors.amber} />
+        {variant === "switchButton" ? null : <BabyLogIcon kind="baby" size={compact ? 15 : 17} color={colors.amber} />}
         <Text style={[styles.triggerText, compact && styles.triggerTextCompact, variant === "switchButton" && styles.switchTriggerText]} numberOfLines={1}>{variant === "switchButton" ? "아기 바꾸기" : babyName}</Text>
-        <Text style={styles.chevron}>⌄</Text>
+        <Text style={[styles.chevron, variant === "switchButton" && styles.switchChevron]}>⌄</Text>
       </Pressable>
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -115,10 +115,11 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
 const styles = StyleSheet.create({
   trigger: { maxWidth: 210, minHeight: 36, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.amberSoft },
   triggerCompact: { minHeight: 32, paddingHorizontal: 8 },
-  switchTrigger: { alignSelf: "flex-end", minHeight: 30, maxWidth: "100%", paddingHorizontal: 10, gap: 5 },
+  switchTrigger: { alignSelf: "center", minHeight: 24, maxWidth: "100%", paddingHorizontal: 5, gap: 2 },
   triggerText: { flexShrink: 1, color: colors.amber, fontSize: 15, fontWeight: "800" },
-  switchTriggerText: { fontSize: 12.5 },
+  switchTriggerText: { fontSize: 11 },
   triggerTextCompact: { fontSize: 14 }, chevron: { color: colors.amber, fontSize: 14, fontWeight: "800" },
+  switchChevron: { fontSize: 11 },
   overlay: { flex: 1, justifyContent: "flex-end" }, backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(33,25,22,0.38)" },
   sheet: { maxHeight: "88%", backgroundColor: colors.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 20, paddingBottom: 34 },
   handle: { alignSelf: "center", width: 38, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 14 },
