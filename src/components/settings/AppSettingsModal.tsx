@@ -152,14 +152,10 @@ export function AppSettingsModal({
   page,
   onClose,
   embedded = false,
-  canConnectEmail = false,
-  onConnectEmail,
 }: {
   page: SettingsPage | null;
   onClose: () => void;
   embedded?: boolean;
-  canConnectEmail?: boolean;
-  onConnectEmail?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { settings, setSettings } = useAppSettings();
@@ -391,17 +387,8 @@ export function AppSettingsModal({
                 <InfoRow label="로그인 방식" value={loginMethodLabel(settings.account.loginMethod)} />
                 <InfoRow
                   label="연결된 계정"
-                  value={email.trim() || (canConnectEmail ? "아직 연결되지 않음" : loginMethodLabel(settings.account.loginMethod))}
+                  value={email.trim() || loginMethodLabel(settings.account.loginMethod)}
                 />
-                {canConnectEmail && onConnectEmail ? (
-                  <SecondaryButton
-                    label="이메일 계정 연결"
-                    onPress={() => {
-                      onClose();
-                      onConnectEmail();
-                    }}
-                  />
-                ) : null}
                 {authProviderFlags.google.visible && googleLinkReady ? (
                   googleLinked ? (
                     <InfoRow label="Google 계정" value="연결됨" />

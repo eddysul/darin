@@ -23,7 +23,7 @@ the Kakao/Supabase dashboards and must not be added to Expo environment files.
    Secret as Client Secret.
 4. In **Authentication > URL Configuration**, ensure the redirect allow list
    contains `knanny://auth/callback`.
-5. For anonymous-user identity linking, enable **Allow manual linking**.
+5. For signed-in account provider linking, enable **Allow manual linking**.
 
 ## Expo / EAS
 
@@ -43,7 +43,7 @@ EAS build must include the flags before the button is enabled in that binary.
 1. Start from a signed-out account and complete Kakao login.
 2. Confirm the app returns through `knanny://auth/callback` and opens onboarding
    or the existing baby workspace.
-3. Repeat from an anonymous account that already owns records and confirm the
-   user ID and records are preserved.
+3. Repeat from Account Settings while signed in and confirm Kakao is added as an
+   identity without changing the existing user ID or records.
 4. Cancel the Kakao consent screen and confirm the app returns without creating
    a session or showing a false success state.

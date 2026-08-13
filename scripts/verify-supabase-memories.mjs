@@ -10,7 +10,7 @@
  *
  * Usage: node --env-file=.env scripts/verify-supabase-memories.mjs
  */
-import { createClient } from "@supabase/supabase-js";
+import { cleanupQaAccounts, createPublicClient, createQaAccounts } from "./lib/qa-auth.mjs";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -27,16 +27,7 @@ const pass = (message) => lines.push(`PASS  ${message}`);
 const fail = (message) => lines.push(`FAIL  ${message}`);
 const info = (message) => notes.push(`NOTE  ${message}`);
 
-const client = () => createClient(url, key, {
-  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-});
-
-async function anonymous(label) {
-  const sb = client();
-  const { data, error } = await sb.auth.signInAnonymously();
-  if (error || !data.user) throw new Error(`${label} auth: ${error?.message ?? "no user"}`);
-  return { sb, user: data.user, label };
-}
+const client = createPublicClient;
 
 function expectOne(rows, label) {
   if (!Array.isArray(rows) || rows.length !== 1) {
@@ -69,11 +60,9 @@ const ONE_PIXEL_PNG = new Uint8Array([
   78, 68, 174, 66, 96, 130,
 ]);
 
-const accountA = await anonymous("QA-A-admin");
-const accountB = await anonymous("QA-B-viewer");
-const accountE = await anonymous("QA-E-editor");
-const accountC = await anonymous("QA-C-outsider");
-const accountF = await anonymous("QA-F-memory-friend");
+const [accountA, accountB, accountE, accountC, accountF] = await createQaAccounts([
+  "QA-A-admin", "QA-B-viewer", "QA-E-editor", "QA-C-outsider", "QA-F-memory-friend",
+]);
 
 let babyId = null;
 const storagePaths = [];
@@ -497,13 +486,7 @@ try {
         : `NOTE  QA baby deleted: ${babyId}`,
     );
   }
-  await Promise.all([
-    accountA.sb.auth.signOut(),
-    accountB.sb.auth.signOut(),
-    accountE.sb.auth.signOut(),
-    accountC.sb.auth.signOut(),
-    accountF.sb.auth.signOut(),
-  ]);
+  await cleanupQaAccounts([accountA, accountB, accountE, accountC, accountF]);
 }
 
 console.log([...lines, ...notes].join("\n"));

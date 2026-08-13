@@ -1,9 +1,9 @@
 /**
  * Live growth_records CRUD + RLS verification.
  * Usage: node --env-file=.env scripts/verify-supabase-growth-records.mjs
- * Creates isolated anonymous QA users and removes the QA baby at the end.
+ * Creates isolated confirmed-email QA users and removes them at the end.
  */
-import { createClient } from "@supabase/supabase-js";
+import { cleanupQaAccounts, createPublicClient, createQaAccounts } from "./lib/qa-auth.mjs";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
@@ -12,16 +12,7 @@ if (!url || !key) throw new Error("Missing Supabase public client environment va
 const lines = [];
 const pass = (message) => lines.push(`PASS  ${message}`);
 const fail = (message) => lines.push(`FAIL  ${message}`);
-const client = () => createClient(url, key, {
-  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-});
-
-async function anonymous(label) {
-  const sb = client();
-  const { data, error } = await sb.auth.signInAnonymously();
-  if (error || !data.user) throw new Error(`${label} auth: ${error?.message ?? "no user"}`);
-  return { sb, user: data.user };
-}
+const client = createPublicClient;
 
 const probe = client();
 const { error: tableError } = await probe.from("growth_records").select("id").limit(1);
@@ -32,9 +23,9 @@ if (tableError && (tableError.code === "PGRST205" || /not find|does not exist/i.
 }
 pass("growth_records table reachable");
 
-const admin = await anonymous("admin");
-const viewer = await anonymous("viewer");
-const editor = await anonymous("editor");
+const [admin, viewer, editor, outsider] = await createQaAccounts([
+  "growth-admin", "growth-viewer", "growth-editor", "growth-outsider",
+]);
 let babyId = null;
 
 try {
@@ -83,7 +74,6 @@ try {
   if (duplicateError || countError || dedupeCount !== 1) throw new Error("local migration dedupe failed");
   pass("client_generated_id migration upload is idempotent");
 
-  const outsider = await anonymous("outsider");
   const { data: outsiderRows, error: outsiderReadError } = await outsider.sb.from("growth_records").select("id").eq("baby_id", babyId);
   if (outsiderReadError || (outsiderRows?.length ?? 0) !== 0) throw new Error("non-member read was not blocked");
   pass("non-member read blocked");
@@ -126,7 +116,7 @@ try {
   fail(error instanceof Error ? error.message : String(error));
 } finally {
   if (babyId) await admin.sb.from("babies").delete().eq("id", babyId);
-  await Promise.all([admin.sb.auth.signOut(), viewer.sb.auth.signOut(), editor.sb.auth.signOut()]);
+  await cleanupQaAccounts([admin, viewer, editor, outsider]);
 }
 
 console.log(lines.join("\n"));

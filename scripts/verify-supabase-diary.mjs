@@ -1,5 +1,5 @@
 /** Live diary_entries / diary_media / Storage / RLS verification. */
-import { createClient } from "@supabase/supabase-js";
+import { cleanupQaAccounts, createPublicClient, createQaAccounts } from "./lib/qa-auth.mjs";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
@@ -8,16 +8,7 @@ if (!url || !key) throw new Error("Missing Supabase public client environment va
 const lines = [];
 const pass = (message) => lines.push(`PASS  ${message}`);
 const fail = (message) => lines.push(`FAIL  ${message}`);
-const client = () => createClient(url, key, {
-  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-});
-
-async function anonymous(label) {
-  const sb = client();
-  const { data, error } = await sb.auth.signInAnonymously();
-  if (error || !data.user) throw new Error(`${label} auth: ${error?.message ?? "no user"}`);
-  return { sb, user: data.user };
-}
+const client = createPublicClient;
 
 const probe = client();
 const { error: tableError } = await probe.from("diary_entries").select("id").limit(1);
@@ -28,10 +19,9 @@ if (tableError && (tableError.code === "PGRST205" || /not find|does not exist/i.
 }
 pass("diary_entries table reachable");
 
-const admin = await anonymous("admin");
-const editor = await anonymous("editor");
-const viewer = await anonymous("viewer");
-const outsider = await anonymous("outsider");
+const [admin, editor, viewer, outsider] = await createQaAccounts([
+  "diary-admin", "diary-editor", "diary-viewer", "diary-outsider",
+]);
 let babyId = null;
 let storagePath = null;
 
@@ -191,7 +181,7 @@ try {
 } finally {
   if (storagePath) await admin.sb.storage.from("diary-media").remove([storagePath]);
   if (babyId) await admin.sb.from("babies").delete().eq("id", babyId);
-  await Promise.all([admin.sb.auth.signOut(), editor.sb.auth.signOut(), viewer.sb.auth.signOut(), outsider.sb.auth.signOut()]);
+  await cleanupQaAccounts([admin, editor, viewer, outsider]);
 }
 
 console.log(lines.join("\n"));

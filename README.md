@@ -18,7 +18,7 @@ pnpm qa:mvp
 환경 변수는 `.env.example`을 참고하세요. `.env` 변경 후 Metro를 재시작합니다.
 
 Supabase 1차 스키마: `supabase/migrations/202607250001_care_logs_slice.sql`  
-(대시보드 SQL Editor에 적용 + Auth > Anonymous sign-ins 활성화)
+(대시보드 SQL Editor에 적용. Build 12부터 Auth의 Anonymous sign-ins는 비활성화하고 이메일/Apple/Google/Kakao 계정으로 로그인합니다.)
 
 ## 앱 구성 (탭)
 

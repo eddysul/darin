@@ -352,22 +352,6 @@ function RootApp() {
     [applyOwnerFromSetup, setLocale, setProfile],
   );
 
-  const enterMain = useCallback(
-    (setup: CareSetup, profileName?: string) => {
-      setCareSetup(setup);
-      applyParentSetup(setup);
-      if (profileName) {
-        setOnboardingProfile({
-          ...DEFAULT_PARENT_PROFILE,
-          name: profileName,
-          role: "parent",
-        });
-      }
-      setPhase("main");
-    },
-    [applyParentSetup, setCareSetup],
-  );
-
   const handleSplashComplete = useCallback(() => setSplashFinished(true), []);
 
   const handleLogout = useCallback(async () => {
@@ -392,6 +376,7 @@ function RootApp() {
       FamilyRepository.listMembersAsFamily(serverBaby.id).catch(() => [] as Awaited<ReturnType<typeof FamilyRepository.listMembersAsFamily>>),
       AuthRepository.getUser(),
     ]);
+    if (!authenticatedUser) throw new Error("로그인이 필요해요.");
     const me = members.find((member) => member.user_id === authenticatedUser?.id);
     const childStatus: ChildStatus = ["unborn", "newborn", "infant"].includes(serverBaby.child_status)
       ? (serverBaby.child_status as ChildStatus)
@@ -441,14 +426,10 @@ function RootApp() {
       const { saveFamilyMembers } = await import("./src/utils/familyMembersStore");
       await saveFamilyMembers(
         familyDisplays,
-        authenticatedUser ? { userId: authenticatedUser.id, babyId: serverBaby.id } : null,
+        { userId: authenticatedUser.id, babyId: serverBaby.id },
       );
     }
-    if (authenticatedUser) {
-      await rehydrateFromServer({ userId: authenticatedUser.id, babyId: serverBaby.id });
-    } else {
-      await rehydrateFromServer();
-    }
+    await rehydrateFromServer({ userId: authenticatedUser.id, babyId: serverBaby.id });
     setOnboardingInviteCode("");
     setOnboardingStartsWithBaby(false);
     setPhase("main");

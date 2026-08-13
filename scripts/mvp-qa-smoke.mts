@@ -2,6 +2,7 @@
  * Logic-level MVP QA smoke. Run: pnpm dlx tsx scripts/mvp-qa-smoke.mts
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { formatDateKey, lastNDateKeys, parseDateKey, shiftDateKey } from "../src/utils/dateKey";
 import {
   buildTodaySummary,
@@ -95,6 +96,15 @@ import {
 
 const today = formatDateKey();
 const me = { id: "me", name: "Me", role: "editor" as const, status: "active" as const, isMe: true };
+
+// Build 12 requires a real account before any repository write can occur.
+{
+  const authSource = readFileSync("src/repositories/AuthRepository.ts", "utf8");
+  assert.equal(authSource.includes(".signInAnonymously("), false);
+  assert.equal(authSource.includes('throw new Error("로그인이 필요해요.")'), true);
+  assert.equal(authSource.includes("anonymous_upgrade"), false);
+  assert.equal(authSource.includes("linkIdentity"), true);
+}
 
 assert.equal(formatIsoDateInput("20260809"), "2026-08-09");
 assert.equal(formatIsoDateInput("2026.8.9"), "2026-89");

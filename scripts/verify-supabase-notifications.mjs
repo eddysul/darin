@@ -1,5 +1,5 @@
 /** Live Phase 4 Push Notifications tables, RLS, Edge Function and token-disable QA. */
-import { createClient } from "@supabase/supabase-js";
+import { cleanupQaAccounts, createQaAccounts } from "./lib/qa-auth.mjs";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
@@ -8,17 +8,9 @@ if (!url || !key) throw new Error("Missing Supabase public client environment va
 const lines = [];
 const pass = (message) => lines.push(`PASS  ${message}`);
 const fail = (message) => lines.push(`FAIL  ${message}`);
-const client = () => createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-async function anonymous(label) {
-  const sb = client();
-  const { data, error } = await sb.auth.signInAnonymously();
-  if (error || !data.user) throw new Error(`${label} auth: ${error?.message ?? "no user"}`);
-  return { sb, user: data.user };
-}
-
-const actor = await anonymous("actor");
-const recipient = await anonymous("recipient");
-const outsider = await anonymous("outsider");
+const [actor, recipient, outsider] = await createQaAccounts([
+  "notifications-actor", "notifications-recipient", "notifications-outsider",
+]);
 let babyId = null;
 
 try {
@@ -126,7 +118,7 @@ try {
   fail(error instanceof Error ? error.message : String(error));
 } finally {
   if (babyId) await actor.sb.from("babies").delete().eq("id", babyId);
-  await Promise.all([actor.sb.auth.signOut(), recipient.sb.auth.signOut(), outsider.sb.auth.signOut()]);
+  await cleanupQaAccounts([actor, recipient, outsider]);
 }
 
 console.log(lines.join("\n"));

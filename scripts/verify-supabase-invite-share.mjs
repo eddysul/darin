@@ -1,5 +1,5 @@
-/** Invite & Share V1 live QA using public/anonymous clients only. */
-import { createClient } from "@supabase/supabase-js";
+/** Invite & Share V1 live QA using disposable confirmed-email accounts. */
+import { cleanupQaAccounts, createQaAccounts } from "./lib/qa-auth.mjs";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
@@ -8,26 +8,25 @@ if (!url || !key) throw new Error("Missing Supabase public client environment va
 const lines = [];
 const pass = (message) => lines.push(`PASS  ${message}`);
 const fail = (message) => lines.push(`FAIL  ${message}`);
-const client = () => createClient(url, key, {
-  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-});
-const account = async (label) => {
-  const sb = client();
-  const { data, error } = await sb.auth.signInAnonymously();
-  if (error || !data.user) throw new Error(`${label} auth: ${error?.message ?? "no user"}`);
-  await sb.from("profiles").upsert({
-    id: data.user.id,
-    display_name: label,
-    preferred_language: "ko",
-  });
-  return { sb, user: data.user, label };
-};
 
-const owner = await account("InviteQA-Owner");
-const family = await account("InviteQA-Family");
-const babyFriend = await account("InviteQA-BabyFriend");
-const darinFriend = await account("InviteQA-DarinFriend");
-const outsider = await account("InviteQA-Outsider");
+const rawAccounts = await createQaAccounts([
+  "InviteQA-Owner", "InviteQA-Family", "InviteQA-BabyFriend", "InviteQA-DarinFriend", "InviteQA-Outsider",
+]);
+let preparedAccounts;
+try {
+  preparedAccounts = await Promise.all(rawAccounts.map(async (created) => {
+    const { sb, user, label } = created;
+    const profile = await sb.from("profiles").upsert({
+      id: user.id, display_name: label, preferred_language: "ko",
+    });
+    if (profile.error) throw profile.error;
+    return created;
+  }));
+} catch (error) {
+  await cleanupQaAccounts(rawAccounts);
+  throw error;
+}
+const [owner, family, babyFriend, darinFriend, outsider] = preparedAccounts;
 let babyId = null;
 
 try {
@@ -196,7 +195,7 @@ try {
   fail(error instanceof Error ? error.message : String(error));
 } finally {
   if (babyId) await owner.sb.from("babies").delete().eq("id", babyId);
-  await Promise.all([owner, family, babyFriend, darinFriend, outsider].map(({ sb }) => sb.auth.signOut()));
+  await cleanupQaAccounts([owner, family, babyFriend, darinFriend, outsider]);
 }
 
 console.log(lines.join("\n"));

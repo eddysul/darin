@@ -13,7 +13,7 @@ import { STORAGE_KEYS } from "../utils/storageKeys";
 
 WebBrowser.maybeCompleteAuthSession();
 
-type PendingEmailAuth = { email: string; flow: "anonymous_upgrade" | "signup" };
+type PendingEmailAuth = { email: string; flow: "signup" };
 type OAuthCallbackSource =
   | "oauth-callback"
   | "google-login"
@@ -27,7 +27,6 @@ export type EmailAuthResult = {
   status: "authenticated" | "confirmation_required";
   user: User | null;
   email: string;
-  needsPasswordAfterConfirmation: boolean;
 };
 
 function authRedirectUrl(path: "callback" | "reset-password"): string {
@@ -36,11 +35,6 @@ function authRedirectUrl(path: "callback" | "reset-password"): string {
   // directly instead of asking expo-linking to infer it at runtime.
   return `knanny://auth/${path}`;
 }
-
-let inFlight: Promise<Session> | null = null;
-let lastAuthError: string | null = null;
-let lastAuthErrorAt = 0;
-const AUTH_ERROR_COOLDOWN_MS = 60_000;
 
 async function clearLegacyDeviceAuth(): Promise<void> {
   // Older builds persisted a generated fallback password in AsyncStorage.
@@ -60,7 +54,7 @@ function normalizedEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function isAnonymousUser(user: User | null | undefined): boolean {
+function isUnsupportedLegacySession(user: User | null | undefined): boolean {
   if (!user) return false;
   return user.is_anonymous === true || user.app_metadata?.provider === "anonymous";
 }
@@ -76,19 +70,6 @@ function socialDisplayName(user: User): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-async function anonymousHasBabyMembership(): Promise<boolean> {
-  const sb = requireSupabase();
-  const { data, error } = await sb.from("baby_members").select("baby_id").limit(1);
-  if (error) throw error;
-  return Boolean(data?.length);
-}
-
-function rememberAuthError(message: string): never {
-  lastAuthError = message;
-  lastAuthErrorAt = Date.now();
-  throw new Error(message);
-}
-
 export const AuthRepository = {
   isConfigured(): boolean {
     return isSupabaseConfigured();
@@ -99,6 +80,16 @@ export const AuthRepository = {
     if (!sb) return null;
     const { data, error } = await sb.auth.getSession();
     if (error) throw error;
+    if (isUnsupportedLegacySession(data.session?.user)) {
+      // Build 12 no longer supports guest sessions. Clear only this device's
+      // token; never delete the legacy server user or associated records.
+      await Promise.all([
+        sb.auth.signOut({ scope: "local" }),
+        clearLegacyDeviceAuth(),
+        clearPendingEmailAuth(),
+      ]);
+      return null;
+    }
     return data.session;
   },
 
@@ -107,29 +98,22 @@ export const AuthRepository = {
     return session?.user ?? null;
   },
 
-  isAnonymousUser,
-
   async getPendingEmailAuth(): Promise<PendingEmailAuth | null> {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEYS.pendingEmailAuth);
       if (!raw) return null;
       const value = JSON.parse(raw) as PendingEmailAuth;
-      if (
-        typeof value.email === "string" &&
-        (value.flow === "anonymous_upgrade" || value.flow === "signup")
-      ) {
+      if (typeof value.email === "string" && value.flow === "signup") {
         return value;
       }
+      await clearPendingEmailAuth();
       return null;
     } catch {
       return null;
     }
   },
 
-  /**
-   * Create an email/password account. Anonymous users are upgraded in place so
-   * their auth.uid() — and therefore every existing RLS relationship — stays unchanged.
-   */
+  /** Create a new email/password account from the signed-out auth screen. */
   async signUpWithPassword(input: {
     email: string;
     password: string;
@@ -139,39 +123,7 @@ export const AuthRepository = {
     const email = normalizedEmail(input.email);
     const current = await this.getSession();
 
-    if (current && isAnonymousUser(current.user)) {
-      const { data, error } = await sb.auth.updateUser(
-        {
-          email,
-          data: input.displayName ? { display_name: input.displayName.trim() } : undefined,
-        },
-        { emailRedirectTo: authRedirectUrl("callback") },
-      );
-      if (error) throw error;
-
-      if (isEmailConfirmed(data.user)) {
-        const passwordResult = await sb.auth.updateUser({ password: input.password });
-        if (passwordResult.error) throw passwordResult.error;
-        await clearPendingEmailAuth();
-        await clearLegacyDeviceAuth();
-        return {
-          status: "authenticated",
-          user: passwordResult.data.user,
-          email,
-          needsPasswordAfterConfirmation: false,
-        };
-      }
-
-      await savePendingEmailAuth({ email, flow: "anonymous_upgrade" });
-      return {
-        status: "confirmation_required",
-        user: data.user,
-        email,
-        needsPasswordAfterConfirmation: true,
-      };
-    }
-
-    if (current && !isAnonymousUser(current.user)) {
+    if (current) {
       throw new Error("이미 이메일 계정으로 로그인되어 있어요.");
     }
 
@@ -194,7 +146,6 @@ export const AuthRepository = {
         status: "confirmation_required",
         user: data.user,
         email,
-        needsPasswordAfterConfirmation: false,
       };
     }
 
@@ -203,18 +154,12 @@ export const AuthRepository = {
       status: "authenticated",
       user: data.user,
       email,
-      needsPasswordAfterConfirmation: false,
     };
   },
 
   async signInWithPassword(emailInput: string, password: string): Promise<Session> {
     const sb = requireSupabase();
-    const current = await this.getSession();
-    if (current && isAnonymousUser(current.user) && (await anonymousHasBabyMembership())) {
-      throw new Error(
-        "이 기기의 익명 기록을 먼저 새 이메일 계정에 연결해주세요. 기존 계정 로그인으로 전환하면 익명 기록을 안전하게 합칠 수 없어요.",
-      );
-    }
+    await this.getSession();
     const { data, error } = await sb.auth.signInWithPassword({
       email: normalizedEmail(emailInput),
       password,
@@ -230,17 +175,9 @@ export const AuthRepository = {
     user: User;
     email: string;
     name?: string;
-    linkedAnonymousUser: boolean;
   } | null> {
     const sb = requireSupabase();
-    const previousSession = await this.getSession();
-    if (
-      previousSession &&
-      isAnonymousUser(previousSession.user) &&
-      (await anonymousHasBabyMembership())
-    ) {
-      throw new Error("anonymous_records_require_linking");
-    }
+    await this.getSession();
     const redirectTo = authRedirectUrl("callback");
     const credentials = {
       provider: "google" as const,
@@ -271,7 +208,6 @@ export const AuthRepository = {
       user: session.user,
       email: session.user.email ?? "",
       name: socialDisplayName(session.user),
-      linkedAnonymousUser: false,
     };
   },
 
@@ -330,17 +266,9 @@ export const AuthRepository = {
     user: User;
     email: string;
     name?: string;
-    linkedAnonymousUser: boolean;
   } | null> {
     const sb = requireSupabase();
-    const previousSession = await this.getSession();
-    if (
-      previousSession &&
-      isAnonymousUser(previousSession.user) &&
-      (await anonymousHasBabyMembership())
-    ) {
-      throw new Error("anonymous_records_require_linking");
-    }
+    await this.getSession();
     const redirectTo = authRedirectUrl("callback");
     const credentials = {
       provider: "kakao" as const,
@@ -370,7 +298,6 @@ export const AuthRepository = {
       user: session.user,
       email: session.user.email ?? "",
       name: socialDisplayName(session.user),
-      linkedAnonymousUser: false,
     };
   },
 
@@ -423,16 +350,7 @@ export const AuthRepository = {
     const available = await AppleAuthentication.isAvailableAsync();
     if (!available) throw new Error("이 기기에서는 Apple 로그인을 사용할 수 없어요.");
 
-    const previousSession = await this.getSession();
-    if (
-      previousSession &&
-      isAnonymousUser(previousSession.user) &&
-      (await anonymousHasBabyMembership())
-    ) {
-      throw new Error(
-        "이 기기의 익명 기록을 먼저 이메일 계정에 연결해주세요. Apple 로그인으로는 기존 기록을 안전하게 합칠 수 없어요.",
-      );
-    }
+    await this.getSession();
 
     let credential: AppleAuthentication.AppleAuthenticationCredential;
     try {
@@ -509,7 +427,7 @@ export const AuthRepository = {
     }
 
     const { error } = await sb.auth.resend({
-      type: pending.flow === "anonymous_upgrade" ? "email_change" : "signup",
+      type: "signup",
       email: pending.email,
       options: { emailRedirectTo: authRedirectUrl("callback") },
     });
@@ -526,20 +444,12 @@ export const AuthRepository = {
     return "resent";
   },
 
-  async completePendingEmailAuth(password?: string): Promise<User> {
+  async completePendingEmailAuth(): Promise<User> {
     const sb = requireSupabase();
-    const pending = await this.getPendingEmailAuth();
     const { data, error } = await sb.auth.getUser();
     if (error) throw error;
     if (!data.user || !isEmailConfirmed(data.user)) {
       throw new Error("이메일 인증이 아직 완료되지 않았어요. 메일의 인증 링크를 먼저 열어주세요.");
-    }
-    if (pending?.flow === "anonymous_upgrade") {
-      if (!password) throw new Error("인증을 마치려면 비밀번호를 다시 입력해주세요.");
-      const updated = await sb.auth.updateUser({ password });
-      if (updated.error) throw updated.error;
-      await clearPendingEmailAuth();
-      return updated.data.user;
     }
     await clearPendingEmailAuth();
     return data.user;
@@ -587,47 +497,19 @@ export const AuthRepository = {
     );
   },
 
-  /**
-   * Ensure there is an auth session.
-   * 1) Existing session
-   * 2) Anonymous (preferred for MVP)
-   * If Anonymous Auth is unavailable, fail safely and let the account login UI
-   * recover instead of creating credentials in unencrypted local storage.
-   */
+  /** Require a real signed-in session. This method never creates an account. */
   async ensureSession(): Promise<Session> {
-    const sb = requireSupabase();
     const existing = await this.getSession();
     if (existing) {
       await clearLegacyDeviceAuth();
-      lastAuthError = null;
       return existing;
     }
-
-    if (inFlight) return inFlight;
-
-    inFlight = (async () => {
-      // Prefer Anonymous every time we need a new session.
-      const { data, error } = await sb.auth.signInAnonymously();
-      if (!error && data.session) {
-        lastAuthError = null;
-        lastAuthErrorAt = 0;
-        return data.session;
-      }
-
-      await clearLegacyDeviceAuth();
-      const message = error?.message ?? "Anonymous authentication is unavailable.";
-      return rememberAuthError(message);
-    })().finally(() => {
-      inFlight = null;
-    });
-
-    return inFlight;
+    await clearLegacyDeviceAuth();
+    throw new Error("로그인이 필요해요.");
   },
 
   async signOut(): Promise<void> {
     const sb = getSupabase();
-    lastAuthError = null;
-    lastAuthErrorAt = 0;
     await clearLegacyDeviceAuth();
     if (!sb) return;
     const { error } = await sb.auth.signOut();

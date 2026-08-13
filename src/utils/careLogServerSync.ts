@@ -84,7 +84,7 @@ export async function bootstrapCareLogsFromServer(opts: {
     };
   }
 
-  // Never create an anonymous session/baby while the login or first-run screen is visible.
+  // Never create an auth session or baby while login or first-run UI is visible.
   // A server baby is bound only after onboarding has produced a real CareSetup.
   if (!opts.hasSavedCareSetup || !(await AuthRepository.getSession())) {
     return {

@@ -1,5 +1,5 @@
 -- CareLog vertical slice (profiles / babies / baby_members / invite_codes / care_logs)
--- Apply in Supabase SQL Editor. Enable Anonymous sign-ins under Auth > Providers.
+-- Apply in Supabase SQL Editor. Build 12 requires a signed-in account; do not enable Anonymous sign-ins.
 
 create extension if not exists "pgcrypto";
 

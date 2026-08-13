@@ -52,7 +52,6 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [confirmationNeedsPassword, setConfirmationNeedsPassword] = useState(false);
 
   useEffect(() => {
     if (recoveryMode) {
@@ -62,7 +61,6 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
     void AuthRepository.getPendingEmailAuth().then((pending) => {
       if (!pending) return;
       setEmail(pending.email);
-      setConfirmationNeedsPassword(pending.flow === "anonymous_upgrade");
       setMode("confirm");
     });
   }, [recoveryMode]);
@@ -107,7 +105,6 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
         if (!passwordsMatch) throw new Error("비밀번호 확인이 일치하지 않아요.");
         const result = await AuthRepository.signUpWithPassword({ email, password, displayName: name });
         if (result.status === "confirmation_required") {
-          setConfirmationNeedsPassword(result.needsPasswordAfterConfirmation);
           setPassword("");
           setPasswordConfirm("");
           setMode("confirm");
@@ -120,20 +117,14 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
         await AuthRepository.sendPasswordReset(email);
         setNotice("비밀번호 재설정 메일을 보냈어요. 메일의 링크를 열어주세요.");
       } else if (mode === "confirm") {
-        if (confirmationNeedsPassword) {
-          if (!validPassword) throw new Error(`비밀번호는 ${PASSWORD_MIN}자 이상 입력해주세요.`);
-          if (!passwordsMatch) throw new Error("비밀번호 확인이 일치하지 않아요.");
-        }
         try {
-          const user = await AuthRepository.completePendingEmailAuth(
-            confirmationNeedsPassword ? password : undefined,
-          );
+          const user = await AuthRepository.completePendingEmailAuth();
           await finish(user);
         } catch (confirmError) {
           // A signup link opened in a different browser/device confirms the
           // server account but cannot restore this app's local PKCE session.
           // In that normal case, password login is the safe completion step.
-          if (!confirmationNeedsPassword && /auth session missing/i.test(String(confirmError))) {
+          if (/auth session missing/i.test(String(confirmError))) {
             selectMode("login");
             setNotice("메일 인증을 마쳤다면 가입한 이메일과 비밀번호로 로그인해주세요.");
             return;
@@ -186,7 +177,7 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
     login: "로그인",
     signup: "계정 만들기",
     forgot: "재설정 메일 보내기",
-    confirm: confirmationNeedsPassword ? "인증 완료 확인" : "로그인으로 계속하기",
+    confirm: "로그인으로 계속하기",
     "reset-password": "새 비밀번호 저장",
   }[mode];
 
@@ -216,10 +207,9 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
       {mode === "confirm" ? (
         <Text style={styles.body}>
           {email}로 보낸 인증 링크를 열어주세요. 인증 후 앱으로 자동 복귀하지 않으면 로그인으로 계속해주세요.
-          {confirmationNeedsPassword ? " 인증 후 사용할 비밀번호를 다시 입력해주세요." : ""}
         </Text>
       ) : null}
-      {mode === "login" || mode === "signup" || mode === "reset-password" || (mode === "confirm" && confirmationNeedsPassword) ? (
+      {mode === "login" || mode === "signup" || mode === "reset-password" ? (
         <Field label={mode === "reset-password" ? "새 비밀번호" : "비밀번호"}>
           <View style={styles.passwordRow}>
             <TextInput
@@ -238,7 +228,7 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
           </View>
         </Field>
       ) : null}
-      {mode === "signup" || mode === "reset-password" || (mode === "confirm" && confirmationNeedsPassword) ? (
+      {mode === "signup" || mode === "reset-password" ? (
         <Field label="비밀번호 확인">
           <TextInput
             style={styles.input}

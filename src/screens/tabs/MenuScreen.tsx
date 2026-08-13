@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { User } from "@supabase/supabase-js";
-import { EmailAuthModal } from "../../components/auth/EmailAuthModal";
 import { BabyLogIcon, type MiscIconKey } from "../../components/babylog/BabyLogIcon";
 import { BabyStickerVaultModal } from "../../components/babylog/BabyStickerVaultModal";
 import { DiaryReminderSettingsModal } from "../../components/babylog/DiaryReminderSettingsModal";
@@ -79,7 +78,6 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
   const [deleteError, setDeleteError] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
-  const [emailAuthOpen, setEmailAuthOpen] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [reminder, setReminder] = useState<DiaryReminderSettings>({
     ...DEFAULT_DIARY_REMINDER,
@@ -96,10 +94,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
   }, [hasServerDeletion]);
 
   const confirmLogout = () => {
-    const anonymous = AuthRepository.isAnonymousUser(authUser);
-    Alert.alert("로그아웃", anonymous
-      ? "익명 계정은 로그아웃 후 다시 찾을 수 없어요. 먼저 이메일 계정에 연결해주세요."
-      : "로그인 화면으로 돌아갈까요? 서버 기록은 다시 로그인하면 복원돼요.", [
+    Alert.alert("로그아웃", "로그인 화면으로 돌아갈까요? 서버 기록은 다시 로그인하면 복원돼요.", [
       { text: "취소", style: "cancel" },
       {
         text: "로그아웃",
@@ -116,7 +111,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
 
   const performDelete = async () => {
     if (deleting) return;
-    if (authUser && !AuthRepository.isAnonymousUser(authUser) && !hasServerDeletion) {
+    if (authUser && !hasServerDeletion) {
       setDeleteError("이메일 계정 삭제용 서버 API가 아직 배포되지 않았어요. 데이터 보호를 위해 로컬 삭제만 진행하지 않습니다.");
       return;
     }
@@ -261,23 +256,6 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
       <AppSettingsModal
         page={accountSettingsOpen ? "account" : null}
         onClose={() => setAccountSettingsOpen(false)}
-        canConnectEmail={AuthRepository.isAnonymousUser(authUser)}
-        onConnectEmail={() => setEmailAuthOpen(true)}
-      />
-
-      <EmailAuthModal
-        visible={emailAuthOpen}
-        onClose={() => setEmailAuthOpen(false)}
-        onAuthenticated={async ({ user, email }) => {
-          setAuthUser(user);
-          setSettings((current) => ({
-            ...current,
-            account: { ...current.account, email, loginMethod: "email" },
-          }));
-          await rehydrateFromServer();
-          setEmailAuthOpen(false);
-          Alert.alert("계정 연결 완료", "기존 아기와 기록을 유지한 채 이메일 계정으로 연결했어요.");
-        }}
       />
 
       <DiaryReminderSettingsModal
@@ -318,9 +296,9 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
             <Text style={styles.deleteBody}>
               {hasServerDeletion
                 ? "계정을 삭제하면 이 계정으로 로그인할 수 없으며, 개인 설정과 알림 토큰이 삭제됩니다. 가족과 공유 중인 아기 기록은 다른 가족 구성원의 접근 권한과 데이터 소유 상태에 따라 일부 보존될 수 있습니다."
-                : authUser && !AuthRepository.isAnonymousUser(authUser)
+                : authUser
                   ? "이메일 계정의 안전한 서버 삭제 API가 아직 필요합니다. 현재는 계정을 삭제하지 않습니다."
-                  : "익명 계정은 선택한 경우에만 이 기기의 로컬 데이터를 삭제합니다."}
+                  : "로그인 세션을 확인하지 못해 서버 계정을 삭제하지 않습니다."}
             </Text>
             <View style={styles.deleteOption}>
               <View style={styles.deleteOptionCopy}>
