@@ -19,6 +19,12 @@ type PersonCutoutNativeModule = {
     offsetY: number,
     zoom: number,
   ): Promise<string>;
+  createRoundedRectCutoutFramed?(
+    imageUri: string,
+    offsetX: number,
+    offsetY: number,
+    zoom: number,
+  ): Promise<string>;
 };
 
 let native: PersonCutoutNativeModule | null = null;
@@ -80,4 +86,19 @@ export async function createCircularCutout(
     }
   }
   return mod.createCircularCutout(imageUri);
+}
+
+/** Rounded-rectangle transparent PNG crop (on-device). */
+export async function createRoundedRectCutout(
+  imageUri: string,
+  crop?: CircularCutoutCrop,
+): Promise<string> {
+  const mod = getNative();
+  if (!mod?.createRoundedRectCutoutFramed) {
+    throw new Error("Rounded rectangle cutout native module unavailable");
+  }
+  const offsetX = Math.min(1, Math.max(0, crop?.offsetX ?? 0.5));
+  const offsetY = Math.min(1, Math.max(0, crop?.offsetY ?? 0.5));
+  const zoom = Math.min(8, Math.max(1, crop?.zoom ?? 1));
+  return mod.createRoundedRectCutoutFramed(imageUri, offsetX, offsetY, zoom);
 }

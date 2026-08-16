@@ -115,6 +115,32 @@ export function resolvePagePhotos(diary: DiaryEntry, pageEdit: GrowthBookPageEdi
   return photos.filter(Boolean);
 }
 
+export function resolveGrowthBookCoverPhoto(
+  entries: DiaryEntry[],
+  edit?: GrowthBookEdit | null,
+): string | null {
+  if (edit?.coverPhotoUri) return edit.coverPhotoUri;
+  const sorted = sortGrowthBookEntries(entries.filter((entry) => entry.includedInGrowthBook));
+  return (
+    sorted
+      .map((entry) => resolvePagePhotos(entry, resolvePageEdit(entry.id, entry, edit ?? null))[0] ?? diaryPrimaryPhoto(entry))
+      .find(Boolean) ?? null
+  );
+}
+
+/** Photo total for the growth book after page-level add/remove overrides are applied. */
+export function growthBookPhotoCount(
+  entries: DiaryEntry[],
+  edit?: GrowthBookEdit | null,
+): number {
+  return entries
+    .filter((entry) => entry.includedInGrowthBook)
+    .reduce(
+      (total, entry) => total + resolvePagePhotos(entry, resolvePageEdit(entry.id, entry, edit)).length,
+      0,
+    );
+}
+
 export function resolvePageBody(diary: DiaryEntry, pageEdit: GrowthBookPageEdit): string {
   if (pageEdit.pageComment !== undefined) return pageEdit.pageComment;
   return diaryBookBody(diary) ?? "";

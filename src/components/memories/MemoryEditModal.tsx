@@ -163,7 +163,7 @@ export function MemoryEditModal({
         >
           <View style={styles.field}>
             <Text style={styles.label}>사진</Text>
-            <Text style={styles.photoGuide}>최대 5장까지 추가할 수 있어요. 첫 번째 사진이 대표 이미지로 표시돼요.</Text>
+            <Text style={styles.photoGuide}>선택한 사진 {existingPhotos.length + newImages.length}장 · 최대 5장까지 추가할 수 있어요.</Text>
             {!mediaReady ? <ActivityIndicator color={colors.amberText} /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
               {existingPhotos.map((photo, index) => (
                 <View key={photo.mediaId} style={styles.photoThumbWrap}>

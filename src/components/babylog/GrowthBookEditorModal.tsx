@@ -78,6 +78,7 @@ type Props = {
   myRole: FamilyRole;
   onChange: (next: GrowthBookEdit) => void;
   onClose: () => void;
+  onDismiss?: () => void;
   initialDiaryId?: string | null;
 };
 
@@ -105,6 +106,7 @@ export function GrowthBookEditorModal({
   myRole,
   onChange,
   onClose,
+  onDismiss,
   initialDiaryId,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -194,8 +196,6 @@ export function GrowthBookEditorModal({
     });
   }, [activePageIndex, bookPages.length, pageTurnProgress, reduceMotion]);
 
-  if (!visible || !activePage) return null;
-
   const navigation: BookPageNavigationProps = {
     pages: pageMeta,
     activeIndex: activePageIndex,
@@ -207,7 +207,7 @@ export function GrowthBookEditorModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose} onDismiss={onDismiss}>
       <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.header}>
           <Pressable
@@ -397,6 +397,14 @@ function SwipeableCanvasStage({
     }),
     [enabled, navigation.onNext, navigation.onPrevious],
   );
+
+  if (!enabled) {
+    return (
+      <View style={styles.canvasStage}>
+        <View style={styles.pageSlideSurface}>{children}</View>
+      </View>
+    );
+  }
 
   return (
     <View {...swipeResponder.panHandlers} style={styles.canvasStage}>
@@ -846,7 +854,7 @@ function PageEditor({
 
   return (
     <View style={[styles.pageWorkspace, { paddingBottom: mode === "edit" ? bottomPad : Math.max(bottomPad, 10) }]}>
-      <SwipeableCanvasStage navigation={navigation} enabled={photoSwapSourceIndex === null}>
+      <SwipeableCanvasStage navigation={navigation} enabled={mode !== "edit" && photoSwapSourceIndex === null}>
         <GrowthBookPageCanvas
           page={page}
           mode={mode}

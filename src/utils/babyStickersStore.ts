@@ -1,4 +1,11 @@
 import type { BabySticker } from "../types/babySticker";
+import {
+  normalizeBorderStyle,
+  normalizeFrameType,
+  normalizeShadowStyle,
+  normalizeSpeechBubbleType,
+  normalizeTemplateId,
+} from "../types/babySticker";
 import { qaStorage } from "./qaStorage";
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
@@ -35,14 +42,17 @@ function normalize(raw: unknown): BabySticker[] {
     cutoutImageUri: s.cutoutImageUri || s.originalImageUri,
     faceImageUri: s.faceImageUri || s.cutoutImageUri || s.originalImageUri,
     finalStickerImageUri: s.finalStickerImageUri || s.cutoutImageUri || s.originalImageUri,
-    cutoutMode: s.cutoutMode === "personCutout" ? "personCutout" : "circular",
+    cutoutMode:
+      s.cutoutMode === "personCutout" || s.cutoutMode === "roundedRect"
+        ? s.cutoutMode
+        : "circular",
     stickerType: s.stickerType ?? "faceTemplate",
-    templateId: s.templateId ?? "portrait",
+    templateId: normalizeTemplateId(s.templateId),
     label: s.label || "내 아기 스티커",
-    borderStyle: s.borderStyle ?? "whiteThick",
-    shadowStyle: s.shadowStyle ?? "soft",
-    speechBubbleType: s.speechBubbleType ?? "none",
-    frameType: s.frameType ?? "none",
+    borderStyle: normalizeBorderStyle(s.borderStyle),
+    shadowStyle: normalizeShadowStyle(s.shadowStyle),
+    speechBubbleType: normalizeSpeechBubbleType(s.speechBubbleType),
+    frameType: normalizeFrameType(s.frameType),
     text: s.text ?? "",
   }));
 }

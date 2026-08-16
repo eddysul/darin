@@ -3,7 +3,7 @@ import * as Sharing from "expo-sharing";
 import { Alert, Platform } from "react-native";
 import type { DiaryEntry } from "../types/babyLog";
 import type { GrowthBookEdit } from "../types/growthBook";
-import type { BabySticker } from "../types/babySticker";
+import type { BabySticker, StickerTemplateId } from "../types/babySticker";
 import { formatGrowthAuthorLabel } from "../types/growthBook";
 import { buildGrowthBookPages, type GrowthBookPage } from "./growthBookPages";
 import { growthBookStickerHeightFactor, growthBookStickerPdfPosition } from "./growthBookStickerLayout";
@@ -36,7 +36,60 @@ function photoGridHtml(page: GrowthBookPage): string {
 }
 
 function stickerImageUri(sticker: BabySticker): string {
-  return sticker.finalStickerImageUri || sticker.cutoutImageUri || sticker.originalImageUri;
+  return sticker.cutoutImageUri || sticker.finalStickerImageUri || sticker.originalImageUri;
+}
+
+const PDF_TEMPLATE_DECORATIONS: Partial<Record<StickerTemplateId, readonly string[]>> = {
+  hello: ["✦", "♥"],
+  huh: ["?", "?"],
+  wow: ["!", "✦", "★"],
+  yummy: ["♥", "♪"],
+  sleepy: ["☾", "Z", "·"],
+  cry: ["💧", "💧", "ㅠ"],
+  daze: ["…", "✧"],
+  heart: ["♥", "♥", "♥"],
+  giggle: ["✦", "♪"],
+  like: ["★", "✓"],
+  pout: ["×", "~"],
+  squeal: ["!", "♥"],
+  why: ["?", "~"],
+  oops: ["!", "✦"],
+  bite: ["♪", "♥"],
+  cute: ["♥", "★", "✦"],
+};
+
+function pdfBubblePlacement(templateId: StickerTemplateId): "top-left" | "top-right" | "bottom-right" {
+  if (templateId === "hello" || templateId === "giggle") return "top-left";
+  if (["yummy", "daze", "heart", "pout", "squeal", "oops", "bite", "cute"].includes(templateId)) {
+    return "bottom-right";
+  }
+  return "top-right";
+}
+
+function stickerVisualHtml(sticker: BabySticker, sizeClass: string): string {
+  const uri = stickerImageUri(sticker);
+  if (!uri) return "";
+  const text = sticker.text.trim();
+  const frameClass =
+    sticker.frameType === "star"
+      ? " frame-star"
+      : sticker.frameType === "heart"
+        ? " frame-heart"
+        : sticker.frameType === "growthBook"
+          ? " frame-book"
+          : "";
+  const bubble = text
+    ? `<span class="sticker-text${sticker.speechBubbleType === "round" ? " is-bubble" : ""}">${escapeHtml(text)}</span>`
+    : "";
+  const decorations = (PDF_TEMPLATE_DECORATIONS[sticker.templateId] ?? [])
+    .map((symbol) => `<i>${escapeHtml(symbol)}</i>`)
+    .join("");
+  const decorationLayer = decorations ? `<span class="sticker-decorations">${decorations}</span>` : "";
+  const borderClass = sticker.borderStyle === "whiteThick" ? " has-white-border" : "";
+  const shadowClass = sticker.shadowStyle === "soft" ? " has-soft-shadow" : "";
+  const shapeClass = sticker.cutoutMode === "circular" ? " is-circle" : " is-rounded";
+  const placementClass = ` bubble-${pdfBubblePlacement(sticker.templateId)}`;
+  return `<span class="sticker-visual ${sizeClass}${frameClass}${borderClass}${shadowClass}${shapeClass}${placementClass}"><img src="${escapeHtml(uri)}" alt="" />${decorationLayer}${bubble}</span>`;
 }
 
 function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker>): string {
@@ -84,7 +137,7 @@ function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker
       const familyStickers = (c.stickerIds ?? []).slice(0, 3)
         .map((id) => stickersById[id])
         .filter(Boolean)
-        .map((sticker) => `<img src="${escapeHtml(stickerImageUri(sticker!))}" alt="" />`)
+        .map((sticker) => stickerVisualHtml(sticker!, "sticker-sm"))
         .join("");
       return `
       <div class="comment">
@@ -100,7 +153,7 @@ function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker
     .map((item) => stickersById[item.stickerId])
     .filter(Boolean)
     .slice(0, 6)
-    .map((sticker) => `<img src="${escapeHtml(stickerImageUri(sticker!))}" alt="" />`)
+    .map((sticker) => stickerVisualHtml(sticker!, "sticker-md"))
     .join("");
 
   const pageStickerBlocks = (page.pageStickers ?? []).slice().sort((a, b) => a.zIndex - b.zIndex)
@@ -108,7 +161,7 @@ function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker
       const sticker = stickersById[item.stickerId];
       if (!sticker) return "";
       const position = growthBookStickerPdfPosition(item, growthBookStickerHeightFactor(sticker));
-      return `<div class="page-sticker" style="left:${position.leftPercent}%;top:${position.topPercent}%;width:${position.widthPercent}%;z-index:${position.zIndex}"><img src="${escapeHtml(stickerImageUri(sticker))}" alt="" /></div>`;
+      return `<div class="page-sticker" style="left:${position.leftPercent}%;top:${position.topPercent}%;width:${position.widthPercent}%;z-index:${position.zIndex}">${stickerVisualHtml(sticker, "sticker-lg")}</div>`;
     })
     .join("");
 
@@ -178,12 +231,36 @@ export function buildGrowthBookPdfHtml(input: {
     .comment-line { display: flex; align-items: center; gap: 1mm; }
     .comment-line .comment-text { flex: 1; }
     .family-stickers { display: flex; align-items: center; gap: 0.8mm; }
-    .family-stickers img { width: 5mm; height: 5mm; border-radius: 2.5mm; object-fit: cover; border: 0.3mm solid #fff; }
     .comment-stickers { display: flex; flex-wrap: wrap; align-items: center; gap: 1.5mm; min-height: 11mm; margin-top: 1mm; }
-    .comment-stickers img { width: 10mm; height: 10mm; border-radius: 5mm; object-fit: contain; }
+    .sticker-visual { position: relative; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; }
+    .sticker-visual img { display: block; width: 100%; height: 100%; object-fit: cover; box-sizing: border-box; }
+    .sticker-visual.is-rounded img { border-radius: 18%; }
+    .sticker-visual.is-circle img { border-radius: 50%; }
+    .sticker-visual.has-white-border img { border: 0.8mm solid #fff; }
+    .sticker-visual.has-soft-shadow img { filter: drop-shadow(0 1mm 1.5mm rgba(74,52,40,0.18)); }
+    .sticker-sm { width: 5mm; height: 5mm; }
+    .sticker-md { width: 10mm; height: 10mm; }
+    .sticker-lg { width: 100%; }
+    .sticker-visual.frame-star img { clip-path: polygon(50% 4%, 62% 36%, 96% 36%, 69% 58%, 80% 92%, 50% 72%, 20% 92%, 31% 58%, 4% 36%, 38% 36%); }
+    .sticker-visual.frame-heart img { clip-path: polygon(50% 90%, 16% 66%, 4% 40%, 8% 18%, 28% 8%, 50% 24%, 72% 8%, 92% 18%, 96% 40%, 84% 66%); }
+    .sticker-visual.frame-book { padding: 4%; background: #F7EFE4; border: 0.4mm solid #8A735A; border-radius: 1.5mm; box-sizing: border-box; }
+    .sticker-decorations { display: none; position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+    .sticker-lg .sticker-decorations { display: block; }
+    .sticker-decorations i { position: absolute; display: inline-flex; align-items: center; justify-content: center; width: 22%; aspect-ratio: 1; color: #E46F82; font-size: 18px; font-style: normal; font-weight: 900; filter: drop-shadow(0 0.8mm 1mm rgba(74,52,40,0.14)); text-shadow: -1.2px -1.2px 0 #fff, 1.2px -1.2px 0 #fff, -1.2px 1.2px 0 #fff, 1.2px 1.2px 0 #fff, 0 0 3px #fff; }
+    .sticker-decorations i:nth-child(1) { left: -7%; top: 5%; transform: rotate(-10deg); }
+    .sticker-decorations i:nth-child(2) { left: -7%; bottom: 7%; transform: rotate(10deg); color: #E2A62D; }
+    .sticker-decorations i:nth-child(3) { right: -5%; bottom: 7%; transform: rotate(6deg); color: #7199CF; }
+    .sticker-visual.bubble-top-left .sticker-decorations i:nth-child(1) { left: auto; right: -7%; }
+    .sticker-visual.bubble-top-left .sticker-decorations i:nth-child(2) { left: auto; right: -7%; }
+    .sticker-visual.bubble-top-left .sticker-decorations i:nth-child(3) { left: -5%; right: auto; }
+    .sticker-visual.bubble-bottom-right .sticker-decorations i:nth-child(2) { left: auto; right: -7%; top: 7%; bottom: auto; }
+    .sticker-visual.bubble-bottom-right .sticker-decorations i:nth-child(3) { left: -5%; right: auto; }
+    .sticker-text { position: absolute; right: -1mm; top: 1mm; z-index: 3; max-width: 70%; padding: 0.6mm 1.2mm; border-radius: 1.4mm; background: #fff; color: #B03A34; font-size: 6px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sticker-text.is-bubble { background: #fff; color: #B03A34; border: 0.3mm solid #fff; }
+    .sticker-visual.bubble-top-left .sticker-text { left: -1mm; right: auto; }
+    .sticker-visual.bubble-bottom-right .sticker-text { top: auto; bottom: 1mm; }
     .page-sticker-layer { position: absolute !important; inset: 0; z-index: 20 !important; pointer-events: none; }
     .page-sticker { position: absolute; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
-    .page-sticker img { display: block; width: 100%; height: 100%; object-fit: contain; }
     .letter-block { margin: 16px 0; padding: 12px; background: #FAF4EE; border-radius: 10px; }
     .letter-from { font-weight: 700; color: #E8918A; margin: 0 0 8px; }
     .letter-body { margin: 0; line-height: 1.65; white-space: pre-wrap; }

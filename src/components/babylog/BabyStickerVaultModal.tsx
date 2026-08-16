@@ -18,7 +18,6 @@ import type { BabySticker, BabyStickerDraft, StickerCutoutMode } from "../../typ
 import {
   STICKER_BORDER_OPTIONS,
   STICKER_BUBBLE_OPTIONS,
-  STICKER_FRAME_OPTIONS,
   STICKER_SHADOW_OPTIONS,
   STICKER_SUGGESTED_PHRASES,
   STICKER_TEMPLATE_OPTIONS,
@@ -35,11 +34,12 @@ import {
 import { createId } from "../../utils/id";
 import { colors, radius } from "../../theme";
 import { EmptyState } from "../states/FeedbackStates";
+import { BabyLogIcon } from "./BabyLogIcon";
 import { BabyStickerFromModel, BabyStickerView } from "./BabyStickerView";
 import { StickerCirclePositioner } from "./StickerCirclePositioner";
 import { useBabyLog } from "../../context/BabyLogContext";
 
-type Mode = "vault" | "pickPhoto" | "position" | "cutting" | "decorate" | "save";
+type Mode = "vault" | "pickPhoto" | "position" | "cutting" | "decorate";
 
 function isLibraryAllowed(
   status: Awaited<ReturnType<typeof ImagePicker.getMediaLibraryPermissionsAsync>>,
@@ -120,10 +120,10 @@ export function BabyStickerVaultModal({
   const [pendingOriginal, setPendingOriginal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [seedPhrase, setSeedPhrase] = useState<string | null>(null);
-  const [cutoutMode, setCutoutMode] = useState<StickerCutoutMode>("circular");
+  const [cutoutMode, setCutoutMode] = useState<StickerCutoutMode>("roundedRect");
   const [circleCrop, setCircleCrop] = useState<CircularCutoutCrop>(DEFAULT_CIRCLE_CROP);
   const personCutoutSupported = isPersonCutoutSupported();
-  const usesInAppPositioner = cutoutMode === "circular" && Platform.OS === "ios";
+  const usesInAppPositioner = cutoutMode === "roundedRect" && Platform.OS === "ios";
 
   useEffect(() => {
     if (!visible) {
@@ -133,7 +133,7 @@ export function BabyStickerVaultModal({
       setPendingOriginal(null);
       setSaving(false);
       setSeedPhrase(null);
-      setCutoutMode("circular");
+      setCutoutMode("roundedRect");
       setCircleCrop(DEFAULT_CIRCLE_CROP);
       return;
     }
@@ -142,7 +142,7 @@ export function BabyStickerVaultModal({
       setCutoutError(false);
       setPendingOriginal(null);
       setSeedPhrase(null);
-      setCutoutMode("circular");
+      setCutoutMode("roundedRect");
       setCircleCrop(DEFAULT_CIRCLE_CROP);
       setMode("pickPhoto");
     }
@@ -160,17 +160,15 @@ export function BabyStickerVaultModal({
           : mode === "cutting"
             ? cutoutMode === "personCutout"
               ? "인물 컷아웃"
-              : "둥근 스티커"
-            : mode === "decorate"
-              ? "스티커 꾸미기"
-              : "스티커 저장";
+              : "둥근 사각형 스티커"
+              : "스티커 꾸미기";
 
   const startCreate = (phrase?: string) => {
     setDraft(null);
     setCutoutError(false);
     setPendingOriginal(null);
     setSeedPhrase(phrase ?? null);
-    setCutoutMode("circular");
+    setCutoutMode("roundedRect");
     setCircleCrop(DEFAULT_CIRCLE_CROP);
     setMode("pickPhoto");
   };
@@ -190,6 +188,7 @@ export function BabyStickerVaultModal({
       } else if (seedPhrase) {
         next.text = seedPhrase;
         next.label = seedPhrase;
+        next.speechBubbleType = "round";
       }
       return next;
     });
@@ -206,8 +205,8 @@ export function BabyStickerVaultModal({
     setCutoutError(false);
     try {
       const result = await createStickerCutout(originalUri, preferredMode, crop);
-      if (result.method === "circular-fallback") {
-        setCutoutMode("circular");
+      if (result.method === "rounded-rect-fallback") {
+        setCutoutMode("roundedRect");
         setMode("position");
         return;
       }
@@ -223,14 +222,14 @@ export function BabyStickerVaultModal({
     setMode("position");
   };
 
-  const continueAsCircular = () => {
+  const continueAsRoundedRect = () => {
     if (!pendingOriginal) return;
-    setCutoutMode("circular");
+    setCutoutMode("roundedRect");
     openPositioner(pendingOriginal, false);
   };
 
   const pickerExtras =
-    cutoutMode === "circular" && Platform.OS !== "ios"
+    cutoutMode === "roundedRect" && Platform.OS !== "ios"
       ? { allowsEditing: true as const, aspect: [1, 1] as [number, number] }
       : { allowsEditing: false as const };
 
@@ -359,10 +358,6 @@ export function BabyStickerVaultModal({
       onClose();
       return;
     }
-    if (mode === "save") {
-      setMode("decorate");
-      return;
-    }
     if (mode === "cutting") {
       if (usesInAppPositioner && pendingOriginal) {
         setMode("position");
@@ -372,7 +367,7 @@ export function BabyStickerVaultModal({
       return;
     }
     if (mode === "decorate") {
-      if (draft?.cutoutMode === "circular" && pendingOriginal && Platform.OS === "ios") {
+      if (draft?.cutoutMode === "roundedRect" && pendingOriginal) {
         setMode("position");
         return;
       }
@@ -464,12 +459,12 @@ export function BabyStickerVaultModal({
             </View>
             {!personCutoutSupported ? (
               <Text style={styles.hint}>
-                인물 컷아웃은 iOS에서만 사용할 수 있어요. 사진을 고른 뒤 동그라미 안에 넣고 싶은 부분을 맞춰요.
+                인물 컷아웃은 iOS에서만 사용할 수 있어요. 사진을 고른 뒤 원하는 위치를 맞춰요.
               </Text>
             ) : cutoutMode === "personCutout" ? (
               <Text style={styles.hint}>배경 제거는 이 기기에서만 해요. 저장한 스티커는 계정에 보관돼요.</Text>
             ) : (
-              <Text style={styles.hint}>사진을 고른 뒤 동그라미 안에 넣고 싶은 부분을 밀어 맞춰요. 저장한 스티커는 이 기기 보관함과 계정에 남겨요.</Text>
+              <Text style={styles.hint}>사진을 고른 뒤 원하는 위치로 움직여 맞춰요. 저장한 스티커는 이 기기 보관함과 계정에 남겨요.</Text>
             )}
             <Pressable
               style={styles.primaryBtn}
@@ -497,7 +492,7 @@ export function BabyStickerVaultModal({
             bottomPad={insets.bottom}
             onConfirm={(crop) => {
               setCircleCrop(crop);
-              void runCutout(pendingOriginal, "circular", crop);
+              void runCutout(pendingOriginal, "roundedRect", crop);
             }}
           />
         ) : null}
@@ -507,15 +502,15 @@ export function BabyStickerVaultModal({
             {cutoutError ? (
               <>
                 <Text style={styles.errorTitle}>스티커 만들기에 실패했어요.</Text>
-                <Text style={styles.hint}>다시 시도하거나 둥근 스티커 방식으로 계속할 수 있어요.</Text>
+                <Text style={styles.hint}>다시 시도하거나 둥근 사각형 방식으로 계속할 수 있어요.</Text>
                 <Pressable
                   style={styles.primaryBtn}
                   onPress={() => pendingOriginal && void runCutout(pendingOriginal, cutoutMode)}
                 >
                   <Text style={styles.primaryBtnText}>다시 시도</Text>
                 </Pressable>
-                <Pressable style={styles.secondaryBtn} onPress={continueAsCircular}>
-                  <Text style={styles.secondaryBtnText}>둥근 스티커로 계속</Text>
+                <Pressable style={styles.secondaryBtn} onPress={continueAsRoundedRect}>
+                  <Text style={styles.secondaryBtnText}>둥근 사각형으로 계속</Text>
                 </Pressable>
               </>
             ) : (
@@ -524,7 +519,7 @@ export function BabyStickerVaultModal({
                 <Text style={[styles.hint, { marginTop: 16, textAlign: "center" }]}>
                   {cutoutMode === "personCutout"
                     ? "기기에서 인물을 찾아 배경을 지우는 중이에요..."
-                    : "둥근 스티커를 만드는 중이에요..."}
+                    : "둥근 사각형 스티커를 만드는 중이에요..."}
                 </Text>
                 <Text style={styles.mockNote}>온디바이스 처리 · 사진은 서버로 전송되지 않아요</Text>
               </>
@@ -538,48 +533,14 @@ export function BabyStickerVaultModal({
             bottomPad={insets.bottom}
             onChange={setDraft}
             onReposition={
-              draft.cutoutMode === "circular" && pendingOriginal && Platform.OS === "ios"
+              draft.cutoutMode === "roundedRect" && pendingOriginal && Platform.OS === "ios"
                 ? () => setMode("position")
                 : undefined
             }
-            onNext={() => setMode("save")}
+            babyName={babyName}
+            saving={saving}
+            onSave={() => void persistAndSave()}
           />
-        ) : null}
-
-        {mode === "save" && draft ? (
-          <ScrollView
-            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.previewCenter}>
-              <BabyStickerView
-                imageUri={draft.cutoutImageUri || draft.originalImageUri}
-                cutoutMode={draft.cutoutMode}
-                borderStyle={draft.borderStyle}
-                shadowStyle={draft.shadowStyle}
-                speechBubbleType={draft.speechBubbleType}
-                frameType={draft.frameType}
-                templateId={draft.templateId}
-                text={draft.text}
-                size={150}
-              />
-            </View>
-            <Text style={styles.label}>스티커 이름</Text>
-            <TextInput
-              style={styles.input}
-              value={draft.label}
-              onChangeText={(label) => setDraft({ ...draft, label })}
-              placeholder={`예: ${babyName} 웃는 스티커`}
-              placeholderTextColor={colors.faint}
-            />
-            <Pressable
-              style={[styles.primaryBtn, saving && styles.disabled]}
-              disabled={saving}
-              onPress={() => void persistAndSave()}
-            >
-              <Text style={styles.primaryBtnText}>{saving ? "저장 중…" : "스티커 저장"}</Text>
-            </Pressable>
-          </ScrollView>
         ) : null}
       </View>
   );
@@ -610,12 +571,14 @@ function VaultHome({
   onDelete: (sticker: BabySticker) => void;
   onApplyPhrase: (phrase: string) => void;
 }) {
+  const [preview, setPreview] = useState<BabySticker | null>(null);
   const sorted = useMemo(
     () => [...stickers].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [stickers],
   );
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 28 }]}>
       <Pressable style={styles.primaryBtn} onPress={onCreate}>
         <Text style={styles.primaryBtnText}>+ 새 스티커 만들기</Text>
@@ -635,8 +598,10 @@ function VaultHome({
             <Pressable
               key={sticker.id}
               style={styles.card}
-              onPress={() => (pickMode ? onPick(sticker) : undefined)}
+              onPress={() => (pickMode ? onPick(sticker) : setPreview(sticker))}
               onLongPress={() => onDelete(sticker)}
+              accessibilityRole="button"
+              accessibilityLabel={pickMode ? `${sticker.label} 선택` : `${sticker.label} 다시 보기`}
             >
               <View style={styles.cardStickerPreview}>
                 <BabyStickerFromModel sticker={sticker} size={88} />
@@ -663,7 +628,7 @@ function VaultHome({
 
       {!pickMode ? (
         <>
-          <Text style={[styles.sectionTitle, { marginTop: 18 }]}>추천 템플릿</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 18 }]}>추천 한마디</Text>
           <View style={styles.phraseRow}>
             {STICKER_SUGGESTED_PHRASES.slice(0, 4).map((phrase) => (
               <Pressable key={phrase} style={styles.phraseChip} onPress={() => onApplyPhrase(phrase)}>
@@ -674,6 +639,31 @@ function VaultHome({
         </>
       ) : null}
     </ScrollView>
+      {preview ? (
+        <View style={styles.previewOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPreview(null)} />
+          <View style={styles.previewSheet}>
+            <Text style={styles.sectionTitle}>{preview.label}</Text>
+            <View style={styles.previewCenter}>
+              <BabyStickerFromModel sticker={preview} size={168} />
+            </View>
+            <Pressable style={styles.primaryBtn} onPress={() => setPreview(null)}>
+              <Text style={styles.primaryBtnText}>닫기</Text>
+            </Pressable>
+            <Pressable
+              style={styles.secondaryBtn}
+              onPress={() => {
+                const target = preview;
+                setPreview(null);
+                onDelete(target);
+              }}
+            >
+              <Text style={[styles.secondaryBtnText, styles.deleteLink]}>삭제</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -682,27 +672,24 @@ function DecorateStep({
   bottomPad,
   onChange,
   onReposition,
-  onNext,
+  babyName,
+  saving,
+  onSave,
 }: {
   draft: BabyStickerDraft;
   bottomPad: number;
   onChange: (next: BabyStickerDraft) => void;
   onReposition?: () => void;
-  onNext: () => void;
+  babyName: string;
+  saving: boolean;
+  onSave: () => void;
 }) {
   return (
     <ScrollView
       contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 28 }]}
       keyboardShouldPersistTaps="handled"
     >
-      <Pressable
-        style={styles.previewCenter}
-        onPress={onReposition}
-        disabled={!onReposition}
-        accessibilityRole={onReposition ? "button" : undefined}
-        accessibilityLabel={onReposition ? "사진 위치 조정" : undefined}
-        accessibilityHint={onReposition ? "동그라미 안에 보이는 부분을 다시 맞춰요" : undefined}
-      >
+      <View style={styles.decoratePreview}>
         <BabyStickerView
           imageUri={draft.cutoutImageUri || draft.originalImageUri}
           cutoutMode={draft.cutoutMode}
@@ -714,11 +701,24 @@ function DecorateStep({
           text={draft.text}
           size={150}
         />
-        {onReposition ? <Text style={styles.repositionHint}>사진을 눌러 위치를 맞춰 주세요</Text> : null}
-      </Pressable>
+        {onReposition ? (
+          <Pressable
+            style={styles.repositionBtn}
+            onPress={onReposition}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="사진 위치 조정"
+            accessibilityHint="사진에서 스티커로 보이는 위치를 다시 조정합니다"
+          >
+            <BabyLogIcon kind="edit" size={13} color={colors.muted} />
+            <Text style={styles.repositionBtnText}>사진 위치 조정</Text>
+          </Pressable>
+        ) : null}
+      </View>
 
+      <Text style={styles.hint}>같은 사진으로 한마디만 바꿔 하나씩 저장할 수 있어요.</Text>
       <OptionRow
-        label="상황 템플릿"
+        label="이모티콘 한마디"
         options={STICKER_TEMPLATE_OPTIONS}
         value={draft.templateId}
         onChange={(templateId) => {
@@ -727,8 +727,8 @@ function DecorateStep({
             ...draft,
             stickerType: templateId === "portrait" ? "faceCrop" : "faceTemplate",
             templateId,
-            text: option?.defaultPhrase ?? draft.text,
-            speechBubbleType: templateId === "portrait" ? draft.speechBubbleType : draft.speechBubbleType === "none" ? "round" : draft.speechBubbleType,
+            text: option?.defaultPhrase ?? "",
+            speechBubbleType: option?.speechBubbleType ?? "none",
           });
         }}
       />
@@ -751,12 +751,6 @@ function DecorateStep({
         value={draft.speechBubbleType}
         onChange={(speechBubbleType) => onChange({ ...draft, speechBubbleType })}
       />
-      <OptionRow
-        label="프레임"
-        options={STICKER_FRAME_OPTIONS}
-        value={draft.frameType}
-        onChange={(frameType) => onChange({ ...draft, frameType })}
-      />
 
       <Text style={styles.label}>짧은 텍스트</Text>
       <TextInput
@@ -771,15 +765,24 @@ function DecorateStep({
           <Pressable
             key={phrase}
             style={[styles.phraseChip, draft.text === phrase && styles.phraseChipActive]}
-            onPress={() => onChange({ ...draft, text: phrase })}
+            onPress={() => onChange({ ...draft, text: phrase, speechBubbleType: "round" })}
           >
             <Text style={styles.phraseText}>{phrase}</Text>
           </Pressable>
         ))}
       </View>
 
-      <Pressable style={styles.primaryBtn} onPress={onNext}>
-        <Text style={styles.primaryBtnText}>다음 · 이름 짓고 저장</Text>
+      <Text style={styles.label}>스티커 이름</Text>
+      <TextInput
+        style={styles.input}
+        value={draft.label}
+        onChangeText={(label) => onChange({ ...draft, label })}
+        placeholder={`예: ${babyName} 웃는 스티커`}
+        placeholderTextColor={colors.faint}
+      />
+
+      <Pressable style={[styles.primaryBtn, saving && styles.disabled]} disabled={saving} onPress={onSave}>
+        <Text style={styles.primaryBtnText}>{saving ? "저장 중…" : "스티커 저장"}</Text>
       </Pressable>
     </ScrollView>
   );
@@ -891,10 +894,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
-    padding: 10,
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 12,
     alignItems: "center",
   },
-  cardStickerPreview: { paddingBottom: 16 },
+  cardStickerPreview: { minHeight: 118, paddingTop: 8, paddingBottom: 22, alignItems: "center", justifyContent: "center" },
+  previewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(46,42,38,0.38)",
+  },
+  previewSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 22,
+  },
   cardLabel: {
     marginTop: 8,
     minHeight: 17,
@@ -924,8 +943,17 @@ const styles = StyleSheet.create({
   },
   phraseChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   phraseText: { fontSize: 12, fontWeight: "700", color: colors.text },
-  previewCenter: { alignItems: "center", marginBottom: 18 },
-  repositionHint: { marginTop: 8, fontSize: 12, fontWeight: "700", color: colors.amberText },
+  previewCenter: { alignItems: "center", marginBottom: 18, paddingTop: 12, paddingBottom: 16 },
+  decoratePreview: { alignItems: "center", marginBottom: 18, paddingTop: 38, paddingRight: 8 },
+  repositionBtn: {
+    minHeight: 36,
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 4,
+  },
+  repositionBtnText: { fontSize: 12, fontWeight: "600", color: colors.muted },
   label: { fontSize: 13, fontWeight: "700", color: colors.text, marginBottom: 8 },
   input: {
     borderWidth: 1,

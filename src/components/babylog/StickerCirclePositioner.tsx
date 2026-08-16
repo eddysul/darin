@@ -20,7 +20,6 @@ import {
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
-const NUDGE = 16;
 const HIT = Platform.OS === "android" ? 48 : 44;
 
 type Props = {
@@ -93,9 +92,12 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
 
   const txRef = useRef(tx);
   const tyRef = useRef(ty);
+  const zoomRef = useRef(zoom);
   const startRef = useRef({ x: 0, y: 0 });
+  const pinchRef = useRef<{ distance: number; zoom: number } | null>(null);
   txRef.current = tx;
   tyRef.current = ty;
+  zoomRef.current = zoom;
 
   const framedUriRef = useRef<string | null>(null);
 
@@ -124,7 +126,11 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
     if (framedUriRef.current === uri) return;
     framedUriRef.current = uri;
     const next = translateFromCrop(initialCropRef.current, natural.w, natural.h, viewport);
-    setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, initialCropRef.current.zoom)));
+    const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, initialCropRef.current.zoom));
+    zoomRef.current = nextZoom;
+    txRef.current = next.tx;
+    tyRef.current = next.ty;
+    setZoom(nextZoom);
     setTx(next.tx);
     setTy(next.ty);
     setReady(true);
@@ -137,12 +143,41 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 1 || Math.abs(gesture.dy) > 1,
+        onMoveShouldSetPanResponder: (event, gesture) =>
+          event.nativeEvent.touches.length >= 2 || Math.abs(gesture.dx) > 1 || Math.abs(gesture.dy) > 1,
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
+          pinchRef.current = null;
           startRef.current = { x: txRef.current, y: tyRef.current };
         },
-        onPanResponderMove: (_, gesture) => {
+        onPanResponderMove: (event, gesture) => {
+          const touches = event.nativeEvent.touches;
+          if (touches.length >= 2 && natural) {
+            const distance = Math.hypot(
+              touches[0].pageX - touches[1].pageX,
+              touches[0].pageY - touches[1].pageY,
+            );
+            if (!pinchRef.current) {
+              pinchRef.current = { distance, zoom: zoomRef.current };
+              return;
+            }
+            if (pinchRef.current.distance > 0) {
+              const nextZoom = Math.min(
+                MAX_ZOOM,
+                Math.max(MIN_ZOOM, pinchRef.current.zoom * (distance / pinchRef.current.distance)),
+              );
+              const crop = cropFromTranslate(txRef.current, tyRef.current, zoomRef.current, natural.w, natural.h, viewport);
+              const next = translateFromCrop({ ...crop, zoom: nextZoom }, natural.w, natural.h, viewport);
+              zoomRef.current = nextZoom;
+              txRef.current = next.tx;
+              tyRef.current = next.ty;
+              setZoom(nextZoom);
+              setTx(next.tx);
+              setTy(next.ty);
+            }
+            return;
+          }
+          pinchRef.current = null;
           if (imgW <= 0 || imgH <= 0) return;
           const next = clampTranslate(
             startRef.current.x + gesture.dx,
@@ -156,8 +191,11 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
           setTx(next.tx);
           setTy(next.ty);
         },
+        onPanResponderRelease: () => {
+          pinchRef.current = null;
+        },
       }),
-    [imgW, imgH, viewport],
+    [imgW, imgH, natural, viewport],
   );
 
   const applyZoom = (nextZoom: number) => {
@@ -165,14 +203,10 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
     const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(nextZoom / ZOOM_STEP) * ZOOM_STEP));
     const crop = cropFromTranslate(tx, ty, zoom, natural.w, natural.h, viewport);
     const next = translateFromCrop({ ...crop, zoom: clamped }, natural.w, natural.h, viewport);
+    zoomRef.current = clamped;
+    txRef.current = next.tx;
+    tyRef.current = next.ty;
     setZoom(clamped);
-    setTx(next.tx);
-    setTy(next.ty);
-  };
-
-  const nudge = (dx: number, dy: number) => {
-    if (imgW <= 0 || imgH <= 0) return;
-    const next = clampTranslate(tx + dx, ty + dy, imgW, imgH, viewport);
     setTx(next.tx);
     setTy(next.ty);
   };
@@ -180,27 +214,40 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
   const resetCenter = () => {
     if (!natural) return;
     const next = translateFromCrop({ offsetX: 0.5, offsetY: 0.5, zoom }, natural.w, natural.h, viewport);
+    txRef.current = next.tx;
+    tyRef.current = next.ty;
+    setTx(next.tx);
+    setTy(next.ty);
+  };
+
+  const resetOriginal = () => {
+    if (!natural) return;
+    const next = translateFromCrop(DEFAULT_CIRCLE_CROP, natural.w, natural.h, viewport);
+    zoomRef.current = DEFAULT_CIRCLE_CROP.zoom;
+    txRef.current = next.tx;
+    tyRef.current = next.ty;
+    setZoom(DEFAULT_CIRCLE_CROP.zoom);
     setTx(next.tx);
     setTy(next.ty);
   };
 
   const confirm = () => {
     if (!natural) return;
-    onConfirm(cropFromTranslate(tx, ty, zoom, natural.w, natural.h, viewport));
+    onConfirm(cropFromTranslate(txRef.current, tyRef.current, zoomRef.current, natural.w, natural.h, viewport));
   };
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad + 16 }]}>
-      <Text style={styles.hint}>동그라미 안에 넣고 싶은 부분이 보이게 사진을 밀어 맞춰 주세요.</Text>
+      <Text style={styles.hint}>사진을 밀거나 두 손가락으로 확대해 원하는 위치를 맞춰주세요.</Text>
 
       <View style={styles.stage}>
         {ready && natural && imgW > 0 ? (
-          <View style={styles.circleWrap}>
+          <View style={styles.cropWrap}>
             <View
-              style={[styles.circle, { width: viewport, height: viewport, borderRadius: viewport / 2 }]}
+              style={[styles.crop, { width: viewport, height: viewport, borderRadius: 24 }]}
               accessibilityRole="image"
-              accessibilityLabel="둥근 스티커 미리보기"
-              accessibilityHint="손가락으로 밀거나 아래 버튼으로 위치를 맞춰 주세요"
+              accessibilityLabel="둥근 사각형 스티커 미리보기"
+              accessibilityHint="손가락으로 밀어 위치를 맞춰 주세요"
               {...panResponder.panHandlers}
             >
             <Image
@@ -218,7 +265,7 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
             </View>
           </View>
         ) : (
-          <View style={[styles.circle, styles.loading, { width: viewport, height: viewport, borderRadius: viewport / 2 }]}>
+          <View style={[styles.crop, styles.loading, { width: viewport, height: viewport, borderRadius: 24 }]}>
             {loadError ? (
               <Text style={styles.loadError}>사진을 불러오지 못했어요</Text>
             ) : (
@@ -249,6 +296,15 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
             <Text style={styles.chipText}>가운데</Text>
           </Pressable>
           <Pressable
+            style={[styles.chip, !ready && styles.disabled]}
+            onPress={resetOriginal}
+            disabled={!ready}
+            accessibilityRole="button"
+            accessibilityLabel="원위치"
+          >
+            <Text style={styles.chipText}>원위치</Text>
+          </Pressable>
+          <Pressable
             style={[styles.chip, (!ready || zoom >= MAX_ZOOM) && styles.disabled]}
             onPress={() => applyZoom(zoom + ZOOM_STEP)}
             disabled={!ready || zoom >= MAX_ZOOM}
@@ -256,47 +312,6 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
             accessibilityLabel="확대"
           >
             <Text style={styles.chipText}>확대</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.pad}>
-          <Pressable
-            style={[styles.padBtn, !ready && styles.disabled]}
-            onPress={() => nudge(0, -NUDGE)}
-            disabled={!ready}
-            accessibilityRole="button"
-            accessibilityLabel="위로 이동"
-          >
-            <Text style={styles.padText}>위</Text>
-          </Pressable>
-          <View style={styles.padMid}>
-            <Pressable
-              style={[styles.padBtn, !ready && styles.disabled]}
-              onPress={() => nudge(-NUDGE, 0)}
-              disabled={!ready}
-              accessibilityRole="button"
-              accessibilityLabel="왼쪽으로 이동"
-            >
-              <Text style={styles.padText}>왼쪽</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.padBtn, !ready && styles.disabled]}
-              onPress={() => nudge(NUDGE, 0)}
-              disabled={!ready}
-              accessibilityRole="button"
-              accessibilityLabel="오른쪽으로 이동"
-            >
-              <Text style={styles.padText}>오른쪽</Text>
-            </Pressable>
-          </View>
-          <Pressable
-            style={[styles.padBtn, !ready && styles.disabled]}
-            onPress={() => nudge(0, NUDGE)}
-            disabled={!ready}
-            accessibilityRole="button"
-            accessibilityLabel="아래로 이동"
-          >
-            <Text style={styles.padText}>아래</Text>
           </Pressable>
         </View>
 
@@ -325,14 +340,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   stage: { flex: 1, alignItems: "center", justifyContent: "center" },
-  circleWrap: {
+  cropWrap: {
     shadowColor: "#4A3428",
     shadowOpacity: 0.18,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
-  circle: {
+  crop: {
     overflow: "hidden",
     borderWidth: 3,
     borderColor: "#FFFFFF",
@@ -341,9 +356,10 @@ const styles = StyleSheet.create({
   loading: { alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
   loadError: { fontSize: 13, fontWeight: "700", color: colors.muted, textAlign: "center" },
   controls: { paddingHorizontal: 18, paddingTop: 8 },
-  row: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   chip: {
-    flex: 1,
+    flexGrow: 1,
+    minWidth: "22%",
     minHeight: HIT,
     borderWidth: 1,
     borderColor: colors.border,
@@ -353,20 +369,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   chipText: { fontSize: 13, fontWeight: "700", color: colors.text },
-  pad: { alignItems: "center", gap: 8, marginBottom: 12 },
-  padMid: { flexDirection: "row", gap: 8 },
-  padBtn: {
-    minWidth: HIT,
-    minHeight: HIT,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  padText: { fontSize: 13, fontWeight: "700", color: colors.text },
   primaryBtn: {
     minHeight: HIT,
     backgroundColor: colors.amber,

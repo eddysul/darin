@@ -42,7 +42,11 @@ import {
   sortGrowthBookEntries,
 } from "../../utils/diaryModel";
 import { buildTodaySummary } from "../../utils/reportAggregates";
-import { estimateGrowthBookPageCount } from "../../utils/growthBookPages";
+import {
+  estimateGrowthBookPageCount,
+  growthBookPhotoCount,
+  resolveGrowthBookCoverPhoto,
+} from "../../utils/growthBookPages";
 import {
   buildDiaryNotificationCopy,
   draftToComposePrefill,
@@ -104,6 +108,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const pendingGrowthBookEditorRef = useRef<{ diaryId: string | null } | null>(null);
+  const pendingGrowthBookVaultRef = useRef(false);
   const [chipPressing, setChipPressing] = useState(false);
   const [reminder, setReminder] = useState<DiaryReminderSettings>({ ...DEFAULT_DIARY_REMINDER });
   const [draftMemory, setDraftMemory] = useState<DiaryDraft | null>(null);
@@ -171,6 +176,22 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     pendingGrowthBookEditorRef.current = null;
     setEditorInitialDiaryId(request.diaryId);
     setEditorOpen(true);
+  }, []);
+
+  const requestGrowthBookVault = useCallback(() => {
+    setEditorOpen(false);
+    setEditorInitialDiaryId(null);
+    if (Platform.OS === "ios") {
+      pendingGrowthBookVaultRef.current = true;
+      return;
+    }
+    setVaultOpen(true);
+  }, []);
+
+  const openPendingGrowthBookVault = useCallback(() => {
+    if (!pendingGrowthBookVaultRef.current) return;
+    pendingGrowthBookVaultRef.current = false;
+    setVaultOpen(true);
   }, []);
 
   const openEdit = useCallback((entry: DiaryEntry, fromPush = false) => {
@@ -276,13 +297,15 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     () => sortGrowthBookEntries(diaryEntries.filter((d) => d.includedInGrowthBook)),
     [diaryEntries],
   );
-  const bookCoverPhoto =
-    growthBookEdit.coverPhotoUri || (bookEntries[0] ? diaryPrimaryPhoto(bookEntries[0]) : null);
+  const bookCoverPhoto = resolveGrowthBookCoverPhoto(bookEntries, growthBookEdit);
   const growthCount = useMemo(
     () => diaryEntries.filter(diaryHasMilestone).length,
     [diaryEntries],
   );
-  const bookPhotoCount = useMemo(() => diaryPhotoCount(bookEntries), [bookEntries]);
+  const bookPhotoCount = useMemo(
+    () => growthBookPhotoCount(bookEntries, growthBookEdit),
+    [bookEntries, growthBookEdit],
+  );
   const filtered = useMemo(() => filterDiaries(diaryEntries, filter), [diaryEntries, filter]);
   const monthSections = useMemo(() => groupDiariesByMonth(filtered), [filtered]);
 
@@ -431,13 +454,15 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
             accessibilityRole="button"
             accessibilityLabel={`${babyName}의 성장책 열기`}
           >
-            {bookCoverPhoto ? (
-              <Image source={{ uri: bookCoverPhoto }} style={styles.bookCover} contentFit="cover" />
-            ) : (
-              <View style={styles.bookCoverFallback}>
-                <BabyLogIcon kind="tab" tab="diary" size={18} color={colors.amberText} />
-              </View>
-            )}
+            <View style={styles.bookCover}>
+              {bookCoverPhoto ? (
+                <Image source={{ uri: bookCoverPhoto }} style={styles.bookCoverImage} contentFit="cover" />
+              ) : (
+                <View style={styles.bookCoverFallback}>
+                  <BabyLogIcon kind="tab" tab="diary" size={18} color={colors.amberText} />
+                </View>
+              )}
+            </View>
             <View style={styles.bookCardLeft}>
               <View style={styles.bookCardTitleRow}>
                 <Text style={styles.bookCardTitle}>{babyName}의 성장책</Text>
@@ -462,6 +487,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
             accessibilityLabel="스티커 만들기"
           >
             <BabyLogIcon kind="baby" size={16} color={colors.amberText} />
+            <Text style={styles.stickerBtnText}>스티커</Text>
           </Pressable>
         </View>
 
@@ -624,11 +650,8 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
         myRole={myFamilyRole}
         initialDiaryId={editorInitialDiaryId}
         onChange={setGrowthBookEdit}
-        onClose={() => {
-          setEditorOpen(false);
-          setEditorInitialDiaryId(null);
-          setVaultOpen(true);
-        }}
+        onClose={requestGrowthBookVault}
+        onDismiss={openPendingGrowthBookVault}
       />
 
       <DiaryReminderSettingsModal
@@ -803,12 +826,19 @@ const styles = StyleSheet.create({
   bookCardDesc: { fontSize: 12, color: colors.muted, marginTop: 4, lineHeight: 18 },
   bookCardBtn: { flexDirection: "row", alignItems: "center", gap: 2 },
   bookCardBtnText: { fontSize: 12.5, fontWeight: "700", color: colors.amberText },
-  bookCover: { width: 44, height: 56, borderRadius: 8 },
-  bookCoverFallback: {
-    width: 44,
-    height: 56,
+  bookCover: {
+    width: 48,
+    height: 62,
     borderRadius: 8,
-    backgroundColor: colors.cardHi,
+    overflow: "hidden",
+    flexShrink: 0,
+    backgroundColor: colors.amberSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  bookCoverImage: { width: "100%", height: "100%" },
+  bookCoverFallback: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -825,6 +855,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 2,
   },
+  stickerBtnText: { fontSize: 11, fontWeight: "800", color: colors.amberText },
   reminderRow: {
     minHeight: 44,
     flexDirection: "row",

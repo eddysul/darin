@@ -1,6 +1,13 @@
 import { requireSupabase } from "../lib/supabase";
 import type { BabyStickerRow, Json } from "../types/database";
 import type { BabySticker } from "../types/babySticker";
+import {
+  normalizeBorderStyle,
+  normalizeFrameType,
+  normalizeShadowStyle,
+  normalizeSpeechBubbleType,
+  normalizeTemplateId,
+} from "../types/babySticker";
 import { qaStorage } from "../utils/qaStorage";
 import { scopedStorageKey, type LocalDataScope } from "../utils/scopedLocalStorage";
 import { STORAGE_KEYS } from "../utils/storageKeys";
@@ -66,14 +73,17 @@ async function rowToSticker(row: BabyStickerRow): Promise<BabySticker> {
     finalStickerImageUri: imageUri,
     storagePath: row.storage_path,
     serverBacked: true,
-    cutoutMode: metadata.cutoutMode === "personCutout" ? "personCutout" : "circular",
+    cutoutMode:
+      metadata.cutoutMode === "personCutout" || metadata.cutoutMode === "roundedRect"
+        ? metadata.cutoutMode
+        : "circular",
     stickerType: metadata.stickerType === "faceCrop" ? "faceCrop" : "faceTemplate",
-    templateId: typeof metadata.templateId === "string" ? metadata.templateId as BabySticker["templateId"] : "portrait",
+    templateId: normalizeTemplateId(typeof metadata.templateId === "string" ? metadata.templateId : null),
     label: row.label,
-    borderStyle: typeof metadata.borderStyle === "string" ? metadata.borderStyle as BabySticker["borderStyle"] : "whiteThick",
-    shadowStyle: typeof metadata.shadowStyle === "string" ? metadata.shadowStyle as BabySticker["shadowStyle"] : "soft",
-    speechBubbleType: typeof metadata.speechBubbleType === "string" ? metadata.speechBubbleType as BabySticker["speechBubbleType"] : "none",
-    frameType: typeof metadata.frameType === "string" ? metadata.frameType as BabySticker["frameType"] : "none",
+    borderStyle: normalizeBorderStyle(typeof metadata.borderStyle === "string" ? metadata.borderStyle : null),
+    shadowStyle: normalizeShadowStyle(typeof metadata.shadowStyle === "string" ? metadata.shadowStyle : null),
+    speechBubbleType: normalizeSpeechBubbleType(typeof metadata.speechBubbleType === "string" ? metadata.speechBubbleType : null),
+    frameType: normalizeFrameType(typeof metadata.frameType === "string" ? metadata.frameType : null),
     text: typeof metadata.text === "string" ? metadata.text : "",
     createdBy: row.created_by ?? undefined,
     createdAt: row.created_at,

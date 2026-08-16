@@ -212,7 +212,7 @@ export function MemoryUploadModal({
               {images.length < MAX_MEMORY_PHOTOS ? <Pressable style={styles.photoAddTile} onPress={() => void pickImage()}><Text style={styles.photoPlus}>＋</Text><Text style={styles.photoAddText}>사진 추가</Text></Pressable> : null}
             </ScrollView>
           )}
-          <Text style={styles.photoGuide}>최대 5장까지 추가할 수 있어요. 첫 번째 사진이 대표 이미지로 표시돼요.</Text>
+          <Text style={styles.photoGuide}>선택한 사진 {images.length}장 · 최대 5장까지 추가할 수 있어요.</Text>
 
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>짧은 이야기</Text>

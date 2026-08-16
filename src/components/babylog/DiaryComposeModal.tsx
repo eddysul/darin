@@ -367,7 +367,7 @@ export function DiaryComposeModal({
                     <Text style={styles.mediaBtnSecondaryText}>스티커 추가</Text>
                   </Pressable>
                 </View>
-                <Text style={styles.photoLimit}>최대 5장까지 추가할 수 있어요. 첫 번째 사진이 대표 이미지로 표시돼요.</Text>
+                <Text style={styles.photoLimit}>선택한 사진 {photos.length}장 · 최대 5장까지 추가할 수 있어요.</Text>
               </>
             )}
             {photos.length > 0 ? (

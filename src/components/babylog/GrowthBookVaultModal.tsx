@@ -7,11 +7,16 @@ import type { GrowthBookEdit } from "../../types/growthBook";
 import {
   diaryDisplayComment,
   diaryMilestoneLabel,
-  diaryPhotoCount,
   diaryPrimaryPhoto,
   sortGrowthBookEntries,
 } from "../../utils/diaryModel";
-import { estimateGrowthBookPageCount } from "../../utils/growthBookPages";
+import {
+  estimateGrowthBookPageCount,
+  growthBookPhotoCount,
+  resolveGrowthBookCoverPhoto,
+  resolvePageEdit,
+  resolvePagePhotos,
+} from "../../utils/growthBookPages";
 import { createGrowthBookPdf } from "../../utils/growthBookPdf";
 import { colors, radius } from "../../theme";
 import { EmptyState } from "../states/FeedbackStates";
@@ -51,15 +56,12 @@ export function GrowthBookVaultModal({
     () => sortGrowthBookEntries(entries.filter((e) => e.includedInGrowthBook)),
     [entries],
   );
-  const photoCount = useMemo(() => diaryPhotoCount(sorted), [sorted]);
+  const photoCount = useMemo(() => growthBookPhotoCount(sorted, edit), [edit, sorted]);
   const pageEstimate = estimateGrowthBookPageCount(sorted.length);
   const canRead = sorted.length > 0;
   const coverTitle = edit?.coverTitle?.trim() || `${babyName}의 성장책`;
   const coverRange = edit?.coverDateRange?.trim() ?? "";
-  const coverPhoto =
-    edit?.coverPhotoUri ||
-    sorted.map((entry) => diaryPrimaryPhoto(entry)).find(Boolean) ||
-    null;
+  const coverPhoto = resolveGrowthBookCoverPhoto(sorted, edit);
   const letterCount = edit?.letters?.length ?? 0;
   const letterIndex = sorted.length + 1;
 
@@ -192,11 +194,12 @@ export function GrowthBookVaultModal({
               </Pressable>
 
               {sorted.map((entry, index) => {
-                const photo = diaryPrimaryPhoto(entry);
                 const milestone = diaryMilestoneLabel(entry);
-                const pageEdit = edit?.pages?.[entry.id];
+                const pageEdit = resolvePageEdit(entry.id, entry, edit);
+                const pagePhotos = resolvePagePhotos(entry, pageEdit);
+                const photo = pagePhotos[0] ?? diaryPrimaryPhoto(entry);
                 const hasComment = Boolean(pageEdit?.pageComment?.trim());
-                const entryPhotoCount = diaryPhotoCount([entry]);
+                const entryPhotoCount = pagePhotos.length;
                 const pageNumber = index + 2;
                 return (
                   <Pressable

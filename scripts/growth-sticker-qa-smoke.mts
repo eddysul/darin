@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import {
   buildGrowthBookPageMeta,
   buildGrowthBookPages,
   buildGrowthBookPaginationItems,
+  growthBookPhotoCount,
   resolveGrowthBookSwipeDirection,
 } from "../src/utils/growthBookPages";
 import {
@@ -15,9 +17,17 @@ import {
 import {
   growthBookStickerHeightFactor,
   growthBookStickerPdfPosition,
+  scaleGrowthBookPageSticker,
 } from "../src/utils/growthBookStickerLayout";
 import { createEmptyGrowthBookEdit } from "../src/types/growthBook";
-import { defaultStickerDraft, type BabySticker } from "../src/types/babySticker";
+import {
+  STICKER_BORDER_OPTIONS,
+  STICKER_BUBBLE_OPTIONS,
+  STICKER_SHADOW_OPTIONS,
+  STICKER_TEMPLATE_OPTIONS,
+  defaultStickerDraft,
+  type BabySticker,
+} from "../src/types/babySticker";
 import {
   canDeleteGrowthBookNote,
   canEditOwnGrowthBookNote,
@@ -127,7 +137,7 @@ const sticker: BabySticker = {
   finalStickerImageUri: "final.png",
   cutoutMode: "circular",
   stickerType: "faceTemplate",
-  templateId: "milestone",
+  templateId: "heart",
   label: "QA 스티커",
   borderStyle: "whiteThick",
   shadowStyle: "soft",
@@ -175,6 +185,15 @@ assert.equal(resolveGrowthBookSwipeDirection(84, 12), "previous");
 assert.equal(resolveGrowthBookSwipeDirection(-30, 4), null);
 assert.equal(resolveGrowthBookSwipeDirection(-84, 72), null);
 assert.equal(JSON.stringify(diary), originalDiary, "growth edit must not mutate source diary");
+assert.equal(growthBookPhotoCount([diary], edit), 2, "growth book count uses saved page photos");
+const removedPhotoEdit = JSON.parse(JSON.stringify(edit)) as typeof edit;
+removedPhotoEdit.pages.d1 = { ...removedPhotoEdit.pages.d1!, photos: [], photosOverridden: true };
+assert.equal(growthBookPhotoCount([diary], removedPhotoEdit), 0, "growth book count decreases after removal");
+assert.equal(diary.photos.length, 1, "diary count remains based on the diary photo array");
+const memoryMedia = [{ id: "m1" }, { id: "m2" }];
+assert.equal(memoryMedia.length, 2, "memory count follows saved media rows");
+memoryMedia.pop();
+assert.equal(memoryMedia.length, 1, "memory count decreases after deletion");
 
 assert.equal(normalizePhotoLayout(3), "three_top_large_bottom_two");
 assert.equal(PHOTO_LAYOUT_OPTIONS.length, 13);
@@ -215,7 +234,7 @@ assert.ok(Math.abs(asymmetricPdfSlot.heightPercent - 58) < 0.000001);
 
 assert.equal(sticker.finalStickerImageUri, "final.png");
 assert.equal(sticker.faceImageUri, "cutout.png");
-assert.equal(sticker.templateId, "milestone");
+assert.equal(sticker.templateId, "heart");
 
 assert.deepEqual(growthBookStickerPdfPosition(edit.pages.d1!.pageStickers![0]!), {
   leftPercent: 25,
@@ -223,22 +242,101 @@ assert.deepEqual(growthBookStickerPdfPosition(edit.pages.d1!.pageStickers![0]!),
   widthPercent: 20,
   zIndex: 3,
 });
-assert.equal(growthBookStickerHeightFactor(sticker), 1.75);
+assert.equal(growthBookStickerHeightFactor(sticker), 1.55);
 assert.ok(
   growthBookStickerPdfPosition(
     { ...edit.pages.d1!.pageStickers![0]!, yRatio: 0.99 },
     growthBookStickerHeightFactor(sticker),
-  ).topPercent < 76,
+  ).topPercent < 80,
   "decorated sticker must stay inside the PDF page",
 );
+const pinchedSticker = scaleGrowthBookPageSticker(
+  edit.pages.d1!.pageStickers![0]!,
+  1.5,
+  300,
+  424,
+  growthBookStickerHeightFactor(sticker),
+);
+assert.ok(Math.abs(pinchedSticker.widthRatio - 0.3) < 0.000001);
+assert.ok(pinchedSticker.xRatio < 0.25 && pinchedSticker.yRatio < 0.4, "pinch keeps the sticker center stable");
+assert.deepEqual(JSON.parse(JSON.stringify(pinchedSticker)), pinchedSticker, "saved transform survives reload");
+assert.equal(scaleGrowthBookPageSticker(pinchedSticker, 10, 300, 424).widthRatio, 0.42);
+assert.equal(scaleGrowthBookPageSticker(pinchedSticker, 0.01, 300, 424).widthRatio, 0.1);
 
 const stickerDraft = defaultStickerDraft("original.png", "cutout.png");
 assert.equal(stickerDraft.originalImageUri, "original.png");
 assert.equal(stickerDraft.cutoutImageUri, "cutout.png");
 assert.equal(stickerDraft.faceImageUri, "cutout.png");
 assert.equal(stickerDraft.templateId, "portrait");
-assert.equal(stickerDraft.cutoutMode, "circular");
+assert.equal(stickerDraft.cutoutMode, "roundedRect");
 assert.equal(stickerDraft.borderStyle, "whiteThick");
+assert.deepEqual(STICKER_TEMPLATE_OPTIONS.map((option) => option.label), [
+  "기본 얼굴",
+  "안녕!",
+  "응?",
+  "우와!",
+  "냠냠",
+  "졸려요~",
+  "힝 ㅠㅠ",
+  "멍~",
+  "심쿵",
+  "헤헷",
+  "좋아요!",
+  "삐짐",
+  "꺄!",
+  "왜애",
+  "앗!",
+  "냠!",
+  "헤헤",
+]);
+assert.equal(STICKER_TEMPLATE_OPTIONS.filter((option) => option.value !== "portrait").length, 16);
+const exactArtworkPresets = [
+  "hello",
+  "huh",
+  "wow",
+  "yummy",
+  "sleepy",
+  "cry",
+  "daze",
+  "heart",
+  "giggle",
+  "like",
+  "pout",
+  "squeal",
+  "why",
+  "oops",
+  "bite",
+  "cute",
+] as const;
+for (const preset of exactArtworkPresets) {
+  assert.ok(
+    existsSync(new URL(`../assets/sticker-templates/phrase-${preset}.png`, import.meta.url)),
+    `${preset} transparent word-bubble artwork must be bundled`,
+  );
+}
+const standaloneDecorationAssets = [
+  "decor-cloud-cute.png",
+  "decor-exclamation-red.png",
+  "decor-heart.png",
+  "decor-moon.png",
+  "decor-puff.png",
+  "decor-question.png",
+  "decor-scribble.png",
+  "decor-sleep.png",
+  "decor-sparkle-blue.png",
+  "decor-spoon.png",
+  "decor-star.png",
+  "decor-tear.png",
+  "decor-wave.png",
+] as const;
+for (const filename of standaloneDecorationAssets) {
+  assert.ok(existsSync(new URL(`../assets/sticker-templates/${filename}`, import.meta.url)), `${filename} must be bundled`);
+}
+assert.deepEqual(STICKER_BORDER_OPTIONS.map((option) => option.value), ["none", "whiteThick"]);
+assert.deepEqual(STICKER_SHADOW_OPTIONS.map((option) => option.value), ["none", "soft"]);
+assert.deepEqual(STICKER_BUBBLE_OPTIONS.map((option) => option.value), ["none", "round"]);
+const legacyCircleDraft = defaultStickerDraft("legacy.png", "legacy-cutout.png", "circular");
+assert.equal(legacyCircleDraft.cutoutMode, "circular", "existing circular stickers stay compatible");
 const personStickerDraft = defaultStickerDraft("original.png", "person.png", "personCutout");
 assert.equal(personStickerDraft.cutoutMode, "personCutout");
 assert.equal(personStickerDraft.borderStyle, "none");
@@ -257,4 +355,52 @@ assert.equal(canEditOwnGrowthBookNote("editor", "me", me), true);
 assert.equal(canEditOwnGrowthBookNote("editor", "other", me), false);
 assert.equal(canDeleteGrowthBookNote("admin", "other", me), true);
 
-console.log("growth-sticker-qa-smoke: all checks passed");
+const pageCanvasSource = readFileSync(
+  new URL("../src/components/babylog/GrowthBookPageCanvas.tsx", import.meta.url),
+  "utf8",
+);
+const editorSource = readFileSync(
+  new URL("../src/components/babylog/GrowthBookEditorModal.tsx", import.meta.url),
+  "utf8",
+);
+const stickerViewSource = readFileSync(
+  new URL("../src/components/babylog/BabyStickerView.tsx", import.meta.url),
+  "utf8",
+);
+for (const preset of exactArtworkPresets) {
+  assert.ok(
+    stickerViewSource.includes(`require("../../../assets/sticker-templates/phrase-${preset}.png")`),
+    `${preset} word-bubble artwork must use a static Metro require`,
+  );
+}
+assert.ok(
+  stickerViewSource.includes("<ExactTemplateArtwork artwork={templateArtwork} size={size} />")
+    && stickerViewSource.includes("const photoSize = usesTemplateArtwork ? basePhotoSize * 0.78 : basePhotoSize"),
+  "exact artwork must reserve a separate center photo area",
+);
+assert.ok(
+  (stickerViewSource.match(/mainLayout: \{ x: -?\d/g) ?? []).length === 16,
+  "each exact preset must define its own phrase position and size",
+);
+assert.ok(
+  stickerViewSource.includes("artwork.decorations.map((item, index) =>")
+    && stickerViewSource.includes("left: size * item.x")
+    && stickerViewSource.includes("top: size * item.y")
+    && stickerViewSource.includes("const pieceSize = size * item.size"),
+  "each exact decoration must render with its preset-specific position and size",
+);
+assert.ok(
+  stickerViewSource.includes('speechBubbleType === "round"')
+    && stickerViewSource.includes("label === TEMPLATE_DEFAULT_PHRASES[templateId]"),
+  "exact artwork must fall back to editable UI for custom text or no-bubble mode",
+);
+assert.ok(!pageCanvasSource.includes("style={[styles.paper, style]}\n      onPress="), "page canvas must not own child taps");
+assert.ok(!pageCanvasSource.includes("style={StyleSheet.absoluteFill}\n          onPress={() => onPageStickerPress(null)}"), "no full-page press overlay in edit mode");
+assert.ok(editorSource.includes("if (!enabled)"), "edit mode must bypass the swipe responder stage");
+assert.ok(
+  editorSource.includes("<View style={styles.pageSlideSurface}>{children}</View>"),
+  "edit mode must render a static touch-safe canvas stage",
+);
+assert.ok(editorSource.includes("<View {...swipeResponder.panHandlers} style={styles.canvasStage}>"), "swipe handlers must only attach to enabled preview stages");
+
+console.log("growth-sticker-qa-smoke: photo counts, create/delete, placement, and persistence passed");

@@ -87,6 +87,10 @@ public class PersonCutoutModule: Module {
     AsyncFunction("createCircularCutoutFramed") { (imageUri: String, offsetX: Double, offsetY: Double, zoom: Double) -> String in
       try Self.makeCircularCutout(from: imageUri, offsetX: offsetX, offsetY: offsetY, zoom: zoom)
     }
+
+    AsyncFunction("createRoundedRectCutoutFramed") { (imageUri: String, offsetX: Double, offsetY: Double, zoom: Double) -> String in
+      try Self.makeFramedCutout(from: imageUri, offsetX: offsetX, offsetY: offsetY, zoom: zoom, rounded: true)
+    }
   }
 
   /// Circular transparent PNG. offsetX/Y are the crop center in 0...1 image space; zoom >= 1 tightens the crop.
@@ -95,6 +99,22 @@ public class PersonCutoutModule: Module {
     offsetX: Double,
     offsetY: Double,
     zoom: Double
+  ) throws -> String {
+    return try makeFramedCutout(
+      from: imageUri,
+      offsetX: offsetX,
+      offsetY: offsetY,
+      zoom: zoom,
+      rounded: false
+    )
+  }
+
+  private static func makeFramedCutout(
+    from imageUri: String,
+    offsetX: Double,
+    offsetY: Double,
+    zoom: Double,
+    rounded: Bool
   ) throws -> String {
     let image = try loadUIImage(from: imageUri)
     let width = image.size.width
@@ -115,9 +135,13 @@ public class PersonCutoutModule: Module {
     let format = UIGraphicsImageRendererFormat.default()
     format.opaque = false
     let renderer = UIGraphicsImageRenderer(size: outputSize, format: format)
-    let circled = renderer.image { _ in
+    let cropped = renderer.image { _ in
       let rect = CGRect(origin: .zero, size: outputSize)
-      UIBezierPath(ovalIn: rect).addClip()
+      if rounded {
+        UIBezierPath(roundedRect: rect, cornerRadius: outputSide * 0.14).addClip()
+      } else {
+        UIBezierPath(ovalIn: rect).addClip()
+      }
       let drawScale = outputSide / cropSide
       image.draw(in: CGRect(
         x: -originX * drawScale,
@@ -126,10 +150,10 @@ public class PersonCutoutModule: Module {
         height: height * drawScale
       ))
     }
-    guard let data = circled.pngData() else {
+    guard let data = cropped.pngData() else {
       throw PersonCutoutError.processingFailed
     }
-    return try writeData(data, prefix: "circular-cutout", ext: "png")
+    return try writeData(data, prefix: rounded ? "rounded-rect-cutout" : "circular-cutout", ext: "png")
   }
 
   private static func loadUIImage(from uri: String) throws -> UIImage {

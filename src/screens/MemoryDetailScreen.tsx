@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { Bookmark } from "lucide-react-native";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
+import { BabyStickerFromModel } from "../components/babylog/BabyStickerView";
 import { BabyStickerVaultModal } from "../components/babylog/BabyStickerVaultModal";
 import { ProfileAvatar } from "../components/profile/ProfileAvatar";
 import { MemoryEditModal } from "../components/memories/MemoryEditModal";
@@ -309,8 +310,14 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
                       <View style={styles.commentMeta}><Text style={styles.commentAuthor}>{commentAuthorLabel(item.authorId)}</Text><Text style={styles.commentDate}>{new Date(item.createdAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</Text></View>
                       {item.commentType === "sticker" ? (
                         <View style={styles.stickerComment}>
-                          {item.stickerImageUrl ? <Image source={{ uri: item.stickerImageUrl }} style={styles.stickerCommentImage} contentFit="contain" /> : null}
-                          <Text style={styles.stickerCommentLabel}>{item.stickerLabel ?? item.body}</Text>
+                          {(() => {
+                            const sticker = babyStickers.find((candidate) => candidate.id === item.stickerId);
+                            if (sticker) return <BabyStickerFromModel sticker={sticker} size={72} />;
+                            return item.stickerImageUrl ? <Image source={{ uri: item.stickerImageUrl }} style={styles.stickerCommentImage} contentFit="contain" /> : null;
+                          })()}
+                          {!item.stickerId || !babyStickers.some((candidate) => candidate.id === item.stickerId) ? (
+                            <Text style={styles.stickerCommentLabel}>{item.stickerLabel ?? item.body}</Text>
+                          ) : null}
                         </View>
                       ) : <Text style={styles.commentBody}>{item.body}</Text>}
                     </View>
@@ -330,7 +337,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stickerBar} keyboardShouldPersistTaps="handled">
                   {babyStickers.map((sticker) => (
                     <Pressable key={sticker.id} style={styles.stickerChoice} onPress={() => void submitStickerComment(sticker)} disabled={working} accessibilityLabel={`${sticker.label} 스티커 댓글 보내기`}>
-                      <Image source={{ uri: sticker.finalStickerImageUri }} style={styles.stickerChoiceImage} contentFit="contain" />
+                      <BabyStickerFromModel sticker={sticker} size={48} />
                       <Text style={styles.stickerChoiceLabel} numberOfLines={1}>{sticker.label}</Text>
                     </Pressable>
                   ))}
@@ -425,7 +432,7 @@ const styles = StyleSheet.create({
   stickerBarBlock: { paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   stickerBarTitle: { color: colors.text, fontSize: 11.5, fontWeight: "800", marginBottom: 5 },
   stickerBar: { gap: 8, paddingRight: 12 },
-  stickerChoice: { width: 70, minHeight: 78, alignItems: "center", justifyContent: "center", borderRadius: radius.md, backgroundColor: colors.cardHi, paddingVertical: 5 },
+  stickerChoice: { width: 78, minHeight: 96, alignItems: "center", justifyContent: "center", borderRadius: radius.md, backgroundColor: colors.cardHi, paddingVertical: 8 },
   stickerChoiceImage: { width: 48, height: 48 },
   stickerChoiceLabel: { color: colors.muted, fontSize: 9.5, fontWeight: "700", maxWidth: 62, marginTop: 2 },
   stickerEmpty: { minHeight: 54, paddingVertical: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8 },
