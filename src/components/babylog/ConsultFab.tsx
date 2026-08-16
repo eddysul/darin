@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors } from "../../theme";
+import { useReduceMotion } from "../../hooks/useReduceMotion";
+import { colors, type } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 
 type Props = {
@@ -17,18 +18,19 @@ type Props = {
 export function ConsultFab({ onPress, compact = false, hidden = false, bottomOffset = 0 }: Props) {
   const insets = useSafeAreaInsets();
   const opacity = useRef(new Animated.Value(hidden ? 0 : 1)).current;
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     Animated.timing(opacity, {
       toValue: hidden ? 0 : 1,
-      duration: 500,
+      duration: reduceMotion ? 0 : 220,
       useNativeDriver: true,
     }).start();
-  }, [hidden, opacity]);
+  }, [hidden, opacity, reduceMotion]);
 
   const size = compact ? 48 : 72;
   const bottom = compact
-    ? Math.max(insets.bottom, 10) + 72 + 12 + bottomOffset
+    ? Math.max(insets.bottom, 10) + 72 + 28 + bottomOffset
     : 18 + bottomOffset;
 
   return (
@@ -51,7 +53,7 @@ export function ConsultFab({ onPress, compact = false, hidden = false, bottomOff
           { width: size, height: size, borderRadius: size / 2 },
           compact && styles.fabCompact,
           !compact && styles.fabLarge,
-          pressed && styles.pressed,
+          pressed && !reduceMotion && styles.pressed,
         ]}
         onPress={onPress}
         accessibilityRole="button"
@@ -96,7 +98,7 @@ const styles = StyleSheet.create({
   pressed: { transform: [{ scale: 0.96 }], opacity: 0.92 },
   text: {
     color: "#FFFFFF",
-    fontSize: 11.5,
+    fontSize: type.xs,
     fontWeight: "800",
     letterSpacing: -0.2,
   },

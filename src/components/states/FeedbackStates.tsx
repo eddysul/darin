@@ -57,7 +57,7 @@ type LoadingProps = {
 export function LoadingState({ label = "불러오는 중…" }: LoadingProps) {
   return (
     <View style={styles.box}>
-      <ActivityIndicator color={colors.amber} />
+      <ActivityIndicator color={colors.amberText} />
       <Text style={[styles.body, { marginTop: 10 }]}>{label}</Text>
     </View>
   );

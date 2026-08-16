@@ -14,6 +14,7 @@ type BaseProps = {
   size?: number;
   color?: string;
   strokeWidth?: number;
+  fill?: string;
 };
 
 type BabyLogIconProps = BaseProps &
@@ -24,7 +25,7 @@ type BabyLogIconProps = BaseProps &
   );
 
 export function BabyLogIcon(props: BabyLogIconProps) {
-  const { size = 20, color, strokeWidth = 1.8 } = props;
+  const { size = 20, color, strokeWidth = 1.8, fill } = props;
 
   let Icon = MISC_ICONS.new;
   let resolvedColor = color ?? "#7A746C";
@@ -38,5 +39,7 @@ export function BabyLogIcon(props: BabyLogIconProps) {
     Icon = MISC_ICONS[props.kind];
   }
 
-  return <Icon size={size} color={resolvedColor} strokeWidth={strokeWidth} />;
+  return (
+    <Icon size={size} color={resolvedColor} strokeWidth={strokeWidth} fill={fill ?? "none"} />
+  );
 }

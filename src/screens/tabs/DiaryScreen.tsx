@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image } from "expo-image";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, SectionList, StyleSheet, Text, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { AppHeader } from "../../components/babylog/AppHeader";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
+import { BabyStickerVaultModal } from "../../components/babylog/BabyStickerVaultModal";
 import { DiaryComposeModal } from "../../components/babylog/DiaryComposeModal";
 import { DiaryReminderSettingsModal } from "../../components/babylog/DiaryReminderSettingsModal";
 import { GrowthBookVaultModal } from "../../components/babylog/GrowthBookVaultModal";
 import { GrowthBookEditorModal } from "../../components/babylog/GrowthBookEditorModal";
-import { GrowthBookPreviewModal } from "../../components/babylog/GrowthBookPreviewModal";
 import { DiaryMoodStamp, DiaryStampPair } from "../../components/babylog/DiaryStamp";
 import { PushToast } from "../../components/babylog/PushToast";
 import { ConsultFab } from "../../components/babylog/ConsultFab";
@@ -39,31 +39,34 @@ import {
   diaryMilestoneLabel,
   diaryPhotoCount,
   diaryPrimaryPhoto,
+  sortGrowthBookEntries,
 } from "../../utils/diaryModel";
 import { buildTodaySummary } from "../../utils/reportAggregates";
-import { createGrowthBookPdf } from "../../utils/growthBookPdf";
 import { estimateGrowthBookPageCount } from "../../utils/growthBookPages";
 import {
   buildDiaryNotificationCopy,
   draftToComposePrefill,
   filterDiaries,
+  findDiaryForDate,
+  groupDiariesByMonth,
   isMeaningfulDiaryDraft,
   resolveDiaryComposeTarget,
 } from "../../utils/diaryToday";
 import { EmptyState } from "../../components/states/FeedbackStates";
-import { colors, radius } from "../../theme";
+import { colors, radius, type } from "../../theme";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
 import type { MainTabParamList } from "../../navigation/types";
 
 type Props = {
   onOpenProfile: () => void;
   onOpenSettings?: () => void;
+  onOpenNotifications?: () => void;
   onOpenConsult: (initialQuestion?: string) => void;
 };
 
 type DiaryFilter = "all" | "growth" | "book";
 
-export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Props) {
+export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenConsult }: Props) {
   const route = useRoute<RouteProp<MainTabParamList, "Diary">>();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList, "Diary">>();
   const {
@@ -81,11 +84,14 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
     growthBookEdit,
     setGrowthBookEdit,
     babyStickers,
+    addBabySticker,
+    deleteBabySticker,
   } = useBabyLog();
   const me = familyMembers.find((member) => member.isMe);
   const allowAdd = canAddLog(myFamilyRole);
 
   const [composeOpen, setComposeOpen] = useState(false);
+  const [composeReadOnly, setComposeReadOnly] = useState(false);
   const [composeFromPush, setComposeFromPush] = useState(false);
   const [editingEntry, setEditingEntry] = useState<DiaryEntry | null>(null);
   const [initialDraft, setInitialDraft] = useState<DiaryComposeDraft | null>(null);
@@ -94,13 +100,13 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
   const [vaultOpen, setVaultOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorInitialDiaryId, setEditorInitialDiaryId] = useState<string | null>(null);
-  const [bookPreviewOpen, setBookPreviewOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [stickerOpen, setStickerOpen] = useState(false);
   const pendingGrowthBookEditorRef = useRef<{ diaryId: string | null } | null>(null);
   const [chipPressing, setChipPressing] = useState(false);
   const [reminder, setReminder] = useState<DiaryReminderSettings>({ ...DEFAULT_DIARY_REMINDER });
   const [draftMemory, setDraftMemory] = useState<DiaryDraft | null>(null);
-  const sheetOpen = composeOpen || vaultOpen || editorOpen || bookPreviewOpen || settingsOpen;
+  const sheetOpen = composeOpen || vaultOpen || editorOpen || settingsOpen || stickerOpen;
   const { fabHidden, promptOpen, setPromptOpen, scrollProps } = useConsultFabBehavior(
     pushVisible || sheetOpen || chipPressing,
   );
@@ -125,20 +131,23 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
   }, [localDataScope]);
 
   const openComposeFresh = useCallback(() => {
-    if (!allowAdd) return;
     const target = resolveDiaryComposeTarget({
       entries: diaryEntriesRef.current,
       draft: getDiaryDraft() ?? draftRef.current,
       dateKey: formatDateKey(),
     });
-    if (
-      target.kind === "edit" &&
-      !canEditLog(myFamilyRole, target.entry.createdBy, me)
-    ) {
+    if (target.kind === "edit") {
+      setEditingEntry(target.entry);
+      setInitialDraft(null);
+      setComposeReadOnly(!canEditLog(myFamilyRole, target.entry.createdBy, me));
+      setComposeFromPush(false);
+      setComposeOpen(true);
       return;
     }
-    setEditingEntry(target.kind === "edit" ? target.entry : null);
+    if (!allowAdd) return;
+    setEditingEntry(null);
     setInitialDraft(target.kind === "draft" ? draftToComposePrefill(target.draft) : null);
+    setComposeReadOnly(false);
     setComposeFromPush(false);
     setComposeOpen(true);
   }, [allowAdd, me, myFamilyRole]);
@@ -164,9 +173,9 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
   }, []);
 
   const openEdit = useCallback((entry: DiaryEntry, fromPush = false) => {
-    if (!canEditLog(myFamilyRole, entry.createdBy, me)) return;
     setInitialDraft(null);
     setEditingEntry(entry);
+    setComposeReadOnly(!canEditLog(myFamilyRole, entry.createdBy, me));
     setComposeFromPush(fromPush);
     setComposeOpen(true);
   }, [me, myFamilyRole]);
@@ -178,23 +187,20 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
       draft: getDiaryDraft() ?? draftRef.current,
       dateKey: key,
     });
-    if (
-      (target.kind === "edit" &&
-        !canEditLog(myFamilyRole, target.entry.createdBy, me)) ||
-      (target.kind !== "edit" && !allowAdd)
-    ) {
-      return;
-    }
+    if (target.kind !== "edit" && !allowAdd) return;
     setComposeFromPush(true);
     if (target.kind === "edit") {
       setInitialDraft(null);
       setEditingEntry(target.entry);
+      setComposeReadOnly(!canEditLog(myFamilyRole, target.entry.createdBy, me));
     } else if (target.kind === "draft") {
       setEditingEntry(null);
       setInitialDraft(draftToComposePrefill(target.draft));
+      setComposeReadOnly(false);
     } else {
       setEditingEntry(null);
       setInitialDraft(null);
+      setComposeReadOnly(false);
     }
     setComposeOpen(true);
   }, [allowAdd, me, myFamilyRole]);
@@ -256,15 +262,18 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
   }, [openFromNotification]);
 
   const bookEntries = useMemo(
-    () => diaryEntries.filter((d) => d.includedInGrowthBook),
+    () => sortGrowthBookEntries(diaryEntries.filter((d) => d.includedInGrowthBook)),
     [diaryEntries],
   );
+  const bookCoverPhoto =
+    growthBookEdit.coverPhotoUri || (bookEntries[0] ? diaryPrimaryPhoto(bookEntries[0]) : null);
   const growthCount = useMemo(
     () => diaryEntries.filter(diaryHasMilestone).length,
     [diaryEntries],
   );
   const bookPhotoCount = useMemo(() => diaryPhotoCount(bookEntries), [bookEntries]);
   const filtered = useMemo(() => filterDiaries(diaryEntries, filter), [diaryEntries, filter]);
+  const monthSections = useMemo(() => groupDiariesByMonth(filtered), [filtered]);
 
   const liveEditing = editingEntry
     ? diaryEntries.find((d) => d.id === editingEntry.id) ?? editingEntry
@@ -272,7 +281,15 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
 
   const reminderLabel = reminder.enabled
     ? formatReminderTime(reminder.hour, reminder.minute)
-    : "알림 꺼짐";
+    : "꺼짐";
+  const todayDiary = findDiaryForDate(diaryEntries, todayKey);
+  const canEditToday = todayDiary ? canEditLog(myFamilyRole, todayDiary.createdBy, me) : allowAdd;
+  const writeLabel = todayDiary
+    ? canEditToday
+      ? "오늘 일기 수정"
+      : "오늘 일기 보기"
+    : "새 일기 쓰기";
+  const writeDisabled = !todayDiary && !allowAdd;
 
   const persistFromDraft = (draft: DiaryComposeDraft, source: "manual" | "notification") => {
     const existingToday = diaryEntries.find((d) => d.dateKey === todayKey);
@@ -356,31 +373,63 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
           openFromNotification();
         }}
       />
-      <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
-      <ScrollView
+      <AppHeader
+        onOpenProfile={onOpenProfile}
+        onOpenSettings={onOpenSettings}
+        onOpenNotifications={onOpenNotifications}
+      />
+      <SectionList
+        sections={monthSections.map((section, index) => ({
+          key: section.monthKey,
+          title: section.label,
+          isFirst: index === 0,
+          data: section.entries,
+        }))}
+        keyExtractor={(item) => item.id}
+        style={styles.list}
         contentContainerStyle={styles.content}
+        stickySectionHeadersEnabled
+        initialNumToRender={8}
+        windowSize={7}
         showsVerticalScrollIndicator={false}
         {...scrollProps}
-      >
+        ListHeaderComponent={
+          <>
         {!allowAdd && (
           <Text style={styles.viewerBanner}>보기 전용 계정이에요. 일기 추가·수정은 제한돼요.</Text>
         )}
         <Pressable
-          style={[styles.writeBtn, styles.btnPrimary, !allowAdd && styles.disabled]}
-          disabled={!allowAdd}
-          accessibilityState={{ disabled: !allowAdd }}
+          style={[styles.writeBtn, styles.btnPrimary, writeDisabled && styles.disabled]}
+          disabled={writeDisabled}
+          accessibilityRole="button"
+          accessibilityLabel={writeLabel}
+          accessibilityState={{ disabled: writeDisabled }}
           onPress={openComposeFresh}
         >
           <View style={styles.btnInner}>
             <BabyLogIcon kind="edit" size={14} color={colors.amberDark} strokeWidth={2.2} />
-            <Text style={styles.btnPrimaryText}>새 일기 쓰기</Text>
+            <Text style={styles.btnPrimaryText}>{writeLabel}</Text>
           </View>
         </Pressable>
 
         <View style={styles.bookRow}>
-          <Pressable style={styles.bookCard} onPress={() => setVaultOpen(true)}>
+          <Pressable
+            style={styles.bookCard}
+            onPress={() => setVaultOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`${babyName}의 성장책 열기`}
+          >
+            {bookCoverPhoto ? (
+              <Image source={{ uri: bookCoverPhoto }} style={styles.bookCover} contentFit="cover" />
+            ) : (
+              <View style={styles.bookCoverFallback}>
+                <BabyLogIcon kind="tab" tab="diary" size={18} color={colors.amberText} />
+              </View>
+            )}
             <View style={styles.bookCardLeft}>
-              <Text style={styles.bookCardTitle}>📖 {babyName}의 성장책</Text>
+              <View style={styles.bookCardTitleRow}>
+                <Text style={styles.bookCardTitle}>{babyName}의 성장책</Text>
+              </View>
               <Text style={styles.bookCardStats}>
                 담은 기록 {bookEntries.length}개 · 사진 {bookPhotoCount}장 · 예상 {estimateGrowthBookPageCount(bookEntries.length)}쪽
               </Text>
@@ -389,24 +438,31 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
               ) : null}
             </View>
             <View style={styles.bookCardBtn}>
-              <Text style={styles.bookCardBtnText}>성장책 보관함</Text>
-              <BabyLogIcon kind="chevron" size={14} color={colors.amber} />
+              <Text style={styles.bookCardBtnText}>성장책 열기</Text>
+              <BabyLogIcon kind="chevron" size={14} color={colors.amberText} />
             </View>
           </Pressable>
 
           <Pressable
-            style={styles.settingsBtn}
-            onPress={() => setSettingsOpen(true)}
-            accessibilityLabel="일기 알림 설정"
+            style={styles.stickerBtn}
+            onPress={() => setStickerOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="스티커 만들기"
           >
-            <BabyLogIcon kind="bell" size={16} color={colors.muted} />
+            <BabyLogIcon kind="baby" size={16} color={colors.amberText} />
           </Pressable>
         </View>
 
-        <Text style={styles.reminderHint}>
-          일기 알림 · {reminderLabel}
-          {!reminder.enabled ? " · 알림이 꺼져 있어요" : ""}
-        </Text>
+        <Pressable
+          style={styles.reminderRow}
+          onPress={() => setSettingsOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="일기 리마인더 설정"
+        >
+          <BabyLogIcon kind="clock" size={14} color={colors.muted} />
+          <Text style={styles.reminderHint}>일기 리마인더 · {reminderLabel}</Text>
+          <BabyLogIcon kind="chevron" size={14} color={colors.muted} />
+        </Pressable>
 
         <ScrollView
           horizontal
@@ -428,6 +484,9 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
                 onPressIn={() => setChipPressing(true)}
                 onPressOut={() => setChipPressing(false)}
                 onPress={() => setFilter(f.key)}
+                accessibilityRole="button"
+                accessibilityLabel={f.label}
+                accessibilityState={{ selected: active }}
               >
                 <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
                   {f.label}
@@ -436,8 +495,9 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
             );
           })}
         </ScrollView>
-
-        {filtered.length === 0 ? (
+          </>
+        }
+        ListEmptyComponent={
           <EmptyState
             title={
               diaryEntries.length === 0
@@ -454,29 +514,35 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
                 : filter === "growth"
                   ? "작성할 때 성장 순간 태그를 붙이면 여기에 모여요."
                   : filter === "book"
-                    ? "소중한 일기에서 📖 담기를 눌러보세요."
+                    ? "소중한 일기 사진 옆 책갈피를 눌러 담아보세요."
                     : undefined
             }
             ctaLabel={diaryEntries.length === 0 ? "첫 일기 쓰기" : undefined}
             onPressCta={diaryEntries.length === 0 ? openComposeFresh : undefined}
           />
-        ) : (
-          filtered.map((d) => (
-            <DiaryCard
-              key={d.id}
-              entry={d}
-              onOpen={() => openEdit(d)}
-              onToggleBook={() => {
-                if (canEditLog(myFamilyRole, d.createdBy, me)) toggleDiaryInGrowthBook(d.id);
-              }}
-            />
-          ))
+        }
+        renderSectionHeader={({ section }) => (
+          <Text
+            style={[styles.monthHeader, section.isFirst && styles.monthHeaderFirst]}
+            accessibilityRole="header"
+          >
+            {section.title}
+          </Text>
         )}
-      </ScrollView>
+        renderItem={({ item: d }) => (
+          <DiaryCard
+            entry={d}
+            canToggleBook={canEditLog(myFamilyRole, d.createdBy, me)}
+            onOpen={() => openEdit(d)}
+            onToggleBook={() => toggleDiaryInGrowthBook(d.id)}
+          />
+        )}
+      />
 
       <DiaryComposeModal
         visible={composeOpen}
         fromPush={composeFromPush}
+        readOnly={composeReadOnly}
         editingEntry={liveEditing}
         initialDraft={initialDraft}
         onClose={() => {
@@ -484,6 +550,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
           setEditingEntry(null);
           setInitialDraft(null);
           setComposeFromPush(false);
+          setComposeReadOnly(false);
           setDraftMemory(getDiaryDraft());
         }}
         onDraftChange={(draft) => {
@@ -506,6 +573,18 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
         }}
       />
 
+      <BabyStickerVaultModal
+        visible={stickerOpen}
+        babyId={localDataScope?.babyId}
+        babyName={babyName}
+        stickers={babyStickers}
+        createdBy={logAuthor.userId}
+        startInCreate
+        onClose={() => setStickerOpen(false)}
+        onSaveSticker={addBabySticker}
+        onDeleteSticker={deleteBabySticker}
+      />
+
       <GrowthBookVaultModal
         visible={vaultOpen}
         babyName={babyName}
@@ -520,7 +599,6 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
             updateDiary(id, { includedInGrowthBook: false });
           }
         }}
-        onOpenPage={(entry) => requestGrowthBookEditor(entry.id)}
         onGoToDiary={() => setVaultOpen(false)}
       />
 
@@ -537,27 +615,8 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
         onClose={() => {
           setEditorOpen(false);
           setEditorInitialDiaryId(null);
+          setVaultOpen(true);
         }}
-        onOpenBookPreview={() => {
-          setEditorOpen(false);
-          setBookPreviewOpen(true);
-        }}
-      />
-
-      <GrowthBookPreviewModal
-        visible={bookPreviewOpen}
-        babyName={babyName}
-        entries={diaryEntries.filter((d) => d.includedInGrowthBook)}
-        edit={growthBookEdit}
-        onClose={() => setBookPreviewOpen(false)}
-        onPdfCreate={() =>
-          void createGrowthBookPdf({
-            babyName,
-            entries: diaryEntries.filter((d) => d.includedInGrowthBook),
-            edit: growthBookEdit,
-            stickers: babyStickers,
-          })
-        }
       />
 
       <DiaryReminderSettingsModal
@@ -587,12 +646,21 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Pr
   );
 }
 
+const THUMB_SIZE = 64;
+const CARD_PAD = 12;
+const BOOKMARK_CHIP = 24;
+const BOOKMARK_HIT = Platform.OS === "android" ? 48 : 44;
+const BOOKMARK_SLOP = (BOOKMARK_HIT - BOOKMARK_CHIP) / 2;
+const BOOKMARK_NUDGE = 4;
+
 function DiaryCard({
   entry,
+  canToggleBook,
   onOpen,
   onToggleBook,
 }: {
   entry: DiaryEntry;
+  canToggleBook: boolean;
   onOpen: () => void;
   onToggleBook: () => void;
 }) {
@@ -601,63 +669,93 @@ function DiaryCard({
   const milestone = diaryMilestoneLabel(entry);
 
   return (
-    <Pressable style={styles.card} onPress={onOpen}>
-      {photo ? (
+    <View style={styles.card}>
+      <Pressable
+        style={styles.cardMain}
+        onPress={onOpen}
+        accessibilityRole="button"
+        accessibilityLabel={
+          milestone ? `${entry.date} 일기, 성장 순간 ${milestone}` : `${entry.date} 일기`
+        }
+      >
         <View style={styles.thumbWrap}>
-          <Image source={{ uri: photo }} style={styles.thumb} contentFit="cover" />
-          {entry.photos.length > 1 ? <View style={styles.photoCountBadge}><Text style={styles.photoCountText}>+{entry.photos.length - 1}</Text></View> : null}
-        </View>
-      ) : (
-        <View style={styles.thumbPlaceholder}>
-          {entry.moodStamp ? (
-            <DiaryMoodStamp id={entry.moodStamp} selected size="sm" />
+          {photo ? (
+            <Image source={{ uri: photo }} style={styles.thumb} contentFit="cover" />
           ) : (
-            <Text style={styles.thumbFallback}>📔</Text>
+            <View style={styles.thumbPlaceholder}>
+              {entry.moodStamp ? (
+                <DiaryMoodStamp id={entry.moodStamp} selected size="sm" />
+              ) : (
+                <BabyLogIcon kind="tab" tab="diary" size={22} color={colors.muted} />
+              )}
+            </View>
           )}
+          {entry.photos.length > 1 ? (
+            <View style={styles.photoCountBadge}>
+              <Text style={styles.photoCountText}>+{entry.photos.length - 1}</Text>
+            </View>
+          ) : null}
         </View>
-      )}
-      <View style={styles.body}>
-        <View style={styles.dateRow}>
-          <Text style={styles.date} numberOfLines={1}>
-            {entry.date}
+        <View style={styles.body}>
+          <View style={styles.dateRow}>
+            <Text style={styles.date} numberOfLines={1}>
+              {entry.date}
+            </Text>
+            <DiaryStampPair skyId={entry.weatherStamp} moodId={entry.moodStamp} size="sm" />
+          </View>
+          <Text style={styles.comment} numberOfLines={2}>
+            {diaryDisplayComment(entry)}
           </Text>
-          <DiaryStampPair skyId={entry.weatherStamp} moodId={entry.moodStamp} size="sm" />
-        </View>
-        <Text style={styles.comment} numberOfLines={2}>
-          {diaryDisplayComment(entry)}
-        </Text>
-        {entry.createdBy?.name ? (
-          <Text style={styles.author}>작성자: {entry.createdBy.name}</Text>
-        ) : null}
-        <View style={styles.cardFooter}>
+          {entry.createdBy?.name ? (
+            <Text style={styles.author}>작성자: {entry.createdBy.name}</Text>
+          ) : null}
           {milestone ? (
             <View style={styles.growthTag}>
-              <Text style={styles.growthTagText}>🌱 {milestone}</Text>
+              <BabyLogIcon kind="sparkles" size={12} color={colors.text} />
+              <Text style={styles.growthTagText} numberOfLines={1}>
+                {milestone}
+              </Text>
             </View>
-          ) : (
-            <View style={styles.footerSpacer} />
-          )}
-          <Pressable
-            style={[styles.bookChip, inBook && styles.bookChipActive]}
-            onPress={(e) => {
-              e.stopPropagation?.();
-              onToggleBook();
-            }}
-            hitSlop={6}
-          >
-            <Text style={[styles.bookChipText, inBook && styles.bookChipTextActive]}>
-              {inBook ? "✓ 성장책에 담김" : "📖 담기"}
-            </Text>
-          </Pressable>
+          ) : null}
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+      <Pressable
+        style={({ pressed }) => [
+          styles.bookmarkBtn,
+          inBook && styles.bookmarkBtnActive,
+          !canToggleBook && styles.disabled,
+          pressed && canToggleBook && styles.bookmarkBtnPressed,
+        ]}
+        hitSlop={BOOKMARK_SLOP}
+        disabled={!canToggleBook}
+        onPress={onToggleBook}
+        accessibilityRole="button"
+        accessibilityLabel={
+          canToggleBook
+            ? inBook
+              ? "성장책에서 빼기"
+              : "성장책에 담기"
+            : inBook
+              ? "성장책에 담김, 이 일기는 수정할 수 없어요"
+              : "성장책에 담기, 이 일기는 수정할 수 없어요"
+        }
+        accessibilityState={{ selected: inBook, disabled: !canToggleBook }}
+      >
+        <BabyLogIcon
+          kind="bookmark"
+          size={14}
+          color={inBook ? colors.amberText : colors.muted}
+          fill={inBook ? colors.amber : "transparent"}
+        />
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  content: { paddingHorizontal: 18, paddingBottom: 24 },
+  list: { flex: 1 },
+  content: { paddingHorizontal: 18, paddingBottom: 96 },
   viewerBanner: {
     color: colors.muted,
     fontSize: 12,
@@ -668,12 +766,12 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 10,
   },
-  writeBtn: { borderRadius: 14, paddingVertical: 12, alignItems: "center", marginBottom: 12 },
+  writeBtn: { minHeight: 44, borderRadius: 14, paddingVertical: 12, alignItems: "center", justifyContent: "center", marginBottom: 12 },
   disabled: { opacity: 0.45 },
   btnPrimary: { backgroundColor: colors.amber },
   btnInner: { flexDirection: "row", alignItems: "center", gap: 6 },
   btnPrimaryText: { color: colors.amberDark, fontWeight: "700", fontSize: 14 },
-  bookRow: { flexDirection: "row", gap: 8, marginBottom: 6 },
+  bookRow: { flexDirection: "row", gap: 8, marginBottom: 4 },
   bookCard: {
     flex: 1,
     flexDirection: "row",
@@ -684,95 +782,151 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.lg,
     paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingVertical: 10,
   },
   bookCardLeft: { flex: 1 },
-  bookCardTitle: { fontSize: 14.5, fontWeight: "800", color: colors.text },
+  bookCardTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  bookCardTitle: { flexShrink: 1, fontSize: 14.5, fontWeight: "800", color: colors.text },
   bookCardStats: { fontSize: 12.5, color: colors.muted, marginTop: 4, fontWeight: "600" },
-  bookCardDesc: { fontSize: 12, color: colors.faint, marginTop: 4, lineHeight: 18 },
+  bookCardDesc: { fontSize: 12, color: colors.muted, marginTop: 4, lineHeight: 18 },
   bookCardBtn: { flexDirection: "row", alignItems: "center", gap: 2 },
-  bookCardBtnText: { fontSize: 12.5, fontWeight: "700", color: colors.amber },
-  settingsBtn: {
-    width: 48,
+  bookCardBtnText: { fontSize: 12.5, fontWeight: "700", color: colors.amberText },
+  bookCover: { width: 44, height: 56, borderRadius: 8 },
+  bookCoverFallback: {
+    width: 44,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: colors.cardHi,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stickerBtn: {
+    minWidth: 56,
+    minHeight: 44,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.backgroundSecondary,
     alignItems: "center",
     justifyContent: "center",
+    gap: 2,
+  },
+  reminderRow: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
+    paddingHorizontal: 2,
   },
   reminderHint: {
-    fontSize: 11.5,
-    color: colors.faint,
+    flex: 1,
+    fontSize: type.xs,
+    color: colors.muted,
     fontWeight: "600",
-    marginBottom: 12,
-    marginLeft: 2,
   },
-  filterRow: { gap: 8, paddingBottom: 14 },
+  filterRow: { gap: 8, paddingBottom: 8 },
   filterChip: {
+    minHeight: 44,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 20,
     paddingHorizontal: 13,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    justifyContent: "center",
   },
   filterChipActive: { backgroundColor: colors.amber, borderColor: colors.amber },
   filterChipText: { fontSize: 12.5, fontWeight: "700", color: colors.muted },
   filterChipTextActive: { color: colors.amberDark },
+  monthHeader: {
+    fontSize: type.xs,
+    fontWeight: "800",
+    color: colors.muted,
+    marginTop: 10,
+    marginBottom: 8,
+    marginLeft: 2,
+    backgroundColor: colors.background,
+    paddingVertical: 4,
+  },
+  monthHeaderFirst: { marginTop: 0 },
   card: {
+    marginBottom: 10,
+  },
+  cardMain: {
     flexDirection: "row",
     gap: 12,
     backgroundColor: colors.backgroundSecondary,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
+    padding: CARD_PAD,
   },
-  thumbWrap: { width: 64, height: 64, borderRadius: 12, overflow: "hidden" },
-  thumb: { width: "100%", height: "100%" },
-  photoCountBadge: { position: "absolute", right: 4, bottom: 4, minWidth: 24, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: "rgba(46,42,38,0.72)", alignItems: "center", justifyContent: "center" },
-  photoCountText: { color: "#fff", fontSize: 10, fontWeight: "800" },
-  thumbPlaceholder: {
-    width: 64,
-    height: 64,
+  thumbWrap: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
     borderRadius: 12,
+    overflow: "hidden",
     backgroundColor: colors.cardHi,
+  },
+  thumb: { width: "100%", height: "100%" },
+  photoCountBadge: {
+    position: "absolute",
+    left: 4,
+    bottom: 4,
+    minWidth: 24,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: "rgba(46,42,38,0.72)",
     alignItems: "center",
     justifyContent: "center",
   },
-  thumbFallback: { fontSize: 22 },
+  photoCountText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  thumbPlaceholder: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   body: { flex: 1, minWidth: 0 },
   dateRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  date: { flex: 1, fontSize: 11.5, color: colors.faint, fontWeight: "700" },
+  date: { flex: 1, fontSize: type.xs, color: colors.muted, fontWeight: "700" },
   comment: { fontSize: 13, color: colors.text, marginTop: 4, lineHeight: 19 },
-  author: { fontSize: 11, color: colors.faint, marginTop: 4, fontWeight: "600" },
-  cardFooter: {
+  author: { fontSize: type.xs, color: colors.muted, marginTop: 4, fontWeight: "600" },
+  growthTag: {
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginTop: 8,
-  },
-  footerSpacer: { flex: 1 },
-  growthTag: {
-    flexShrink: 1,
+    gap: 4,
     backgroundColor: colors.amberSoft,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 3,
+    marginTop: 8,
   },
-  growthTagText: { fontSize: 11.5, fontWeight: "700", color: colors.text },
-  bookChip: {
-    marginLeft: "auto",
-    borderRadius: 999,
+  growthTagText: { flexShrink: 1, fontSize: type.xs, fontWeight: "700", color: colors.text },
+  bookmarkBtn: {
+    position: "absolute",
+    top: CARD_PAD - BOOKMARK_NUDGE,
+    left: CARD_PAD + THUMB_SIZE - BOOKMARK_CHIP + BOOKMARK_NUDGE,
+    zIndex: 2,
+    width: BOOKMARK_CHIP,
+    height: BOOKMARK_CHIP,
+    borderRadius: BOOKMARK_CHIP / 2,
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  bookChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  bookChipText: { fontSize: 11, fontWeight: "700", color: colors.muted },
-  bookChipTextActive: { color: colors.amber },
+  bookmarkBtnActive: {
+    backgroundColor: colors.amberSoft,
+    borderColor: colors.amber,
+  },
+  bookmarkBtnPressed: { opacity: 0.7 },
 });

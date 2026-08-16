@@ -2,12 +2,15 @@ import type { ComponentType } from "react";
 import {
   Apple,
   Activity,
+  AlertTriangle,
   ArrowLeftRight,
   Baby,
   Bath,
   Bell,
+  Bookmark,
   Bot,
   BookOpen,
+  Cake,
   CalendarDays,
   Check,
   ChevronRight,
@@ -16,7 +19,11 @@ import {
   MessageCircle,
   FileText,
   FolderOpen,
+  Handshake,
+  Image as ImageIcon,
+  LayoutGrid,
   GlassWater,
+  Lock,
   LogOut,
   Menu,
   Mic,
@@ -25,6 +32,7 @@ import {
   Pencil,
   Pill,
   Plus,
+  Send,
   Settings,
   Sparkles,
   Star,
@@ -90,7 +98,15 @@ export type MiscIconKey =
   | "bot"
   | "logout"
   | "chat"
-  | "settings";
+  | "settings"
+  | "image"
+  | "layout"
+  | "bookmark"
+  | "send"
+  | "alert"
+  | "cake"
+  | "lock"
+  | "handshake";
 
 export const TAB_ICONS: Record<TabIconKey, IconComponent> = {
   record: ClipboardList,
@@ -122,4 +138,12 @@ export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
   logout: LogOut,
   chat: MessageCircle,
   settings: Settings,
+  image: ImageIcon,
+  layout: LayoutGrid,
+  bookmark: Bookmark,
+  send: Send,
+  alert: AlertTriangle,
+  cake: Cake,
+  lock: Lock,
+  handshake: Handshake,
 };

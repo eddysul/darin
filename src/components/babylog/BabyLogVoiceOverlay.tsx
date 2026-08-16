@@ -273,7 +273,7 @@ export function BabyLogVoiceOverlay({
           {stage === "analyzing" && (
             <>
               <Text style={styles.state}>{t("voice.analyzing")}</Text>
-              <ActivityIndicator size="large" color={colors.amber} style={{ marginBottom: 16 }} />
+              <ActivityIndicator size="large" color={colors.amberText} style={{ marginBottom: 16 }} />
               <Text style={styles.analyzingText}>{t("voice.analyzingHint")}</Text>
             </>
           )}

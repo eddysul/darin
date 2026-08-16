@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { QuickRecord } from "../../types/quickRecord";
 import type { OneTouchAction } from "../../constants/quickRecordActions";
 import { QUICK_RECORD_ACTIONS } from "../../constants/quickRecordActions";
-import { colors } from "../../theme";
+import { colors, type } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import { QuickRecordEditorSheet } from "./QuickRecordEditorSheet";
@@ -57,17 +57,19 @@ export function QuickRecordsBar({
     <View style={styles.card}>
       <View style={styles.header}>
         <View style={styles.headingCopy}>
-          <Text style={styles.title}>저장해둔 빠른 기록</Text>
+          <Text style={styles.title}>자주 쓰는</Text>
           <Text style={styles.subtitle}>한 번 탭하면 바로 기록돼요.</Text>
         </View>
         <Pressable
           style={[styles.editBtn, disabled && styles.disabled]}
           disabled={disabled}
+          accessibilityRole="button"
+          accessibilityLabel="자주 쓰는 기록 관리"
           accessibilityState={{ disabled }}
           hitSlop={8}
           onPress={openManage}
         >
-          <BabyLogIcon kind="edit" size={13} color={colors.amber} />
+          <BabyLogIcon kind="edit" size={13} color={colors.amberText} />
           <Text style={styles.edit}>관리</Text>
         </Pressable>
       </View>
@@ -75,7 +77,7 @@ export function QuickRecordsBar({
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {pinned.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>아직 저장해둔 빠른 기록이 없어요.</Text>
+            <Text style={styles.emptyTitle}>아직 자주 쓰는 기록이 없어요.</Text>
             <Text style={styles.emptyBody}>자주 쓰는 조합을 저장해두면 한 번에 기록할 수 있어요.</Text>
           </View>
         ) : null}
@@ -90,6 +92,9 @@ export function QuickRecordsBar({
               pressed && !disabled && styles.pressed,
             ]}
             onPress={() => onTap(record)}
+            accessibilityRole="button"
+            accessibilityLabel={`${record.label} 바로 기록`}
+            accessibilityState={{ disabled }}
             onLongPress={
               disabled
                 ? undefined
@@ -119,9 +124,9 @@ export function QuickRecordsBar({
           style={[styles.addChip, disabled && styles.disabled]}
           onPress={openCreate}
           accessibilityRole="button"
-          accessibilityLabel="새로 추가"
+          accessibilityLabel="자주 쓰는 기록 추가"
         >
-          <Text style={styles.addLabel}>새로 추가</Text>
+          <Text style={styles.addLabel}>조합 추가</Text>
         </Pressable>
       </ScrollView>
 
@@ -143,8 +148,8 @@ export function QuickRecordsBar({
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: 20,
-    padding: 14,
+    marginBottom: 10,
+    padding: 12,
     borderRadius: 18,
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -159,27 +164,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 11,
+    marginBottom: 8,
   },
   headingCopy: { flex: 1, paddingRight: 8 },
-  title: { fontSize: 17, fontWeight: "800", color: colors.text },
-  subtitle: { marginTop: 2, fontSize: 11, lineHeight: 15, color: colors.faint },
+  title: { fontSize: type.md, fontWeight: "800", color: colors.text },
+  subtitle: { marginTop: 2, fontSize: type.xs, lineHeight: 16, color: colors.faint },
   editBtn: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  edit: { fontSize: 11.5, color: colors.amber, fontWeight: "700" },
+  edit: { fontSize: type.xs, color: colors.amberText, fontWeight: "700" },
   row: { gap: 7, paddingRight: 6 },
   emptyState: { maxWidth: 230, justifyContent: "center", paddingRight: 4 },
-  emptyTitle: { fontSize: 12, fontWeight: "700", color: colors.muted },
-  emptyBody: { marginTop: 2, fontSize: 10.5, lineHeight: 15, color: colors.faint },
+  emptyTitle: { fontSize: type.xs, fontWeight: "700", color: colors.muted },
+  emptyBody: { marginTop: 2, fontSize: type.xs, lineHeight: 16, color: colors.faint },
   chip: {
+    minHeight: Platform.OS === "android" ? 48 : 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
@@ -187,15 +194,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 8,
   },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.45 },
   iconWrap: { width: 24, height: 24, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  label: { fontSize: 12, fontWeight: "700", color: colors.text, maxWidth: 110 },
+  label: { fontSize: type.xs, fontWeight: "700", color: colors.text, maxWidth: 110 },
   addChip: {
-    minWidth: 78,
-    height: 40,
+    minWidth: 88,
+    minHeight: Platform.OS === "android" ? 48 : 44,
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
@@ -206,5 +213,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.amberSoft,
   },
-  addLabel: { fontSize: 12, color: colors.amber, fontWeight: "700" },
+  addLabel: { fontSize: type.xs, color: colors.amberText, fontWeight: "700" },
 });

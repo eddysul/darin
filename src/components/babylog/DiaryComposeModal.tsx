@@ -43,6 +43,7 @@ import { BabyStickerVaultModal } from "./BabyStickerVaultModal";
 type Props = {
   visible: boolean;
   fromPush?: boolean;
+  readOnly?: boolean;
   editingEntry?: DiaryEntry | null;
   initialDraft?: DiaryComposeDraft | null;
   onClose: () => void;
@@ -61,6 +62,7 @@ function formatTodayLabel(d = new Date()): string {
 export function DiaryComposeModal({
   visible,
   fromPush,
+  readOnly = false,
   editingEntry,
   initialDraft,
   onClose,
@@ -170,7 +172,7 @@ export function DiaryComposeModal({
   }, [visible, editingEntry, initialDraft]);
 
   useEffect(() => {
-    if (!visible || !ready || isEdit || !onDraftChange) return;
+    if (!visible || !ready || isEdit || readOnly || !onDraftChange) return;
     const t = setTimeout(() => onDraftChange(buildDraft()), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- buildDraft reads latest state
@@ -178,6 +180,7 @@ export function DiaryComposeModal({
     visible,
     ready,
     isEdit,
+    readOnly,
     onDraftChange,
     notes,
     photos,
@@ -234,7 +237,7 @@ export function DiaryComposeModal({
   };
 
   const handleSave = () => {
-    if (!canSave) return;
+    if (readOnly || !canSave) return;
     const draft = buildDraft();
     draft.comment = notes.trim() || DIARY_PHOTO_ONLY_COMMENT;
     onSave(draft);
@@ -242,12 +245,12 @@ export function DiaryComposeModal({
   };
 
   const handleClose = () => {
-    if (!isEdit && onDraftChange) onDraftChange(buildDraft());
+    if (!readOnly && !isEdit && onDraftChange) onDraftChange(buildDraft());
     onClose();
   };
 
   const handleDelete = () => {
-    if (!editingEntry || !onDelete) return;
+    if (readOnly || !editingEntry || !onDelete) return;
     Alert.alert("일기 삭제", "이 일기를 삭제할까요? 성장책에서도 함께 빠져요.", [
       { text: "취소", style: "cancel" },
       {
@@ -261,13 +264,15 @@ export function DiaryComposeModal({
     ]);
   };
 
-  const title = isEdit
-    ? fromPush
-      ? "오늘 일기 이어쓰기"
-      : "일기 수정"
-    : fromPush
-      ? "알림에서 쓰기"
-      : "새 일기 쓰기";
+  const title = readOnly
+    ? "일기 보기"
+    : isEdit
+      ? fromPush
+        ? "오늘 일기 이어쓰기"
+        : "일기 수정"
+      : fromPush
+        ? "알림에서 쓰기"
+        : "새 일기 쓰기";
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
@@ -277,19 +282,27 @@ export function DiaryComposeModal({
             <Text style={styles.headerBtnText}>닫기</Text>
           </Pressable>
           <Text style={styles.headerTitle}>{title}</Text>
-          <Pressable
-            onPress={handleSave}
-            hitSlop={10}
-            style={[styles.headerBtn, !canSave && styles.headerBtnDisabled]}
-            disabled={!canSave}
-          >
-            <Text style={[styles.saveHeaderText, !canSave && styles.saveHeaderTextDisabled]}>저장</Text>
-          </Pressable>
+          {readOnly ? (
+            <View style={styles.headerBtn} />
+          ) : (
+            <Pressable
+              onPress={handleSave}
+              hitSlop={10}
+              style={[styles.headerBtn, !canSave && styles.headerBtnDisabled]}
+              disabled={!canSave}
+            >
+              <Text style={[styles.saveHeaderText, !canSave && styles.saveHeaderTextDisabled]}>저장</Text>
+            </Pressable>
+          )}
         </View>
 
-        {fromPush ? (
+        {readOnly ? (
           <View style={styles.fromPushBanner}>
-            <BabyLogIcon kind="bell" size={14} color={colors.amber} />
+            <Text style={styles.fromPushText}>이 일기는 보기만 할 수 있어요</Text>
+          </View>
+        ) : fromPush ? (
+          <View style={styles.fromPushBanner}>
+            <BabyLogIcon kind="bell" size={14} color={colors.amberText} />
             <Text style={styles.fromPushText}>알림에서 바로 열린 오늘 일기예요</Text>
           </View>
         ) : null}
@@ -308,7 +321,7 @@ export function DiaryComposeModal({
 
             <View style={styles.careCard}>
               <View style={styles.careTagRow}>
-                <BabyLogIcon kind="sparkles" size={12} color={colors.amber} strokeWidth={2.2} />
+                <BabyLogIcon kind="sparkles" size={12} color={colors.amberText} strokeWidth={2.2} />
                 <Text style={styles.careTag}>오늘의 Care Log</Text>
               </View>
               <Text style={styles.careText}>{displaySummary}</Text>
@@ -320,7 +333,7 @@ export function DiaryComposeModal({
               ) : null}
             </View>
 
-            {!isEdit || fromPush ? (
+            {!readOnly && (!isEdit || fromPush) ? (
               <>
                 <Text style={styles.sectionLabel}>오늘 기록 기반 제안</Text>
                 <Text style={styles.sectionHint}>누르면 코멘트에 이어붙여요</Text>
@@ -344,32 +357,40 @@ export function DiaryComposeModal({
             ) : null}
 
             <Text style={styles.fieldLabel}>사진</Text>
-            <View style={styles.mediaActions}>
-              <Pressable style={[styles.mediaBtn, photos.length >= MAX_DIARY_PHOTOS && styles.mediaBtnDisabled]} onPress={() => void pickPhoto()}>
-                <Text style={styles.mediaBtnText}>사진 추가</Text>
-              </Pressable>
-              <Pressable style={styles.mediaBtnSecondary} onPress={() => setStickerPickerOpen(true)}>
-                <Text style={styles.mediaBtnSecondaryText}>스티커 추가</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.photoLimit}>최대 5장까지 추가할 수 있어요. 첫 번째 사진이 대표 이미지로 표시돼요.</Text>
+            {readOnly ? null : (
+              <>
+                <View style={styles.mediaActions}>
+                  <Pressable style={[styles.mediaBtn, photos.length >= MAX_DIARY_PHOTOS && styles.mediaBtnDisabled]} onPress={() => void pickPhoto()}>
+                    <Text style={styles.mediaBtnText}>사진 추가</Text>
+                  </Pressable>
+                  <Pressable style={styles.mediaBtnSecondary} onPress={() => setStickerPickerOpen(true)}>
+                    <Text style={styles.mediaBtnSecondaryText}>스티커 추가</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.photoLimit}>최대 5장까지 추가할 수 있어요. 첫 번째 사진이 대표 이미지로 표시돼요.</Text>
+              </>
+            )}
             {photos.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
                 {photos.map((uri, index) => (
                   <View key={`${uri}-${index}`} style={styles.photoThumbWrap}>
                     <Image source={{ uri }} style={styles.photoThumb} contentFit="cover" />
                     {index === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>대표</Text></View> : null}
-                    <Pressable
-                      style={styles.photoRemove}
-                      onPress={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}
-                      accessibilityRole="button"
-                      accessibilityLabel={`사진 ${index + 1} 삭제`}
-                    >
-                      <Text style={styles.photoRemoveText}>×</Text>
-                    </Pressable>
+                    {readOnly ? null : (
+                      <Pressable
+                        style={styles.photoRemove}
+                        onPress={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}
+                        accessibilityRole="button"
+                        accessibilityLabel={`사진 ${index + 1} 삭제`}
+                      >
+                        <View style={styles.photoRemoveGlyph}>
+                          <Text style={styles.photoRemoveText}>×</Text>
+                        </View>
+                      </Pressable>
+                    )}
                   </View>
                 ))}
-                {photos.length < MAX_DIARY_PHOTOS ? (
+                {!readOnly && photos.length < MAX_DIARY_PHOTOS ? (
                   <Pressable style={styles.photoAddTile} onPress={() => void pickPhoto()}>
                     <Text style={styles.photoAddPlus}>＋</Text>
                     <Text style={styles.photoAddText}>사진 추가</Text>
@@ -377,11 +398,13 @@ export function DiaryComposeModal({
                 ) : null}
               </ScrollView>
             ) : (
-              <Pressable style={styles.photoBox} onPress={() => void pickPhoto()}>
+              <Pressable style={styles.photoBox} onPress={readOnly ? undefined : () => void pickPhoto()} disabled={readOnly}>
                 <View style={styles.photoHintWrap}>
                   {mood ? <DiaryMoodStamp id={mood} selected size="lg" /> : null}
-                  <Text style={styles.photoHint}>사진 추가하기</Text>
-                  <Text style={styles.photoHintSub}>사진만 있어도 저장할 수 있어요</Text>
+                  <Text style={styles.photoHint}>{readOnly ? "사진 없음" : "사진 추가하기"}</Text>
+                  {readOnly ? null : (
+                    <Text style={styles.photoHintSub}>사진만 있어도 저장할 수 있어요</Text>
+                  )}
                 </View>
               </Pressable>
             )}
@@ -396,14 +419,14 @@ export function DiaryComposeModal({
                     return (
                       <Pressable
                         key={id}
-                        onLongPress={() => setStickerIds((prev) => prev.filter((x) => x !== id))}
+                        onLongPress={readOnly ? undefined : () => setStickerIds((prev) => prev.filter((x) => x !== id))}
                       >
                         <BabyStickerFromModel sticker={sticker} size={72} />
                       </Pressable>
                     );
                   })}
                 </ScrollView>
-                <Text style={styles.sectionHint}>길게 누르면 스티커를 빼요</Text>
+                {readOnly ? null : <Text style={styles.sectionHint}>길게 누르면 스티커를 빼요</Text>}
               </>
             ) : null}
 
@@ -413,19 +436,26 @@ export function DiaryComposeModal({
               value={notes}
               onChangeText={setNotes}
               multiline
+              editable={!readOnly}
               placeholder={`${babyName}와 있었던 일을 적어보세요`}
               placeholderTextColor={colors.faint}
             />
 
             <Text style={styles.fieldLabel}>오늘의 하늘</Text>
-            <Text style={styles.sectionHint}>다시 누르면 선택을 해제할 수 있어요</Text>
-            <DiarySkyPicker value={weather} onChange={setWeather} />
+            {readOnly ? null : (
+              <Text style={styles.sectionHint}>다시 누르면 선택을 해제할 수 있어요</Text>
+            )}
+            <View pointerEvents={readOnly ? "none" : "auto"}>
+              <DiarySkyPicker value={weather} onChange={setWeather} />
+            </View>
 
             <Text style={styles.fieldLabel}>오늘의 마음</Text>
-            <DiaryMoodPicker value={mood} onChange={setMood} />
+            <View pointerEvents={readOnly ? "none" : "auto"}>
+              <DiaryMoodPicker value={mood} onChange={setMood} />
+            </View>
 
             <Text style={styles.fieldLabel}>성장 순간 태그</Text>
-            <View style={styles.optionRow}>
+            <View style={styles.optionRow} pointerEvents={readOnly ? "none" : "auto"}>
               <Pressable
                 style={[styles.tagChip, !customMode && milestoneTag === null && styles.tagChipActive]}
                 onPress={() => {
@@ -474,6 +504,7 @@ export function DiaryComposeModal({
                 style={styles.customMoment}
                 value={customMilestoneTag}
                 onChangeText={setCustomMilestoneTag}
+                editable={!readOnly}
                 placeholder="예: 처음으로 손을 뻗은 날"
                 placeholderTextColor={colors.faint}
               />
@@ -482,39 +513,44 @@ export function DiaryComposeModal({
             <View style={styles.toggleRow}>
               <View style={styles.toggleCopy}>
                 <Text style={styles.toggleTitle}>성장책에 담기</Text>
-                <Text style={styles.toggleSub}>저장 후 성장책 보관함에서도 볼 수 있어요</Text>
+                <Text style={styles.toggleSub}>저장 후 성장책에서도 볼 수 있어요</Text>
               </View>
               <Switch
                 value={inBook}
                 onValueChange={setInBook}
+                disabled={readOnly}
                 trackColor={{ false: colors.border, true: colors.amber }}
                 thumbColor="#FFFFFF"
               />
             </View>
 
-            <Pressable
-              style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
-              onPress={handleSave}
-              disabled={!canSave}
-            >
-              <Text style={styles.saveBtnText}>{isEdit ? "수정 저장" : "일기 저장"}</Text>
-            </Pressable>
-            {!canSave ? (
-              <Text style={styles.saveHint}>사진 또는 코멘트 중 하나는 필요해요</Text>
-            ) : null}
+            {readOnly ? null : (
+              <View>
+                <Pressable
+                  style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
+                  onPress={handleSave}
+                  disabled={!canSave}
+                >
+                  <Text style={styles.saveBtnText}>{isEdit ? "수정 저장" : "일기 저장"}</Text>
+                </Pressable>
+                {!canSave ? (
+                  <Text style={styles.saveHint}>사진 또는 코멘트 중 하나는 필요해요</Text>
+                ) : null}
 
-            {isEdit && onDelete ? (
-              <Pressable style={styles.deleteBtn} onPress={handleDelete}>
-                <Text style={styles.deleteBtnText}>일기 삭제</Text>
-              </Pressable>
-            ) : null}
+                {isEdit && onDelete ? (
+                  <Pressable style={styles.deleteBtn} onPress={handleDelete}>
+                    <Text style={styles.deleteBtnText}>일기 삭제</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            )}
           </ScrollView>
         </KeyboardAvoidingView>
       </View>
 
       <BabyStickerVaultModal
         embedded
-        visible={stickerPickerOpen}
+        visible={!readOnly && stickerPickerOpen}
         babyName={babyName}
         stickers={babyStickers}
         createdBy={logAuthor.userId}
@@ -547,7 +583,7 @@ const styles = StyleSheet.create({
   headerBtnDisabled: { opacity: 0.4 },
   headerBtnText: { fontSize: 15, fontWeight: "600", color: colors.muted },
   headerTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
-  saveHeaderText: { fontSize: 15, fontWeight: "800", color: colors.amber, textAlign: "right" },
+  saveHeaderText: { fontSize: 15, fontWeight: "800", color: colors.amberText, textAlign: "right" },
   saveHeaderTextDisabled: { color: colors.faint },
   content: { paddingHorizontal: 18, paddingTop: 14 },
   fromPushBanner: {
@@ -580,7 +616,7 @@ const styles = StyleSheet.create({
   careTag: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.amber,
+    color: colors.amberText,
     letterSpacing: 0.3,
     textTransform: "uppercase",
   },
@@ -638,18 +674,34 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     alignItems: "center",
   },
-  mediaBtnSecondaryText: { color: colors.amber, fontWeight: "800", fontSize: 13 },
+  mediaBtnSecondaryText: { color: colors.amberText, fontWeight: "800", fontSize: 13 },
   photoLimit: { color: colors.faint, fontSize: 11.5, lineHeight: 17, marginBottom: 8 },
   photoRow: { gap: 10, paddingRight: 4 },
   photoThumbWrap: { width: 112, height: 112, borderRadius: 16, overflow: "hidden", backgroundColor: colors.cardHi },
   photoThumb: { width: "100%", height: "100%" },
   coverBadge: { position: "absolute", left: 7, bottom: 7, borderRadius: 999, backgroundColor: "rgba(46,42,38,0.72)", paddingHorizontal: 7, paddingVertical: 3 },
   coverBadgeText: { color: "#fff", fontSize: 9.5, fontWeight: "800" },
-  photoRemove: { position: "absolute", right: 6, top: 6, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(46,42,38,0.72)" },
+  photoRemove: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoRemoveGlyph: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(46,42,38,0.72)",
+  },
   photoRemoveText: { color: "#fff", fontSize: 21, lineHeight: 23, fontWeight: "500" },
   photoAddTile: { width: 96, height: 112, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center", gap: 4 },
-  photoAddPlus: { color: colors.amber, fontSize: 26, lineHeight: 28 },
-  photoAddText: { color: colors.amber, fontSize: 11.5, fontWeight: "800" },
+  photoAddPlus: { color: colors.amberText, fontSize: 26, lineHeight: 28 },
+  photoAddText: { color: colors.amberText, fontSize: 11.5, fontWeight: "800" },
   stickerRow: { gap: 10, paddingVertical: 4 },
   notes: {
     backgroundColor: colors.card,

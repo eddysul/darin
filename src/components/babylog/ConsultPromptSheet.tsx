@@ -42,21 +42,28 @@ export function ConsultPromptSheet({
           <Text style={styles.title}>무엇을 도와드릴까요?</Text>
           <Text style={styles.subtitle}>
             {todayLogCount === 0
-              ? "오늘 기록이 아직 없어요. 이렇게 시작해 볼까요?"
-              : `오늘 기록 ${todayLogCount}개를 바탕으로 물어볼 수 있어요.`}
+              ? "오늘 기록이 아직 없어요. 질문을 고르면 상담 입력칸에 들어가요."
+              : `오늘 기록 ${todayLogCount}개를 바탕으로 물어볼 수 있어요. 고르면 입력칸에 넣고, 보낸 뒤에 답해요.`}
           </Text>
           <View style={styles.list}>
             {questions.map((q) => (
-              <Pressable
-                key={q}
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                onPress={() => onSelectQuestion(q)}
-              >
+          <Pressable
+            key={q}
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => onSelectQuestion(q)}
+            accessibilityRole="button"
+            accessibilityLabel={q}
+          >
                 <Text style={styles.rowText}>{q}</Text>
               </Pressable>
             ))}
           </View>
-          <Pressable style={styles.closeBtn} onPress={onClose}>
+          <Pressable
+            style={styles.closeBtn}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="닫기"
+          >
             <Text style={styles.closeText}>닫기</Text>
           </Pressable>
         </Pressable>
@@ -101,6 +108,8 @@ const styles = StyleSheet.create({
   },
   list: { gap: 8 },
   row: {
+    minHeight: 48,
+    justifyContent: "center",
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -112,7 +121,9 @@ const styles = StyleSheet.create({
   rowText: { fontSize: 14.5, fontWeight: "700", color: colors.text },
   closeBtn: {
     marginTop: 14,
+    minHeight: 44,
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 12,
   },
   closeText: { fontSize: 14, fontWeight: "700", color: colors.muted },

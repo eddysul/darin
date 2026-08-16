@@ -1,5 +1,12 @@
-import type { BabyMemberRow, InviteCodeRow, InviteType, PermissionRole } from "../types/database";
+import type {
+  BabyMemberRow,
+  DarinInviteRequestRow,
+  InviteCodeRow,
+  InviteType,
+  PermissionRole,
+} from "../types/database";
 import type { FamilyMember, FamilyRole } from "../types/family";
+import { FAMILY_ROLE_LABELS } from "../types/family";
 import type { FamilyMemberDisplay } from "../types/profileSettings";
 import type { RelationshipLabel } from "../types/growthBook";
 import { requireSupabase } from "../lib/supabase";
@@ -10,6 +17,61 @@ import {
 } from "../utils/supabaseMappers";
 import { AuthRepository } from "./AuthRepository";
 import { ProfileRepository } from "./ProfileRepository";
+
+export type DarinInviteRequestView = {
+  id: string;
+  babyId: string;
+  requestType: "family" | "friend";
+  roleLabel: string;
+  relation: string;
+  createdAt: string;
+  title: string;
+  body: string;
+  direction: "incoming" | "outgoing";
+};
+
+function mapDarinInviteError(error: { code?: string; message: string }): Error {
+  const message = error.message ?? "";
+  if (/does not exist|schema cache|send_darin_id_invite_request|respond_darin_id_invite_request|darin_invite_requests/i.test(message)) {
+    return new Error("초대 요청 기능이 아직 준비 중이에요.");
+  }
+  if (error.code === "P0002" || /not found|unavailable/i.test(message)) {
+    return new Error("해당 Darin ID를 찾지 못했어요.");
+  }
+  if (/cannot invite yourself/i.test(message)) {
+    return new Error("내 ID에는 요청을 보낼 수 없어요.");
+  }
+  if (error.code === "23505" || /already connected/i.test(message)) {
+    return new Error("이미 연결되어 있어요.");
+  }
+  if (error.code === "42501" || /only baby admin|permission/i.test(message)) {
+    return new Error("초대 요청은 아기 관리자만 보낼 수 있어요.");
+  }
+  return new Error("초대 요청을 보내지 못했어요.");
+}
+
+function viewFromRow(
+  row: DarinInviteRequestRow,
+  userId: string,
+  event?: { title?: string | null; body?: string | null },
+): DarinInviteRequestView {
+  const incoming = row.receiver_id === userId;
+  const requestType = row.request_type;
+  const defaultTitle = incoming
+    ? requestType === "family" ? "가족 초대 요청" : "친구 추가 요청"
+    : requestType === "family" ? "보낸 가족 요청" : "보낸 친구 요청";
+  return {
+    id: row.id,
+    babyId: row.baby_id,
+    requestType,
+    roleLabel: FAMILY_ROLE_LABELS[permissionToFamilyRole(row.permission_role)],
+    relation: row.relationship_label,
+    createdAt: row.created_at,
+    title: event?.title?.trim() || defaultTitle,
+    body: event?.body?.trim() || (incoming ? "공유 요청이 도착했어요." : "상대의 수락을 기다리고 있어요."),
+    direction: incoming ? "incoming" : "outgoing",
+  };
+}
 
 function memberFromRow(row: BabyMemberRow, displayName?: string): FamilyMember {
   return {
@@ -209,6 +271,64 @@ export const FamilyRepository = {
     });
     if (error) throw error;
     return data?.[0] ?? null;
+  },
+
+  async sendDarinIdInviteRequest(input: {
+    babyId: string;
+    darinId: string;
+    requestType: "family" | "friend";
+    role?: FamilyRole;
+    relationshipLabel?: string;
+  }) {
+    const { data, error } = await requireSupabase().rpc("send_darin_id_invite_request", {
+      p_baby_id: input.babyId,
+      p_darin_id: input.darinId,
+      p_request_type: input.requestType,
+      p_role: input.requestType === "family" ? familyRoleToPermission(input.role ?? "editor") : "viewer",
+      p_relation: input.relationshipLabel ?? (input.requestType === "family" ? "가족" : "친구"),
+    });
+    if (error) throw mapDarinInviteError(error);
+    return data?.[0] ?? null;
+  },
+
+  async respondToDarinIdInviteRequest(requestId: string, accept: boolean) {
+    const { data, error } = await requireSupabase().rpc("respond_darin_id_invite_request", {
+      p_request_id: requestId,
+      p_accept: accept,
+    });
+    if (error) throw mapDarinInviteError(error);
+    return data?.[0] ?? null;
+  },
+
+  async listDarinInviteRequests(): Promise<DarinInviteRequestView[]> {
+    const user = await AuthRepository.getUser();
+    if (!user) return [];
+    const sb = requireSupabase();
+    const { data, error } = await sb
+      .from("darin_invite_requests")
+      .select("*")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+    if (error) throw mapDarinInviteError(error);
+    const rows = data ?? [];
+    if (!rows.length) return [];
+    const { data: events } = await sb
+      .from("notification_events")
+      .select("title, body, data")
+      .eq("recipient_id", user.id)
+      .eq("event_type", "invite_request")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    const byRequestId = new Map<string, { title?: string | null; body?: string | null }>();
+    for (const event of events ?? []) {
+      const payload = event.data && typeof event.data === "object" && !Array.isArray(event.data)
+        ? event.data as { requestId?: unknown }
+        : {};
+      if (typeof payload.requestId === "string" && !byRequestId.has(payload.requestId)) {
+        byRequestId.set(payload.requestId, event);
+      }
+    }
+    return rows.map((row) => viewFromRow(row, user.id, byRequestId.get(row.id)));
   },
 
   async getMyPermission(babyId: string): Promise<PermissionRole | null> {

@@ -16,10 +16,11 @@ import { dayNavLabel, formatDateKey } from "../../utils/dateKey";
 import { FEEDING_CATS } from "../../utils/reportAggregates";
 import { toMinutes } from "../../utils/formatLog";
 import { isCustomCategoryKey } from "../../types/logCategory";
-import { colors, radius } from "../../theme";
+import { colors, radius, type } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { formatTemperature, formatVolume } from "../../utils/measurementFormat";
 import { diaperCounts } from "../../utils/diaperLog";
+import { useCompactLayout } from "../../hooks/useCompactLayout";
 
 type Props = {
   logs: BabyLogEntry[];
@@ -97,6 +98,7 @@ export function TodayLogSummaryCard({
   canGoPrev = true,
   onPressDate,
 }: Props) {
+  const compact = useCompactLayout();
   const [page, setPage] = useState(0);
   const isToday = dateKey === formatDateKey();
   const title = isToday ? "오늘 요약" : "하루 요약";
@@ -220,7 +222,7 @@ export function TodayLogSummaryCard({
   };
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, compact && styles.cardCompact]}>
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <Text style={styles.title}>{title}</Text>
@@ -321,8 +323,8 @@ export function TodayLogSummaryCard({
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: 20,
-    paddingVertical: 16,
+    marginBottom: 10,
+    paddingVertical: 12,
     borderRadius: radius.xl,
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -333,16 +335,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     elevation: 3,
   },
+  cardCompact: {
+    marginBottom: 6,
+    paddingVertical: 8,
+  },
   header: {
     paddingHorizontal: SIDE_PAD,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    marginBottom: 14,
+    marginBottom: 8,
   },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  title: { fontSize: 18, fontWeight: "800", color: colors.text, letterSpacing: -0.3 },
+  title: { fontSize: type.md, fontWeight: "800", color: colors.text, letterSpacing: -0.3 },
   infoBadge: {
     width: 16,
     height: 16,
@@ -354,12 +360,12 @@ const styles = StyleSheet.create({
   },
   infoText: { color: colors.faint, fontSize: 9, lineHeight: 11, fontWeight: "800" },
   dateRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  dateButton: { minHeight: 32, minWidth: 104, paddingHorizontal: 5, borderRadius: radius.full, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3 },
-  date: { fontSize: 12, color: colors.muted, fontWeight: "700", textAlign: "center" },
+  dateButton: { minHeight: 44, minWidth: 104, paddingHorizontal: 8, borderRadius: radius.full, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3 },
+  date: { fontSize: type.xs, color: colors.muted, fontWeight: "700", textAlign: "center" },
   calendarHint: { color: colors.faint, fontSize: 10 },
   arrowBtn: {
-    width: 28,
-    height: 28,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -372,9 +378,9 @@ const styles = StyleSheet.create({
     paddingRight: SIDE_PAD + 8,
   },
   metricCard: {
-    minHeight: 134,
+    minHeight: 110,
     paddingHorizontal: 6,
-    paddingVertical: 12,
+    paddingVertical: 8,
     alignItems: "center",
     borderRadius: 16,
     borderWidth: 1,
@@ -388,19 +394,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  metricLabel: { marginTop: 8, fontSize: 11, color: colors.text, fontWeight: "700" },
-  metricValue: { marginTop: 4, fontSize: 17, color: colors.text, fontWeight: "800" },
+  metricLabel: { marginTop: 6, fontSize: type.xs, color: colors.text, fontWeight: "700" },
+  metricValue: { marginTop: 2, fontSize: type.md, color: colors.text, fontWeight: "800" },
   metricDetail: {
     marginTop: 2,
-    fontSize: 10,
-    color: colors.amber,
+    fontSize: type.xs,
+    color: colors.amberText,
     fontWeight: "700",
     textAlign: "center",
   },
   metricDetailEmpty: { color: "transparent" },
   metricRecent: {
-    marginTop: 3,
-    fontSize: 9.5,
+    marginTop: 2,
+    fontSize: type.xs,
     color: colors.muted,
     fontWeight: "700",
     textAlign: "center",

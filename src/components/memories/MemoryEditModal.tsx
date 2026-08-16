@@ -153,7 +153,7 @@ export function MemoryEditModal({
           <Pressable style={styles.action} onPress={closeSafely} disabled={saving}><Text style={styles.cancel}>취소</Text></Pressable>
           <Text style={styles.title}>추억 수정</Text>
           <Pressable style={styles.action} onPress={() => void save()} disabled={saving}>
-            {saving ? <ActivityIndicator color={colors.amber} /> : <Text style={styles.save}>저장</Text>}
+            {saving ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.save}>저장</Text>}
           </Pressable>
         </View>
         <ScrollView
@@ -164,7 +164,7 @@ export function MemoryEditModal({
           <View style={styles.field}>
             <Text style={styles.label}>사진</Text>
             <Text style={styles.photoGuide}>최대 5장까지 추가할 수 있어요. 첫 번째 사진이 대표 이미지로 표시돼요.</Text>
-            {!mediaReady ? <ActivityIndicator color={colors.amber} /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+            {!mediaReady ? <ActivityIndicator color={colors.amberText} /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
               {existingPhotos.map((photo, index) => (
                 <View key={photo.mediaId} style={styles.photoThumbWrap}>
                   <Image source={{ uri: photo.uri }} style={styles.photoThumb} contentFit="cover" />
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   action: { minWidth: 64, minHeight: 44, justifyContent: "center" },
   title: { flex: 1, paddingBottom: 12, textAlign: "center", color: colors.text, fontSize: 17, fontWeight: "800" },
   cancel: { color: colors.muted, fontSize: 15, fontWeight: "600" },
-  save: { color: colors.amber, fontSize: 15, fontWeight: "800", textAlign: "right" },
+  save: { color: colors.amberText, fontSize: 15, fontWeight: "800", textAlign: "right" },
   content: { padding: 20, gap: 14 },
   field: { gap: 8, padding: 14, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   label: { color: colors.text, fontSize: 14, fontWeight: "800" },
@@ -225,8 +225,8 @@ const styles = StyleSheet.create({
   photoRemove: { position: "absolute", right: 6, top: 6, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(46,42,38,0.72)" },
   photoRemoveText: { color: "#fff", fontSize: 21, lineHeight: 23 },
   photoAddTile: { width: 96, height: 112, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center", gap: 4 },
-  photoPlus: { color: colors.amber, fontSize: 26, lineHeight: 28 },
-  photoAddText: { color: colors.amber, fontSize: 11.5, fontWeight: "800" },
+  photoPlus: { color: colors.amberText, fontSize: 26, lineHeight: 28 },
+  photoAddText: { color: colors.amberText, fontSize: 11.5, fontWeight: "800" },
   caption: { minHeight: 110, borderRadius: radius.md, backgroundColor: colors.cardHi, padding: 12, color: colors.text, fontSize: 14, lineHeight: 21 },
   counter: { color: colors.faint, fontSize: 10.5, textAlign: "right" },
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: 12, fontSize: 12.5 },

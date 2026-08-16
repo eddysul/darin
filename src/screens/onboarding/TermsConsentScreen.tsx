@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
   boxOn: { backgroundColor: colors.amber, borderColor: colors.amber },
   check: { color: "#fff", fontSize: 14, fontWeight: "900" },
   label: { flex: 1, fontSize: 14, lineHeight: 21, color: colors.text, fontWeight: "600" },
-  req: { color: colors.amber, fontWeight: "800" },
+  req: { color: colors.amberText, fontWeight: "800" },
   opt: { color: colors.faint, fontWeight: "700" },
   note: { marginTop: 16, fontSize: 12, color: colors.faint, lineHeight: 18 },
 });

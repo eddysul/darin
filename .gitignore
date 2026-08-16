@@ -1,6 +1,7 @@
 node_modules
 dist
 .expo
+.cursor/
 .DS_Store
 **/.DS_Store
 http:/

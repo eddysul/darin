@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   badge: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.amber,
+    color: colors.amberText,
     backgroundColor: colors.amberSoft,
     overflow: "hidden",
     paddingHorizontal: 8,

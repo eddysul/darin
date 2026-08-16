@@ -20,9 +20,10 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   BabyProfile: { mode?: "create" } | undefined;
-  FamilyShare: undefined;
+  FamilyShare: { tab?: "create" | "enter" | "people" } | undefined;
   MyProfile: undefined;
   SettingsHome: undefined;
+  NotificationCenter: undefined;
   SettingsDetail: { page: SettingsDetailPage };
   GrowthRecords: undefined;
   MemoryDetail: { memoryPostId: string };

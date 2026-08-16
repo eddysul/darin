@@ -206,7 +206,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     ]);
   };
 
-  if (loading) return <View style={styles.center}><ActivityIndicator color={colors.amber} /><Text style={styles.muted}>추억을 불러오는 중…</Text></View>;
+  if (loading) return <View style={styles.center}><ActivityIndicator color={colors.amberText} /><Text style={styles.muted}>추억을 불러오는 중…</Text></View>;
   if (!bundle || error && !bundle) return (
     <View style={styles.center}>
       <Text style={styles.errorTitle}>추억을 열지 못했어요.</Text><Text style={styles.muted}>{error}</Text>
@@ -225,8 +225,8 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const privacy = memoryPrivacyPresentation(bundle.post.privacyType);
 
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? undefined : "padding"} keyboardVerticalOffset={0}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <MemoryMediaViewer media={bundle.media} imageUrls={imageUrls} onDoubleTap={() => void likeFromDoubleTap()} />
 
         <View style={[styles.postCard, { borderColor: privacy.accent }]}>
@@ -237,12 +237,13 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
               <Text style={styles.date}>{new Date(bundle.post.createdAt).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })}</Text>
             </View>
             <View style={[styles.privacyBadge, { backgroundColor: privacy.soft }]}>
-              <Text style={[styles.privacyBadgeText, { color: privacy.accent }]}>{privacy.icon} {memoryPrivacyLabel(bundle.post.privacyType)}</Text>
+              <BabyLogIcon kind={privacy.icon} size={12} color={privacy.accent} strokeWidth={2.2} />
+              <Text style={[styles.privacyBadgeText, { color: privacy.accent }]}>{memoryPrivacyLabel(bundle.post.privacyType)}</Text>
             </View>
           </View>
           <View style={styles.actionRow}>
-            <Pressable style={styles.actionButton} onPress={() => void toggleReaction()} disabled={working}>
-              <Text style={[styles.actionHeart, myReaction && styles.actionHeartActive]}>{myReaction ? "♥" : "♡"}</Text>
+            <Pressable style={styles.actionButton} onPress={() => void toggleReaction()} disabled={working} accessibilityLabel={myReaction ? "좋아요 취소" : "좋아요"}>
+              <BabyLogIcon kind="sparkles" size={20} color={myReaction ? colors.amberText : colors.muted} strokeWidth={2.2} />
             </Pressable>
             <Pressable style={styles.actionButton} onPress={() => setCommentsOpen(true)} accessibilityLabel="댓글 열기">
               <BabyLogIcon kind="chat" size={20} color={colors.muted} />
@@ -281,7 +282,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
         </View>
 
         <Pressable style={styles.commentsSummary} onPress={() => setCommentsOpen(true)}>
-          <BabyLogIcon kind="chat" size={18} color={colors.amber} />
+          <BabyLogIcon kind="chat" size={18} color={colors.amberText} />
           <Text style={styles.commentsSummaryText}>{bundle.comments.length ? `댓글 ${bundle.comments.length}개 보기` : "첫 댓글 남기기"}</Text>
         </Pressable>
         {error ? <Text style={styles.inlineError}>{error}</Text> : null}
@@ -371,7 +372,7 @@ const styles = StyleSheet.create({
   muted: { color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center", marginTop: 9 },
   errorTitle: { color: colors.text, fontSize: 17, fontWeight: "800" },
   outlineButton: { minHeight: 44, marginTop: 16, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
-  outlineText: { color: colors.amber, fontWeight: "800" },
+  outlineText: { color: colors.amberText, fontWeight: "800" },
   content: { gap: 12 },
   postCard: { marginHorizontal: 16, padding: 16, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -379,18 +380,16 @@ const styles = StyleSheet.create({
   metaCopy: { flex: 1 },
   author: { color: colors.text, fontSize: 13.5, fontWeight: "800" },
   date: { color: colors.faint, fontSize: 10.5, marginTop: 2 },
-  privacyBadge: { minHeight: 28, maxWidth: 116, paddingHorizontal: 9, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
+  privacyBadge: { minHeight: 28, maxWidth: 140, paddingHorizontal: 9, borderRadius: radius.full, flexDirection: "row", alignItems: "center", gap: 4 },
   privacyBadgeText: { fontSize: 10.5, fontWeight: "800", textAlign: "right" },
   actionRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 },
   actionButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  actionHeart: { color: colors.muted, fontSize: 26, lineHeight: 30 },
-  actionHeartActive: { color: colors.amber },
   actionCount: { flex: 1, color: colors.muted, fontSize: 12.5, fontWeight: "700" },
   caption: { color: colors.text, fontSize: 15, lineHeight: 23, marginTop: 6 },
   captionAuthor: { fontWeight: "800" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
   familyChip: { minHeight: 28, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
-  familyChipText: { color: colors.amber, fontSize: 11.5, fontWeight: "700" },
+  familyChipText: { color: colors.amberText, fontSize: 11.5, fontWeight: "700" },
   guestChip: { minHeight: 28, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   guestChipText: { color: colors.muted, fontSize: 11.5, fontWeight: "600" },
   ownerActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 13 },
@@ -406,7 +405,7 @@ const styles = StyleSheet.create({
   sheetHeader: { minHeight: 52, flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   sheetTitle: { flex: 1, color: colors.text, fontSize: 16, fontWeight: "800", textAlign: "center", marginLeft: 44 },
   sheetClose: { width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" },
-  sheetCloseText: { color: colors.amber, fontSize: 12.5, fontWeight: "800" },
+  sheetCloseText: { color: colors.amberText, fontSize: 12.5, fontWeight: "800" },
   commentList: { flexGrow: 0, flexShrink: 1 },
   commentListContent: { paddingVertical: 8 },
   emptyComments: { color: colors.faint, fontSize: 12.5, lineHeight: 19, paddingVertical: 34, textAlign: "center" },
@@ -432,7 +431,7 @@ const styles = StyleSheet.create({
   stickerEmpty: { minHeight: 54, paddingVertical: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8 },
   stickerEmptyText: { flex: 1, color: colors.faint, fontSize: 11.5 },
   stickerCreateButton: { minHeight: 40, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  stickerCreateText: { color: colors.amber, fontSize: 11, fontWeight: "800" },
+  stickerCreateText: { color: colors.amberText, fontSize: 11, fontWeight: "800" },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   commentInput: { flex: 1, minHeight: 46, maxHeight: 100, borderRadius: 16, backgroundColor: colors.cardHi, color: colors.text, paddingHorizontal: 13, paddingVertical: 12, fontSize: 13 },
   send: { minWidth: 54, minHeight: 44, borderRadius: 14, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },

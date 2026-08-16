@@ -17,6 +17,7 @@ type Props = {
   /** Render as an overlay inside a parent Modal (avoids iOS nested-Modal failures). */
   embedded?: boolean;
   onPdfCreate?: () => void;
+  initialPageIndex?: number;
 };
 
 /**
@@ -31,6 +32,7 @@ export function GrowthBookPreviewModal({
   onClose,
   embedded = false,
   onPdfCreate,
+  initialPageIndex = 0,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { babyStickers } = useBabyLog();
@@ -43,8 +45,9 @@ export function GrowthBookPreviewModal({
 
   useEffect(() => {
     if (!visible) return;
-    setCurrentPageIndex(0);
-  }, [visible, pages.length]);
+    const last = Math.max(0, pages.length - 1);
+    setCurrentPageIndex(Math.min(Math.max(0, initialPageIndex), last));
+  }, [visible, initialPageIndex, pages.length]);
 
   if (!visible) return null;
 
@@ -62,7 +65,7 @@ export function GrowthBookPreviewModal({
         <Pressable onPress={onClose} hitSlop={10} style={styles.topBtn}>
           <Text style={styles.topBtnText}>닫기</Text>
         </Pressable>
-        <Text style={styles.topTitle}>성장책 미리보기</Text>
+        <Text style={styles.topTitle}>책 읽기</Text>
         <View style={styles.topBtn} />
       </View>
 

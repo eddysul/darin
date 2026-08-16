@@ -6,7 +6,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useBabyLog } from "../../context/BabyLogContext";
 import type { RootStackParamList } from "../../navigation/types";
 import { BabyProfileRepository } from "../../repositories/BabyProfileRepository";
-import { colors, radius } from "../../theme";
+import { colors, fontScaleCap, radius } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 
 function babyAgeLabel(birthDate: string | null): string {
@@ -43,9 +43,15 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
 
   return (
     <>
-      <Pressable style={[styles.trigger, compact && styles.triggerCompact, variant === "switchButton" && styles.switchTrigger]} onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel={`현재 아기 ${babyName}. 아기 전환`}>
-        {variant === "switchButton" ? null : <BabyLogIcon kind="baby" size={compact ? 15 : 17} color={colors.amber} />}
-        <Text style={[styles.triggerText, compact && styles.triggerTextCompact, variant === "switchButton" && styles.switchTriggerText]} numberOfLines={1}>{variant === "switchButton" ? "아기 바꾸기" : babyName}</Text>
+      <Pressable
+        style={[styles.trigger, compact && styles.triggerCompact, variant === "switchButton" && styles.switchTrigger]}
+        onPress={() => setOpen(true)}
+        hitSlop={compact || variant === "switchButton" ? { top: 12, bottom: 12, left: 8, right: 8 } : undefined}
+        accessibilityRole="button"
+        accessibilityLabel={`현재 아기 ${babyName}. 아기 전환`}
+      >
+        {variant === "switchButton" ? null : <BabyLogIcon kind="baby" size={compact ? 15 : 17} color={colors.amberText} />}
+        <Text style={[styles.triggerText, compact && styles.triggerTextCompact, variant === "switchButton" && styles.switchTriggerText]} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>{variant === "switchButton" ? "아기 바꾸기" : babyName}</Text>
         <Text style={[styles.chevron, variant === "switchButton" && styles.switchChevron]}>⌄</Text>
       </Pressable>
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
@@ -91,7 +97,7 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
                         <View style={styles.babyMetaRow}>
                           <Text style={styles.babyMeta}>{babyAgeLabel(baby.birth_date)}</Text>
                           <Text style={styles.metaDot}>·</Text>
-                          <BabyLogIcon kind="profile" size={15} color={colors.amber} strokeWidth={2.1} />
+                          <BabyLogIcon kind="profile" size={15} color={colors.amberText} strokeWidth={2.1} />
                           <Text style={styles.sharedText}>나와 공유 중</Text>
                         </View>
                       </View>
@@ -113,12 +119,25 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
 }
 
 const styles = StyleSheet.create({
-  trigger: { maxWidth: 210, minHeight: 36, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.amberSoft },
-  triggerCompact: { minHeight: 32, paddingHorizontal: 8 },
-  switchTrigger: { alignSelf: "center", minHeight: 24, maxWidth: "100%", paddingHorizontal: 5, gap: 2 },
-  triggerText: { flexShrink: 1, color: colors.amber, fontSize: 15, fontWeight: "800" },
-  switchTriggerText: { fontSize: 11 },
-  triggerTextCompact: { fontSize: 14 }, chevron: { color: colors.amber, fontSize: 14, fontWeight: "800" },
+  trigger: { maxWidth: 210, minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.amberSoft },
+  triggerCompact: {
+    alignSelf: "flex-start",
+    minHeight: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  switchTrigger: {
+    alignSelf: "flex-start",
+    minHeight: 0,
+    maxWidth: undefined,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    gap: 2,
+  },
+  triggerText: { flexShrink: 1, color: colors.amberText, fontSize: 15, fontWeight: "800" },
+  switchTriggerText: { fontSize: 11, fontWeight: "800" },
+  triggerTextCompact: { fontSize: 14 }, chevron: { color: colors.amberText, fontSize: 14, fontWeight: "800" },
   switchChevron: { fontSize: 11 },
   overlay: { flex: 1, justifyContent: "flex-end" }, backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(33,25,22,0.38)" },
   sheet: { maxHeight: "88%", backgroundColor: colors.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 20, paddingBottom: 34 },
@@ -127,7 +146,7 @@ const styles = StyleSheet.create({
   sheetTitleCopy: { flex: 1 },
   title: { fontSize: 24, fontWeight: "900", color: colors.text },
   subtitle: { marginTop: 7, color: colors.muted, fontSize: 14, lineHeight: 20 },
-  closeButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.cardHi, alignItems: "center", justifyContent: "center" },
+  closeButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.cardHi, alignItems: "center", justifyContent: "center" },
   closeText: { color: colors.muted, fontSize: 31, lineHeight: 33, fontWeight: "300" },
   list: { maxHeight: 500 },
   listContent: { gap: 10, paddingBottom: 2 },
@@ -136,7 +155,7 @@ const styles = StyleSheet.create({
   babyIcon: { width: 58, height: 58, borderRadius: 29, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   babyCopy: { flex: 1, minWidth: 0 },
   babyName: { fontSize: 19, fontWeight: "800", color: colors.text },
-  babyNameActive: { color: colors.amber },
+  babyNameActive: { color: colors.amberText },
   babyMetaRow: { marginTop: 5, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5 },
   babyMeta: { fontSize: 13, color: colors.muted, fontWeight: "600" },
   metaDot: { color: colors.faint, fontSize: 13 },
@@ -145,11 +164,11 @@ const styles = StyleSheet.create({
   selectedCheck: { color: "#FFFFFF", fontSize: 24, lineHeight: 27, fontWeight: "800" },
   addButton: { minHeight: 66, marginTop: 2, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center" },
   addIcon: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  addIconText: { color: colors.amber, fontSize: 22, lineHeight: 24, fontWeight: "500" },
-  addButtonText: { color: colors.amber, fontSize: 16, fontWeight: "800" },
+  addIconText: { color: colors.amberText, fontSize: 22, lineHeight: 24, fontWeight: "500" },
+  addButtonText: { color: colors.amberText, fontSize: 16, fontWeight: "800" },
   label: { marginTop: 10, marginBottom: 6, color: colors.text, fontSize: 12.5, fontWeight: "800" }, input: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card, paddingHorizontal: 12, color: colors.text, fontSize: 15 },
   avatarWrap: { alignItems: "center", marginBottom: 6 },
-  genderRow: { flexDirection: "row", gap: 8 }, genderChip: { minHeight: 40, minWidth: 74, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border }, genderChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft }, genderText: { color: colors.muted, fontWeight: "700" }, genderTextActive: { color: colors.amber },
+  genderRow: { flexDirection: "row", gap: 8 }, genderChip: { minHeight: 44, minWidth: 74, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border }, genderChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft }, genderText: { color: colors.muted, fontWeight: "700" }, genderTextActive: { color: colors.amberText },
   error: { marginTop: 10, color: colors.dangerText, fontSize: 12 }, actionRow: { flexDirection: "row", gap: 8, marginTop: 18 }, secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border }, secondaryText: { color: colors.muted, fontWeight: "800" }, primary: { flex: 2, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, backgroundColor: colors.amber }, primaryText: { color: "#fff", fontWeight: "800" },
   empty: { color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center", paddingVertical: 18 },
 });

@@ -24,7 +24,7 @@ import { MemoriesScreen } from "./tabs/MemoriesScreen";
 import type { LogCategoryKey } from "../types/logCategory";
 import type { BabyLogCategoryId } from "../constants/babyLogCategories";
 import type { MessageKey } from "../i18n";
-import { colors, gradients } from "../theme";
+import { colors, fontScaleCap, gradients, type } from "../theme";
 import { isCustomCategoryKey } from "../types/logCategory";
 import { canAddLog, canDeleteLog, canEditLog } from "../types/family";
 import { ErrorBanner } from "../components/states/FeedbackStates";
@@ -98,6 +98,8 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                 key={name}
                 style={[styles.tabItem, !allowAdd && styles.disabled]}
                 disabled={!allowAdd}
+                accessibilityRole="button"
+                accessibilityLabel="음성으로 기록"
                 accessibilityState={{ disabled: !allowAdd }}
                 onPress={() => setVoiceOpen(true)}
               >
@@ -106,7 +108,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                     <BabyLogIcon kind="tab" tab="mic" size={24} color="#FFFFFF" strokeWidth={2.2} />
                   </LinearGradient>
                 </View>
-                <Text style={[styles.tabLabel, styles.centerLabel]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>{t("tabs.voice")}</Text>
+                <Text style={[styles.tabLabel, styles.centerLabel]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} maxFontSizeMultiplier={fontScaleCap.tab}>{t("tabs.voice")}</Text>
               </Pressable>
             );
           }
@@ -119,10 +121,10 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                 kind="tab"
                 tab={tabIcon}
                 size={22}
-                color={active ? colors.amber : colors.faint}
+                color={active ? colors.amberText : colors.muted}
                 strokeWidth={active ? 2.2 : 1.8}
               />
-              <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>{label}</Text>
+              <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} maxFontSizeMultiplier={fontScaleCap.tab}>{label}</Text>
             </Pressable>
           );
         })}
@@ -238,6 +240,7 @@ function RecordTab() {
     <RecordScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
       onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+      onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
       }
@@ -251,6 +254,8 @@ function DiaryTab() {
   return (
     <DiaryScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+      onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
       }
@@ -264,6 +269,8 @@ function ReportTab() {
   return (
     <BabyReportScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+      onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenRecord={() => navigation.navigate("Record")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
@@ -278,6 +285,9 @@ function ConsultTab() {
   return (
     <ConsultScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+      onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
+      onOpenRecord={() => navigation.navigate("Record")}
     />
   );
 }
@@ -287,6 +297,8 @@ function MemoriesTab() {
   const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <MemoriesScreen
+      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+      onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenFamily={() => rootNavigation?.navigate("FamilyShare")}
       onOpenDetail={(memoryPostId) => rootNavigation?.navigate("MemoryDetail", { memoryPostId })}
     />
@@ -368,8 +380,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  tabLabel: { fontSize: 10.5, fontWeight: "600", color: colors.faint },
-  tabLabelActive: { color: colors.amber },
+  tabLabel: { fontSize: type.xs, fontWeight: "700", color: colors.muted },
+  tabLabelActive: { color: colors.amberText },
   centerLabel: { marginTop: 2 },
   disabled: { opacity: 0.45 },
   storageBanner: {

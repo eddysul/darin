@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   header: { minHeight: 52, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   action: { width: 64, minHeight: 44, alignItems: "center", justifyContent: "center" },
   cancel: { color: colors.muted, fontSize: 15, fontWeight: "700" },
-  done: { color: colors.amber, fontSize: 15, fontWeight: "800" },
+  done: { color: colors.amberText, fontSize: 15, fontWeight: "800" },
   title: { flex: 1, textAlign: "center", color: colors.text, fontSize: 16, fontWeight: "800" },
   wheelArea: { height: ITEM_HEIGHT * 5, marginHorizontal: 18, flexDirection: "row" },
   selection: { position: "absolute", left: 0, right: 0, top: ITEM_HEIGHT * 2, height: ITEM_HEIGHT, borderRadius: 10, backgroundColor: colors.backgroundSecondary, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
@@ -267,6 +267,6 @@ const styles = StyleSheet.create({
   singleWheelArea: { alignSelf: "center", width: 180, height: ITEM_HEIGHT * 5 },
   singleWheelLabel: { textAlign: "center", color: colors.faint, fontSize: 11, fontWeight: "700" },
   help: { marginTop: 12, paddingHorizontal: 20, textAlign: "center", color: colors.muted, fontSize: 12, lineHeight: 18 },
-  clearButton: { alignSelf: "center", minHeight: 38, justifyContent: "center", paddingHorizontal: 16 },
+  clearButton: { alignSelf: "center", minHeight: 44, justifyContent: "center", paddingHorizontal: 16 },
   clearText: { color: colors.faint, fontSize: 12.5, fontWeight: "700" },
 });

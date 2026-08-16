@@ -1,0 +1,69 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
+import { colors, radius } from "../theme";
+import type { RootStackParamList } from "../navigation/types";
+import { NotificationRepository } from "../repositories/NotificationRepository";
+import { FamilyRepository } from "../repositories/FamilyRepository";
+import { getNotificationQaSeed, type NotificationItem } from "../data/notificationQaSeed";
+
+type Props = NativeStackScreenProps<RootStackParamList, "NotificationCenter">;
+type Filter = "all" | "request" | "family" | "summary" | "event";
+type CenterItem = NotificationItem & { requestId?: string };
+const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
+const FILTERS: Array<{ key: Filter; label: string }> = [{ key: "all", label: "전체" }, { key: "request", label: "요청" }, { key: "family", label: "가족" }, { key: "summary", label: "요약" }, { key: "event", label: "이벤트" }];
+
+function periodFor(value: string): CenterItem["period"] { const age = Date.now() - new Date(value).getTime(); return age < 86_400_000 ? "today" : age < 7 * 86_400_000 ? "week" : "older"; }
+function toItem(event: Awaited<ReturnType<typeof NotificationRepository.listInAppEvents>>[number]): CenterItem {
+  const data = event.data && typeof event.data === "object" && !Array.isArray(event.data) ? event.data as Record<string, unknown> : {};
+  const type: CenterItem["type"] = event.event_type === "invite_request" ? "invite_request" : event.event_type === "family_joined" ? "new_shared_log" : "event";
+  return { id: event.id, type, title: event.title, body: event.body, period: periodFor(event.created_at), isRead: Boolean(event.read_at), requestId: typeof data.requestId === "string" ? data.requestId : undefined };
+}
+function matches(item: CenterItem, filter: Filter) { if (filter === "all") return true; if (filter === "request") return item.type === "invite_request"; if (filter === "family") return item.type === "new_shared_log" || item.type === "new_diary"; if (filter === "summary") return item.type === "daily_summary" || item.type === "weekly_summary"; return item.type === "reminder" || item.type === "event"; }
+
+export function NotificationCenterScreen({ navigation }: Props) {
+  const [filter, setFilter] = useState<Filter>("all");
+  const [items, setItems] = useState<CenterItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [responding, setResponding] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const mapped = (await NotificationRepository.listInAppEvents()).map(toItem);
+      setItems(mapped.length ? mapped : getNotificationQaSeed());
+    } catch {
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const visible = useMemo(() => items.filter((item) => matches(item, filter)), [filter, items]);
+  const open = (item: CenterItem) => {
+    if (item.type === "invite_request") {
+      navigation.navigate("FamilyShare", { tab: "enter" });
+      return;
+    }
+    if (item.type === "new_diary") navigation.navigate("MainTabs", { screen: "Diary" });
+    else if (item.type === "daily_summary" || item.type === "weekly_summary") navigation.navigate("MainTabs", { screen: "Report" });
+    else navigation.navigate("MainTabs", { screen: "Record" });
+  };
+  const respond = async (item: CenterItem, accept: boolean) => { if (!item.requestId || responding) return; setResponding(item.id); try { await FamilyRepository.respondToDarinIdInviteRequest(item.requestId, accept); setItems((current) => current.filter((currentItem) => currentItem.id !== item.id)); Alert.alert(accept ? "요청을 수락했어요" : "요청을 거절했어요", accept ? "공유 멤버 연결이 완료되었어요." : "요청을 거절했어요."); } catch (cause) { Alert.alert("요청을 처리하지 못했어요", cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요."); } finally { setResponding(null); } };
+  return <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>{FILTERS.map((item) => <Pressable key={item.key} style={[styles.filter, filter === item.key && styles.filterActive]} onPress={() => setFilter(item.key)}><Text style={[styles.filterText, filter === item.key && styles.filterTextActive]}>{item.label}</Text></Pressable>)}</ScrollView>
+    <Section title="오늘" items={visible.filter((item) => item.period === "today")} open={open} respond={respond} responding={responding} />
+    <Section title="이번 주" items={visible.filter((item) => item.period === "week")} open={open} respond={respond} responding={responding} />
+    <Section title="이전 알림" items={visible.filter((item) => item.period === "older")} open={open} respond={respond} responding={responding} />
+    {!loading && !visible.length ? <View style={styles.empty}><BabyLogIcon kind="bell" size={26} color={colors.faint} /><Text style={styles.emptyTitle}>새 알림이 없어요</Text><Text style={styles.emptyText}>가족 초대, 공유 기록, 요약과 리마인더가 여기에 모여요.</Text></View> : null}
+    <Pressable style={styles.settingsRow} onPress={() => navigation.navigate("SettingsHome")}><View style={styles.settingsIcon}><BabyLogIcon kind="settings" size={18} color={colors.muted} /></View><Text style={styles.settingsText}>알림 설정</Text><BabyLogIcon kind="chevron" size={18} color={colors.faint} /></Pressable>
+  </ScrollView>;
+}
+
+function Section({ title, items, open, respond, responding }: { title: string; items: CenterItem[]; open: (item: CenterItem) => void; respond: (item: CenterItem, accept: boolean) => void; responding: string | null }) {
+  return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{items.length ? items.map((item) => <View key={item.id} style={[styles.card, !item.isRead && styles.unreadCard]}><Pressable style={styles.cardMain} onPress={() => open(item)}><View style={styles.cardIcon}><BabyLogIcon kind={item.type === "invite_request" ? "family" : "bell"} size={18} color={colors.muted} /></View><View style={styles.cardCopy}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.cardBody}>{item.body}</Text></View>{!item.isRead ? <View style={styles.unreadDot} /> : null}</Pressable>{item.type === "invite_request" ? <View style={styles.inviteActions}><Pressable style={styles.declineButton} disabled={responding === item.id} onPress={() => void respond(item, false)}><Text style={styles.declineText}>거절</Text></Pressable><Pressable style={styles.acceptButton} disabled={responding === item.id} onPress={() => void respond(item, true)}><Text style={styles.acceptText}>수락</Text></Pressable></View> : null}</View>) : <Text style={styles.sectionEmpty}>알림이 없어요</Text>}</View>;
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background }, content: { padding: 18, paddingBottom: 32 }, filters: { gap: 8, paddingBottom: 20 }, filter: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, justifyContent: "center" }, filterActive: { backgroundColor: colors.amberSoft, borderColor: colors.amber }, filterText: { color: colors.muted, fontSize: 13, fontWeight: "700" }, filterTextActive: { color: colors.amberText }, section: { gap: 9, marginBottom: 22 }, sectionTitle: { marginLeft: 2, color: colors.text, fontSize: 15, fontWeight: "800" }, sectionEmpty: { paddingLeft: 2, color: colors.faint, fontSize: 13 }, card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }, unreadCard: { borderColor: "#E8918A" }, cardMain: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: 11, padding: 13 }, cardIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }, cardCopy: { flex: 1 }, cardTitle: { color: colors.text, fontSize: 14, fontWeight: "800" }, cardBody: { marginTop: 3, color: colors.muted, fontSize: 12.5, lineHeight: 18 }, unreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#E8918A" }, inviteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, paddingHorizontal: 13, paddingBottom: 13 }, declineButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.backgroundSecondary, justifyContent: "center" }, declineText: { color: colors.muted, fontWeight: "700", fontSize: 13 }, acceptButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.amber, justifyContent: "center" }, acceptText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 }, empty: { alignItems: "center", paddingHorizontal: 30, paddingVertical: 52 }, emptyTitle: { marginTop: 12, color: colors.text, fontSize: 16, fontWeight: "800" }, emptyText: { marginTop: 6, color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center" }, settingsRow: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 13, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }, settingsIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }, settingsText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800" },
+});

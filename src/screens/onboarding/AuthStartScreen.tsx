@@ -175,11 +175,11 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
 
             <View style={styles.legalRow}>
               <Text style={styles.legalText}>계속하면 </Text>
-              <Pressable onPress={() => setPolicyPage("terms")} hitSlop={6}>
+              <Pressable onPress={() => setPolicyPage("terms")} hitSlop={10}>
                 <Text style={styles.legalLink}>이용약관</Text>
               </Pressable>
               <Text style={styles.legalText}> 및 </Text>
-              <Pressable onPress={() => setPolicyPage("privacy")} hitSlop={6}>
+              <Pressable onPress={() => setPolicyPage("privacy")} hitSlop={10}>
                 <Text style={styles.legalLink}>개인정보처리방침</Text>
               </Pressable>
               <Text style={styles.legalText}>에 동의하게 됩니다.</Text>
@@ -262,5 +262,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   legalText: { color: colors.faint, fontSize: 11, lineHeight: 16 },
-  legalLink: { color: colors.primary, fontSize: 11, lineHeight: 16, fontWeight: "700" },
+  legalLink: { color: colors.amberText, fontSize: 11, lineHeight: 16, fontWeight: "700" },
 });

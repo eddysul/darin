@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, Platform } from "react-native";
 import Svg, { Circle, Path, Text as SvgText } from "react-native-svg";
 import { AppHeader } from "../../components/babylog/AppHeader";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
@@ -24,7 +24,7 @@ import {
   weeklyTrend,
   type FeedingSleepPatternBucket,
 } from "../../utils/reportAggregates";
-import { colors, radius } from "../../theme";
+import { colors, categoryColors, radius } from "../../theme";
 import { formatDisplayTime } from "../../utils/logSummary";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import type { GrowthRecord } from "../../types/growthRecord";
@@ -33,20 +33,23 @@ import { formatTemperature, formatWeight, lengthFromCm } from "../../utils/measu
 type Props = {
   onOpenProfile: () => void;
   onOpenSettings?: () => void;
+  onOpenNotifications?: () => void;
   onOpenConsult: (initialQuestion?: string) => void;
   onOpenRecord: () => void;
 };
 
 type ReportCat = "all" | "feeding" | BabyLogCategoryId;
 
-export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult, onOpenRecord }: Props) {
+export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenConsult, onOpenRecord }: Props) {
   const { logs, babyName, careSetup, diaryEntries, growthRecords, addGrowthRecord, updateGrowthRecord } = useBabyLog();
   const { settings } = useAppSettings();
   const [reportCat, setReportCat] = useState<ReportCat>("all");
   const [growthModalOpen, setGrowthModalOpen] = useState(false);
   const [editingGrowthRecord, setEditingGrowthRecord] = useState<GrowthRecord | null>(null);
   const [chipPressing, setChipPressing] = useState(false);
-  const { fabHidden, promptOpen, setPromptOpen, scrollProps } = useConsultFabBehavior(chipPressing);
+  const { fabHidden, promptOpen, setPromptOpen, scrollProps } = useConsultFabBehavior(
+    chipPressing || growthModalOpen,
+  );
 
   const todayKey = formatDateKey();
   const todayLogs = useMemo(() => getLogsForDay(logs, todayKey, todayKey), [logs, todayKey]);
@@ -116,7 +119,7 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
 
   return (
     <View style={styles.root}>
-      <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
+      <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} />
       <ScrollView showsVerticalScrollIndicator={false} {...scrollProps}>
         {reportCat === "all" ? (
           <View style={styles.pad}>
@@ -172,9 +175,9 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
               {latestGrowthRecord ? (
                 <>
                   <View style={styles.growthGrid}>
-                    <GrowthMetric label="몸무게" value={latestWeightRecord?.weightKg === undefined ? "기록 없음" : formatWeight(latestWeightRecord.weightKg, settings.units.weight)} note={latestWeightRecord ? (latestWeightRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color="#E8918A" points={sortedGrowthRecords.flatMap((record) => record.weightKg === undefined ? [] : [{ value: record.weightKg, source: record.source }])} />
-                    <GrowthMetric label="키" value={latestHeightRecord?.heightCm === undefined ? "기록 없음" : formatGrowthLength(latestHeightRecord.heightCm, settings.units.height)} note={latestHeightRecord ? (latestHeightRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color="#9B82D7" points={sortedGrowthRecords.flatMap((record) => record.heightCm === undefined ? [] : [{ value: record.heightCm, source: record.source }])} />
-                    <GrowthMetric label="머리둘레" value={latestHeadRecord?.headCircumferenceCm === undefined ? "기록 없음" : formatGrowthLength(latestHeadRecord.headCircumferenceCm, settings.units.height)} note={latestHeadRecord ? (latestHeadRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color="#69C3AE" points={sortedGrowthRecords.flatMap((record) => record.headCircumferenceCm === undefined ? [] : [{ value: record.headCircumferenceCm, source: record.source }])} last />
+                    <GrowthMetric label="몸무게" value={latestWeightRecord?.weightKg === undefined ? "기록 없음" : formatWeight(latestWeightRecord.weightKg, settings.units.weight)} note={latestWeightRecord ? (latestWeightRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color={colors.amber} points={sortedGrowthRecords.flatMap((record) => record.weightKg === undefined ? [] : [{ value: record.weightKg, source: record.source }])} />
+                    <GrowthMetric label="키" value={latestHeightRecord?.heightCm === undefined ? "기록 없음" : formatGrowthLength(latestHeightRecord.heightCm, settings.units.height)} note={latestHeightRecord ? (latestHeightRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color={categoryColors.play} points={sortedGrowthRecords.flatMap((record) => record.heightCm === undefined ? [] : [{ value: record.heightCm, source: record.source }])} />
+                    <GrowthMetric label="머리둘레" value={latestHeadRecord?.headCircumferenceCm === undefined ? "기록 없음" : formatGrowthLength(latestHeadRecord.headCircumferenceCm, settings.units.height)} note={latestHeadRecord ? (latestHeadRecord.source === "hospital" ? "최근 병원 기록" : "최근 집 기록") : "측정값을 기다려요"} color={categoryColors.bath} points={sortedGrowthRecords.flatMap((record) => record.headCircumferenceCm === undefined ? [] : [{ value: record.headCircumferenceCm, source: record.source }])} last />
                   </View>
                   <View style={styles.growthLegend}><Text style={styles.growthLegendText}>● 병원 기록</Text><Text style={styles.growthLegendText}>○ 집 기록</Text></View>
                   <View style={styles.growthActions}>
@@ -202,9 +205,9 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
                     </View>
                   </View>
                   <View style={styles.rhythmLegend}>
-                    <LegendDot color="#9B82D7" label="수면" />
-                    <LegendDot color="#E8918A" label="수유" />
-                    <LegendDot color="#69C3AE" label="기저귀" />
+                    <LegendDot color={categoryColors.sleep} label="수면" />
+                    <LegendDot color={categoryColors.formula} label="수유" />
+                    <LegendDot color={categoryColors.diaper} label="기저귀" />
                   </View>
                 </>
               ) : <DashboardEmpty title="수유/수면/기저귀 기록이 쌓이면 하루 리듬을 보여드릴게요." compact />}
@@ -226,9 +229,14 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
             </DashboardCard>
 
             <DashboardCard title="마일스톤">
-              {isBirthday ? <View style={styles.birthdayBanner}><Text style={styles.birthdayText}>🎉 오늘은 {babyName}의 생일이에요.</Text></View> : null}
+              {isBirthday ? (
+                <View style={styles.birthdayBanner}>
+                  <BabyLogIcon kind="cake" size={16} color={colors.amberText} />
+                  <Text style={styles.birthdayText}>오늘은 {babyName}의 생일이에요.</Text>
+                </View>
+              ) : null}
               <View style={styles.milestoneRow}>
-                <View style={styles.milestoneIcon}><Text style={styles.milestoneEmoji}>🐻</Text></View>
+                <View style={styles.milestoneIcon}><BabyLogIcon kind="baby" size={22} color={colors.amberText} /></View>
                 <View style={styles.milestoneBody}>
                   <View style={styles.badge}><Text style={styles.badgeText}>현재</Text></View>
                   <Text style={styles.milestoneCurrent}>{latestMilestone?.milestoneTag ?? latestMilestone?.customMilestoneTag ?? dashboard.milestone.current}</Text>
@@ -256,7 +264,7 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenConsult,
         )}
       </ScrollView>
 
-      <ConsultFab hidden={fabHidden || reportCat === "all"} onPress={() => setPromptOpen(true)} />
+      <ConsultFab hidden={fabHidden} onPress={() => setPromptOpen(true)} />
       <ConsultPromptSheet
         visible={promptOpen}
         todayLogCount={summary.totalCount}
@@ -363,7 +371,7 @@ function DashboardCard({
     <View style={styles.dashboardCard}>
       <View style={styles.dashboardHeader}>
         <View style={styles.dashboardTitleRow}>
-          {icon ? <BabyLogIcon kind={icon} size={16} color={colors.amber} strokeWidth={2.1} /> : null}
+          {icon ? <BabyLogIcon kind={icon} size={16} color={colors.amberText} strokeWidth={2.1} /> : null}
           <Text style={styles.dashboardTitle}>{title}</Text>
         </View>
         {caption ? <Text style={styles.dashboardCaption}>{caption}</Text> : null}
@@ -403,7 +411,7 @@ function SummaryMetric({
 function DashboardEmpty({ icon, title, actionLabel, onPress, compact }: { icon?: "record"; title: string; actionLabel?: string; onPress?: () => void; compact?: boolean }) {
   return (
     <View style={[styles.dashboardEmpty, compact && styles.dashboardEmptyCompact]}>
-      {icon ? <View style={styles.dashboardEmptyIcon}><BabyLogIcon kind="tab" tab={icon} size={21} color={colors.amber} /></View> : null}
+      {icon ? <View style={styles.dashboardEmptyIcon}><BabyLogIcon kind="tab" tab={icon} size={21} color={colors.amberText} /></View> : null}
       <Text style={styles.dashboardEmptyText}>{title}</Text>
       {actionLabel && onPress ? <Pressable style={styles.dashboardEmptyBtn} onPress={onPress}><Text style={styles.dashboardEmptyBtnText}>{actionLabel}</Text></Pressable> : null}
     </View>
@@ -570,15 +578,15 @@ function RhythmDial({ logs }: { logs: BabyLogEntry[] }) {
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <Circle cx={center} cy={center} r={dialRadius} fill="#FFFDFC" stroke={colors.border} strokeWidth="10" />
         {sleepLogs.map((entry) => (
-          <Path key={entry.id} d={sleepArcPath(toMinutes(entry.time), Number.parseInt(entry.duration ?? "0", 10) || 5, dialRadius, center)} fill="none" stroke="#9B82D7" strokeWidth="11" strokeLinecap="round" />
+          <Path key={entry.id} d={sleepArcPath(toMinutes(entry.time), Number.parseInt(entry.duration ?? "0", 10) || 5, dialRadius, center)} fill="none" stroke={categoryColors.sleep} strokeWidth="11" strokeLinecap="round" />
         ))}
         {feedingLogs.map((entry) => {
           const point = dialPoint(toMinutes(entry.time), dialRadius, center);
-          return <Circle key={entry.id} cx={point.x} cy={point.y} r="5" fill="#E8918A" stroke="#FFF" strokeWidth="2" />;
+          return <Circle key={entry.id} cx={point.x} cy={point.y} r="5" fill={categoryColors.formula} stroke="#FFF" strokeWidth="2" />;
         })}
         {diaperLogs.map((entry) => {
           const point = dialPoint(toMinutes(entry.time), dialRadius - 15, center);
-          return <Circle key={entry.id} cx={point.x} cy={point.y} r="4.5" fill="#69C3AE" stroke="#FFF" strokeWidth="2" />;
+          return <Circle key={entry.id} cx={point.x} cy={point.y} r="4.5" fill={categoryColors.diaper} stroke="#FFF" strokeWidth="2" />;
         })}
         <SvgText x={center} y={center - 2} textAnchor="middle" fontSize="13" fontWeight="700" fill={colors.text}>오늘</SvgText>
         <SvgText x={center} y={center + 16} textAnchor="middle" fontSize="11" fill={colors.faint}>24h</SvgText>
@@ -726,12 +734,17 @@ function CategoryDetail({
             const isShort = gap < avgGap * 0.5;
             const isLong = gap > avgGap * 1.8;
             const gapTxt = gap >= 60 ? `${Math.floor(gap / 60)}시간 ${gap % 60}분` : `${gap}분`;
-            const flag = isShort ? "⚠️ 평소보다 짧아요" : isLong ? "⚠️ 평소보다 길어요" : "";
+            const flag = isShort ? "평소보다 짧아요" : isLong ? "평소보다 길어요" : "";
             return (
               <View key={entry.id}>
                 <View style={styles.gapRow}>
                   <Text style={[styles.gapPill, isShort && styles.gapShort, isLong && styles.gapLong]}>{gapTxt}</Text>
-                  <Text style={styles.gapFlag}>{flag}</Text>
+                  {flag ? (
+                    <View style={styles.gapFlagRow}>
+                      <BabyLogIcon kind="alert" size={12} color={colors.dangerText} />
+                      <Text style={styles.gapFlag}>{flag}</Text>
+                    </View>
+                  ) : null}
                 </View>
                 <IntervalRow entry={entry} c={c} />
               </View>
@@ -755,7 +768,9 @@ function CategoryDetail({
               const flagAnomaly = isToday && isAnomaly;
               return (
                 <View key={d.dateKey} style={styles.trendCol}>
-                  <Text style={styles.trendFlag}>{flagAnomaly ? "⚠️" : ""}</Text>
+                  <View style={styles.trendFlag}>
+                    {flagAnomaly ? <BabyLogIcon kind="alert" size={12} color={colors.danger} /> : null}
+                  </View>
                   <View style={styles.trendTrack}>
                     <View
                       style={[
@@ -866,7 +881,7 @@ const styles = StyleSheet.create({
   growthLegendText: { fontSize: 9.5, fontWeight: "700", color: colors.faint },
   growthActions: { flexDirection: "row", gap: 8, marginTop: 14 },
   growthSecondaryBtn: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  growthSecondaryText: { fontSize: 11.5, fontWeight: "800", color: colors.amber },
+  growthSecondaryText: { fontSize: 11.5, fontWeight: "800", color: colors.amberText },
   growthEditBtn: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi },
   growthEditText: { fontSize: 11.5, fontWeight: "700", color: colors.text },
   growthEmpty: { alignItems: "center", paddingHorizontal: 12, paddingBottom: 4 },
@@ -899,16 +914,15 @@ const styles = StyleSheet.create({
   patternCount: { marginTop: 3, fontSize: 9.5, color: colors.faint },
   patternDisclaimer: { marginTop: 11, fontSize: 10, lineHeight: 15, textAlign: "center", color: colors.faint },
   milestoneRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  birthdayBanner: { marginBottom: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 13, backgroundColor: colors.amberSoft },
-  birthdayText: { textAlign: "center", fontSize: 12.5, fontWeight: "800", color: colors.amberDark },
-  milestoneIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(233,163,83,0.18)" },
-  milestoneEmoji: { fontSize: 23 },
+  birthdayBanner: { marginBottom: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 13, backgroundColor: colors.amberSoft, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  birthdayText: { textAlign: "center", fontSize: 12.5, fontWeight: "800", color: colors.amberText },
+  milestoneIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
   milestoneBody: { flex: 1, minWidth: 0 },
-  badge: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: "rgba(233,163,83,0.15)", marginBottom: 4 },
-  badgeText: { fontSize: 9.5, fontWeight: "800", color: "#D49347" },
+  badge: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: colors.amberSoft, marginBottom: 4 },
+  badgeText: { fontSize: 9.5, fontWeight: "800", color: colors.amberText },
   milestoneCurrent: { fontSize: 12.5, fontWeight: "800", color: colors.text, lineHeight: 18 },
   milestoneTip: { fontSize: 10.5, color: colors.faint, lineHeight: 16, marginTop: 3 },
-  tipBtn: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.cardHi },
+  tipBtn: { minHeight: Platform.OS === "android" ? 48 : 44, borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 11, justifyContent: "center", backgroundColor: colors.cardHi },
   tipBtnText: { fontSize: 10.5, fontWeight: "700", color: colors.text },
   scheduleList: { marginTop: 13, borderTopWidth: 1, borderTopColor: colors.border },
   scheduleRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
@@ -918,8 +932,8 @@ const styles = StyleSheet.create({
   scheduleValueEmpty: { color: colors.faint, fontWeight: "500" },
   scheduleEmpty: { marginTop: 5, fontSize: 10.5, lineHeight: 16, textAlign: "center", color: colors.faint },
   scheduleFootnote: { marginTop: 5, fontSize: 9.5, textAlign: "center", color: colors.faint },
-  backToOverview: { alignSelf: "flex-start", marginHorizontal: 18, marginBottom: 10, paddingHorizontal: 10, paddingVertical: 6 },
-  backToOverviewText: { color: colors.amber, fontSize: 12.5, fontWeight: "800" },
+  backToOverview: { alignSelf: "flex-start", marginHorizontal: 18, marginBottom: 10, minHeight: Platform.OS === "android" ? 48 : 44, paddingHorizontal: 10, justifyContent: "center" },
+  backToOverviewText: { color: colors.amberText, fontSize: 12.5, fontWeight: "800" },
   filterRow: { paddingHorizontal: 18, paddingVertical: 2, gap: 8, paddingBottom: 14 },
   filterChip: {
     backgroundColor: colors.card,
@@ -952,7 +966,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     marginBottom: 10,
   },
-  aiTagText: { fontSize: 10.5, fontWeight: "700", color: colors.amber },
+  aiTagText: { fontSize: 10.5, fontWeight: "700", color: colors.amberText },
   aiText: { fontSize: 13, lineHeight: 22, color: colors.muted },
   empty: {
     textAlign: "center",
@@ -1015,11 +1029,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   gapShort: { backgroundColor: colors.dangerSoft, color: colors.dangerText },
-  gapLong: { backgroundColor: "rgba(232,163,61,0.2)", color: colors.amber },
-  gapFlag: { fontSize: 10.5, color: colors.faint },
+  gapLong: { backgroundColor: "rgba(232,163,61,0.2)", color: colors.amberText },
+  gapFlagRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: 4 },
+  gapFlag: { flex: 1, fontSize: 10.5, color: colors.faint },
   trendChart: { flexDirection: "row", alignItems: "flex-end", gap: 7, height: 118, paddingVertical: 16 },
   trendCol: { flex: 1, alignItems: "center", height: "100%", justifyContent: "flex-end" },
-  trendFlag: { fontSize: 11, height: 16 },
+  trendFlag: { height: 16, alignItems: "center", justifyContent: "center" },
   trendTrack: { flex: 1, width: "100%", justifyContent: "flex-end" },
   trendBar: { width: "100%", borderRadius: 5, minHeight: 4 },
   trendDay: { fontSize: 10, color: colors.faint, fontWeight: "600", marginTop: 6 },

@@ -17,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useReduceMotion } from "../../hooks/useReduceMotion";
 import type { DiaryEntry } from "../../types/babyLog";
 import type { FamilyMember, FamilyRole } from "../../types/family";
 import {
@@ -46,7 +47,6 @@ import {
   type GrowthBookPage,
   type GrowthBookPageMeta,
 } from "../../utils/growthBookPages";
-import { createGrowthBookPdf } from "../../utils/growthBookPdf";
 import {
   PHOTO_LAYOUT_OPTIONS,
   PRIMARY_RATIO_LAYOUTS,
@@ -58,7 +58,7 @@ import {
 } from "../../utils/growthBookPhotoLayouts";
 import { diaryMilestoneLabel, sortGrowthBookEntries } from "../../utils/diaryModel";
 import { colors, radius } from "../../theme";
-import { BabyLogIcon } from "./BabyLogIcon";
+import { BabyLogIcon, type MiscIconKey } from "./BabyLogIcon";
 import { BabyStickerVaultModal } from "./BabyStickerVaultModal";
 import { BabyStickerFromModel } from "./BabyStickerView";
 import { useBabyLog } from "../../context/BabyLogContext";
@@ -78,7 +78,6 @@ type Props = {
   myRole: FamilyRole;
   onChange: (next: GrowthBookEdit) => void;
   onClose: () => void;
-  onOpenBookPreview?: () => void;
   initialDiaryId?: string | null;
 };
 
@@ -109,10 +108,10 @@ export function GrowthBookEditorModal({
   initialDiaryId,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReduceMotion();
   const { babyStickers } = useBabyLog();
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [pageMode, setPageMode] = useState<GrowthBookCanvasMode>("edit");
-  const [pdfBusy, setPdfBusy] = useState(false);
   const [pageTurnDirection, setPageTurnDirection] = useState<-1 | 1>(-1);
   const pageTurnProgress = useRef(new Animated.Value(0)).current;
   const pageTurnAnimating = useRef(false);
@@ -170,7 +169,7 @@ export function GrowthBookEditorModal({
     requestAnimationFrame(() => {
       Animated.timing(pageTurnProgress, {
         toValue: 1,
-        duration: 105,
+        duration: reduceMotion ? 0 : 105,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start(({ finished }) => {
@@ -184,7 +183,7 @@ export function GrowthBookEditorModal({
         requestAnimationFrame(() => {
           Animated.timing(pageTurnProgress, {
             toValue: 0,
-            duration: 115,
+            duration: reduceMotion ? 0 : 115,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }).start(() => {
@@ -193,16 +192,7 @@ export function GrowthBookEditorModal({
         });
       });
     });
-  }, [activePageIndex, bookPages.length, pageTurnProgress]);
-  const createPdf = async () => {
-    if (pdfBusy) return;
-    setPdfBusy(true);
-    try {
-      await createGrowthBookPdf({ babyName, entries: bookEntries, edit, stickers: babyStickers });
-    } finally {
-      setPdfBusy(false);
-    }
-  };
+  }, [activePageIndex, bookPages.length, pageTurnProgress, reduceMotion]);
 
   if (!visible || !activePage) return null;
 
@@ -210,12 +200,8 @@ export function GrowthBookEditorModal({
     pages: pageMeta,
     activeIndex: activePageIndex,
     onSelect: goToPage,
-    onFirst: () => goToPage(0),
     onPrevious: () => goToPage(activePageIndex - 1),
     onNext: () => goToPage(activePageIndex + 1),
-    onLast: () => goToPage(bookPages.length - 1),
-    onPdfCreate: () => void createPdf(),
-    pdfBusy,
     pageTurnProgress,
     pageTurnDirection,
   };
@@ -224,14 +210,22 @@ export function GrowthBookEditorModal({
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.header}>
-          <Pressable onPress={onClose} hitSlop={10}>
-            <Text style={styles.headerBtn}>뒤로</Text>
+          <Pressable
+            onPress={onClose}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="목차로"
+            style={styles.headerBtnHit}
+          >
+            <Text style={styles.headerBtn}>목차로</Text>
           </Pressable>
           <Text style={styles.headerTitle}>성장책 편집</Text>
           <Pressable
             onPress={() => setPageMode((current) => current === "edit" ? "preview" : "edit")}
             hitSlop={10}
             style={styles.headerModeBtn}
+            accessibilityRole="button"
+            accessibilityLabel={pageMode === "edit" ? "미리보기" : "편집"}
           >
             <Text style={styles.headerBtn}>{pageMode === "edit" ? "미리보기" : "편집"}</Text>
           </Pressable>
@@ -250,7 +244,6 @@ export function GrowthBookEditorModal({
               onPageIndexChange={setActivePageIndex}
               resetKey={`${visible}-${pageMode}-${bookPages.map((page) => page.id).join("|")}`}
               style={styles.editorReader}
-              onPdfCreate={() => void createPdf()}
             />
           </View>
         ) : null}
@@ -306,12 +299,8 @@ type BookPageNavigationProps = {
   pages: GrowthBookPageMeta[];
   activeIndex: number;
   onSelect: (index: number) => void;
-  onFirst: () => void;
   onPrevious: () => void;
   onNext: () => void;
-  onLast: () => void;
-  onPdfCreate: () => void;
-  pdfBusy: boolean;
   pageTurnProgress: Animated.Value;
   pageTurnDirection: -1 | 1;
 };
@@ -320,32 +309,35 @@ function BookPageNavigation({
   pages,
   activeIndex,
   onSelect,
-  onFirst,
   onPrevious,
   onNext,
-  onLast,
-  onPdfCreate,
-  pdfBusy,
 }: BookPageNavigationProps) {
   const paginationItems = buildGrowthBookPaginationItems(pages.length, activeIndex);
+  const atStart = activeIndex <= 0;
+  const atEnd = activeIndex >= pages.length - 1;
   return (
     <View style={styles.bookNavigation}>
       <View style={styles.pageNavigator}>
-        <Pressable disabled={activeIndex <= 0} onPress={onFirst} style={styles.pageEdgeArrow}>
-          <Text style={[styles.pageEdgeArrowText, activeIndex <= 0 && styles.pageArrowDisabled]}>|‹</Text>
-        </Pressable>
-        <Pressable disabled={activeIndex <= 0} onPress={onPrevious} style={styles.pageArrow}>
-          <Text style={[styles.pageArrowText, activeIndex <= 0 && styles.pageArrowDisabled]}>‹</Text>
+        <Pressable
+          disabled={atStart}
+          onPress={onPrevious}
+          style={styles.pageArrow}
+          accessibilityRole="button"
+          accessibilityLabel="이전 페이지"
+        >
+          <View style={styles.pageArrowPrev}>
+            <BabyLogIcon kind="chevron" size={18} color={atStart ? colors.faint : colors.text} />
+          </View>
         </Pressable>
         <Text style={styles.pageCounter}>{activeIndex + 1} / {pages.length}</Text>
-        <Pressable disabled={activeIndex >= pages.length - 1} onPress={onNext} style={styles.pageArrow}>
-          <Text style={[styles.pageArrowText, activeIndex >= pages.length - 1 && styles.pageArrowDisabled]}>›</Text>
-        </Pressable>
-        <Pressable disabled={activeIndex >= pages.length - 1} onPress={onLast} style={styles.pageEdgeArrow}>
-          <Text style={[styles.pageEdgeArrowText, activeIndex >= pages.length - 1 && styles.pageArrowDisabled]}>›|</Text>
-        </Pressable>
-        <Pressable onPress={onPdfCreate} disabled={pdfBusy} style={styles.pdfQuickBtn}>
-          <Text style={styles.pdfQuickBtnText}>{pdfBusy ? "생성 중" : "PDF"}</Text>
+        <Pressable
+          disabled={atEnd}
+          onPress={onNext}
+          style={styles.pageArrow}
+          accessibilityRole="button"
+          accessibilityLabel="다음 페이지"
+        >
+          <BabyLogIcon kind="chevron" size={18} color={atEnd ? colors.faint : colors.text} />
         </Pressable>
       </View>
       <View style={styles.pageChipRow}>
@@ -358,6 +350,9 @@ function BookPageNavigation({
               key={item.key}
               onPress={() => onSelect(item.index)}
               style={[styles.pageChip, activeIndex === item.index && styles.pageChipActive]}
+              accessibilityRole="button"
+              accessibilityLabel={`${page.title} 페이지`}
+              accessibilityState={{ selected: activeIndex === item.index }}
             >
               <Text style={[styles.pageChipText, activeIndex === item.index && styles.pageChipTextActive]}>
                 {page.title}
@@ -444,8 +439,7 @@ function CoverBookPageEditor({
       <BookPageNavigation {...navigation} />
       {mode === "edit" ? (
         <View style={styles.editorToolbarCompact}>
-          <EditorTool label="표지 사진" symbol="▧" onPress={() => setSheetOpen(true)} />
-          <EditorTool label="표지 제목" symbol="✎" onPress={() => setSheetOpen(true)} />
+          <EditorTool label="표지 편집" icon="edit" onPress={() => setSheetOpen(true)} />
         </View>
       ) : null}
       {sheetOpen ? (
@@ -499,7 +493,7 @@ function FinalLetterBookPageEditor({
       <BookPageNavigation {...navigation} />
       {mode === "edit" ? (
         <View style={styles.editorToolbarCompact}>
-          <EditorTool label="가족 편지" symbol="✎" onPress={() => setSheetOpen(true)} />
+          <EditorTool label="가족 편지" icon="chat" onPress={() => setSheetOpen(true)} />
         </View>
       ) : null}
       {sheetOpen ? (
@@ -645,7 +639,7 @@ function PageList({
   if (entries.length === 0) {
     return (
       <View style={[styles.content, { paddingBottom: bottomPad + 28 }]}>
-        <Text style={styles.hint}>성장책에 담긴 일기가 없어요. 일기에서 📖 담기를 눌러 주세요.</Text>
+        <Text style={styles.hint}>성장책에 담긴 일기가 없어요. 일기에서 담기를 눌러 주세요.</Text>
       </View>
     );
   }
@@ -894,11 +888,11 @@ function PageEditor({
 
       {mode === "edit" ? (
         <View style={styles.editorToolbar}>
-          <EditorTool label="사진" symbol="▧" onPress={() => { setSelectedPhotoIndex(Math.min(photos.length, getPhotoLayoutCount(pageEdit.photoLayout) - 1)); setSheet("photo"); }} />
-          <EditorTool label="레이아웃" symbol="▦" onPress={() => setSheet("layout")} />
-          <EditorTool label="코멘트" symbol="✎" onPress={() => setSheet("comment")} />
-          <EditorTool label="스티커" symbol="✦" onPress={() => openStickerPicker("page")} />
-          <EditorTool label="롤링페이퍼" symbol="♡" onPress={() => setSheet("rolling")} />
+          <EditorTool label="사진" icon="image" onPress={() => { setSelectedPhotoIndex(Math.min(photos.length, getPhotoLayoutCount(pageEdit.photoLayout) - 1)); setSheet("photo"); }} />
+          <EditorTool label="레이아웃" icon="layout" onPress={() => setSheet("layout")} />
+          <EditorTool label="코멘트" icon="edit" onPress={() => setSheet("comment")} />
+          <EditorTool label="스티커" icon="baby" onPress={() => openStickerPicker("page")} />
+          <EditorTool label="롤링페이퍼" icon="chat" onPress={() => setSheet("rolling")} />
         </View>
       ) : null}
 
@@ -1146,10 +1140,10 @@ function PageEditor({
   );
 }
 
-function EditorTool({ label, symbol, onPress }: { label: string; symbol: string; onPress: () => void }) {
+function EditorTool({ label, icon, onPress }: { label: string; icon: MiscIconKey; onPress: () => void }) {
   return (
-    <Pressable style={styles.editorTool} onPress={onPress}>
-      <Text style={styles.editorToolSymbol}>{symbol}</Text>
+    <Pressable style={styles.editorTool} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
+      <BabyLogIcon kind={icon} size={18} color={colors.amberText} />
       <Text style={styles.editorToolLabel}>{label}</Text>
     </Pressable>
   );
@@ -1331,58 +1325,6 @@ function LetterEditor({
   );
 }
 
-function PdfActions({
-  babyName,
-  entries,
-  edit,
-  bottomPad,
-  onOpenBookPreview,
-}: {
-  babyName: string;
-  entries: DiaryEntry[];
-  edit: GrowthBookEdit;
-  bottomPad: number;
-  onOpenBookPreview?: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const { babyStickers } = useBabyLog();
-  const pdfPreviewPage = useMemo(
-    () => buildGrowthBookPages({ babyName, entries, edit }).find((page) => page.diaryId) ?? null,
-    [babyName, edit, entries],
-  );
-  return (
-    <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 28 }]}>
-      <Text style={styles.hint}>
-        PDF에는 표지, 페이지 사진·레이아웃·코멘트, 롤링페이퍼, 스티커, 마지막 편지가 모두 포함됩니다.
-      </Text>
-      {pdfPreviewPage ? (
-        <View style={styles.pdfCanvasWrap}>
-          <GrowthBookPageCanvas page={pdfPreviewPage} mode="pdf" stickers={babyStickers} style={styles.pdfCanvasPreview} />
-        </View>
-      ) : null}
-      <Pressable
-        style={styles.primaryBtn}
-        disabled={busy}
-        onPress={async () => {
-          setBusy(true);
-          try {
-            await createGrowthBookPdf({ babyName, entries, edit, stickers: babyStickers });
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <Text style={styles.primaryBtnText}>PDF 만들기</Text>
-      </Pressable>
-      {onOpenBookPreview ? (
-        <Pressable style={styles.ghostBtn} onPress={onOpenBookPreview}>
-          <Text style={styles.ghostBtnText}>성장책 미리보기로 확인</Text>
-        </Pressable>
-      ) : null}
-    </ScrollView>
-  );
-}
-
 function CommentRow({
   authorLabel,
   text,
@@ -1429,10 +1371,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  headerBtn: { fontSize: 15, fontWeight: "600", color: colors.muted, minWidth: 48 },
+  headerBtn: { fontSize: 15, fontWeight: "600", color: colors.muted },
+  headerBtnHit: { minHeight: 44, minWidth: 56, justifyContent: "center" },
   headerTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
   headerSpacer: { minWidth: 48 },
-  headerModeBtn: { minWidth: 64, alignItems: "flex-end" },
+  headerModeBtn: { minHeight: 44, minWidth: 64, alignItems: "flex-end", justifyContent: "center" },
   content: { paddingHorizontal: 18, paddingTop: 16 },
   hint: { fontSize: 13, color: colors.muted, lineHeight: 19, marginBottom: 14 },
   hintMuted: { fontSize: 12, color: colors.faint, marginTop: 10 },
@@ -1497,7 +1440,7 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: { color: colors.text, fontWeight: "700", fontSize: 14 },
   ghostBtn: { paddingVertical: 14, alignItems: "center", marginTop: 4 },
-  ghostBtnText: { color: colors.amber, fontWeight: "700" },
+  ghostBtnText: { color: colors.amberText, fontWeight: "700" },
   poolRow: { gap: 8, paddingRight: 8 },
   poolThumbWrap: { borderRadius: 12, borderWidth: 2, borderColor: "transparent", overflow: "hidden" },
   poolThumbSelected: { borderColor: colors.amber },
@@ -1534,7 +1477,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.amberSoft,
   },
-  addPhotoText: { color: colors.amber, fontWeight: "800", fontSize: 12 },
+  addPhotoText: { color: colors.amberText, fontWeight: "800", fontSize: 12 },
   layoutRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   layoutChip: {
     borderWidth: 1,
@@ -1547,7 +1490,7 @@ const styles = StyleSheet.create({
   layoutChipSelected: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
   layoutChipDisabled: { opacity: 0.35 },
   layoutChipText: { fontSize: 12.5, fontWeight: "700", color: colors.muted },
-  layoutChipTextSelected: { color: colors.amber },
+  layoutChipTextSelected: { color: colors.amberText },
   pageWorkspace: { flex: 1, backgroundColor: "#E9E2DA" },
   editorReaderWrap: { flex: 1, paddingTop: 12, paddingBottom: 8 },
   editorReader: { flex: 1 },
@@ -1567,21 +1510,16 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   bookNavigation: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: "rgba(255,249,242,0.96)", paddingBottom: 5 },
-  pageNavigator: { height: 30, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingRight: 46 },
-  pageArrow: { width: 34, alignItems: "center", justifyContent: "center" },
-  pageArrowText: { fontSize: 25, color: colors.text, fontWeight: "300", lineHeight: 27 },
-  pageEdgeArrow: { width: 26, alignItems: "center", justifyContent: "center" },
-  pageEdgeArrowText: { fontSize: 15, color: colors.text, fontWeight: "700" },
-  pageArrowDisabled: { color: colors.faint, opacity: 0.4 },
+  pageNavigator: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  pageArrow: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  pageArrowPrev: { transform: [{ rotate: "180deg" }] },
   pageCounter: { minWidth: 56, textAlign: "center", fontSize: 12, fontWeight: "800", color: colors.muted },
-  pageChipRow: { minHeight: 34, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 8, paddingVertical: 3 },
-  pageChip: { minWidth: 38, height: 28, paddingHorizontal: 10, borderRadius: 14, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  pageChipRow: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  pageChip: { minWidth: 44, minHeight: 44, paddingHorizontal: 12, borderRadius: 22, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   pageChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   pageChipText: { fontSize: 11, fontWeight: "700", color: colors.muted },
-  pageChipTextActive: { color: colors.amberDark },
+  pageChipTextActive: { color: colors.amberText },
   pageEllipsis: { width: 16, textAlign: "center", color: colors.faint, fontSize: 14, fontWeight: "800" },
-  pdfQuickBtn: { position: "absolute", right: 12, minWidth: 42, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.amber },
-  pdfQuickBtnText: { color: colors.amberDark, fontSize: 10, fontWeight: "800" },
   editorToolbar: {
     minHeight: 60,
     flexDirection: "row",
@@ -1593,8 +1531,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
   },
   editorToolbarCompact: { minHeight: 56, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: "24%", borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
-  editorTool: { flex: 1, alignItems: "center", justifyContent: "center", gap: 3, paddingVertical: 7 },
-  editorToolSymbol: { fontSize: 21, color: colors.amber, fontWeight: "700" },
+  editorTool: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", gap: 3, paddingVertical: 7 },
   editorToolLabel: { fontSize: 10.5, color: colors.text, fontWeight: "700" },
   sheetOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 30, justifyContent: "flex-end", backgroundColor: "rgba(42,36,31,0.42)" },
   editorSheet: { maxHeight: "72%", borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: colors.background, paddingHorizontal: 18, paddingTop: 10 },
@@ -1609,7 +1546,7 @@ const styles = StyleSheet.create({
   photoSheetThumb: { width: 50, height: 50, borderRadius: 9 },
   photoSheetEmpty: { width: 50, height: 50, borderRadius: 9, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
   photoSheetLabel: { flex: 1, fontSize: 13, fontWeight: "700", color: colors.text },
-  sheetAction: { fontSize: 12, color: colors.amber, fontWeight: "800", paddingVertical: 8 },
+  sheetAction: { fontSize: 12, color: colors.amberText, fontWeight: "800", paddingVertical: 8 },
   sheetDanger: { color: colors.dangerText },
   sheetOptionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingBottom: 8 },
   sheetOption: { width: "48%", minHeight: 118, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 8, padding: 10 },
@@ -1645,7 +1582,7 @@ const styles = StyleSheet.create({
   rollingStickerPreviewRow: { marginTop: 6, minHeight: 34, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 4 },
   pdfCanvasWrap: { alignItems: "center", marginBottom: 12 },
   pdfCanvasPreview: { width: "76%", maxWidth: 320, shadowColor: "#4A3428", shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
-  autoAuthor: { fontSize: 13, fontWeight: "800", color: colors.amber, marginBottom: 8, marginTop: 8 },
+  autoAuthor: { fontSize: 13, fontWeight: "800", color: colors.amberText, marginBottom: 8, marginTop: 8 },
   commentCard: {
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -1654,7 +1591,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
   },
-  commentAuthor: { fontSize: 12.5, fontWeight: "800", color: colors.amber },
+  commentAuthor: { fontSize: 12.5, fontWeight: "800", color: colors.amberText },
   commentText: { fontSize: 13.5, color: colors.text, marginTop: 6, lineHeight: 20 },
   commentActions: { flexDirection: "row", gap: 14, marginTop: 10 },
   commentAction: { fontSize: 12, fontWeight: "700", color: colors.muted },

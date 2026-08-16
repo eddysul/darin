@@ -436,7 +436,7 @@ function DetailLine({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   header: { minHeight: 48, paddingHorizontal: 16, paddingBottom: 10, flexDirection: "row", alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  headerButton: { minWidth: 52, color: colors.amber, fontSize: 15, fontWeight: "800" },
+  headerButton: { minWidth: 52, color: colors.amberText, fontSize: 15, fontWeight: "800" },
   headerTitle: { flex: 1, textAlign: "center", color: colors.text, fontSize: 17, fontWeight: "800" },
   headerSpacer: { width: 52 },
   content: { paddingHorizontal: 16, paddingTop: 16, gap: 10 },

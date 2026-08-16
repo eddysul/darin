@@ -28,7 +28,7 @@ export function PushToast({
 
   return (
     <Pressable style={styles.toast} onPress={onPress}>
-      <BabyLogIcon kind="bell" size={20} color={colors.amber} />
+      <BabyLogIcon kind="bell" size={20} color={colors.amberText} />
       <View style={styles.body}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.sub} numberOfLines={2}>
@@ -59,5 +59,5 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   title: { fontSize: 13, fontWeight: "800", color: "#FFFFFF" },
   sub: { fontSize: 12, color: "rgba(255,255,255,0.72)", marginTop: 3, lineHeight: 17 },
-  cta: { fontSize: 11, fontWeight: "700", color: colors.amber, marginTop: 6 },
+  cta: { fontSize: 11, fontWeight: "700", color: colors.amberText, marginTop: 6 },
 });

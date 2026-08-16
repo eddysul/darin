@@ -150,6 +150,7 @@ export function AddCustomCategorySheet({
                     key={option}
                     style={[styles.colorDot, { backgroundColor: option }, active && styles.colorDotActive]}
                     onPress={() => setColor(option)}
+                    accessibilityRole="button"
                     accessibilityLabel={`색상 ${option}`}
                   />
                 );
@@ -258,7 +259,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   colorRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 16 },
-  colorDot: { width: 30, height: 30, borderRadius: 15 },
+  colorDot: { width: 44, height: 44, borderRadius: 22 },
   colorDotActive: { borderWidth: 3, borderColor: colors.text },
   modeList: { gap: 8, marginBottom: 12 },
   modeCard: {
@@ -271,7 +272,7 @@ const styles = StyleSheet.create({
   },
   modeCardActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   modeLabel: { fontSize: 14, fontWeight: "800", color: colors.text, marginBottom: 3 },
-  modeLabelActive: { color: colors.amber },
+  modeLabelActive: { color: colors.amberText },
   modeHint: { fontSize: 12, color: colors.faint, fontWeight: "600" },
   modeHintActive: { color: colors.muted },
   error: {

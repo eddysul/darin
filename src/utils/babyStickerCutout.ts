@@ -11,7 +11,16 @@ import {
   createCircularCutout as nativeCircularCutout,
   createPersonCutout as nativePersonCutout,
   isPersonCutoutAvailable,
+  type CircularCutoutCrop,
 } from "person-cutout";
+
+export type { CircularCutoutCrop };
+
+export const DEFAULT_CIRCLE_CROP: CircularCutoutCrop = {
+  offsetX: 0.5,
+  offsetY: 0.5,
+  zoom: 1,
+};
 
 export type { StickerCutoutMode };
 
@@ -48,11 +57,12 @@ export function isPersonCutoutSupported(): boolean {
 
 /**
  * Produce a transparent sticker PNG for the selected mode.
- * Person cutout failures fall back to circular (never throws for empty URI only).
+ * Person cutout failures open the circular positioner instead of a centered crop.
  */
 export async function createStickerCutout(
   imageUri: string,
   mode: StickerCutoutMode = "circular",
+  crop?: CircularCutoutCrop,
 ): Promise<CutoutResult> {
   if (!imageUri) throw new Error("이미지 URI가 없어요.");
 
@@ -64,19 +74,21 @@ export async function createStickerCutout(
       const uri = await nativePersonCutout(imageUri, 2.5);
       return { uri, method: "personCutout", mode: "personCutout" };
     } catch {
-      // Requirement: fall back to existing circular sticker mode
-      const circular = await createCircularSticker(imageUri);
-      return { ...circular, method: "circular-fallback", mode: "circular" };
+      // Let the UI open the circular positioner instead of a centered crop.
+      return { uri: imageUri, method: "circular-fallback", mode: "circular" };
     }
   }
 
-  return createCircularSticker(imageUri);
+  return createCircularSticker(imageUri, crop);
 }
 
-async function createCircularSticker(imageUri: string): Promise<CutoutResult> {
+async function createCircularSticker(
+  imageUri: string,
+  crop?: CircularCutoutCrop,
+): Promise<CutoutResult> {
   try {
     if (Platform.OS === "ios") {
-      const uri = await nativeCircularCutout(imageUri);
+      const uri = await nativeCircularCutout(imageUri, crop);
       return { uri, method: "circular", mode: "circular" };
     }
   } catch {

@@ -59,6 +59,7 @@ export const ProfileRepository = {
     preferredLanguage?: string;
     avatarUrl?: string | null;
     nickname?: string | null;
+    darinId?: string | null;
     defaultRelation?: string | null;
     residenceCountry?: string | null;
     guardianBirthDate?: string | null;
@@ -72,6 +73,7 @@ export const ProfileRepository = {
       preferred_language: input.preferredLanguage ?? "ko",
       avatar_url: input.avatarUrl === undefined ? undefined : input.avatarUrl,
       nickname: input.nickname === undefined ? undefined : (input.nickname?.trim() || null),
+      darin_id: input.darinId === undefined ? undefined : (input.darinId?.trim() || null),
       default_relation: input.defaultRelation === undefined ? undefined : input.defaultRelation,
       residence_country:
         input.residenceCountry === undefined ? undefined : input.residenceCountry,
@@ -95,6 +97,7 @@ export const ProfileRepository = {
 
     const patch: Partial<ProfileRow> = {
       display_name: name,
+      darin_id: input.darinId === undefined ? undefined : (input.darinId?.trim() || null),
       nickname: input.nickname?.trim() || null,
       default_relation: input.defaultRelation
         ? toDbRelationshipLabel(input.defaultRelation)

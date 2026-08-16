@@ -82,6 +82,18 @@ export const NotificationRepository = {
     return notificationSettingsFromRow(result.data);
   },
 
+  async listInAppEvents() {
+    const userId = await requireUserId();
+    const { data, error } = await requireSupabase()
+      .from("notification_events")
+      .select("id, event_type, title, body, data, read_at, created_at")
+      .eq("recipient_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    return data ?? [];
+  },
+
   async createNotificationEvent(input: SendNotificationInput): Promise<void> {
     await this.sendPushToBabyMembers(input);
   },

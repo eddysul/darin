@@ -17,7 +17,7 @@ import { QUICK_RECORD_ACTIONS, type OneTouchAction } from "../../constants/quick
 import { useApp } from "../../context/AppContext";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { useBabyLog } from "../../context/BabyLogContext";
-import { colors } from "../../theme";
+import { colors, type } from "../../theme";
 import {
   RELATIONSHIP_OPTIONS,
   type RelationshipToChild,
@@ -28,6 +28,7 @@ import {
   type AppLanguagePreference,
 } from "../../types/profilePreferences";
 import { AddCustomCategorySheet } from "../babylog/AddCustomCategorySheet";
+import { DraggableCategoryList } from "./DraggableCategoryList";
 import { NavigationHeader } from "../navigation/NavigationHeader";
 import { DataExportRepository } from "../../repositories/DataExportRepository";
 import { ContactRequestRepository } from "../../repositories/ContactRequestRepository";
@@ -35,6 +36,21 @@ import { AuthRepository } from "../../repositories/AuthRepository";
 import { authProviderFlags } from "../../config/authProviders";
 import type { ContactRequestCategory } from "../../types/database";
 import { createId } from "../../utils/id";
+import type { AppSettings } from "../../types/appSettings";
+
+function applyCategoryOrder(current: AppSettings, order: OneTouchAction[]): AppSettings {
+  const visible = current.categories.visible;
+  const visibleOrdered = order.filter((id) => visible.includes(id));
+  const coreCount = Math.min(6, current.categories.core.length, visibleOrdered.length);
+  return {
+    ...current,
+    categories: {
+      ...current.categories,
+      order,
+      core: visibleOrdered.slice(0, coreCount),
+    },
+  };
+}
 
 export type SettingsPage =
   | "account"
@@ -188,6 +204,7 @@ export function AppSettingsModal({
   const [kakaoLinkReady, setKakaoLinkReady] = useState(false);
   const [kakaoLinkBusy, setKakaoLinkBusy] = useState(false);
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
+  const [categoryDragging, setCategoryDragging] = useState(false);
 
   const accountDirty = page === "account" && accountReady && (
     name !== (careSetup.parent.parentName || profile.name) ||
@@ -357,17 +374,6 @@ export function AppSettingsModal({
     }));
   };
 
-  const moveCategory = (id: OneTouchAction, delta: -1 | 1) => {
-    setSettings((current) => {
-      const order = [...current.categories.order];
-      const index = order.indexOf(id);
-      const target = index + delta;
-      if (index < 0 || target < 0 || target >= order.length) return current;
-      [order[index], order[target]] = [order[target], order[index]];
-      return { ...current, categories: { ...current.categories, order } };
-    });
-  };
-
   const content = (
     <View style={styles.root}>
         {!embedded ? <NavigationHeader
@@ -380,6 +386,7 @@ export function AppSettingsModal({
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 24, 36) }]}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={!categoryDragging}
         >
           {page === "account" ? (
             <>
@@ -477,35 +484,34 @@ export function AppSettingsModal({
           {page === "categories" ? (
             <>
               <Text style={styles.help}>
-                표시 여부와 기본 6개를 선택하고 화살표로 순서를 바꿀 수 있어요. 기본에 포함되지 않은 표시 항목은 펼치기 영역에 나타납니다. 커스텀 카테고리는 아래에서 추가할 수 있어요.
+                표시 여부와 기본 6개를 선택한 뒤, 왼쪽 점을 길게 눌러 위아래로 끌어 순서를 바꿀 수 있어요. 펼치기 항목을 기본 노출 자리로 옮기면 역할이 서로 바뀝니다. 커스텀 카테고리는 아래에서 추가할 수 있어요.
               </Text>
-              <SettingsSection title={`기본 노출 ${settings.categories.core.length}/6`}>
-                {settings.categories.order.map((id, index) => {
-                  const action = actionById.get(id);
-                  if (!action) return null;
-                  const visible = settings.categories.visible.includes(id);
-                  const core = settings.categories.core.includes(id);
-                  return (
-                    <View key={id} style={styles.categoryRow}>
-                      <View style={styles.categoryCopy}>
-                        <Text style={styles.rowLabel}>{action.label}</Text>
-                        <Text style={styles.rowMeta}>{core ? "기본 노출" : visible ? "펼치기 영역" : "숨김"}</Text>
-                      </View>
-                      <Pressable style={styles.miniButton} onPress={() => moveCategory(id, -1)} disabled={index === 0}>
-                        <Text style={[styles.miniButtonText, index === 0 && styles.disabledText]}>↑</Text>
-                      </Pressable>
-                      <Pressable style={styles.miniButton} onPress={() => moveCategory(id, 1)} disabled={index === settings.categories.order.length - 1}>
-                        <Text style={[styles.miniButtonText, index === settings.categories.order.length - 1 && styles.disabledText]}>↓</Text>
-                      </Pressable>
-                      <Pressable style={[styles.stateButton, visible && styles.stateButtonOn]} onPress={() => toggleVisible(id, !visible)}>
-                        <Text style={[styles.stateButtonText, visible && styles.stateButtonTextOn]}>{visible ? "표시" : "숨김"}</Text>
-                      </Pressable>
-                      <Pressable style={[styles.stateButton, core && styles.coreButtonOn]} onPress={() => toggleCore(id, !core)}>
-                        <Text style={[styles.stateButtonText, core && styles.stateButtonTextOn]}>기본</Text>
-                      </Pressable>
-                    </View>
-                  );
-                })}
+              <SettingsSection title={`기본 노출 ${settings.categories.core.length}/6`} overflowVisible>
+                <DraggableCategoryList
+                  items={settings.categories.order}
+                  onReorder={(order) => setSettings((current) => applyCategoryOrder(current, order))}
+                  onDragActiveChange={setCategoryDragging}
+                  renderRow={(id) => {
+                    const action = actionById.get(id);
+                    if (!action) return null;
+                    const visible = settings.categories.visible.includes(id);
+                    const core = settings.categories.core.includes(id);
+                    return (
+                      <>
+                        <View style={styles.categoryCopy}>
+                          <Text style={styles.categoryTitle} numberOfLines={1}>{action.label}</Text>
+                          <Text style={styles.categoryMeta}>{core ? "기본 노출" : visible ? "펼치기 영역" : "숨김"}</Text>
+                        </View>
+                        <Pressable style={[styles.stateButton, visible && styles.stateButtonOn]} onPress={() => toggleVisible(id, !visible)}>
+                          <Text style={[styles.stateButtonText, visible && styles.stateButtonTextOn]}>{visible ? "표시" : "숨김"}</Text>
+                        </Pressable>
+                        <Pressable style={[styles.stateButton, core && styles.coreButtonOn]} onPress={() => toggleCore(id, !core)}>
+                          <Text style={[styles.stateButtonText, core && styles.stateButtonTextOn]}>기본</Text>
+                        </Pressable>
+                      </>
+                    );
+                  }}
+                />
               </SettingsSection>
               <SettingsSection title="내 기록 카테고리">
                 {customCategories.length === 0 ? (
@@ -517,8 +523,8 @@ export function AppSettingsModal({
                     <View key={category.id} style={styles.categoryRow}>
                       <View style={[styles.customColorDot, { backgroundColor: category.color }]} />
                       <View style={styles.categoryCopy}>
-                        <Text style={styles.rowLabel} numberOfLines={1}>{category.label}</Text>
-                        <Text style={styles.rowMeta}>커스텀 · 빠른기록에서 선택 가능</Text>
+                        <Text style={styles.categoryTitle} numberOfLines={1}>{category.label}</Text>
+                        <Text style={styles.categoryMeta}>커스텀 · 빠른기록에서 선택 가능</Text>
                       </View>
                       <Pressable
                         style={styles.stateButton}
@@ -802,11 +808,19 @@ export function AppSettingsModal({
   );
 }
 
-function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
+function SettingsSection({
+  title,
+  children,
+  overflowVisible,
+}: {
+  title: string;
+  children: React.ReactNode;
+  overflowVisible?: boolean;
+}) {
   return (
     <View>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.card}>{children}</View>
+      <View style={[styles.card, overflowVisible && styles.cardOverflow]}>{children}</View>
     </View>
   );
 }
@@ -969,29 +983,32 @@ function loginMethodLabel(method: string) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, backgroundColor: colors.card },
-  headerButton: { width: 56, minHeight: 34, justifyContent: "center" },
-  headerButtonText: { color: colors.amber, fontSize: 14, fontWeight: "800" },
-  headerTitle: { flex: 1, textAlign: "center", color: colors.text, fontSize: 17, fontWeight: "800" },
+  headerButton: { width: 56, minHeight: 44, justifyContent: "center" },
+  headerButtonText: { color: colors.amberText, fontSize: 14, fontWeight: "800" },
+  headerTitle: { flex: 1, textAlign: "center", color: colors.text, fontSize: type.md, fontWeight: "800" },
   content: { padding: 20, gap: 20 },
-  sectionTitle: { marginBottom: 8, marginLeft: 3, color: colors.muted, fontSize: 12, fontWeight: "800" },
+  sectionTitle: { marginBottom: 8, marginLeft: 3, color: colors.muted, fontSize: type.xs, fontWeight: "800" },
   card: { borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  cardOverflow: { overflow: "visible" },
   field: { padding: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   fieldLabel: { color: colors.muted, fontSize: 11, fontWeight: "700", marginBottom: 7 },
   input: { minHeight: 42, borderRadius: 12, backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 14 },
   messageInput: { minHeight: 140, paddingTop: 12, paddingBottom: 12 },
   settingRow: { minHeight: 62, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   rowLabel: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "700" },
-  rowMeta: { marginTop: 3, color: colors.faint, fontSize: 10.5 },
+  rowMeta: { marginTop: 3, color: colors.faint, fontSize: type.xs },
   infoValue: { color: colors.muted, fontSize: 13, fontWeight: "700" },
   choiceBlock: { paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 9 },
   choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  choice: { minHeight: 34, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, backgroundColor: colors.backgroundSecondary },
+  choice: { minHeight: 44, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, backgroundColor: colors.backgroundSecondary },
   choiceOn: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
   choiceText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
-  choiceTextOn: { color: colors.amberDark },
-  choiceHelp: { color: colors.faint, fontSize: 10.5, lineHeight: 16 },
-  categoryRow: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  categoryCopy: { flex: 1 },
+  choiceTextOn: { color: colors.amberText },
+  choiceHelp: { color: colors.faint, fontSize: type.xs, lineHeight: 16 },
+  categoryRow: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  categoryCopy: { flex: 1, minWidth: 0, justifyContent: "center" },
+  categoryTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  categoryMeta: { marginTop: 2, color: colors.muted, fontSize: type.xs, fontWeight: "600" },
   customColorDot: { width: 12, height: 12, borderRadius: 6, marginLeft: 4 },
   addCategoryRow: {
     minHeight: 54,
@@ -1005,11 +1022,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  addCategoryText: { color: colors.amber, fontSize: 13, fontWeight: "800" },
-  miniButton: { width: 28, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: colors.backgroundSecondary },
-  miniButtonText: { color: colors.text, fontSize: 16, fontWeight: "800" },
-  disabledText: { opacity: 0.25 },
-  stateButton: { minWidth: 40, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
+  addCategoryText: { color: colors.amberText, fontSize: 13, fontWeight: "800" },
+  stateButton: { minWidth: 44, minHeight: 44, borderRadius: 9, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   stateButtonOn: { backgroundColor: colors.cardHi, borderColor: "#7FC8B2" },
   coreButtonOn: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
   stateButtonText: { color: colors.faint, fontSize: 10, fontWeight: "800" },

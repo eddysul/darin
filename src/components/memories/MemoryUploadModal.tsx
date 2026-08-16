@@ -183,7 +183,7 @@ export function MemoryUploadModal({
             <Text style={styles.subtitle}>아기의 사진과 짧은 이야기를 가족과 함께 나눠보세요.</Text>
           </View>
           <Pressable style={styles.headerAction} onPress={() => void submit()} disabled={!canSubmit}>
-            {saving ? <ActivityIndicator color={colors.amber} /> : <Text style={[styles.save, !canSubmit && styles.disabledText]}>올리기</Text>}
+            {saving ? <ActivityIndicator color={colors.amberText} /> : <Text style={[styles.save, !canSubmit && styles.disabledText]}>올리기</Text>}
           </Pressable>
         </View>
         <ScrollView
@@ -269,12 +269,12 @@ const styles = StyleSheet.create({
   title: { textAlign: "center", color: colors.text, fontSize: 17, fontWeight: "800" },
   subtitle: { color: colors.muted, fontSize: 10.5, textAlign: "center", marginTop: 2 },
   cancel: { color: colors.muted, fontSize: 15, fontWeight: "600" },
-  save: { color: colors.amber, fontSize: 15, fontWeight: "800", textAlign: "right" },
+  save: { color: colors.amberText, fontSize: 15, fontWeight: "800", textAlign: "right" },
   disabledText: { opacity: 0.4 },
   content: { padding: 20, gap: 14 },
   photo: { width: "100%", aspectRatio: 1.25, borderRadius: radius.xl, overflow: "hidden", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   photoEmpty: { flex: 1, alignItems: "center", justifyContent: "center" },
-  photoPlus: { color: colors.amber, fontSize: 38, fontWeight: "300" },
+  photoPlus: { color: colors.amberText, fontSize: 38, fontWeight: "300" },
   photoLabel: { color: colors.muted, fontSize: 13, fontWeight: "700" },
   photoGuide: { color: colors.faint, fontSize: 11.5, lineHeight: 17 },
   photoRow: { gap: 10, paddingRight: 4 },
@@ -285,16 +285,16 @@ const styles = StyleSheet.create({
   photoRemove: { position: "absolute", right: 6, top: 6, width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(46,42,38,0.72)" },
   photoRemoveText: { color: "#fff", fontSize: 22, lineHeight: 24 },
   photoAddTile: { width: 104, height: 132, borderRadius: 18, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center", gap: 4 },
-  photoAddText: { color: colors.amber, fontSize: 11.5, fontWeight: "800" },
+  photoAddText: { color: colors.amberText, fontSize: 11.5, fontWeight: "800" },
   field: { gap: 8, padding: 14, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   fieldLabel: { color: colors.text, fontSize: 14, fontWeight: "800" },
   caption: { minHeight: 100, color: colors.text, fontSize: 14, lineHeight: 21, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
   counter: { color: colors.faint, fontSize: 10.5, textAlign: "right" },
-  babyTag: { color: colors.amber, fontSize: 13, fontWeight: "800", marginBottom: 2 },
+  babyTag: { color: colors.amberText, fontSize: 13, fontWeight: "800", marginBottom: 2 },
   babyTargetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   babyTargetChip: { minHeight: 40, maxWidth: "100%", paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   babyTargetChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   babyTargetText: { color: colors.muted, fontSize: 12.5, fontWeight: "700" },
-  babyTargetTextActive: { color: colors.amber },
+  babyTargetTextActive: { color: colors.amberText },
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: 12, fontSize: 12.5, lineHeight: 18 },
 });

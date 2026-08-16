@@ -66,5 +66,5 @@ const styles = StyleSheet.create({
   chip: { minHeight: 44, justifyContent: "center", paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   chipText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
-  chipTextActive: { color: colors.amber },
+  chipTextActive: { color: colors.amberText },
 });

@@ -222,7 +222,7 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
               placeholder={`${PASSWORD_MIN}자 이상`}
               placeholderTextColor={colors.faint}
             />
-            <Pressable onPress={() => setPasswordVisible((value) => !value)} hitSlop={10}>
+            <Pressable onPress={() => setPasswordVisible((value) => !value)} hitSlop={12} style={styles.visibilityBtn}>
               <Text style={styles.visibility}>{passwordVisible ? "숨기기" : "보기"}</Text>
             </Pressable>
           </View>
@@ -330,7 +330,8 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   passwordInput: { flex: 1, minHeight: 54, paddingHorizontal: 14, color: colors.text, fontSize: 15 },
-  visibility: { color: colors.primary, fontSize: 12, fontWeight: "800" },
+  visibilityBtn: { minHeight: 44, minWidth: 44, justifyContent: "center", alignItems: "center" },
+  visibility: { color: colors.amberText, fontSize: 12, fontWeight: "800" },
   primary: {
     minHeight: 56,
     borderRadius: 15,

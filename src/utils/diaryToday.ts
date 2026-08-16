@@ -92,3 +92,38 @@ export function filterDiaries(
   if (filter === "book") return entries.filter((d) => d.includedInGrowthBook);
   return entries;
 }
+
+export type DiaryMonthSection = {
+  monthKey: string;
+  label: string;
+  entries: DiaryEntry[];
+};
+
+export function diaryMonthLabel(monthKey: string): string {
+  const [year, month] = monthKey.split("-");
+  const y = Number(year);
+  const m = Number(month);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return "날짜 없음";
+  return `${y}년 ${m}월`;
+}
+
+/** Keeps newest-first order; starts a section when the calendar month changes. */
+export function groupDiariesByMonth(entries: DiaryEntry[]): DiaryMonthSection[] {
+  const groups: DiaryMonthSection[] = [];
+  const indexByKey = new Map<string, number>();
+  for (const entry of entries) {
+    const monthKey = /^\d{4}-\d{2}/.test(entry.dateKey) ? entry.dateKey.slice(0, 7) : "unknown";
+    const existing = indexByKey.get(monthKey);
+    if (existing === undefined) {
+      indexByKey.set(monthKey, groups.length);
+      groups.push({
+        monthKey,
+        label: monthKey === "unknown" ? "날짜 없음" : diaryMonthLabel(monthKey),
+        entries: [entry],
+      });
+    } else {
+      groups[existing].entries.push(entry);
+    }
+  }
+  return groups;
+}

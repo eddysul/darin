@@ -1,13 +1,34 @@
-import { useMemo, useRef, useState } from "react";
-import { Alert, Animated, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
-import { BabyLogIcon } from "./BabyLogIcon";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Alert,
+  Animated,
+  FlatList,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
 import type { CustomCategory } from "../../types/logCategory";
 import { formatDisplayTime, formatTimelineLabel, formatTimelineSubtitle, sortLogsNewest } from "../../utils/logSummary";
 import { formatLogProvenance } from "../../utils/logProvenance";
 import { resolveLogCategory } from "../../utils/resolveLogCategory";
-import { colors, radius } from "../../theme";
+import { useReduceMotion } from "../../hooks/useReduceMotion";
+import { colors, fontScaleCap, radius, type } from "../../theme";
+
+type ScrollHandlers = {
+  onScrollBeginDrag?: () => void;
+  onScrollEndDrag?: (e?: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  onMomentumScrollBegin?: () => void;
+  onMomentumScrollEnd?: (e?: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  scrollEventThrottle?: number;
+};
 
 type Props = {
   logs: BabyLogEntry[];
@@ -17,6 +38,10 @@ type Props = {
   highlightId?: string | null;
   limit?: number;
   title?: string;
+  listHeader?: ReactNode;
+  listEmpty?: ReactNode;
+  contentContainerStyle?: StyleProp<ViewStyle>;
+  scrollProps?: ScrollHandlers;
 };
 
 export function TodayTimeline({
@@ -27,49 +52,71 @@ export function TodayTimeline({
   highlightId,
   limit = 3,
   title = "오늘의 기록",
+  listHeader,
+  listEmpty,
+  contentContainerStyle,
+  scrollProps,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const sorted = sortLogsNewest(logs);
   const visible = expanded ? sorted : sorted.slice(0, limit);
+  const canExpand = sorted.length > limit;
 
-  return (
-    <View style={styles.section}>
+  const header = (
+    <View>
+      {listHeader}
       <View style={styles.header}>
         <View style={styles.titleRow}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title} maxFontSizeMultiplier={fontScaleCap.chrome}>{title}</Text>
           <View style={styles.countBadge}><Text style={styles.countText}>{sorted.length}개</Text></View>
         </View>
-        {sorted.length > limit ? (
-          <Pressable onPress={() => setExpanded((value) => !value)} hitSlop={8}>
+        {canExpand ? (
+          <Pressable style={styles.viewAllBtn} onPress={() => setExpanded((value) => !value)} hitSlop={10} accessibilityRole="button">
             <Text style={styles.viewAll}>{expanded ? "접기" : "더 많은 기록 보기 ›"}</Text>
           </Pressable>
         ) : null}
       </View>
-
-      {visible.length === 0 ? (
-        <Text style={styles.empty}>아직 기록이 없어요. 위에서 빠르게 기록해 보세요.</Text>
-      ) : (
-        <View style={styles.timeline}>
-          {visible.map((entry, index) => (
-            <SwipeableTimelineRow
-              key={entry.id}
-              entry={entry}
-              customCategories={customCategories}
-              isLast={index === visible.length - 1}
-              highlighted={highlightId === entry.id}
-              onPress={() => onPress(entry)}
-              onDelete={onDelete ? () => onDelete(entry) : undefined}
-            />
-          ))}
-        </View>
-      )}
     </View>
+  );
+
+  return (
+    <FlatList
+      data={visible}
+      keyExtractor={(entry) => entry.id}
+      style={styles.list}
+      contentContainerStyle={contentContainerStyle}
+      ListHeaderComponent={header}
+      ListEmptyComponent={
+        listEmpty !== undefined
+          ? <View>{listEmpty}</View>
+          : sorted.length === 0
+            ? <Text style={styles.empty}>아직 기록이 없어요. 위에서 기록해 보세요.</Text>
+            : null
+      }
+      extraData={`${highlightId ?? ""}-${expanded}-${visible.length}`}
+      initialNumToRender={8}
+      windowSize={7}
+      removeClippedSubviews={false}
+      renderItem={({ item, index }) => (
+        <SwipeableTimelineRow
+          entry={item}
+          customCategories={customCategories}
+          isFirst={index === 0}
+          isLast={index === visible.length - 1}
+          highlighted={highlightId === item.id}
+          onPress={() => onPress(item)}
+          onDelete={onDelete ? () => onDelete(item) : undefined}
+        />
+      )}
+      {...scrollProps}
+    />
   );
 }
 
 function SwipeableTimelineRow({
   entry,
   customCategories,
+  isFirst,
   isLast,
   highlighted,
   onPress,
@@ -77,15 +124,28 @@ function SwipeableTimelineRow({
 }: {
   entry: BabyLogEntry;
   customCategories: CustomCategory[];
+  isFirst: boolean;
   isLast: boolean;
   highlighted?: boolean;
   onPress: () => void;
   onDelete?: () => void;
 }) {
   const translateX = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
   const category = resolveLogCategory(entry.cat, customCategories);
-  const reset = () =>
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+  const reset = useCallback(
+    () =>
+      Animated.timing(translateX, { toValue: 0, duration: reduceMotion ? 0 : 180, useNativeDriver: true }).start(),
+    [reduceMotion, translateX],
+  );
+
+  const confirmDelete = useCallback(() => {
+    if (!onDelete) return;
+    Alert.alert("기록 삭제", "이 기록을 삭제할까요?", [
+      { text: "취소", style: "cancel", onPress: reset },
+      { text: "삭제", style: "destructive", onPress: onDelete },
+    ]);
+  }, [onDelete, reset]);
 
   const panResponder = useMemo(
     () =>
@@ -102,22 +162,17 @@ function SwipeableTimelineRow({
           }
           Animated.timing(translateX, {
             toValue: -96,
-            duration: 140,
+            duration: reduceMotion ? 0 : 140,
             useNativeDriver: true,
-          }).start(() => {
-            Alert.alert("기록 삭제", "이 기록을 삭제할까요?", [
-              { text: "취소", style: "cancel", onPress: reset },
-              { text: "삭제", style: "destructive", onPress: onDelete },
-            ]);
-          });
+          }).start(confirmDelete);
         },
         onPanResponderTerminate: reset,
       }),
-    [onDelete, translateX],
+    [confirmDelete, onDelete, reduceMotion, reset, translateX],
   );
 
   return (
-    <View style={styles.swipeWrap}>
+    <View style={[styles.swipeWrap, isFirst && styles.swipeFirst, isLast && styles.swipeLast]}>
       <View style={styles.deleteUnderlay}>
         <Text style={styles.deleteText}>삭제</Text>
       </View>
@@ -129,7 +184,17 @@ function SwipeableTimelineRow({
         ]}
         {...panResponder.panHandlers}
       >
-        <Pressable style={styles.row} onPress={onPress}>
+        <Pressable
+          style={styles.row}
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`${formatDisplayTime(entry.time)} ${formatTimelineLabel(entry, customCategories)}`}
+          accessibilityHint={onDelete ? "쓸어 넘기면 삭제할 수 있어요" : undefined}
+          accessibilityActions={onDelete ? [{ name: "delete", label: "삭제" }] : undefined}
+          onAccessibilityAction={(event) => {
+            if (event.nativeEvent.actionName === "delete") confirmDelete();
+          }}
+        >
           <View style={styles.rail}>
             <View style={[styles.dot, { backgroundColor: category.color }]} />
             {!isLast && <View style={styles.line} />}
@@ -159,18 +224,19 @@ function SwipeableTimelineRow({
 }
 
 const styles = StyleSheet.create({
-  section: { marginBottom: 24 },
+  list: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 10,
   },
-  title: { fontSize: 19, fontWeight: "800", color: colors.text, letterSpacing: -0.3 },
+  title: { fontSize: type.lg, fontWeight: "800", color: colors.text, letterSpacing: -0.3 },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 },
   countBadge: { minWidth: 34, height: 24, borderRadius: 12, paddingHorizontal: 8, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
-  countText: { color: colors.amber, fontSize: 10.5, fontWeight: "800" },
-  viewAll: { fontSize: 12.5, fontWeight: "800", color: colors.amber },
+  countText: { color: colors.amberText, fontSize: type.xs, fontWeight: "800" },
+  viewAllBtn: { minHeight: 44, justifyContent: "center", paddingHorizontal: 4 },
+  viewAll: { fontSize: type.xs, fontWeight: "800", color: colors.amberText },
   empty: {
     textAlign: "center",
     color: colors.faint,
@@ -181,20 +247,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  timeline: {
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 5,
+  swipeWrap: {
+    position: "relative",
     overflow: "hidden",
-    shadowColor: "#2E2A26",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    backgroundColor: colors.card,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: colors.border,
   },
-  swipeWrap: { position: "relative" },
+  swipeFirst: {
+    borderTopWidth: 1,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    paddingTop: 5,
+  },
+  swipeLast: {
+    borderBottomWidth: 1,
+    borderBottomLeftRadius: radius.lg,
+    borderBottomRightRadius: radius.lg,
+    paddingBottom: 5,
+    marginBottom: 24,
+  },
   rowSurface: { backgroundColor: colors.card, paddingHorizontal: 12 },
   rowHighlight: { backgroundColor: "rgba(232,145,138,0.14)" },
   deleteUnderlay: {
@@ -231,8 +304,8 @@ const styles = StyleSheet.create({
   },
   body: { flex: 1 },
   entryRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  entryText: { flex: 1, fontSize: 14.5, fontWeight: "700", color: colors.text },
-  entryMeta: { fontSize: 11, lineHeight: 16, color: colors.muted, marginTop: 3 },
+  entryText: { flex: 1, fontSize: type.sm, fontWeight: "700", color: colors.text },
+  entryMeta: { fontSize: type.xs, lineHeight: 16, color: colors.muted, marginTop: 3 },
   actor: { fontSize: 11, color: colors.faint, marginTop: 3 },
   editChip: {
     borderWidth: 1,

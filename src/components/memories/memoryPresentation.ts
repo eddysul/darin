@@ -1,8 +1,9 @@
+import type { MiscIconKey } from "../babylog/BabyLogIcon";
 import type { MemoryPrivacyType } from "../../types/memory";
 
 export type MemoryPrivacyPresentation = {
   label: string;
-  icon: string;
+  icon: MiscIconKey;
   accent: string;
   soft: string;
 };
@@ -10,31 +11,31 @@ export type MemoryPrivacyPresentation = {
 const PRESENTATION: Record<MemoryPrivacyType, MemoryPrivacyPresentation> = {
   family_circle: {
     label: "가족 공개",
-    icon: "⌂",
+    icon: "family",
     accent: "#5E9E8C",
     soft: "#EAF5F1",
   },
   friend_circle: {
     label: "친구 공개",
-    icon: "◇",
+    icon: "handshake",
     accent: "#6795B5",
     soft: "#E9F3F9",
   },
   only_me: {
     label: "나만 보기",
-    icon: "♙",
+    icon: "lock",
     accent: "#8B75B8",
     soft: "#F1ECF8",
   },
   tagged_family: {
     label: "가족 공개",
-    icon: "⌂",
+    icon: "family",
     accent: "#5E9E8C",
     soft: "#EAF5F1",
   },
   selected_people: {
     label: "가족 공개",
-    icon: "⌂",
+    icon: "family",
     accent: "#5E9E8C",
     soft: "#EAF5F1",
   },

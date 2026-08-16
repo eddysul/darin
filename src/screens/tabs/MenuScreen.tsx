@@ -26,7 +26,7 @@ import { useAppSettings } from "../../context/AppSettingsContext";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { useLogout } from "../../context/LogoutContext";
 import { AuthRepository } from "../../repositories/AuthRepository";
-import { colors, radius } from "../../theme";
+import { colors, radius, type } from "../../theme";
 import type { DiaryReminderSettings } from "../../types/diaryReminder";
 import type { SettingsDetailPage } from "../../navigation/types";
 import { DEFAULT_DIARY_REMINDER } from "../../types/diaryReminder";
@@ -49,10 +49,11 @@ type Props = {
   onOpenSettings: (page: SettingsDetailPage) => void;
   onOpenGrowthRecords: () => void;
   onOpenGrowthBookStorage?: () => void;
+  onOpenConsult?: () => void;
   embedded?: boolean;
 };
 
-export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, onOpenSettings, onOpenGrowthRecords, onOpenGrowthBookStorage, embedded = false }: Props) {
+export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, onOpenSettings, onOpenGrowthRecords, onOpenGrowthBookStorage, onOpenConsult, embedded = false }: Props) {
   const insets = useSafeAreaInsets();
   const logout = useLogout();
   const { settings, setSettings, resetSettings } = useAppSettings();
@@ -177,14 +178,22 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
             onPress={() => (onOpenMyProfile ? onOpenMyProfile() : setAccountSettingsOpen(true))}
           />
           <MenuRow icon="baby" title="아기 프로필" subtitle="사진·이름·별명·생년월일 관리" onPress={onOpenProfile} />
-          <MenuRow icon="family" title="가족·친구 공유" subtitle="구성원·친구·초대코드를 한 곳에서 관리" onPress={onOpenFamilyShare} />
+          <MenuRow icon="family" title="가족·친구 공유" subtitle="ID로 요청하거나 연결된 사람을 관리" onPress={onOpenFamilyShare} />
+          {onOpenConsult ? (
+            <MenuRow
+              icon="bot"
+              title="AI 상담"
+              subtitle="육아 질문을 바로 물어보세요"
+              onPress={onOpenConsult}
+            />
+          ) : null}
         </MenuSection>
 
         <MenuSection title="알림">
           <MenuRow
             icon="bell"
             title="알림 설정"
-            subtitle="전체·일기·돌봄·가족 소식 알림"
+            subtitle="일기 리마인더"
             onPress={() => setReminderOpen(true)}
           />
         </MenuSection>
@@ -201,7 +210,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         <MenuSection title="꾸미기/성장책">
           <MenuRow icon="baby" title="내 아기 스티커" subtitle="스티커 만들기와 보관함" onPress={() => setStickerOpen(true)} />
           {onOpenGrowthBookStorage ? (
-            <MenuRow icon="folder" title="성장책 보관함" subtitle="담긴 기록·미리보기·PDF 관리" onPress={onOpenGrowthBookStorage} />
+            <MenuRow icon="folder" title="성장책" subtitle="목차에서 읽고 꾸며요" onPress={onOpenGrowthBookStorage} />
           ) : null}
           <MenuRow icon="folder" title="성장책 설정" subtitle="날짜·작성자·기본 레이아웃" onPress={() => onOpenSettings("growthBook")} />
         </MenuSection>
@@ -281,6 +290,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
 
       <BabyStickerVaultModal
         visible={stickerOpen}
+        babyId={localDataScope?.babyId}
         babyName={babyName}
         stickers={babyStickers}
         createdBy={logAuthor.userId}
@@ -384,7 +394,7 @@ function MenuRow({
       accessibilityLabel={title}
     >
       <View style={[styles.iconWrap, danger && styles.dangerIconWrap]}>
-        <BabyLogIcon kind={icon} size={19} color={danger ? colors.dangerText : colors.amber} strokeWidth={1.9} />
+        <BabyLogIcon kind={icon} size={19} color={danger ? colors.dangerText : colors.amberText} strokeWidth={1.9} />
       </View>
       <View style={styles.rowBody}>
         <Text style={[styles.rowTitle, danger && styles.dangerTitle]}>{title}</Text>
@@ -398,10 +408,10 @@ function MenuRow({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: 20, gap: 15 },
-  eyebrow: { color: colors.amber, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
-  title: { color: colors.text, fontSize: 27, fontWeight: "800", letterSpacing: -0.5 },
-  subtitle: { color: colors.muted, fontSize: 13, marginTop: -8, marginBottom: 4 },
-  sectionTitle: { color: colors.muted, fontSize: 12, fontWeight: "800", marginBottom: 7, marginLeft: 3 },
+  eyebrow: { color: colors.amberText, fontSize: type.xs, fontWeight: "900", letterSpacing: 1.4 },
+  title: { color: colors.text, fontSize: type.xl, fontWeight: "800", letterSpacing: -0.5 },
+  subtitle: { color: colors.muted, fontSize: type.sm, marginTop: -8, marginBottom: 4 },
+  sectionTitle: { color: colors.muted, fontSize: type.xs, fontWeight: "800", marginBottom: 7, marginLeft: 3 },
   section: { borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
   row: { minHeight: 68, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 15, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   pressed: { backgroundColor: colors.cardHi },
@@ -409,9 +419,9 @@ const styles = StyleSheet.create({
   iconWrap: { width: 39, height: 39, borderRadius: 14, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
   dangerIconWrap: { backgroundColor: colors.dangerSoft },
   rowBody: { flex: 1 },
-  rowTitle: { color: colors.text, fontSize: 14.5, fontWeight: "800" },
+  rowTitle: { color: colors.text, fontSize: type.sm, fontWeight: "800" },
   dangerTitle: { color: colors.dangerText },
-  rowSubtitle: { color: colors.faint, fontSize: 11.5, marginTop: 3 },
+  rowSubtitle: { color: colors.faint, fontSize: type.xs, marginTop: 3 },
   overlay: { flex: 1, justifyContent: "center", padding: 22, backgroundColor: "rgba(30,26,23,0.48)" },
   notificationCard: { borderRadius: radius.xl, backgroundColor: colors.card, padding: 20, gap: 8, maxHeight: "88%" },
   notificationTitle: { fontSize: 20, fontWeight: "900", color: colors.text },

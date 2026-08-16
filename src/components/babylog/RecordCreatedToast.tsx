@@ -45,5 +45,5 @@ const styles = StyleSheet.create({
   },
   body: { gap: 4 },
   title: { fontSize: 13.5, fontWeight: "800", color: "#FFFFFF" },
-  cta: { fontSize: 12, fontWeight: "700", color: colors.amber },
+  cta: { fontSize: 12, fontWeight: "700", color: colors.amberText },
 });

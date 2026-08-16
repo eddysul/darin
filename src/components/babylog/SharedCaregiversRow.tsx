@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { useBabyLog } from "../../context/BabyLogContext";
-import { colors } from "../../theme";
+import { colors, fontScaleCap } from "../../theme";
 
 const CAREGIVER_TONES = [colors.amber, "#7c83fd", "#5CB87A", "#c98a54"] as const;
 
@@ -47,7 +47,7 @@ export function SharedCaregiversRow({ onPress, size = "md", label }: Props) {
           </View>
         ))}
       </View>
-      <Text style={[styles.label, size === "sm" && styles.labelSm]} numberOfLines={1}>
+      <Text style={[styles.label, size === "sm" && styles.labelSm]} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>
         {resolved}
       </Text>
     </Pressable>

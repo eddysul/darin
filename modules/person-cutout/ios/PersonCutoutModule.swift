@@ -81,24 +81,55 @@ public class PersonCutoutModule: Module {
     }
 
     AsyncFunction("createCircularCutout") { (imageUri: String) -> String in
-      let image = try Self.loadUIImage(from: imageUri)
-      let size = min(image.size.width, image.size.height)
-      let outputSize = CGSize(width: size, height: size)
-      let renderer = UIGraphicsImageRenderer(size: outputSize)
-      let circled = renderer.image { ctx in
-        let rect = CGRect(origin: .zero, size: outputSize)
-        UIBezierPath(ovalIn: rect).addClip()
-        let origin = CGPoint(
-          x: (size - image.size.width) / 2.0,
-          y: (size - image.size.height) / 2.0
-        )
-        image.draw(at: origin)
-      }
-      guard let data = circled.pngData() else {
-        throw PersonCutoutError.processingFailed
-      }
-      return try Self.writeData(data, prefix: "circular-cutout", ext: "png")
+      try Self.makeCircularCutout(from: imageUri, offsetX: 0.5, offsetY: 0.5, zoom: 1)
     }
+
+    AsyncFunction("createCircularCutoutFramed") { (imageUri: String, offsetX: Double, offsetY: Double, zoom: Double) -> String in
+      try Self.makeCircularCutout(from: imageUri, offsetX: offsetX, offsetY: offsetY, zoom: zoom)
+    }
+  }
+
+  /// Circular transparent PNG. offsetX/Y are the crop center in 0...1 image space; zoom >= 1 tightens the crop.
+  private static func makeCircularCutout(
+    from imageUri: String,
+    offsetX: Double,
+    offsetY: Double,
+    zoom: Double
+  ) throws -> String {
+    let image = try loadUIImage(from: imageUri)
+    let width = image.size.width
+    let height = image.size.height
+    guard width > 0, height > 0 else {
+      throw PersonCutoutError.invalidImage
+    }
+
+    let zoomClamped = min(max(zoom, 1.0), 8.0)
+    let cropSide = min(width, height) / CGFloat(zoomClamped)
+    var originX = CGFloat(min(max(offsetX, 0.0), 1.0)) * width - cropSide / 2
+    var originY = CGFloat(min(max(offsetY, 0.0), 1.0)) * height - cropSide / 2
+    originX = min(max(0 as CGFloat, originX), width - cropSide)
+    originY = min(max(0 as CGFloat, originY), height - cropSide)
+
+    let outputSide = min(max(cropSide, 256 as CGFloat), 1024 as CGFloat)
+    let outputSize = CGSize(width: outputSide, height: outputSide)
+    let format = UIGraphicsImageRendererFormat.default()
+    format.opaque = false
+    let renderer = UIGraphicsImageRenderer(size: outputSize, format: format)
+    let circled = renderer.image { _ in
+      let rect = CGRect(origin: .zero, size: outputSize)
+      UIBezierPath(ovalIn: rect).addClip()
+      let drawScale = outputSide / cropSide
+      image.draw(in: CGRect(
+        x: -originX * drawScale,
+        y: -originY * drawScale,
+        width: width * drawScale,
+        height: height * drawScale
+      ))
+    }
+    guard let data = circled.pngData() else {
+      throw PersonCutoutError.processingFailed
+    }
+    return try writeData(data, prefix: "circular-cutout", ext: "png")
   }
 
   private static func loadUIImage(from uri: String) throws -> UIImage {

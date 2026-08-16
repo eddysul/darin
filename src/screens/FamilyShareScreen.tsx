@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,83 +12,70 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect } from "@react-navigation/native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BabyLogIcon, type MiscIconKey } from "../components/babylog/BabyLogIcon";
 import { useBabyLog } from "../context/BabyLogContext";
+import { FriendRepository, type FriendDisplay } from "../repositories/DarinFriendRepository";
 import {
-  FriendRepository,
-  type FriendDisplay,
-} from "../repositories/DarinFriendRepository";
-import { FamilyRepository } from "../repositories/FamilyRepository";
+  FamilyRepository,
+  type DarinInviteRequestView,
+} from "../repositories/FamilyRepository";
 import { ProfileRepository } from "../repositories/ProfileRepository";
-import type { InviteType } from "../types/database";
+import { parseDarinId } from "../repositories/DarinIdentityRepository";
 import { FAMILY_ROLE_LABELS } from "../types/family";
-import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
+import type { RootStackParamList } from "../navigation/types";
 import { colors, radius } from "../theme";
 
-type InvitePreview = NonNullable<Awaited<ReturnType<typeof FamilyRepository.previewInviteCode>>>;
+const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 
-const INVITE_LABELS: Record<InviteType, string> = {
+const INVITE_LABELS: Record<VisibleInviteType, string> = {
   family: "가족 초대",
   baby_friend: "친구 초대",
-  darin_friend: "친구 초대",
 };
 
-const INVITE_DESCRIPTIONS: Record<InviteType, string> = {
+const INVITE_DESCRIPTIONS: Record<VisibleInviteType, string> = {
   family: "기록과 성장책을 함께 볼 수 있어요.",
   baby_friend: "친구 공개 순간만 볼 수 있어요.",
-  darin_friend: "친구 공개 순간만 볼 수 있어요.",
 };
 
-const INVITE_PERMISSION_COPY: Record<InviteType, string> = {
+const INVITE_PERMISSION_COPY: Record<VisibleInviteType, string> = {
   family: "관리자 또는 편집 가능 권한으로 기록·일기·성장책을 함께 관리해요.",
   baby_friend: "친구 공개 순간만 볼 수 있고 기록·일기·성장책은 볼 수 없어요.",
-  darin_friend: "친구 공개 순간만 볼 수 있고 기록·일기·성장책은 볼 수 없어요.",
 };
 
-const INVITE_ICON: Record<InviteType, string> = {
-  family: "●●",
-  baby_friend: "♡",
-  darin_friend: "●●",
+const INVITE_ICON: Record<VisibleInviteType, MiscIconKey> = {
+  family: "family",
+  baby_friend: "handshake",
 };
 
 type ShareTab = "create" | "enter" | "people";
-type VisibleInviteType = Extract<InviteType, "family" | "baby_friend">;
+type VisibleInviteType = "family" | "baby_friend";
+type IdPreview = { darinId: string; nickname: string; tag: string };
+type Props = NativeStackScreenProps<RootStackParamList, "FamilyShare">;
 
-function inviteMessage(type: InviteType, code: string, babyName: string): string {
-  const intro =
-    type === "family"
-      ? `${babyName}의 다린 기록을 함께 남기도록 초대했어요.`
-      : type === "baby_friend"
-        ? `${babyName}의 친구 공개 순간을 함께 보도록 초대했어요.`
-        : `${babyName}의 친구 공개 순간을 함께 보도록 초대했어요.`;
-  return `${intro}\n\n초대코드: ${code}\n\n다린 앱에서 ‘초대코드 입력’을 선택해 주세요.`;
-}
-
-function previewTitle(preview: InvitePreview): string {
-  if (preview.invite_type !== "family") return `${preview.baby_name ?? "아기"}의 친구 초대`;
-  return `${preview.baby_name ?? "아기"}의 가족 초대`;
-}
-
-export function FamilyShareScreen() {
+export function FamilyShareScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { babyName, myFamilyRole, familyMembers, rehydrateFromServer, activeBabyId } = useBabyLog();
   const babyId = activeBabyId;
   const isAdmin = myFamilyRole === "owner" || myFamilyRole === "admin";
-  const [activeTab, setActiveTab] = useState<ShareTab>("create");
+  const [activeTab, setActiveTab] = useState<ShareTab>(() => route.params?.tab ?? (isAdmin ? "create" : "enter"));
   const [inviteType, setInviteType] = useState<VisibleInviteType>(() => (isAdmin ? "family" : "baby_friend"));
   const [role, setRole] = useState<"admin" | "editor">("editor");
   const [relation, setRelation] = useState("가족");
-  const [createdCodes, setCreatedCodes] = useState<Partial<Record<VisibleInviteType, string>>>({});
-  const [code, setCode] = useState("");
-  const [preview, setPreview] = useState<InvitePreview | null>(null);
-  const [displayName, setDisplayName] = useState("");
-  const [realName, setRealName] = useState("");
+  const [targetDarinId, setTargetDarinId] = useState("");
+  const [idPreview, setIdPreview] = useState<IdPreview | null>(null);
   const [friends, setFriends] = useState<FriendDisplay[]>([]);
+  const [incoming, setIncoming] = useState<DarinInviteRequestView[]>([]);
+  const [outgoing, setOutgoing] = useState<DarinInviteRequestView[]>([]);
   const [working, setWorking] = useState(false);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState("");
+  const [creatingCode, setCreatingCode] = useState(false);
   const [error, setError] = useState("");
-  const createdCode = createdCodes[inviteType] ?? "";
 
   const refresh = useCallback(async () => {
     const [profile] = await Promise.all([
@@ -96,432 +83,519 @@ export function FamilyShareScreen() {
       rehydrateFromServer().catch(() => undefined),
     ]);
     if (profile) {
-      setDisplayName((current) => current || profile.display_name || "");
-      setRealName((current) => current || profile.nickname || "");
       setRelation((current) =>
         current === "가족" && profile.default_relation ? profile.default_relation : current,
       );
     }
     if (babyId && isAdmin) {
-      setFriends(await FriendRepository.listFriendsByBabyId(babyId).catch(() => []));
+      const babyFriends = await FriendRepository.listFriendsByBabyId(babyId).catch(() => []);
+      setFriends(babyFriends);
     } else {
       setFriends([]);
+    }
+    try {
+      const requests = await FamilyRepository.listDarinInviteRequests();
+      setIncoming(requests.filter((item) => item.direction === "incoming"));
+      setOutgoing(requests.filter((item) => item.direction === "outgoing"));
+    } catch {
+      setIncoming([]);
+      setOutgoing([]);
     }
   }, [babyId, isAdmin, rehydrateFromServer]);
 
   useFocusEffect(
     useCallback(() => {
+      if (route.params?.tab) setActiveTab(route.params.tab);
       void refresh();
-    }, [refresh]),
+    }, [refresh, route.params?.tab]),
   );
 
   const chooseType = (next: VisibleInviteType) => {
     setInviteType(next);
     setError("");
+    setIdPreview(null);
+    setInviteCode("");
     setRelation(next === "family" ? "가족" : "친구");
   };
 
-  const createInvite = async () => {
-    if (working) return;
+  const confirmDarinId = () => {
+    const preview = parseDarinId(targetDarinId);
+    if (!preview) {
+      setIdPreview(null);
+      setError("Darin ID를 닉네임#0000 형식으로 입력해 주세요.");
+      return;
+    }
+    setError("");
+    setIdPreview(preview);
+  };
+
+  const sendDarinIdRequest = async () => {
+    if (working || !idPreview) return;
     if (!babyId || !isAdmin) {
-      setError("초대코드는 관리자만 만들 수 있어요.");
+      setError("초대 요청은 아기 관리자만 보낼 수 있어요.");
       return;
     }
     setWorking(true);
     setError("");
     try {
-      const invite = inviteType === "family"
-        ? await FamilyRepository.createInviteCode({ babyId, inviteType, role, relationshipLabel: relation })
-        : await FriendRepository.createFriendInvite(babyId);
-      setCreatedCodes((current) => ({ ...current, [inviteType]: invite.code }));
+      const request = await FamilyRepository.sendDarinIdInviteRequest({
+        babyId,
+        darinId: idPreview.darinId,
+        requestType: inviteType === "family" ? "family" : "friend",
+        role,
+        relationshipLabel: relation,
+      });
+      if (!request) throw new Error("초대 요청을 만들지 못했어요.");
+      setTargetDarinId("");
+      setIdPreview(null);
+      Alert.alert(
+        inviteType === "family" ? "가족 초대 요청을 보냈어요" : "친구 추가 요청을 보냈어요",
+        `${request.recipient_nickname}님에게 요청을 보냈어요.`,
+      );
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "초대 요청을 보내지 못했어요.");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const createAuxiliaryInviteCode = async () => {
+    if (!babyId || !isAdmin || creatingCode) return;
+    setCreatingCode(true);
+    setError("");
+    try {
+      const row = await FamilyRepository.createInviteCode({
+        babyId,
+        inviteType,
+        role,
+        relationshipLabel: relation,
+      });
+      const code = row?.code ?? "";
+      if (!code) throw new Error("초대코드를 만들지 못했어요.");
+      setInviteCode(code);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "초대코드를 만들지 못했어요.");
     } finally {
-      setWorking(false);
+      setCreatingCode(false);
     }
   };
 
-  const copyCode = async () => {
-    if (!createdCode) return;
-    await Clipboard.setStringAsync(createdCode);
-    Alert.alert("복사 완료", "초대코드를 복사했어요.");
+  const copyInviteCode = async () => {
+    if (!inviteCode) return;
+    await Clipboard.setStringAsync(inviteCode);
+    Alert.alert("코드를 복사했어요", "가족에게 코드를 공유해 주세요.");
   };
 
-  const openShareSheet = async () => {
-    if (!createdCode) return;
+  const shareInviteCode = async () => {
+    if (!inviteCode) return;
+    await Share.share({ message: `다린 초대코드: ${inviteCode}` });
+  };
+
+  const respondToRequest = async (item: DarinInviteRequestView, accept: boolean) => {
+    if (respondingId) return;
+    setRespondingId(item.id);
     try {
-      await Share.share({ message: inviteMessage(inviteType, createdCode, babyName) });
-    } catch {
-      Alert.alert("공유할 수 없어요", "초대코드를 복사해서 직접 보내주세요.");
-    }
-  };
-
-  const shareToKakao = async () => {
-    // Native Kakao Share is intentionally deferred. iOS presents KakaoTalk as
-    // a target when installed, and remains usable for every other share app.
-    await openShareSheet();
-  };
-
-  const inspectInvite = async () => {
-    const normalized = code.trim().toUpperCase();
-    if (!normalized || working) return;
-    setWorking(true);
-    setError("");
-    try {
-      const next = await FamilyRepository.previewInviteCode(normalized);
-      if (!next) throw new Error("초대코드를 찾지 못했어요.");
-      if (next.invite_type === "darin_friend") {
-        throw new Error("이전 버전 초대코드예요. 새로운 친구 초대코드를 요청해 주세요.");
-      }
-      if (!next.is_valid) {
-        const reason =
-          next.invalid_reason === "expired"
-            ? "만료된 초대코드예요."
-            : next.invalid_reason === "revoked"
-              ? "취소된 초대코드예요."
-              : "이미 사용된 초대코드예요.";
-        throw new Error(reason);
-      }
-      setCode(normalized);
-      setPreview(next);
-      if (next.invite_type === "family" && next.relation) setRelation(next.relation);
-    } catch (cause) {
-      setPreview(null);
-      setError(cause instanceof Error ? cause.message : "초대 정보를 확인하지 못했어요.");
-    } finally {
-      setWorking(false);
-    }
-  };
-
-  const acceptInvite = async () => {
-    if (!preview || !displayName.trim() || !realName.trim() || working) return;
-    setWorking(true);
-    setError("");
-    try {
-      const accepted = await FamilyRepository.acceptInviteCode({
-        code,
-        displayName: displayName.trim(),
-        nickname: realName.trim(),
-        relation,
-      });
+      await FamilyRepository.respondToDarinIdInviteRequest(item.id, accept);
+      Alert.alert(accept ? "요청을 수락했어요" : "요청을 거절했어요", accept ? "공유 멤버 연결이 완료되었어요." : "요청을 거절했어요.");
       await refresh();
-      const message =
-        accepted?.invite_type === "family"
-          ? "아기 가족 목록에 연결됐어요."
-          : "친구 공개 순간을 볼 수 있도록 친구 목록에 연결됐어요.";
-      Alert.alert("초대 수락 완료", message);
-      setPreview(null);
-      setCode("");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "초대를 수락하지 못했어요.");
+      Alert.alert("요청을 처리하지 못했어요", cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요.");
     } finally {
-      setWorking(false);
+      setRespondingId(null);
     }
   };
 
   const activeFamily = familyMembers.filter((member) => member.status === "active");
+  const pendingOutgoing = useMemo(
+    () => outgoing.filter((item) => !babyId || item.babyId === babyId),
+    [babyId, outgoing],
+  );
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={88}
-    >
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
-      >
-        <View style={styles.headerCopy}>
-          <Text style={styles.title}>가족·친구 초대</Text>
-          <Text style={styles.headerSubtitle}>가족과 친구를 안전하게 연결해요.</Text>
-        </View>
-
+    <View style={styles.root}>
+      <View style={styles.topChrome}>
         <View style={[styles.card, styles.summaryCard]}>
-          <View style={styles.summaryIcon}><Text style={styles.summaryIconText}>✈</Text></View>
+          <View style={styles.summaryIcon}>
+            <BabyLogIcon kind="family" size={22} color={colors.amberText} />
+          </View>
           <View style={styles.summaryCopy}>
             <Text style={styles.summaryTitle}>{babyName}네 가족</Text>
-            <Text style={styles.summaryMeta}>가족 {activeFamily.length}명 · 함께 기록 중</Text>
+            <Text style={styles.summaryMeta}>가족 {activeFamily.length}명 · 친구 {friends.length}명</Text>
             <Text style={styles.summaryHint} numberOfLines={2}>
               {activeFamily.length <= 1 ? "아직 초대된 가족이 없어요." : `${activeFamily.length - 1}명의 가족과 연결되어 있어요.`}
             </Text>
           </View>
-          <Pressable
-            testID="friend-add-button"
-            style={styles.summaryButton}
-            onPress={() => setActiveTab("create")}
-            accessibilityRole="button"
-            accessibilityLabel="가족·친구 초대"
-          >
-            <Text style={styles.summaryButtonText}>가족·친구 초대</Text>
-          </Pressable>
         </View>
+      </View>
 
-        <View style={styles.hubCard}>
-          <View style={styles.tabs} accessibilityRole="tablist">
-            {([
-              ["create", "초대 만들기"],
-              ["enter", "초대코드 입력"],
-              ["people", "연결된 사람"],
-            ] as const).map(([value, label]) => (
-              <Pressable
-                key={value}
-                style={[styles.tab, activeTab === value && styles.tabActive]}
-                onPress={() => {
-                  setActiveTab(value);
-                  setError("");
-                }}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: activeTab === value }}
-              >
-                <Text style={[styles.tabText, activeTab === value && styles.tabTextActive]} numberOfLines={1}>{label}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {activeTab === "create" ? (
-            <View style={styles.tabBody}>
-              <Text style={styles.sectionTitle}>누구를 초대할까요?</Text>
-              {(["family", "baby_friend"] as VisibleInviteType[]).map((type) => {
-                const disabled = !isAdmin;
-                return (
-                  <Pressable
-                    key={type}
-                    testID={`invite-choice-${type}`}
-                    style={[styles.inviteOption, inviteType === type && styles.inviteOptionActive, disabled && styles.disabled]}
-                    disabled={disabled}
-                    onPress={() => chooseType(type)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: inviteType === type, disabled }}
-                  >
-                    <View style={[styles.optionIcon, inviteType === type && styles.optionIconActive]}>
-                      <Text style={[styles.optionIconText, inviteType === type && styles.optionIconTextActive]}>{INVITE_ICON[type]}</Text>
-                    </View>
-                    <View style={styles.optionCopy}>
-                      <Text style={styles.optionTitle}>{INVITE_LABELS[type]}</Text>
-                      <Text style={styles.optionDescription}>{INVITE_DESCRIPTIONS[type]}</Text>
-                      {disabled ? <Text style={styles.adminHint}>아기 관리자만 선택할 수 있어요.</Text> : null}
-                    </View>
-                    <Text style={[styles.optionArrow, inviteType === type && styles.optionArrowActive]}>›</Text>
-                  </Pressable>
-                );
-              })}
-
-              <Text style={styles.permissionHint}>{INVITE_PERMISSION_COPY[inviteType]}</Text>
-              {inviteType === "family" ? (
-                <View style={styles.roleArea}>
-                  <Text style={styles.fieldLabel}>가족 권한</Text>
-                  <View style={styles.chips}>
-                    {(["admin", "editor"] as const).map((value) => (
-                      <Pressable key={value} style={[styles.chip, role === value && styles.chipActive]} onPress={() => setRole(value)}>
-                        <Text style={[styles.chipText, role === value && styles.chipTextActive]}>{value === "admin" ? "관리자" : "편집 가능"}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                  <Text style={styles.permissionHint}>관리자는 구성원과 초대를 관리하고, 편집 가능은 기록을 추가·수정할 수 있어요.</Text>
-                </View>
-              ) : null}
-
-              <View style={styles.sendSection}>
-                <Text style={styles.sectionTitle}>초대 보내기</Text>
-                {createdCode ? (
-                  <>
-                    <View style={styles.codePill}><Text style={styles.code} numberOfLines={1} adjustsFontSizeToFit>{createdCode}</Text></View>
-                    <View style={styles.actionRow}>
-                      <Pressable style={styles.secondary} onPress={() => void copyCode()} accessibilityLabel="초대코드 복사">
-                        <Text style={styles.secondaryText}>▣  복사</Text>
-                      </Pressable>
-                      <Pressable style={styles.shareButton} onPress={() => void shareToKakao()} accessibilityLabel="초대코드 공유하기">
-                        <Text style={styles.shareButtonText}>⌯  공유하기</Text>
-                      </Pressable>
-                    </View>
-                    <Text style={styles.shareHelper}>카카오톡 또는 공유하기로 바로 보낼 수 있어요.</Text>
-                  </>
-                ) : (
-                  <Pressable style={[styles.primary, working && styles.disabled]} onPress={() => void createInvite()} disabled={working}>
-                    {working ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>초대코드 생성</Text>}
-                  </Pressable>
-                )}
-                {createdCode ? (
-                  <Pressable style={styles.regenerateButton} onPress={() => void createInvite()} disabled={working}>
-                    <Text style={styles.regenerateText}>새 코드 만들기</Text>
-                  </Pressable>
-                ) : null}
-              </View>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? undefined : "padding"}
+        keyboardVerticalOffset={0}
+      >
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
+          <View style={styles.hubCard}>
+            <View style={styles.tabs} accessibilityRole="tablist">
+              {([
+                ["create", "요청 보내기"],
+                ["enter", "요청 받기"],
+                ["people", "연결된 사람"],
+              ] as const).map(([value, label]) => (
+                <Pressable
+                  key={value}
+                  style={[styles.tab, activeTab === value && styles.tabActive]}
+                  onPress={() => {
+                    setActiveTab(value);
+                    setError("");
+                  }}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: activeTab === value }}
+                >
+                  <Text style={[styles.tabText, activeTab === value && styles.tabTextActive]} numberOfLines={1}>{label}</Text>
+                </Pressable>
+              ))}
             </View>
-          ) : null}
 
-          {activeTab === "enter" ? (
-            <View style={styles.tabBody}>
-              <Text style={styles.sectionTitle}>초대코드 입력</Text>
-              <Text style={styles.description}>받은 코드를 입력하면 연결 정보와 권한을 먼저 확인할 수 있어요.</Text>
-              <TextInput
-                style={styles.input}
-                value={code}
-                onChangeText={(value) => {
-                  setCode(value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 16));
-                  setPreview(null);
-                  setError("");
-                }}
-                placeholder="DARIN-XXXXXXXX"
-                placeholderTextColor={colors.faint}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={() => void inspectInvite()}
-              />
-              <Pressable style={[styles.primary, (!code.trim() || working) && styles.disabled]} onPress={() => void inspectInvite()} disabled={!code.trim() || working}>
-                {working ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>초대 정보 확인</Text>}
-              </Pressable>
+            {activeTab === "create" ? (
+              <View style={styles.tabBody}>
+                {isAdmin ? (
+                  <>
+                <Text style={styles.sectionTitle}>누구를 초대할까요?</Text>
+                {(["family", "baby_friend"] as VisibleInviteType[]).map((type) => (
+                    <Pressable
+                      key={type}
+                      testID={`invite-choice-${type}`}
+                      style={[styles.inviteOption, inviteType === type && styles.inviteOptionActive]}
+                      onPress={() => chooseType(type)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: inviteType === type }}
+                    >
+                      <View style={[styles.optionIcon, inviteType === type && styles.optionIconActive]}>
+                        <BabyLogIcon kind={INVITE_ICON[type]} size={18} color={inviteType === type ? colors.amberText : colors.muted} />
+                      </View>
+                      <View style={styles.optionCopy}>
+                        <Text style={styles.optionTitle}>{INVITE_LABELS[type]}</Text>
+                        <Text style={styles.optionDescription}>{INVITE_DESCRIPTIONS[type]}</Text>
+                      </View>
+                    </Pressable>
+                ))}
 
-              {preview ? (
-                <View style={styles.preview}>
-                  <Text style={styles.previewTitle}>{previewTitle(preview)}</Text>
-                  <Text style={styles.description}>초대한 사람: {preview.inviter_name}</Text>
-                  <Text style={styles.permissionHint}>{INVITE_PERMISSION_COPY[preview.invite_type]}</Text>
-                  <Text style={styles.fieldLabel}>닉네임</Text>
-                  <Text style={styles.fieldHelp}>앱에서 주로 보이는 이름이에요.</Text>
-                  <TextInput style={styles.input} value={displayName} onChangeText={setDisplayName} placeholder="예: 콩이맘, 준이아빠" placeholderTextColor={colors.faint} maxLength={40} />
-                  <Text style={styles.fieldLabel}>이름</Text>
-                  <Text style={styles.fieldHelp}>친구와 가족이 확인할 수 있는 이름이에요.</Text>
-                  <TextInput style={styles.input} value={realName} onChangeText={setRealName} placeholder="예: 김민지, 이원준" placeholderTextColor={colors.faint} maxLength={40} />
-                  {preview.invite_type === "family" ? (
+                <Text style={styles.permissionHint}>{INVITE_PERMISSION_COPY[inviteType]}</Text>
+                {inviteType === "family" ? (
+                  <View style={styles.roleArea}>
+                    <Text style={styles.fieldLabel}>가족 권한</Text>
+                    <View style={styles.chips}>
+                      {(["admin", "editor"] as const).map((value) => (
+                        <Pressable
+                          key={value}
+                          style={[styles.chip, role === value && styles.chipActive]}
+                          onPress={() => setRole(value)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: role === value }}
+                        >
+                          <Text style={[styles.chipText, role === value && styles.chipTextActive]}>{value === "admin" ? "관리자" : "편집 가능"}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    <Text style={styles.permissionHint}>관리자는 구성원과 초대를 관리하고, 편집 가능은 기록을 추가·수정할 수 있어요.</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.sendSection}>
+                  <Text style={styles.sectionTitle}>{inviteType === "family" ? "Darin ID로 가족 요청" : "Darin ID로 친구 요청"}</Text>
+                  <Text style={styles.description}>상대가 알려준 Darin ID 형식을 확인한 뒤 요청을 보내요. 실명과 사진은 보낸 뒤에 알려 줘요.</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={targetDarinId}
+                    onChangeText={(value) => {
+                      setTargetDarinId(value);
+                      setError("");
+                      setIdPreview(null);
+                    }}
+                    placeholder="예: 콩이맘#4821"
+                    placeholderTextColor={colors.faint}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={confirmDarinId}
+                    accessibilityLabel="Darin ID"
+                    accessibilityHint={error || undefined}
+                  />
+                  {error ? <Text nativeID="invite-id-error" style={styles.error} accessibilityRole="alert">{error}</Text> : null}
+                  {!idPreview ? (
+                    <Pressable
+                      style={[styles.secondary, (!targetDarinId.trim() || working) && styles.disabled]}
+                      onPress={confirmDarinId}
+                      disabled={!targetDarinId.trim() || working}
+                      accessibilityRole="button"
+                      accessibilityLabel="형식 확인"
+                    >
+                      <Text style={styles.secondaryText}>형식 확인</Text>
+                    </Pressable>
+                  ) : (
                     <>
-                      <Text style={styles.fieldLabel}>아기와의 관계</Text>
-                      <View style={styles.chips}>
-                        {PROFILE_RELATION_OPTIONS.map((value) => (
-                          <Pressable key={value} style={[styles.chip, relation === value && styles.chipActive]} onPress={() => setRelation(value)}>
-                            <Text style={[styles.chipText, relation === value && styles.chipTextActive]}>{value}</Text>
-                          </Pressable>
-                        ))}
+                      <View style={styles.previewCard}>
+                        <Avatar name={idPreview.nickname} />
+                        <View style={styles.friendCopy}>
+                          <Text style={styles.person}>{idPreview.nickname}</Text>
+                          <Text style={styles.nickname}>{idPreview.darinId}</Text>
+                          <Text style={styles.permissionHint}>형식만 확인했어요. 상대가 없으면 전송되지 않아요.</Text>
+                        </View>
+                      </View>
+                      <Pressable
+                        style={[styles.primary, working && styles.disabled]}
+                        onPress={() => void sendDarinIdRequest()}
+                        disabled={working}
+                        accessibilityRole="button"
+                        accessibilityLabel="요청 보내기"
+                      >
+                        {working ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.primaryText}>요청 보내기</Text>}
+                      </Pressable>
+                    </>
+                  )}
+                </View>
+
+                <View style={styles.sendSection}>
+                  <Text style={styles.sectionTitle}>초대코드 (보조)</Text>
+                  <Text style={styles.description}>상대 ID를 모를 때만 코드를 만들어 공유해요. 앱 안 초대는 Darin ID 요청이 기본이에요.</Text>
+                  {inviteCode ? (
+                    <>
+                      <View style={styles.codePill}>
+                        <Text style={styles.codeText}>{inviteCode}</Text>
+                      </View>
+                      <View style={styles.inviteActions}>
+                        <Pressable style={styles.secondary} onPress={() => void copyInviteCode()} accessibilityRole="button" accessibilityLabel="코드 복사">
+                          <Text style={styles.secondaryText}>복사</Text>
+                        </Pressable>
+                        <Pressable style={styles.primary} onPress={() => void shareInviteCode()} accessibilityRole="button" accessibilityLabel="코드 공유">
+                          <Text style={styles.primaryText}>공유</Text>
+                        </Pressable>
                       </View>
                     </>
-                  ) : null}
-                  <Pressable style={[styles.primary, (!displayName.trim() || !realName.trim() || working) && styles.disabled]} onPress={() => void acceptInvite()} disabled={!displayName.trim() || !realName.trim() || working}>
-                    <Text style={styles.primaryText}>초대 수락</Text>
-                  </Pressable>
+                  ) : (
+                    <Pressable
+                      style={[styles.secondary, creatingCode && styles.disabled]}
+                      onPress={() => void createAuxiliaryInviteCode()}
+                      disabled={creatingCode}
+                      accessibilityRole="button"
+                      accessibilityLabel="초대코드 만들기"
+                    >
+                      {creatingCode ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.secondaryText}>코드 만들기</Text>}
+                    </Pressable>
+                  )}
                 </View>
-              ) : null}
-            </View>
-          ) : null}
 
-          {activeTab === "people" ? (
-            <View style={styles.tabBody}>
-              <Text style={styles.sectionTitle}>연결된 사람</Text>
-              <Text style={styles.permissionHint}>친구는 친구 공개 순간만 볼 수 있어요. 기록, 일기, 성장책은 가족에게만 공유돼요.</Text>
-
-              <View style={styles.peopleSection}>
-                <Text style={styles.peopleTitle}>가족</Text>
-                {activeFamily.length ? activeFamily.map((member) => (
-                  <View key={member.id} style={styles.personRow}>
-                    <View style={styles.personAvatar}><Text style={styles.personAvatarText}>{member.name.slice(0, 1)}</Text></View>
-                    <View style={styles.friendCopy}>
-                      <Text style={styles.person}>{member.name}</Text>
-                      <Text style={styles.nickname}>{member.realName ? `${member.realName} · ` : ""}{member.relationshipLabel ?? "가족"} · {FAMILY_ROLE_LABELS[member.role]}</Text>
-                    </View>
+                {pendingOutgoing.length ? (
+                  <View style={styles.sendSection}>
+                    <Text style={styles.sectionTitle}>보낸 요청</Text>
+                    {pendingOutgoing.map((item) => (
+                      <View key={item.id} style={styles.personRow}>
+                        <View style={styles.personAvatar}>
+                          <BabyLogIcon kind={item.requestType === "family" ? "family" : "handshake"} size={18} color={colors.amberText} />
+                        </View>
+                        <View style={styles.friendCopy}>
+                          <Text style={styles.person}>{item.title}</Text>
+                          <Text style={styles.nickname}>{item.body}</Text>
+                          <Text style={styles.permissionHint}>{item.relation} · {item.roleLabel} · 수락 대기</Text>
+                        </View>
+                      </View>
+                    ))}
                   </View>
-                )) : <Text style={styles.empty}>아직 초대된 가족이 없어요.</Text>}
+                ) : null}
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.sectionTitle}>요청 보내기</Text>
+                    <Text style={styles.description}>초대는 아기 관리자만 보낼 수 있어요. 받은 요청은 요청 받기에서 확인하고 수락할 수 있어요.</Text>
+                    <Pressable
+                      style={styles.secondary}
+                      onPress={() => setActiveTab("enter")}
+                      accessibilityRole="button"
+                      accessibilityLabel="요청 받기 보기"
+                    >
+                      <Text style={styles.secondaryText}>요청 받기 보기</Text>
+                    </Pressable>
+                  </>
+                )}
               </View>
+            ) : null}
 
-              <View style={styles.peopleSection}>
-                <Text style={styles.peopleTitle}>친구</Text>
-                {friends.length ? friends.map((friend) => (
-                  <View key={friend.membershipId} style={styles.personRow}>
-                    <View style={styles.personAvatar}><Text style={styles.personAvatarText}>{friend.displayName.slice(0, 1)}</Text></View>
-                    <View style={styles.friendCopy}>
-                      <Text style={styles.person}>{friend.displayName}</Text>
-                      {friend.realName ? <Text style={styles.nickname}>{friend.realName}</Text> : null}
+            {activeTab === "enter" ? (
+              <View style={styles.tabBody}>
+                <Text style={styles.sectionTitle}>받은 요청</Text>
+                <Text style={styles.description}>대기 중인 요청을 여기서 수락하거나 거절해요. 알림은 입구예요.</Text>
+                {incoming.length ? incoming.map((item) => (
+                  <View key={item.id} style={styles.requestCard}>
+                    <View style={styles.previewCard}>
+                      <View style={styles.personAvatar}>
+                        <BabyLogIcon kind={item.requestType === "family" ? "family" : "handshake"} size={18} color={colors.amberText} />
+                      </View>
+                      <View style={styles.friendCopy}>
+                        <Text style={styles.person}>{item.title}</Text>
+                        <Text style={styles.nickname}>{item.body}</Text>
+                        <Text style={styles.permissionHint}>{item.relation} · {item.roleLabel}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.inviteActions}>
+                      <Pressable
+                        style={[styles.declineButton, respondingId === item.id && styles.disabled]}
+                        disabled={respondingId === item.id}
+                        onPress={() => void respondToRequest(item, false)}
+                        accessibilityRole="button"
+                        accessibilityLabel="거절"
+                      >
+                        <Text style={styles.declineText}>거절</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.acceptButton, respondingId === item.id && styles.disabled]}
+                        disabled={respondingId === item.id}
+                        onPress={() => void respondToRequest(item, true)}
+                        accessibilityRole="button"
+                        accessibilityLabel="수락"
+                      >
+                        {respondingId === item.id ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.acceptText}>수락</Text>}
+                      </Pressable>
                     </View>
                   </View>
                 )) : (
                   <View style={styles.emptyGroup}>
-                    <Text style={styles.empty}>아직 연결된 친구가 없어요.</Text>
-                    <Text style={styles.empty}>친구를 초대해 추억을 함께 나눠보세요.</Text>
+                    <Text style={styles.empty}>받은 요청이 없어요.</Text>
+                    <Text style={styles.empty}>새 요청이 오면 알림과 여기에 같이 보여요.</Text>
+                    <Pressable
+                      style={styles.secondary}
+                      onPress={() => navigation.navigate("NotificationCenter")}
+                      accessibilityRole="button"
+                      accessibilityLabel="알림 열기"
+                    >
+                      <Text style={styles.secondaryText}>알림 열기</Text>
+                    </Pressable>
                   </View>
                 )}
               </View>
-            </View>
-          ) : null}
+            ) : null}
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            {activeTab === "people" ? (
+              <View style={styles.tabBody}>
+                <Text style={styles.sectionTitle}>연결된 사람</Text>
+                <Text style={styles.permissionHint}>친구는 친구 공개 순간만 볼 수 있어요. 기록, 일기, 성장책은 가족에게만 공유돼요.</Text>
+
+                <View style={styles.peopleSection}>
+                  <Text style={styles.peopleTitle}>가족</Text>
+                  {activeFamily.length ? activeFamily.map((member) => (
+                    <View key={member.id} style={styles.personRow}>
+                      <Avatar name={member.name} uri={member.avatarUrl} />
+                      <View style={styles.friendCopy}>
+                        <Text style={styles.person}>{member.name}</Text>
+                        <Text style={styles.nickname}>{member.realName ? `${member.realName} · ` : ""}{member.relationshipLabel ?? "가족"} · {FAMILY_ROLE_LABELS[member.role]}</Text>
+                      </View>
+                    </View>
+                  )) : <Text style={styles.empty}>아직 초대된 가족이 없어요.</Text>}
+                </View>
+
+                <View style={styles.peopleSection}>
+                  <Text style={styles.peopleTitle}>친구</Text>
+                  {friends.length ? friends.map((friend) => (
+                    <View key={friend.membershipId} style={styles.personRow}>
+                      <Avatar name={friend.displayName} />
+                      <View style={styles.friendCopy}>
+                        <Text style={styles.person}>{friend.displayName}</Text>
+                        {friend.realName ? <Text style={styles.nickname}>{friend.realName}</Text> : null}
+                      </View>
+                    </View>
+                  )) : (
+                    <View style={styles.emptyGroup}>
+                      <Text style={styles.empty}>아직 연결된 친구가 없어요.</Text>
+                      <Text style={styles.empty}>친구를 초대해 추억을 함께 나눠보세요.</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ) : null}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+function Avatar({ name, uri }: { name: string; uri?: string }) {
+  return (
+    <View style={styles.personAvatar}>
+      {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFillObject} contentFit="cover" /> : (
+        <Text style={styles.personAvatarText}>{name.slice(0, 1)}</Text>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 16, gap: 16 },
-  headerCopy: { alignItems: "center", gap: 4, paddingVertical: 2 },
-  title: { fontSize: 23, fontWeight: "900", color: colors.text, textAlign: "center" },
-  headerSubtitle: { fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 20 },
+  flex: { flex: 1 },
+  topChrome: { paddingHorizontal: 16, paddingTop: 12, gap: 12 },
+  content: { paddingHorizontal: 16, paddingTop: 12, gap: 16 },
   card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: 16 },
-  summaryCard: { minHeight: 116, flexDirection: "row", alignItems: "center", gap: 12 },
+  summaryCard: { minHeight: 96, flexDirection: "row", alignItems: "center", gap: 12 },
   summaryIcon: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
-  summaryIconText: { color: colors.amber, fontSize: 26, fontWeight: "900" },
   summaryCopy: { flex: 1, minWidth: 0, gap: 3 },
   summaryTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
   summaryMeta: { color: colors.muted, fontSize: 12.5, lineHeight: 18 },
   summaryHint: { color: colors.faint, fontSize: 11.5, lineHeight: 17 },
-  summaryButton: { minHeight: 44, maxWidth: 118, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
-  summaryButtonText: { color: colors.amber, fontSize: 12, fontWeight: "900", textAlign: "center" },
   hubCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: 12, gap: 16 },
   tabs: { flexDirection: "row", gap: 6 },
-  tab: { flex: 1, minWidth: 0, minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, backgroundColor: colors.card },
+  tab: { flex: 1, minWidth: 0, minHeight: TOUCH_MIN, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, backgroundColor: colors.card },
   tabActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   tabText: { color: colors.muted, fontSize: 11.5, fontWeight: "800", textAlign: "center" },
-  tabTextActive: { color: colors.amber },
+  tabTextActive: { color: colors.amberText },
   tabBody: { gap: 12, paddingHorizontal: 2, paddingBottom: 2 },
   sectionTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
   description: { fontSize: 13, color: colors.muted, lineHeight: 19 },
   permissionHint: { fontSize: 12, color: colors.faint, lineHeight: 18 },
-  fieldHelp: { fontSize: 11.5, color: colors.faint, lineHeight: 17, marginTop: -5 },
   person: { fontSize: 14, color: colors.text, fontWeight: "700" },
   nickname: { fontSize: 11.5, color: colors.muted, lineHeight: 17 },
   inviteOption: { minHeight: 86, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11 },
   inviteOptionActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   optionIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.cardHi, alignItems: "center", justifyContent: "center" },
   optionIconActive: { backgroundColor: "rgba(232,145,138,0.24)" },
-  optionIconText: { color: colors.muted, fontSize: 14, fontWeight: "900", letterSpacing: -2 },
-  optionIconTextActive: { color: colors.amber },
   optionCopy: { flex: 1, minWidth: 0, gap: 3 },
   optionTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
   optionDescription: { color: colors.muted, fontSize: 11.5, lineHeight: 17 },
-  optionArrow: { color: colors.faint, fontSize: 25 },
-  optionArrowActive: { color: colors.amber },
-  adminHint: { color: colors.faint, fontSize: 10.5, fontWeight: "700" },
   roleArea: { gap: 8, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { minHeight: 38, paddingHorizontal: 11, justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderRadius: radius.full },
+  chip: { minHeight: TOUCH_MIN, paddingHorizontal: 14, justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderRadius: radius.full },
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   chipText: { fontSize: 12, fontWeight: "700", color: colors.muted },
-  chipTextActive: { color: colors.amber },
-  primary: { minHeight: 48, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
-  primaryText: { color: "#fff", fontWeight: "800" },
+  chipTextActive: { color: colors.amberText },
+  primary: { minHeight: TOUCH_MIN, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
+  primaryText: { color: colors.amberDark, fontWeight: "800" },
   sendSection: { gap: 10, marginTop: 4, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border },
-  codePill: { minHeight: 64, paddingHorizontal: 14, borderRadius: radius.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft, borderWidth: 1, borderColor: "rgba(232,145,138,0.32)" },
-  code: { fontSize: 20, fontWeight: "900", letterSpacing: 1, color: colors.amber, textAlign: "center" },
-  actionRow: { flexDirection: "row", gap: 8 },
-  secondary: { minHeight: 48, flex: 1, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  secondaryText: { color: colors.text, fontSize: 12, fontWeight: "800" },
-  shareButton: { minHeight: 48, flex: 1.15, borderRadius: radius.md, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  shareButtonText: { color: "#fff", fontSize: 12, fontWeight: "900" },
-  shareHelper: { color: colors.faint, fontSize: 11.5, lineHeight: 17, textAlign: "center" },
-  regenerateButton: { minHeight: 40, alignItems: "center", justifyContent: "center" },
-  regenerateText: { color: colors.amber, fontSize: 12, fontWeight: "800" },
-  input: { width: "100%", minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, color: colors.text, backgroundColor: colors.cardHi, fontSize: 15 },
-  preview: { gap: 10, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
-  previewTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
+  secondary: { minHeight: TOUCH_MIN, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  secondaryText: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  input: { width: "100%", minHeight: TOUCH_MIN, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, color: colors.text, backgroundColor: colors.cardHi, fontSize: 15 },
+  previewCard: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
+  requestCard: { gap: 10, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card },
+  requestButton: { minHeight: TOUCH_MIN, minWidth: 96, maxWidth: 118, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  requestButtonText: { color: colors.amberDark, fontSize: 12, fontWeight: "800", textAlign: "center" },
   fieldLabel: { fontSize: 12, fontWeight: "800", color: colors.muted, marginTop: 2 },
   peopleSection: { gap: 9, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card },
   peopleTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
   personRow: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 },
-  personAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
-  personAvatarText: { color: colors.amber, fontSize: 14, fontWeight: "900" },
+  personAvatar: { width: 38, height: 38, borderRadius: 19, overflow: "hidden", backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
+  personAvatarText: { color: colors.amberText, fontSize: 14, fontWeight: "900" },
   friendCopy: { flex: 1, minWidth: 0 },
-  emptyGroup: { gap: 2 },
+  emptyGroup: { gap: 8 },
   empty: { color: colors.faint, fontSize: 12, lineHeight: 18 },
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12.5 },
   disabled: { opacity: 0.48 },
+  inviteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
+  codePill: { minHeight: TOUCH_MIN, borderRadius: radius.md, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  codeText: { fontSize: 18, fontWeight: "800", letterSpacing: 2, color: colors.text },
+  declineButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.backgroundSecondary, justifyContent: "center" },
+  declineText: { color: colors.muted, fontWeight: "700", fontSize: 13 },
+  acceptButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.amber, justifyContent: "center" },
+  acceptText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 },
 });

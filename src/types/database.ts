@@ -35,6 +35,7 @@ export type NotificationEventType =
   | "growth_book_rolling_paper"
   | "family_joined"
   | "diary_reminder"
+  | "invite_request"
   | "test";
 export type NotificationEventStatus = "pending" | "sent" | "failed" | "skipped";
 
@@ -103,6 +104,7 @@ export type ProfileRow = {
   id: string;
   display_name: string;
   nickname: string | null;
+  darin_id: string | null;
   avatar_url: string | null;
   avatar_storage_path: string | null;
   default_relation: string | null;
@@ -438,11 +440,27 @@ export type NotificationEventRow = {
   status: NotificationEventStatus;
   error_message: string | null;
   sent_at: string | null;
+  read_at: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export type ContactRequestCategory = "bug" | "account" | "data" | "family" | "feedback" | "other";
+
+export type DarinInviteRequestStatus = "pending" | "accepted" | "declined" | "cancelled";
+
+export type DarinInviteRequestRow = {
+  id: string;
+  baby_id: string;
+  sender_id: string;
+  receiver_id: string;
+  request_type: "family" | "friend";
+  permission_role: PermissionRole;
+  relationship_label: DbRelationshipLabel;
+  status: DarinInviteRequestStatus;
+  created_at: string;
+  responded_at: string | null;
+};
 
 export type ContactRequestRow = {
   id: string;
@@ -630,6 +648,12 @@ export type Database = {
         Update: Partial<NotificationEventRow>;
         Relationships: [];
       };
+      darin_invite_requests: {
+        Row: DarinInviteRequestRow;
+        Insert: Partial<DarinInviteRequestRow> & Pick<DarinInviteRequestRow, "baby_id" | "sender_id" | "receiver_id" | "request_type">;
+        Update: Partial<DarinInviteRequestRow>;
+        Relationships: [];
+      };
       contact_requests: {
         Row: ContactRequestRow;
         Insert: Partial<ContactRequestRow> & Pick<ContactRequestRow, "user_id" | "message">;
@@ -706,6 +730,14 @@ export type Database = {
       accept_invite_code: {
         Args: { p_code: string; p_display_name: string; p_nickname?: string | null; p_relation?: string };
         Returns: Array<{ baby_id: string | null; invite_type: InviteType; permission_role: string }>;
+      };
+      send_darin_id_invite_request: {
+        Args: { p_baby_id: string; p_darin_id: string; p_request_type: "family" | "friend"; p_role?: string; p_relation?: string };
+        Returns: Array<{ request_id: string; recipient_nickname: string }>;
+      };
+      respond_darin_id_invite_request: {
+        Args: { p_request_id: string; p_accept: boolean };
+        Returns: Array<{ baby_id: string; request_type: "family" | "friend"; permission_role: string }>;
       };
       list_my_darin_friends: {
         Args: Record<string, never>;

@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, Vibration, View } from "react-native";
+import { Animated, Pressable, ScrollView, StyleSheet, Vibration, View } from "react-native";
 import { Image } from "expo-image";
 import { BabyLogIcon } from "../babylog/BabyLogIcon";
+import { useReduceMotion } from "../../hooks/useReduceMotion";
 import type { MemoryMedia } from "../../types/memory";
 import { colors } from "../../theme";
 
@@ -17,8 +18,10 @@ export function MemoryMediaViewer({ media, imageUrls = [], onDoubleTap }: Props)
   const heartOpacity = useRef(new Animated.Value(0)).current;
   const [pageWidth, setPageWidth] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
+  const reduceMotion = useReduceMotion();
 
   const playHeart = () => {
+    if (reduceMotion) return;
     heartScale.setValue(0.65);
     heartOpacity.setValue(1);
     Animated.parallel([
@@ -62,7 +65,7 @@ export function MemoryMediaViewer({ media, imageUrls = [], onDoubleTap }: Props)
         >
           {imageUrls.map((url, index) => (
             <Pressable key={media[index]?.id ?? `${url}-${index}`} style={[styles.page, { width: pageWidth || undefined }]} onPress={handlePress}>
-              <Image source={{ uri: url }} style={StyleSheet.absoluteFill} contentFit="contain" transition={150} />
+              <Image source={{ uri: url }} style={StyleSheet.absoluteFill} contentFit="contain" transition={reduceMotion ? 0 : 150} />
             </Pressable>
           ))}
         </ScrollView>
@@ -81,7 +84,7 @@ export function MemoryMediaViewer({ media, imageUrls = [], onDoubleTap }: Props)
           },
         ]}
       >
-        <Text style={styles.heartText}>♥</Text>
+        <BabyLogIcon kind="sparkles" size={56} color={colors.amberText} />
       </Animated.View>
       {imageUrls.length > 1 ? (
         <View style={styles.dots} pointerEvents="none">
@@ -114,12 +117,5 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: "center",
     justifyContent: "center",
-  },
-  heartText: {
-    color: colors.amber,
-    fontSize: 78,
-    textShadowColor: "rgba(46,42,38,0.16)",
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 12,
   },
 });

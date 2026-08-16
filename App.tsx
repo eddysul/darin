@@ -27,6 +27,7 @@ import { GrowthRecordsManagerScreen } from "./src/screens/GrowthRecordsManagerSc
 import { MemoryDetailScreen } from "./src/screens/MemoryDetailScreen";
 import { MyProfileScreen } from "./src/screens/MyProfileScreen";
 import { SettingsHomeScreen } from "./src/screens/SettingsHomeScreen";
+import { NotificationCenterScreen } from "./src/screens/NotificationCenterScreen";
 import { AppSettingsModal, SETTINGS_PAGE_TITLES } from "./src/components/settings/AppSettingsModal";
 import type { RootStackParamList } from "./src/navigation/types";
 import { SplashScreen } from "./src/screens/SplashScreen";
@@ -57,6 +58,7 @@ import {
   savePendingInvite,
 } from "./src/utils/pendingInviteStore";
 import { AuthRepository } from "./src/repositories/AuthRepository";
+import { DarinIdentityRepository, generateDarinTag } from "./src/repositories/DarinIdentityRepository";
 import { BabyRepository } from "./src/repositories/BabyRepository";
 import { FamilyRepository } from "./src/repositories/FamilyRepository";
 import { BabyProfileRepository } from "./src/repositories/BabyProfileRepository";
@@ -243,6 +245,7 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
         <RootStack.Screen name="FamilyShare" component={FamilyShareScreen} options={{ title: "가족·친구 초대" }} />
         <RootStack.Screen name="MyProfile" component={MyProfileScreen} options={{ title: "내 프로필" }} />
         <RootStack.Screen name="SettingsHome" component={SettingsHomeScreen} options={{ title: "설정" }} />
+        <RootStack.Screen name="NotificationCenter" component={NotificationCenterScreen} options={{ title: "알림" }} />
         <RootStack.Screen
           name="SettingsDetail"
           options={({ route }) => ({ title: SETTINGS_PAGE_TITLES[route.params.page] })}
@@ -468,6 +471,7 @@ function RootApp() {
     const profile = await ProfileRepository.getMyProfile().catch(() => null);
     const profileComplete = isUserProfileComplete(profile);
     const providerName = authProfileName(session.user, input?.name);
+    const localIdentity = await DarinIdentityRepository.get(session.user.id).catch(() => null);
     const relation = relationshipLabel(profile?.default_relation) ?? pendingRelation;
     const displayName = profile?.display_name?.trim() || providerName;
     const avatarUrl = profile?.avatar_storage_path
@@ -479,8 +483,9 @@ function RootApp() {
 
     if (!profileComplete) {
       setProfileSetupInitial({
-        displayName,
-        realName: profile?.nickname ?? undefined,
+        nickname: profile?.display_name?.trim() || localIdentity?.nickname || providerName,
+        realNameFromProvider: localIdentity?.realNameFromProvider || providerName || profile?.nickname || "",
+        darinTag: localIdentity?.tag || generateDarinTag(),
         relation,
         avatarUrl,
         residenceCountry: isResidenceCountry(profile?.residence_country)
@@ -539,7 +544,7 @@ function RootApp() {
       if (startupRouting.current) return;
       startupRouting.current = true;
       void routeAuthenticatedSession().catch(() => {
-        setProfileSetupInitial({ displayName: careSetup.parent.parentName || "" });
+        setProfileSetupInitial({ nickname: careSetup.parent.parentName || "", darinTag: generateDarinTag() });
         setPhase("profileSetup");
       });
       return;
@@ -582,6 +587,19 @@ function RootApp() {
 
   const handleSetupComplete = useCallback(
     async (result: OnboardingResult) => {
+      if (result.mode === "join-request") {
+        try {
+          await rehydrateFromServer();
+          await routeAuthenticatedSession({
+            name: result.myName,
+            preferredBabyId: result.babyId,
+          });
+        } catch (cause) {
+          Alert.alert("참여하지 못했어요", cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요.");
+        }
+        return;
+      }
+
       if (result.mode === "join") {
         let accepted: Awaited<ReturnType<typeof FamilyRepository.acceptInviteCode>>;
         try {

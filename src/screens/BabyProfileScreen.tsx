@@ -43,6 +43,8 @@ import { presentAvatarPicker } from "../utils/profileAvatarPicker";
 import { colors, radius } from "../theme";
 import { CAUTION_FOOD_PRESETS } from "../types/cautionFood";
 
+const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
+
 const MEMBER_COLORS = [colors.amber, "#7c83fd", "#5CB87A", "#c98a54"];
 
 export function BabyProfileScreen() {
@@ -306,7 +308,7 @@ export function BabyProfileScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.amber} />
+        <ActivityIndicator color={colors.amberText} />
         <Text style={styles.muted}>아기 프로필을 불러오는 중…</Text>
       </View>
     );
@@ -314,7 +316,7 @@ export function BabyProfileScreen() {
 
   if (isCreating) {
     return (
-      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={88}>
+      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? undefined : "padding"} keyboardVerticalOffset={0}>
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 24, 36) }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <View style={styles.babyCard}>
             <ProfileAvatar
@@ -338,7 +340,7 @@ export function BabyProfileScreen() {
             <Text style={styles.label}>생년월일</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="생년월일 선택" style={styles.dateInput} onPress={() => setBirthPickerOpen(true)}>
               <Text style={[styles.dateInputText, !birthDate && styles.datePlaceholder]}>{birthDate || "날짜를 선택해 주세요"}</Text>
-              <BabyLogIcon kind="calendar" size={18} color={colors.amber} />
+              <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
             </Pressable>
             <Text style={styles.label}>성별</Text>
             <View style={styles.chips}>
@@ -364,7 +366,7 @@ export function BabyProfileScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={88}>
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? undefined : "padding"} keyboardVerticalOffset={0}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 24, 36) }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <View style={styles.babyCard}>
           <View style={styles.switcherBtn}>
@@ -422,7 +424,7 @@ export function BabyProfileScreen() {
               <Text style={[styles.dateInputText, !birthDate && styles.datePlaceholder]}>
                 {birthDate || "날짜를 선택해 주세요"}
               </Text>
-              <BabyLogIcon kind="calendar" size={18} color={colors.amber} />
+              <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
             </Pressable>
             <Text style={styles.inputHint}>달력에서 생년월일을 선택해 주세요.</Text>
             <Text style={styles.label}>성별</Text>
@@ -507,7 +509,12 @@ export function BabyProfileScreen() {
         </View>
 
         {members.length === 0 ? (
-          <EmptyState title="아직 공유 멤버가 없어요." body="가족 초대코드를 공유해 보세요." />
+          <EmptyState
+            title="아직 공유 멤버가 없어요."
+            body="Darin ID로 요청하거나 연결된 사람을 관리해 보세요."
+            ctaLabel="가족·친구 초대"
+            onPressCta={() => navigation.navigate("FamilyShare")}
+          />
         ) : (
           members.map((m, i) => (
             <View key={m.membershipId} style={[styles.memberRow, m.status === "inactive" && styles.inactiveRow]}>
@@ -657,7 +664,7 @@ const styles = StyleSheet.create({
   },
   babyCopy: { width: "100%", alignItems: "center", gap: 6 },
   babyName: { color: colors.text, fontSize: 22, fontWeight: "800" },
-  nickname: { color: colors.amber, fontSize: 13, fontWeight: "700" },
+  nickname: { color: colors.amberText, fontSize: 13, fontWeight: "700" },
   babyAge: { color: colors.muted, fontSize: 13 },
   switcherBtn: { position: "absolute", top: 14, left: 14, zIndex: 2 },
   editBtn: { position: "absolute", top: 14, right: 14, minHeight: 36, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
@@ -679,15 +686,15 @@ const styles = StyleSheet.create({
   customFoodName: { color: colors.text, fontSize: 13, fontWeight: "700" },
   customFoodRemove: { color: colors.dangerText, fontSize: 11.5, fontWeight: "700" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { minHeight: 40, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
+  chip: { minHeight: TOUCH_MIN, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   chipText: { color: colors.muted, fontWeight: "700", fontSize: 12.5 },
-  chipTextActive: { color: colors.amber },
+  chipTextActive: { color: colors.amberText },
   metaLabel: { color: colors.faint, fontSize: 11.5, fontWeight: "700" },
   metaValue: { color: colors.text, fontSize: 14, fontWeight: "600", marginBottom: 6 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4 },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "800" },
-  link: { color: colors.amber, fontWeight: "700", fontSize: 13 },
+  link: { color: colors.amberText, fontWeight: "700", fontSize: 13 },
   memberRow: { flexDirection: "row", gap: 12, padding: 14, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   inactiveRow: { opacity: 0.55 },
   avatar: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", overflow: "hidden" },
@@ -696,17 +703,17 @@ const styles = StyleSheet.create({
   memberRole: { color: colors.muted, fontSize: 12 },
   badge: { color: colors.faint },
   miniRoles: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
-  miniChip: { minHeight: 30, paddingHorizontal: 8, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
+  miniChip: { minHeight: TOUCH_MIN, paddingHorizontal: 10, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
   miniChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   miniChipText: { color: colors.muted, fontSize: 10.5, fontWeight: "700" },
-  miniChipTextActive: { color: colors.amber },
+  miniChipTextActive: { color: colors.amberText },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  actionBtn: { minHeight: 34, paddingHorizontal: 10, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
+  actionBtn: { minHeight: TOUCH_MIN, paddingHorizontal: 10, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
   actionText: { color: colors.muted, fontSize: 11.5, fontWeight: "700" },
   danger: { color: colors.dangerText },
   memberStatus: { color: colors.faint, fontSize: 11, fontWeight: "700" },
   invite: { minHeight: 50, borderRadius: radius.lg, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  inviteText: { color: colors.amber, fontWeight: "800" },
+  inviteText: { color: colors.amberText, fontWeight: "800" },
   viewerHint: { textAlign: "center", color: colors.faint, fontSize: 12.5 },
   save: { minHeight: 48, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", marginTop: 4 },
   saveText: { color: "#fff", fontWeight: "800" },

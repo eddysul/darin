@@ -38,5 +38,5 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   title: { fontSize: 16, fontWeight: "800", color: colors.text },
-  action: { fontSize: 13, color: colors.amber, fontWeight: "700" },
+  action: { fontSize: 13, color: colors.amberText, fontWeight: "700" },
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Linking, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import {
@@ -20,8 +20,9 @@ import {
 } from "../../types/careSetup";
 import type { RelationshipLabel } from "../../types/growthBook";
 import type { InviteType } from "../../types/database";
-import { FamilyRepository } from "../../repositories/FamilyRepository";
-import { colors, radius } from "../../theme";
+import { FamilyRepository, type DarinInviteRequestView } from "../../repositories/FamilyRepository";
+import { ProfileRepository } from "../../repositories/ProfileRepository";
+import { colors } from "../../theme";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { RecordDatePickerModal } from "../../components/babylog/RecordDatePickerModal";
 import { formatDateKey, offsetDateKey } from "../../utils/dateKey";
@@ -44,7 +45,8 @@ export type OnboardingResult =
       relationship: RelationshipToChild;
       relationshipLabel: RelationshipLabel;
       inviteType: InviteType;
-    };
+    }
+  | { mode: "join-request"; babyId: string; myName: string };
 
 type Props = {
   initialName?: string;
@@ -59,6 +61,7 @@ type Props = {
 type Step =
   | "about"
   | "connect"
+  | "requests"
   | "invite"
   | "invite-confirm"
   | "born"
@@ -103,6 +106,11 @@ export function OnboardingFlow({
   const [inviteCode, setInviteCode] = useState(initialInviteCode);
   const [inviteError, setInviteError] = useState("");
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
+  const [incomingRequests, setIncomingRequests] = useState<DarinInviteRequestView[]>([]);
+  const [myDarinId, setMyDarinId] = useState("");
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState("");
   const [datePickerTarget, setDatePickerTarget] = useState<"birthDate" | "dueDate" | null>(null);
 
   const setParent = <K extends keyof CareSetup["parent"]>(key: K, value: CareSetup["parent"][K]) =>
@@ -158,6 +166,63 @@ export function OnboardingFlow({
     if (!initialInviteCode) return;
     void previewInvite();
   }, [initialInviteCode, previewInvite]);
+
+  const loadIncomingRequests = useCallback(async () => {
+    setRequestsLoading(true);
+    setRequestError("");
+    try {
+      const [reqs, profile] = await Promise.all([
+        FamilyRepository.listDarinInviteRequests().catch(() => []),
+        ProfileRepository.getMyProfile().catch(() => null),
+      ]);
+      setIncomingRequests(reqs.filter((item) => item.direction === "incoming"));
+      setMyDarinId(profile?.darin_id?.trim() ?? "");
+    } catch (cause) {
+      setIncomingRequests([]);
+      setRequestError(cause instanceof Error ? cause.message : "받은 요청을 불러오지 못했어요.");
+    } finally {
+      setRequestsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (step !== "connect" && step !== "requests") return;
+    void loadIncomingRequests();
+  }, [loadIncomingRequests, step]);
+
+  const acceptIncomingRequest = async (item: DarinInviteRequestView) => {
+    if (respondingId) return;
+    setRespondingId(item.id);
+    setRequestError("");
+    try {
+      const accepted = await FamilyRepository.respondToDarinIdInviteRequest(item.id, true);
+      const babyId = accepted?.baby_id ?? item.babyId;
+      if (!babyId) throw new Error("연결된 아기 정보를 찾지 못했어요.");
+      onComplete({
+        mode: "join-request",
+        babyId,
+        myName: setup.parent.parentName.trim(),
+      });
+    } catch (cause) {
+      setRequestError(cause instanceof Error ? cause.message : "요청을 수락하지 못했어요.");
+    } finally {
+      setRespondingId(null);
+    }
+  };
+
+  const declineIncomingRequest = async (item: DarinInviteRequestView) => {
+    if (respondingId) return;
+    setRespondingId(item.id);
+    setRequestError("");
+    try {
+      await FamilyRepository.respondToDarinIdInviteRequest(item.id, false);
+      await loadIncomingRequests();
+    } catch (cause) {
+      setRequestError(cause instanceof Error ? cause.message : "요청을 거절하지 못했어요.");
+    } finally {
+      setRespondingId(null);
+    }
+  };
 
   const pickPhoto = async () => {
     try {
@@ -256,7 +321,7 @@ export function OnboardingFlow({
     return (
       <OnboardingShell
         title="아기 정보를 어떻게 연결할까요?"
-        subtitle="새로 만들거나, 가족이 만든 기록에 참여할 수 있어요."
+        subtitle="새로 만들거나, 가족이 ID로 보낸 요청을 수락해 참여할 수 있어요."
       >
         <ChoiceCard
           title="새 아기 등록하기"
@@ -264,13 +329,99 @@ export function OnboardingFlow({
           onPress={() => setStep("born")}
         />
         <ChoiceCard
-          title="초대코드로 연결하기"
-          body="이미 가족이 만든 아기 기록에 참여해요."
+          title="받은 요청으로 참여하기"
+          body={
+            incomingRequests.length
+              ? `대기 중인 요청 ${incomingRequests.length}건이 있어요.`
+              : "가족이 Darin ID로 보낸 요청을 수락해요."
+          }
+          onPress={() => {
+            setRequestError("");
+            setStep("requests");
+          }}
+        />
+        <Pressable
+          style={styles.linkButton}
           onPress={() => {
             setInviteError("");
             setStep("invite");
           }}
-        />
+          accessibilityRole="button"
+          accessibilityLabel="초대코드가 있으면 입력"
+        >
+          <Text style={styles.linkButtonText}>초대코드가 있으면 입력</Text>
+        </Pressable>
+      </OnboardingShell>
+    );
+  }
+
+  if (step === "requests") {
+    return (
+      <OnboardingShell
+        title="받은 요청으로 참여"
+        subtitle="가족이 Darin ID로 보낸 요청을 수락하면 그 아기 기록에 연결돼요."
+        secondaryLabel="뒤로"
+        onSecondary={() => setStep("connect")}
+      >
+        {requestsLoading ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={colors.amberText} />
+            <Text style={styles.hint}>받은 요청을 확인하는 중이에요.</Text>
+          </View>
+        ) : incomingRequests.length ? (
+          incomingRequests.map((item) => (
+            <View key={item.id} style={styles.requestCard}>
+              <Text style={styles.requestTitle}>{item.title}</Text>
+              <Text style={styles.requestBody}>{item.body}</Text>
+              <Text style={styles.hint}>{item.relation} · {item.roleLabel}</Text>
+              <View style={styles.requestActions}>
+                <Pressable
+                  style={styles.declineButton}
+                  disabled={respondingId === item.id}
+                  onPress={() => void declineIncomingRequest(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel="거절"
+                >
+                  <Text style={styles.declineText}>거절</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.acceptButton, respondingId === item.id && styles.disabled]}
+                  disabled={Boolean(respondingId)}
+                  onPress={() => void acceptIncomingRequest(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel="수락하고 참여"
+                >
+                  {respondingId === item.id ? (
+                    <ActivityIndicator color={colors.amberDark} />
+                  ) : (
+                    <Text style={styles.acceptText}>수락하고 참여</Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          ))
+        ) : (
+          <View style={styles.summaryCard}>
+            <Text style={styles.choiceTitle}>아직 받은 요청이 없어요</Text>
+            <Text style={styles.choiceBody}>
+              {myDarinId
+                ? `내 Darin ID는 ${myDarinId}예요. 가족에게 이 ID를 알려 주면 요청이 여기로 와요.`
+                : "가족에게 내 Darin ID를 알려 주면, 요청이 여기로 와요."}
+            </Text>
+            <Pressable
+              style={styles.linkButton}
+              onPress={() => {
+                setInviteError("");
+                setStep("invite");
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="초대코드가 있으면 입력"
+            >
+              <Text style={styles.linkButtonText}>초대코드가 있으면 입력</Text>
+            </Pressable>
+          </View>
+        )}
+        {requestError ? <Text style={styles.error}>{requestError}</Text> : null}
       </OnboardingShell>
     );
   }
@@ -279,7 +430,7 @@ export function OnboardingFlow({
     return (
       <OnboardingShell
         title="초대코드 입력"
-        subtitle="가족 또는 친구가 공유한 초대코드를 입력하세요."
+        subtitle="ID 요청 대신, 아직 유효한 초대코드가 있으면 입력할 수 있어요."
         primaryLabel="코드 확인"
         primaryDisabled={!inviteCode.trim()}
         onPrimary={() => void previewInvite()}
@@ -299,7 +450,7 @@ export function OnboardingFlow({
           />
         </OnboardingField>
         {inviteError ? <Text style={styles.error}>{inviteError}</Text> : null}
-        <Text style={styles.hint}>가족 또는 친구가 공유한 초대코드를 입력하세요.</Text>
+        <Text style={styles.hint}>앱 안 초대는 Darin ID 요청이 기본이에요. 코드는 보조 경로예요.</Text>
       </OnboardingShell>
     );
   }
@@ -612,7 +763,7 @@ function DatePickerField({
       <Text style={[styles.dateFieldText, !value && styles.datePlaceholder]}>
         {value || "날짜를 선택해 주세요"}
       </Text>
-      <BabyLogIcon kind="calendar" size={18} color={colors.amber} />
+      <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
     </Pressable>
   );
 }
@@ -717,4 +868,24 @@ const styles = StyleSheet.create({
   },
   photoBtnText: { fontSize: 13, fontWeight: "700", color: colors.text },
   skip: { fontSize: 12, color: colors.faint, fontWeight: "700" },
+  linkButton: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: 4 },
+  linkButtonText: { color: colors.amberText, fontSize: 13, fontWeight: "800" },
+  loadingRow: { alignItems: "center", gap: 10, paddingVertical: 18 },
+  requestCard: {
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    padding: 16,
+    marginBottom: 12,
+    gap: 8,
+  },
+  requestTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
+  requestBody: { fontSize: 13, color: colors.muted, lineHeight: 19 },
+  requestActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 4 },
+  declineButton: { minHeight: 44, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.backgroundSecondary, justifyContent: "center" },
+  declineText: { color: colors.muted, fontWeight: "700", fontSize: 13 },
+  acceptButton: { minHeight: 44, minWidth: 120, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  acceptText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 },
+  disabled: { opacity: 0.48 },
 });

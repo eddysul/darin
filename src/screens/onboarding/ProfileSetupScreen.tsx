@@ -19,6 +19,13 @@ import { ProfileAvatar } from "../../components/profile/ProfileAvatar";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { RecordDatePickerModal } from "../../components/babylog/RecordDatePickerModal";
 import { ProfileRepository } from "../../repositories/ProfileRepository";
+import {
+  createDarinIdentity,
+  DarinIdentityRepository,
+  generateDarinTag,
+  validateDarinNickname,
+} from "../../repositories/DarinIdentityRepository";
+import { AuthRepository } from "../../repositories/AuthRepository";
 import { useApp } from "../../context/AppContext";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { useAppSettings } from "../../context/AppSettingsContext";
@@ -36,8 +43,12 @@ import {
 } from "../../types/profilePreferences";
 
 export type ProfileSetupInitial = {
+  /** Legacy aliases are retained only to resume an older interrupted setup. */
   displayName?: string;
   realName?: string;
+  realNameFromProvider?: string;
+  nickname?: string;
+  darinTag?: string;
   relation?: RelationshipLabel;
   avatarUrl?: string;
   residenceCountry?: ResidenceCountry;
@@ -65,8 +76,9 @@ export function ProfileSetupScreen({
   const { applyOwnerFromSetup } = useBabyLog();
   const { setSettings } = useAppSettings();
   const { setLocale } = useLanguage();
-  const [nickname, setNickname] = useState(initial.displayName ?? "");
-  const [realName, setRealName] = useState(initial.realName ?? "");
+  const [nickname, setNickname] = useState(initial.nickname ?? initial.displayName ?? "");
+  const [realNameFromProvider] = useState(initial.realNameFromProvider ?? initial.realName ?? "");
+  const [darinTag, setDarinTag] = useState(initial.darinTag ?? generateDarinTag());
   const [relation, setRelation] = useState<RelationshipLabel | null>(initial.relation ?? null);
   const [residenceCountry, setResidenceCountry] = useState<ResidenceCountry | null>(
     initial.residenceCountry ?? null,
@@ -81,15 +93,16 @@ export function ProfileSetupScreen({
   const [clearAvatar, setClearAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const nicknameError = validateDarinNickname(nickname);
 
   const canContinue = canSubmitUserProfile({
     displayName: nickname,
-    realName,
+    realName: realNameFromProvider || nickname,
     relation,
     residenceCountry,
     preferredLanguage,
     guardianBirthDate,
-  }) && !saving;
+  }) && !nicknameError && !saving;
 
   const pickAvatar = () => {
     presentAvatarPicker({
@@ -108,13 +121,24 @@ export function ProfileSetupScreen({
   };
 
   const save = async () => {
-    if (!canContinue || !relation || !residenceCountry || !preferredLanguage) return;
+    if (!canContinue || nicknameError || !relation || !residenceCountry || !preferredLanguage) {
+      if (nicknameError) setError(nicknameError);
+      return;
+    }
     setSaving(true);
     setError("");
     try {
+      const identity = createDarinIdentity({
+        realNameFromProvider: realNameFromProvider || nickname.trim(),
+        nickname,
+        tag: darinTag,
+      });
       const saved = await ProfileRepository.upsertMyProfile({
         displayName: nickname,
-        nickname: realName,
+        // Existing backend columns remain compatible: display_name is the Darin nickname,
+        // while nickname stores the provider-confirmed real name until a schema migration.
+        nickname: realNameFromProvider || null,
+        darinId: identity.darinId,
         defaultRelation: relation,
         residenceCountry,
         preferredLanguage,
@@ -122,6 +146,10 @@ export function ProfileSetupScreen({
         avatarStoragePath: clearAvatar ? null : undefined,
         avatarUrl: clearAvatar ? null : undefined,
       });
+      const user = await AuthRepository.getUser();
+      if (user) {
+        await DarinIdentityRepository.save(user.id, identity);
+      }
       const uploaded = pickedAvatar
         ? await ProfileRepository.uploadMyAvatar(pickedAvatar)
         : null;
@@ -176,7 +204,7 @@ export function ProfileSetupScreen({
       >
         <View style={styles.heading}>
           <Text style={styles.title}>내 프로필을 설정해 주세요</Text>
-          <Text style={styles.subtitle}>가족과 친구가 알아볼 수 있도록 닉네임과 이름을 입력해 주세요.</Text>
+          <Text style={styles.subtitle}>가져온 이름을 확인하고 Darin에서 사용할 닉네임을 정해 주세요.</Text>
         </View>
 
         <ProfileAvatar
@@ -189,28 +217,28 @@ export function ProfileSetupScreen({
 
         <View style={styles.card}>
           <Text style={styles.label}>닉네임 *</Text>
-          <Text style={styles.help}>앱에서 주로 보이는 이름이에요.</Text>
+          <Text style={styles.help}>Darin에서 보이는 이름이에요. 2~12자, #과 /는 사용할 수 없어요.</Text>
           <TextInput
             style={styles.input}
             value={nickname}
             onChangeText={setNickname}
             placeholder="예: 콩이맘, 준이아빠"
             placeholderTextColor={colors.faint}
-            maxLength={40}
+            maxLength={12}
             autoFocus={!nickname.trim()}
             returnKeyType="next"
           />
 
-          <Text style={styles.label}>이름 *</Text>
-          <Text style={styles.help}>친구 추가와 초대 확인 때 함께 보여줘요.</Text>
-          <TextInput
-            style={styles.input}
-            value={realName}
-            onChangeText={setRealName}
-            placeholder="예: 김민지, 이원준"
-            placeholderTextColor={colors.faint}
-            maxLength={40}
-          />
+          <Text style={styles.label}>가져온 이름</Text>
+          <Text style={styles.help}>Google, Apple 또는 카카오에서 가져온 이름이에요.</Text>
+          <View style={styles.readonlyField}><Text style={[styles.readonlyText, !realNameFromProvider && styles.placeholder]}>{realNameFromProvider || "가져온 이름이 없어요"}</Text></View>
+
+          <Text style={styles.label}>Darin ID</Text>
+          <Text style={styles.help}>가족·공유 멤버 검색과 요청에 사용할 고유 ID예요.</Text>
+          <View style={styles.darinIdRow}>
+            <View style={styles.darinIdField}><Text style={styles.darinIdText}>{nickname.trim() ? `${nickname.trim()}#${darinTag}` : "닉네임#코드"}</Text></View>
+            <Pressable style={styles.regenerateButton} onPress={() => setDarinTag(generateDarinTag())} accessibilityRole="button" accessibilityLabel="Darin ID 새 코드 만들기"><Text style={styles.regenerateText}>새 코드</Text></Pressable>
+          </View>
 
           <Text style={styles.label}>아기와의 관계 *</Text>
           <View style={styles.chips}>
@@ -270,7 +298,7 @@ export function ProfileSetupScreen({
             <Text style={[styles.dateInputText, !guardianBirthDate && styles.datePlaceholder]}>
               {guardianBirthDate || "YYYY-MM-DD"}
             </Text>
-            <BabyLogIcon kind="calendar" size={18} color={colors.amber} />
+            <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
           </Pressable>
         </View>
 
@@ -311,11 +339,19 @@ const styles = StyleSheet.create({
   label: { color: colors.text, fontSize: 13, fontWeight: "800", marginTop: 2 },
   help: { color: colors.faint, fontSize: 11.5, lineHeight: 17, marginTop: -5 },
   input: { minHeight: 48, paddingHorizontal: 13, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, color: colors.text, fontSize: 15 },
+  readonlyField: { minHeight: 48, paddingHorizontal: 13, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundSecondary, justifyContent: "center" },
+  readonlyText: { color: colors.text, fontSize: 15 },
+  placeholder: { color: colors.faint },
+  darinIdRow: { flexDirection: "row", gap: 8 },
+  darinIdField: { flex: 1, minHeight: 48, paddingHorizontal: 13, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, justifyContent: "center" },
+  darinIdText: { color: colors.amberText, fontSize: 15, fontWeight: "800" },
+  regenerateButton: { minHeight: 48, paddingHorizontal: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberSoft, justifyContent: "center" },
+  regenerateText: { color: colors.amberText, fontSize: 13, fontWeight: "800" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { minHeight: 42, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   chipText: { color: colors.muted, fontSize: 12.5, fontWeight: "700" },
-  chipTextActive: { color: colors.amber },
+  chipTextActive: { color: colors.amberText },
   error: { padding: 12, borderRadius: radius.md, backgroundColor: colors.dangerSoft, color: colors.dangerText, fontSize: 12.5, lineHeight: 19 },
   dateInput: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   dateInputText: { color: colors.text, fontSize: 15 },

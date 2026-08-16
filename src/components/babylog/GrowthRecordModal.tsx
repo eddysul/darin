@@ -168,7 +168,7 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
         <Pressable style={styles.sheet} onPress={() => {}} accessible={false}>
           <View style={styles.handle} />
           <View style={styles.titleRow}>
-            <View style={styles.titleIcon}><BabyLogIcon kind="tab" tab="report" size={20} color={colors.amber} /></View>
+            <View style={styles.titleIcon}><BabyLogIcon kind="tab" tab="report" size={20} color={colors.amberText} /></View>
             <View style={styles.titleCopy}>
               <Text style={styles.title}>{record ? "성장 기록 수정" : "성장 기록 추가"}</Text>
               <Text style={styles.subtitle}>입력값은 kg·cm로 안전하게 변환해 저장해요.</Text>
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   sourceBtn: { flex: 1, alignItems: "center", paddingVertical: 11, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   sourceBtnActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   sourceText: { fontSize: 13, fontWeight: "700", color: colors.muted },
-  sourceTextActive: { color: colors.amber },
+  sourceTextActive: { color: colors.amberText },
   noteInput: { minHeight: 72, textAlignVertical: "top" },
   actions: { flexDirection: "row", gap: 10, marginTop: 22, marginBottom: 8 },
   actionBtn: { flex: 1, alignItems: "center", paddingVertical: 13, borderRadius: 14 },

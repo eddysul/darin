@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,10 +21,14 @@ import { useBabyLog } from "../../context/BabyLogContext";
 import { MemoriesRepository } from "../../repositories/MemoriesRepository";
 import type { MemoryCard } from "../../types/memory";
 import { memberRelationshipLabel } from "../../types/family";
-import { colors, radius } from "../../theme";
+import { colors, fontScaleCap, radius } from "../../theme";
+import { NotificationBellButton } from "../../components/NotificationBellButton";
+
+const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 
 type Props = {
   onOpenSettings?: () => void;
+  onOpenNotifications?: () => void;
   onOpenFamily?: () => void;
   onOpenDetail: (memoryPostId: string) => void;
 };
@@ -84,7 +89,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
           <BabyLogIcon kind="folder" size={32} color={colors.faint} />
         )}
         <View style={[styles.privacyBadge, { backgroundColor: privacy.soft }]}>
-          <Text style={[styles.privacyIcon, { color: privacy.accent }]}>{privacy.icon}</Text>
+          <BabyLogIcon kind={privacy.icon} size={11} color={privacy.accent} strokeWidth={2.2} />
           <Text style={[styles.privacyText, { color: privacy.accent }]}>{privacy.label}</Text>
         </View>
         {item.mediaCount > 1 ? <View style={styles.mediaCountBadge}><Text style={styles.mediaCountText}>+{item.mediaCount - 1}</Text></View> : null}
@@ -112,10 +117,20 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
           </Pressable>
         ) : null}
         <View style={styles.reactionRow}>
-          <Pressable style={styles.reactionButton} onPress={onOpen} accessibilityLabel={`좋아요 ${item.reactionCount}개`}>
-            <Text style={styles.heart}>♡</Text><Text style={styles.reactionText}>{item.reactionCount}</Text>
-          </Pressable>
-          <Pressable style={styles.reactionButton} onPress={onOpen} accessibilityLabel={`댓글 ${item.commentCount}개`}>
+          <View
+            style={styles.reactionButton}
+            accessible
+            accessibilityRole="text"
+            accessibilityLabel={`좋아요 ${item.reactionCount}개`}
+          >
+            <BabyLogIcon kind="sparkles" size={16} color={colors.muted} /><Text style={styles.reactionText}>{item.reactionCount}</Text>
+          </View>
+          <Pressable
+            style={styles.reactionButton}
+            onPress={onOpen}
+            accessibilityRole="button"
+            accessibilityLabel={`댓글 ${item.commentCount}개`}
+          >
             <BabyLogIcon kind="chat" size={19} color={colors.muted} /><Text style={styles.reactionText}>{item.commentCount}</Text>
           </Pressable>
           <View style={styles.reactionSpacer} />
@@ -135,7 +150,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
   );
 });
 
-export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: Props) {
+export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFamily, onOpenDetail }: Props) {
   const insets = useSafeAreaInsets();
   const { babyName, careSetup, familyMembers, myFamilyRole, logAuthor, storageReady, babies, activeBabyId } = useBabyLog();
   const [cards, setCards] = useState<MemoryCard[]>([]);
@@ -251,13 +266,14 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.headerCopy}>
-          <Text style={styles.title}>우리 순간</Text>
-          <Text style={styles.subtitle}>가족과 함께 보는 우리 아기의 순간</Text>
+          <Text style={styles.title} maxFontSizeMultiplier={fontScaleCap.chrome}>우리 순간</Text>
+          <Text style={styles.subtitle} maxFontSizeMultiplier={fontScaleCap.chrome}>가족과 함께 보는 우리 아기의 순간</Text>
         </View>
         <View style={styles.headerActions}>
+          {onOpenNotifications ? <NotificationBellButton onPress={onOpenNotifications} /> : null}
           {canCreate ? (
             <Pressable style={styles.iconButton} onPress={() => setUploadOpen(true)} accessibilityRole="button" accessibilityLabel="사진 추가">
-              <BabyLogIcon kind="new" size={20} color={colors.amber} strokeWidth={2.2} />
+              <BabyLogIcon kind="new" size={20} color={colors.amberText} strokeWidth={2.2} />
             </Pressable>
           ) : null}
           {onOpenSettings ? (
@@ -268,28 +284,32 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
         </View>
       </View>
 
-      <Pressable style={styles.familySection} onPress={onOpenFamily} accessibilityRole="button" accessibilityLabel="가족 구성원 관리">
-        <View style={styles.paperPlane}><Text style={styles.paperPlaneText}>✈</Text></View>
-        <View style={styles.familyCopy}>
-          <Text style={styles.familyTitle}>{babyName}네 가족</Text>
-          <Text style={styles.familySummary}>가족 {activeFamilyMembers.length + 1}명 · {togetherDays ? `함께 ${togetherDays}일` : "함께 기록 중"}</Text>
-          {activeFamilyMembers.length === 0 ? (
-            <Text style={styles.familyHint}>아직 초대된 가족이 없어요.</Text>
-          ) : (
-            <View style={styles.familyChips}>
-              {activeFamilyMembers.slice(0, 5).map((member) => (
-                <View key={member.id} style={styles.familyChip}>
-                  <Text style={styles.familyEmoji}>{member.emoji ?? "♡"}</Text>
-                  <Text style={styles.familyChipText} numberOfLines={1}>{memberRelationshipLabel(member)}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-        <Pressable style={styles.inviteButton} onPress={onOpenFamily}>
-          <Text style={styles.inviteText}>가족·친구 초대</Text>
+      <View style={styles.familySection}>
+        <Pressable
+          style={styles.familyMain}
+          onPress={onOpenFamily}
+          accessibilityRole="button"
+          accessibilityLabel="가족 구성원 관리"
+        >
+          <View style={styles.paperPlane}><BabyLogIcon kind="send" size={16} color={colors.amberText} strokeWidth={2.2} /></View>
+          <View style={styles.familyCopy}>
+            <Text style={styles.familyTitle}>{babyName}네 가족</Text>
+            <Text style={styles.familySummary}>가족 {activeFamilyMembers.length + 1}명 · {togetherDays ? `함께 ${togetherDays}일` : "함께 기록 중"}</Text>
+            {activeFamilyMembers.length === 0 ? (
+              <Text style={styles.familyHint}>아직 초대된 가족이 없어요. 여기를 눌러 요청을 보내 보세요.</Text>
+            ) : (
+              <View style={styles.familyChips}>
+                {activeFamilyMembers.slice(0, 5).map((member) => (
+                  <View key={member.id} style={styles.familyChip}>
+                    <BabyLogIcon kind="family" size={12} color={colors.amberText} />
+                    <Text style={styles.familyChipText} numberOfLines={1}>{memberRelationshipLabel(member)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         </Pressable>
-      </Pressable>
+      </View>
 
       <ScrollView
         horizontal
@@ -300,23 +320,43 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
         <Pressable
           style={[styles.filterChip, babyFilter === "all" && filter === "all" && styles.filterChipActive]}
           onPress={() => { setBabyFilter("all"); setFilter("all"); }}
+          accessibilityRole="button"
+          accessibilityLabel="전체"
         >
           <Text style={[styles.filterText, babyFilter === "all" && filter === "all" && styles.filterTextActive]}>전체</Text>
         </Pressable>
         {babies.map((baby) => {
           const active = babyFilter === baby.id && filter === "all";
-          return <Pressable key={baby.id} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => { setBabyFilter(baby.id); setFilter("all"); }}><Text style={[styles.filterText, active && styles.filterTextActive]}>{baby.name}</Text></Pressable>;
+          return (
+            <Pressable
+              key={baby.id}
+              style={[styles.filterChip, active && styles.filterChipActive]}
+              onPress={() => { setBabyFilter(baby.id); setFilter("all"); }}
+              accessibilityRole="button"
+              accessibilityLabel={baby.name}
+            >
+              <Text style={[styles.filterText, active && styles.filterTextActive]}>{baby.name}</Text>
+            </Pressable>
+          );
         })}
         <Pressable
           style={[styles.filterChip, babyFilter === "family" && filter === "all" && styles.filterChipActive]}
           onPress={() => { setBabyFilter("family"); setFilter("all"); }}
+          accessibilityRole="button"
+          accessibilityLabel="가족 순간"
         >
           <Text style={[styles.filterText, babyFilter === "family" && filter === "all" && styles.filterTextActive]}>가족 순간</Text>
         </Pressable>
         {FILTERS.filter((item) => item.key !== "all").map((item) => {
           const active = babyFilter === "all" && filter === item.key;
           return (
-            <Pressable key={item.key} style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => { setBabyFilter("all"); setFilter(item.key); }}>
+            <Pressable
+              key={item.key}
+              style={[styles.filterChip, active && styles.filterChipActive]}
+              onPress={() => { setBabyFilter("all"); setFilter(item.key); }}
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+            >
               <Text style={[styles.filterText, active && styles.filterTextActive]}>{item.label}</Text>
             </Pressable>
           );
@@ -324,7 +364,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
       </ScrollView>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color={colors.amber} /><Text style={styles.centerCopy}>가족 추억을 불러오는 중…</Text></View>
+        <View style={styles.center}><ActivityIndicator color={colors.amberText} /><Text style={styles.centerCopy}>가족 추억을 불러오는 중…</Text></View>
       ) : error ? (
         <View style={styles.center}>
           <Text style={styles.errorTitle}>추억을 불러오지 못했어요.</Text>
@@ -333,7 +373,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenFamily, onOpenDetail }: P
         </View>
       ) : filteredCards.length === 0 ? (
         <View style={styles.center}>
-          <View style={styles.emptyIcon}><BabyLogIcon kind="sparkles" size={34} color={colors.amber} /></View>
+          <View style={styles.emptyIcon}><BabyLogIcon kind="sparkles" size={34} color={colors.amberText} /></View>
           <Text style={styles.emptyTitle}>{emptyCopy.title}</Text>
           <Text style={styles.emptyCopy}>{emptyCopy.description}</Text>
           {canCreate && filter !== "tagged" ? <Pressable style={styles.primaryButton} onPress={() => setUploadOpen(true)}><Text style={styles.primaryText}>{filter === "all" ? "첫 순간 올리기" : "순간 올리기"}</Text></Pressable> : null}
@@ -388,21 +428,18 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: "row", gap: 8 },
   iconButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   familySection: { marginHorizontal: 16, marginBottom: 10, padding: 13, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 10 },
+  familyMain: { flex: 1, minWidth: 0, minHeight: Platform.OS === "android" ? 48 : 44, flexDirection: "row", alignItems: "center", gap: 10 },
   paperPlane: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
-  paperPlaneText: { color: colors.amber, fontSize: 18, fontWeight: "800" },
   familyCopy: { flex: 1 },
   familyTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
   familySummary: { color: colors.muted, fontSize: 11.5, marginTop: 2, marginBottom: 7 },
   familyHint: { color: colors.muted, fontSize: 12.5 },
   familyChips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  familyChip: { minHeight: 30, maxWidth: 92, paddingHorizontal: 8, borderRadius: radius.full, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 4 },
-  familyEmoji: { color: colors.amber, fontSize: 11 },
+  familyChip: { minHeight: TOUCH_MIN, maxWidth: 120, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 4 },
   familyChipText: { color: colors.muted, fontSize: 11.5, fontWeight: "700", flexShrink: 1 },
-  inviteButton: { minHeight: 36, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
-  inviteText: { color: colors.amber, fontSize: 11.5, fontWeight: "800" },
   filterScroller: { flexGrow: 0, flexShrink: 0 },
   filterRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
-  filterChip: { minHeight: 36, paddingHorizontal: 12, borderRadius: radius.full, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  filterChip: { minHeight: Platform.OS === "android" ? 48 : 44, paddingHorizontal: 12, borderRadius: radius.full, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   filterChipActive: { backgroundColor: colors.amber, borderColor: colors.amber },
   filterText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   filterTextActive: { color: "#FFFFFF" },
@@ -415,12 +452,11 @@ const styles = StyleSheet.create({
   primaryButton: { minHeight: 50, marginTop: 22, paddingHorizontal: 24, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
   primaryText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   secondaryButton: { minHeight: 44, marginTop: 18, paddingHorizontal: 18, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  secondaryText: { color: colors.amber, fontSize: 13, fontWeight: "800" },
+  secondaryText: { color: colors.amberText, fontSize: 13, fontWeight: "800" },
   feed: { paddingHorizontal: 16, paddingTop: 4, gap: 14 },
   card: { width: "100%", minWidth: 0, borderRadius: 22, overflow: "hidden", backgroundColor: colors.card, borderWidth: 1.25 },
   thumbnail: { width: "100%", aspectRatio: 4 / 3, alignItems: "center", justifyContent: "center", backgroundColor: colors.cardHi },
   privacyBadge: { position: "absolute", left: 12, top: 12, minHeight: 28, paddingHorizontal: 9, borderRadius: radius.full, flexDirection: "row", alignItems: "center", gap: 4 },
-  privacyIcon: { fontSize: 11, fontWeight: "900" },
   privacyText: { fontSize: 10.5, fontWeight: "800" },
   mediaCountBadge: { position: "absolute", right: 12, top: 12, minWidth: 30, height: 28, paddingHorizontal: 8, borderRadius: 14, backgroundColor: "rgba(46,42,38,0.72)", alignItems: "center", justifyContent: "center" },
   mediaCountText: { color: "#fff", fontSize: 11, fontWeight: "800" },
@@ -431,15 +467,14 @@ const styles = StyleSheet.create({
   authorLine: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
   author: { color: colors.text, fontSize: 13, fontWeight: "800" },
   targetBadge: { maxWidth: 180, paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.full, backgroundColor: colors.amberSoft },
-  targetBadgeText: { color: colors.amber, fontSize: 9.5, fontWeight: "800" },
+  targetBadgeText: { color: colors.amberText, fontSize: 9.5, fontWeight: "800" },
   meta: { color: colors.faint, fontSize: 10.5, marginTop: 2 },
   caption: { color: colors.text, fontSize: 14, lineHeight: 21, marginTop: 11 },
-  moreButton: { alignSelf: "flex-start", minHeight: 32, justifyContent: "center", marginTop: 2 },
-  moreText: { color: colors.amber, fontSize: 12, fontWeight: "800" },
+  moreButton: { alignSelf: "flex-start", minHeight: TOUCH_MIN, justifyContent: "center", marginTop: 2 },
+  moreText: { color: colors.amberText, fontSize: 12, fontWeight: "800" },
   reactionRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
   reactionButton: { minWidth: 54, minHeight: 44, paddingHorizontal: 5, flexDirection: "row", alignItems: "center", gap: 5 },
   reactionSpacer: { flex: 1 },
   saveButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  heart: { color: colors.muted, fontSize: 25, lineHeight: 27 },
   reactionText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
 });

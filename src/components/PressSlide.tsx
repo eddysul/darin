@@ -1,5 +1,6 @@
 import { Animated, Pressable, StyleSheet, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 import { useRef } from "react";
+import { useReduceMotion } from "../hooks/useReduceMotion";
 
 type Props = PressableProps & {
   style?: StyleProp<ViewStyle>;
@@ -10,8 +11,10 @@ type Props = PressableProps & {
 export function PressSlide({ style, children, onPress, disabled, slideAmount = 5, ...rest }: Props) {
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
+  const reduceMotion = useReduceMotion();
 
   const onPressIn = () => {
+    if (reduceMotion) return;
     Animated.parallel([
       Animated.spring(translateX, { toValue: slideAmount, useNativeDriver: true, speed: 60, bounciness: 0 }),
       Animated.timing(opacity, { toValue: 0.65, duration: 80, useNativeDriver: true }),
@@ -19,6 +22,7 @@ export function PressSlide({ style, children, onPress, disabled, slideAmount = 5
   };
 
   const onPressOut = () => {
+    if (reduceMotion) return;
     Animated.parallel([
       Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 24, bounciness: 6 }),
       Animated.timing(opacity, { toValue: 1, duration: 120, useNativeDriver: true }),

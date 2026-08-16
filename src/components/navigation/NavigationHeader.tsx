@@ -39,7 +39,7 @@ export function NavigationHeader({
         onPress={onBack}
         disabled={!onBack}
         style={styles.sideButton}
-        hitSlop={4}
+        hitSlop={10}
       >
         {modalActions ? (
           <Text style={styles.leftLabel}>{leftLabel ?? "취소"}</Text>
@@ -58,7 +58,7 @@ export function NavigationHeader({
         onPress={onRightPress}
         disabled={!onRightPress || rightDisabled}
         style={styles.sideButton}
-        hitSlop={4}
+        hitSlop={10}
       >
         {rightLabel ? (
           <Text style={[styles.rightLabel, rightDisabled && styles.disabled]}>{rightLabel}</Text>
@@ -96,6 +96,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   leftLabel: { color: colors.muted, fontSize: 15, fontWeight: "700" },
-  rightLabel: { color: colors.amber, fontSize: 15, fontWeight: "800" },
+  rightLabel: { color: colors.amberText, fontSize: 15, fontWeight: "800" },
   disabled: { opacity: 0.42 },
 });

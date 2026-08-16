@@ -453,7 +453,7 @@ function FreePageSticker({
 function LetterContent({ page }: { page: GrowthBookPage }) {
   return (
     <View style={styles.letterInner}>
-      <BabyLogIcon kind="sparkles" size={18} color={colors.amber} />
+      <BabyLogIcon kind="sparkles" size={18} color={colors.amberText} />
       <Text style={styles.letterEyebrow}>{page.subtitle}</Text>
       <Text style={styles.letterTitle}>{page.title}</Text>
       <Text style={styles.letterBody}>{page.body}</Text>
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
   marginLine: { position: "absolute", left: 18, top: 14, bottom: 14, width: 1, backgroundColor: "rgba(232,145,138,0.28)" },
   dogEar: { position: "absolute", top: 0, right: 0, width: 0, height: 0, borderStyle: "solid", borderTopWidth: 20, borderLeftWidth: 20, borderTopColor: "rgba(196,170,140,0.55)", borderLeftColor: "transparent" },
   coverInner: { flex: 1, paddingHorizontal: 28, paddingVertical: 28, alignItems: "center", justifyContent: "center" },
-  coverEyebrow: { fontSize: 11, fontWeight: "800", color: colors.amber, letterSpacing: 2 },
+  coverEyebrow: { fontSize: 11, fontWeight: "800", color: colors.amberText, letterSpacing: 2 },
   coverTitle: { marginTop: 8, fontSize: 25, fontWeight: "800", color: "#3D342C", textAlign: "center", lineHeight: 32 },
   coverPhotoFrame: { marginTop: 18, width: "84%", aspectRatio: 1, maxHeight: 230, borderRadius: 12, overflow: "hidden", borderWidth: 5, borderColor: "#FFF" },
   coverPhotoPlaceholder: { marginTop: 18, width: "84%", aspectRatio: 1, maxHeight: 220, borderRadius: 12, backgroundColor: "rgba(232,145,138,0.12)", alignItems: "center", justifyContent: "center", gap: 6, padding: 14 },
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   coverRange: { marginTop: 14, fontSize: 13, fontWeight: "700", color: "#8A735A", letterSpacing: 1 },
   momentInner: { flex: 1, paddingLeft: 28, paddingRight: 22, paddingTop: 20, paddingBottom: 16 },
   momentHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  momentEyebrow: { fontSize: 10, fontWeight: "800", color: colors.amber, letterSpacing: 1 },
+  momentEyebrow: { fontSize: 10, fontWeight: "800", color: colors.amberText, letterSpacing: 1 },
   momentTitle: { marginTop: 5, fontSize: 20, fontWeight: "800", color: "#3D342C", lineHeight: 25 },
   momentDate: { marginTop: 2, fontSize: 11, fontWeight: "600", color: "#8A735A" },
   photoGrid: { position: "relative", marginTop: 9, height: "39%" },
@@ -493,7 +493,7 @@ const styles = StyleSheet.create({
   photoSwapSource: { borderWidth: 2, borderStyle: "solid", borderColor: colors.amber, opacity: 0.82 },
   editableRegion: { borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: "rgba(255,255,255,0.38)" },
   emptyPhoto: { flex: 1, alignItems: "center", justifyContent: "center" },
-  addPhotoPlus: { color: colors.amber, fontSize: 24, fontWeight: "500" },
+  addPhotoPlus: { color: colors.amberText, fontSize: 24, fontWeight: "500" },
   addPhotoLabel: { color: colors.amberDark, fontSize: 10, fontWeight: "700" },
   photoEditBadge: { position: "absolute", right: 5, top: 5, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: "rgba(61,52,44,0.7)" },
   photoEditBadgeText: { color: "#FFF", fontSize: 8, fontWeight: "800" },
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
   emptyCopy: { padding: 10, color: "#A08C7A", fontSize: 11, textAlign: "center" },
   rollingWrap: { marginTop: 7, minHeight: 32, borderRadius: 8, padding: 5, gap: 4 },
   rollingItem: { backgroundColor: "rgba(255,255,255,0.62)", borderRadius: 7, paddingHorizontal: 6, paddingVertical: 4 },
-  rollingAuthor: { fontSize: 9, fontWeight: "800", color: colors.amber },
+  rollingAuthor: { fontSize: 9, fontWeight: "800", color: colors.amberText },
   rollingContentRow: { minHeight: 17, flexDirection: "row", alignItems: "center", gap: 3 },
   rollingText: { flex: 1, fontSize: 10, color: "#4A4038", marginTop: 1 },
   rollingStickerImage: { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: "#FFF" },
@@ -518,9 +518,9 @@ const styles = StyleSheet.create({
   stickerControlText: { color: "#FFF", fontSize: 6.8, fontWeight: "800" },
   stickerControlDangerText: { color: "#FFF" },
   letterInner: { flex: 1, paddingHorizontal: 32, paddingVertical: 36, justifyContent: "center" },
-  letterEyebrow: { marginTop: 10, fontSize: 11, fontWeight: "800", color: colors.amber, letterSpacing: 1 },
+  letterEyebrow: { marginTop: 10, fontSize: 11, fontWeight: "800", color: colors.amberText, letterSpacing: 1 },
   letterTitle: { marginTop: 8, fontSize: 24, fontWeight: "800", color: "#3D342C" },
   letterBody: { marginTop: 18, fontSize: 14, lineHeight: 24, color: "#4A4038", fontWeight: "500" },
   letterSeal: { marginTop: 28, alignSelf: "flex-end", width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(232,145,138,0.25)", borderWidth: 1.5, borderColor: colors.amber, alignItems: "center", justifyContent: "center", transform: [{ rotate: "-8deg" }] },
-  letterSealText: { color: colors.amber, fontSize: 18, fontWeight: "800" },
+  letterSealText: { color: colors.amberText, fontSize: 18, fontWeight: "800" },
 });

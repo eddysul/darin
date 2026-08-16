@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   label: { color: colors.faint, fontSize: 12, fontWeight: "700" },
   input: { minHeight: 46, paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, color: colors.text, fontSize: 15 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { minHeight: 38, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  chip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   chipSelected: { borderColor: colors.amber, backgroundColor: colors.amber },
   chipText: { color: colors.muted, fontSize: 13, fontWeight: "700" },
   chipTextSelected: { color: colors.amberDark },

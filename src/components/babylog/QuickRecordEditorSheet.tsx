@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   title: { fontSize: 17, fontWeight: "800", color: colors.text },
-  link: { fontSize: 13, fontWeight: "700", color: colors.amber },
+  link: { fontSize: 13, fontWeight: "700", color: colors.amberText },
   listRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   colorRow: { flexDirection: "row", gap: 8, marginBottom: 4 },
-  swatch: { width: 28, height: 28, borderRadius: 14 },
+  swatch: { width: 44, height: 44, borderRadius: 22 },
   swatchActive: { borderWidth: 3, borderColor: "#fff", shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 3 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {

@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     fontSize: 11,
     fontWeight: "700",
-    color: colors.amber,
+    color: colors.amberText,
     backgroundColor: colors.amberSoft,
     paddingHorizontal: 12,
     paddingVertical: 4,

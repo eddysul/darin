@@ -6,11 +6,12 @@ import {
   type OneTouchAction,
 } from "../../constants/quickRecordActions";
 import type { CustomCategory } from "../../types/logCategory";
-import { colors } from "../../theme";
+import { colors, radius, type } from "../../theme";
 import { BabyLogIcon, CATEGORY_ICONS } from "./BabyLogIcon";
 import { CustomTemplateIcon } from "./CustomTemplateIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
 import { rankQuickActions } from "../../utils/quickCategoryRanking";
+import { useCompactLayout } from "../../hooks/useCompactLayout";
 
 export type { OneTouchAction } from "../../constants/quickRecordActions";
 
@@ -52,6 +53,7 @@ export function OneTouchRecordGrid({
   logs = [],
   babyScopeKey,
 }: Props) {
+  const compact = useCompactLayout();
   const [expanded, setExpanded] = useState(false);
   const orderedVisible = visibleActions ?? QUICK_RECORD_ACTIONS.map((action) => action.id);
   void coreActions;
@@ -67,7 +69,7 @@ export function OneTouchRecordGrid({
     <View style={styles.section}>
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
-          <Text style={styles.title}>빠르게 기록하기</Text>
+          <Text style={styles.title}>기록하기</Text>
           <Text style={styles.subtitle}>탭해서 자세히 기록 · 길게 눌러 타이머 시작</Text>
         </View>
         {onAdd ? (
@@ -76,9 +78,9 @@ export function OneTouchRecordGrid({
             disabled={disabled}
             onPress={onAdd}
             accessibilityRole="button"
-            accessibilityLabel="새로 추가"
+            accessibilityLabel="카테고리 추가"
           >
-            <Text style={styles.countBadgeText}>새로 추가</Text>
+            <Text style={styles.countBadgeText}>카테고리 추가</Text>
           </Pressable>
         ) : null}
       </View>
@@ -93,24 +95,26 @@ export function OneTouchRecordGrid({
                 timerActive={activeTimerActions.includes(action.id)}
                 disabled={disabled}
                 expanded
+                dense={compact}
                 onSelect={onSelect}
                 onLongPress={onLongPress}
                 onOpenActiveTimer={onOpenActiveTimer}
                 onInteractionChange={onInteractionChange}
               />
               {action.id === "vaccination" && onOpenGrowth ? (
-                <GrowthTile disabled={disabled} onPress={onOpenGrowth} />
+                <GrowthTile dense={compact} disabled={disabled} onPress={onOpenGrowth} />
               ) : null}
             </Fragment>
           ))}
           {!visible.some((action) => action.id === "vaccination") && onOpenGrowth ? (
-            <GrowthTile disabled={disabled} onPress={onOpenGrowth} />
+            <GrowthTile dense={compact} disabled={disabled} onPress={onOpenGrowth} />
           ) : null}
           {customCategories.map((category) => (
             <CustomCategoryTile
               key={category.id}
               category={category}
               disabled={disabled}
+              dense={compact}
               onPress={() => onSelectCustom?.(category)}
               onInteractionChange={onInteractionChange}
             />
@@ -129,15 +133,19 @@ export function OneTouchRecordGrid({
               sleepActive={sleepActive}
               timerActive={activeTimerActions.includes(action.id)}
               disabled={disabled}
+              dense={compact}
               onSelect={onSelect}
               onLongPress={onLongPress}
               onOpenActiveTimer={onOpenActiveTimer}
               onInteractionChange={onInteractionChange}
             />
           ))}
+          {onOpenGrowth ? (
+            <GrowthTile compact dense={compact} disabled={disabled} onPress={onOpenGrowth} />
+          ) : null}
           {canExpand ? (
             <Pressable
-              style={({ pressed }) => [styles.expandTile, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.expandTile, compact && styles.expandTileDense, pressed && styles.pressed]}
               onPress={() => setExpanded(true)}
               accessibilityRole="button"
               accessibilityLabel="더 보기"
@@ -165,11 +173,13 @@ export function OneTouchRecordGrid({
 function CustomCategoryTile({
   category,
   disabled,
+  dense,
   onPress,
   onInteractionChange,
 }: {
   category: CustomCategory;
   disabled?: boolean;
+  dense?: boolean;
   onPress: () => void;
   onInteractionChange?: (active: boolean) => void;
 }) {
@@ -179,6 +189,7 @@ function CustomCategoryTile({
       style={({ pressed }) => [
         styles.button,
         styles.buttonExpanded,
+        dense && styles.buttonExpandedDense,
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
       ]}
@@ -201,11 +212,27 @@ function CustomCategoryTile({
   );
 }
 
-function GrowthTile({ disabled = false, onPress }: { disabled?: boolean; onPress: () => void }) {
+function GrowthTile({
+  disabled = false,
+  compact = false,
+  dense = false,
+  onPress,
+}: {
+  disabled?: boolean;
+  compact?: boolean;
+  dense?: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       disabled={disabled}
-      style={({ pressed }) => [styles.button, styles.buttonExpanded, disabled && styles.disabled, pressed && !disabled && styles.pressed]}
+      style={({ pressed }) => [
+        styles.button,
+        compact ? styles.buttonCompact : styles.buttonExpanded,
+        dense && (compact ? styles.buttonCompactDense : styles.buttonExpandedDense),
+        disabled && styles.disabled,
+        pressed && !disabled && styles.pressed,
+      ]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="성장 기록 추가"
@@ -224,6 +251,7 @@ function ActionTile({
   timerActive,
   disabled,
   expanded,
+  dense,
   onSelect,
   onLongPress,
   onOpenActiveTimer,
@@ -234,6 +262,7 @@ function ActionTile({
   timerActive: boolean;
   disabled?: boolean;
   expanded?: boolean;
+  dense?: boolean;
   onSelect: (action: OneTouchAction) => void;
   onLongPress?: (action: OneTouchAction) => void;
   onOpenActiveTimer?: (action: OneTouchAction) => void;
@@ -251,6 +280,7 @@ function ActionTile({
       style={({ pressed }) => [
         styles.button,
         expanded ? styles.buttonExpanded : styles.buttonCompact,
+        dense && (expanded ? styles.buttonExpandedDense : styles.buttonCompactDense),
         inProgress && styles.activeButton,
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
@@ -302,28 +332,30 @@ function ActionTile({
 }
 
 const styles = StyleSheet.create({
-  section: { width: "100%", marginBottom: 18 },
+  section: { width: "100%", marginBottom: 10 },
   headingRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 11,
+    marginBottom: 8,
   },
   headingCopy: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 10, rowGap: 2, flex: 1, paddingRight: 8 },
-  title: { fontSize: 18, fontWeight: "800", color: colors.text, letterSpacing: -0.2 },
-  subtitle: { fontSize: 11.5, color: colors.faint, flexShrink: 1 },
+  title: { fontSize: type.md, fontWeight: "800", color: colors.text, letterSpacing: -0.2 },
+  subtitle: { fontSize: type.xs, color: colors.faint, flexShrink: 1 },
   countBadge: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
     gap: 5,
     borderRadius: 999,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  countBadgeText: { color: colors.text, fontSize: 10.5, fontWeight: "700" },
+  countBadgeText: { color: colors.text, fontSize: type.xs, fontWeight: "700" },
   row: { gap: 8, paddingRight: 4 },
   gridExpanded: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   button: {
@@ -344,6 +376,8 @@ const styles = StyleSheet.create({
   },
   buttonCompact: { width: 72, minHeight: 86 },
   buttonExpanded: { width: "31.5%", minHeight: 90 },
+  buttonCompactDense: { width: 64, minHeight: 72 },
+  buttonExpandedDense: { minHeight: 76 },
   pressed: { transform: [{ scale: 0.97 }], opacity: 0.82 },
   disabled: { opacity: 0.45 },
   activeButton: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
@@ -357,13 +391,13 @@ const styles = StyleSheet.create({
   },
   growthIconWrap: { backgroundColor: "#E7F5F0" },
   label: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: type.xs,
+    lineHeight: 15,
     fontWeight: "700",
     color: colors.text,
     textAlign: "center",
   },
-  activeLabel: { color: colors.amber },
+  activeLabel: { color: colors.amberText },
   progressBadge: {
     position: "absolute",
     top: 4,
@@ -388,10 +422,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 10,
   },
-  expandTileLabel: { fontSize: 11, fontWeight: "800", color: colors.amber, textAlign: "center" },
+  expandTileDense: { width: 64, minHeight: 72 },
+  expandTileLabel: { fontSize: type.xs, fontWeight: "800", color: colors.amberText, textAlign: "center" },
   collapseButton: {
     marginTop: 10,
-    minHeight: 36,
+    minHeight: 44,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,

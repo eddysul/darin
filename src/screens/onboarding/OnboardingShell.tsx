@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     fontSize: 11,
     fontWeight: "800",
-    color: colors.amber,
+    color: colors.amberText,
     backgroundColor: colors.amberSoft,
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   bodyCompact: { marginBottom: 0, gap: 0 },
   field: { marginBottom: 16 },
   label: { fontSize: 13, fontWeight: "700", color: colors.text, marginBottom: 8 },
-  required: { color: colors.amber },
+  required: { color: colors.amberText },
   optional: { color: colors.faint, fontWeight: "500" },
   optionWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   optionBtn: {

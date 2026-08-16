@@ -19,9 +19,11 @@ export function actionToCategory(action: OneTouchAction): LogCategoryKey {
 }
 
 /** Prefill for long-press detail sheets (no auto-create). */
-export function longPressSheetPrefill(action: OneTouchAction): RecordSheetPrefill {
+export function longPressSheetPrefill(
+  action: OneTouchAction,
+  dateKey = formatDateKey(),
+): RecordSheetPrefill {
   const time = nowTime();
-  const dateKey = formatDateKey();
   const base = { time, dateKey, source: "manual" as const };
 
   switch (action) {

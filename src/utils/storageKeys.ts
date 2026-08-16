@@ -27,6 +27,8 @@ export const STORAGE_KEYS = {
   pendingEmailAuth: "darin:pending-email-auth",
   /** Invite code retained across OAuth/browser round-trips until accept. */
   pendingInvite: "darin:pending-invite",
+  /** Local MVP identity metadata. The backend will later enforce globally unique Darin IDs. */
+  darinIdentity: "darin:darin-identity",
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

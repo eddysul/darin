@@ -25,7 +25,7 @@ export function ProfileAvatar({
       {uri ? (
         <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit={imageFit} contentPosition="center" transition={120} />
       ) : (
-        <BabyLogIcon kind={fallback} size={Math.round(size * 0.42)} color={colors.amber} />
+        <BabyLogIcon kind={fallback} size={Math.round(size * 0.42)} color={colors.amberText} />
       )}
     </View>
   );
@@ -48,5 +48,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
-  caption: { color: colors.amber, fontSize: 12.5, fontWeight: "700" },
+  caption: { color: colors.amberText, fontSize: 12.5, fontWeight: "700" },
 });

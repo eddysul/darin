@@ -15,6 +15,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import type { BabySticker } from "../../types/babySticker";
 import type { GrowthBookPage } from "../../utils/growthBookPages";
+import { useReduceMotion } from "../../hooks/useReduceMotion";
 import { colors } from "../../theme";
 import { GrowthBookPageCanvas } from "./GrowthBookPageCanvas";
 
@@ -70,6 +71,7 @@ export function GrowthBookReader({
 }: Props) {
   const [viewportW, setViewportW] = useState(GROWTH_BOOK_PAPER_W);
   const [transition, setTransition] = useState<TransitionState | null>(null);
+  const reduceMotion = useReduceMotion();
 
   // progress: 0 = 종이가 전혀 안 접힘(fold가 오른쪽 끝), 1 = 완전히 넘어감(fold가 왼쪽 끝)
   const progress = useRef(new Animated.Value(0)).current;
@@ -153,7 +155,7 @@ export function GrowthBookReader({
       const remaining = Math.abs(toValue - fromFraction);
       Animated.timing(progress, {
         toValue,
-        duration: Math.max(150, TURN_MS * remaining),
+        duration: reduceMotion ? 0 : Math.max(150, TURN_MS * remaining),
         easing: TURN_EASING,
         useNativeDriver: false,
       }).start(({ finished }) => {
@@ -163,7 +165,7 @@ export function GrowthBookReader({
         else clearTransition();
       });
     },
-    [clearTransition, finishTurn, progress],
+    [clearTransition, finishTurn, progress, reduceMotion],
   );
 
   const turnTo = useCallback(

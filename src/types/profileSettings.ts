@@ -38,6 +38,7 @@ export type BabyProfile = {
 
 export type UpdateMyProfileInput = {
   displayName: string;
+  darinId?: string | null;
   nickname?: string | null;
   defaultRelation?: RelationshipLabel | DbRelationshipLabel | null;
   preferredLanguage?: string;

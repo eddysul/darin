@@ -5,7 +5,6 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -64,12 +63,14 @@ import {
   longPressSheetPrefill,
 } from "../../utils/longPressActions";
 import { FEEDING_CATS, getLogsForDay } from "../../utils/reportAggregates";
-import { colors } from "../../theme";
+import { colors, type } from "../../theme";
+import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { loadFoodIngredients, normalizeIngredientName, saveFoodIngredients } from "../../utils/foodIngredientsStore";
 
 type Props = {
   onOpenProfile: () => void;
   onOpenSettings: () => void;
+  onOpenNotifications?: () => void;
   onOpenConsult: (initialQuestion?: string) => void;
 };
 
@@ -83,7 +84,7 @@ const TIMER_LABEL: Record<ActiveTimer["kind"], string> = {
   play: "놀이",
 };
 
-export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: Props) {
+export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenConsult }: Props) {
   const { settings, ready: settingsReady } = useAppSettings();
   const {
     logs,
@@ -142,6 +143,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
 
   const me = familyMembers.find((m) => m.isMe);
   const allowAdd = canAddLog(myFamilyRole);
+  const compact = useCompactLayout();
   const todayKey = formatDateKey();
   const dayLogs = useMemo(
     () => getLogsForDay(logs, selectedDateKey, todayKey),
@@ -360,12 +362,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
 
   const handleOneTouch = (action: OneTouchAction) => {
     if (!allowAdd) return;
-    const next = longPressSheetPrefill(action);
-    openSheet(next.cat ?? actionToCategory(action), {
-      ...next,
-      time: nowTime(),
-      dateKey: todayKey,
-    });
+    const next = longPressSheetPrefill(action, selectedDateKey);
+    openSheet(next.cat ?? actionToCategory(action), next);
   };
 
   const startOrOpenTimer = (action: OneTouchAction) => {
@@ -432,11 +430,11 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
         startOrOpenTimer(action);
         return;
       }
-      const next = longPressSheetPrefill(action);
+      const next = longPressSheetPrefill(action, selectedDateKey);
       openSheet(next.cat ?? actionToCategory(action), next);
       return;
     }
-    const next = longPressSheetPrefill(action);
+    const next = longPressSheetPrefill(action, selectedDateKey);
     openSheet(next.cat ?? actionToCategory(action), next);
   };
 
@@ -531,7 +529,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
       openSheet("diaper", {
         cat: "diaper",
         time,
-        dateKey: todayKey,
+        dateKey: selectedDateKey,
         source: "manual",
       });
       return;
@@ -559,7 +557,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
     const created = addLog({
       cat: defaults.cat,
       time,
-      dateKey: todayKey,
+      dateKey: selectedDateKey,
       source: "manual",
       chip: defaults.chip,
       chip2: defaults.chip2,
@@ -590,7 +588,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
       .filter((entry) => cats.includes(entry.cat as never))
       .sort((a, b) => a.time.localeCompare(b.time));
     const index = editId ? ordered.findIndex((entry) => entry.id === editId) + 1 : ordered.length + 1;
-    return `오늘 ${Math.max(1, index)}회차 ${cat === "pump" ? "유축" : "수유"}`;
+    const dayPart = targetDate === todayKey ? "오늘" : shortDateLabel(targetDate).replace("/", ".");
+    return `${dayPart} ${Math.max(1, index)}회차 ${cat === "pump" ? "유축" : "수유"}`;
   };
   const activeSessionLabel = primaryTimer
     ? sessionLabelFor(primaryTimer.kind === "breastfeeding" ? "breast" : primaryTimer.kind, undefined, primaryTimer.dateKey)
@@ -646,22 +645,49 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
 
   return (
     <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        onScrollBeginDrag={handleScrollBegin}
-        onScrollEndDrag={handleScrollEnd}
-        onMomentumScrollBegin={handleScrollBegin}
-        onMomentumScrollEnd={handleScrollEnd}
-        scrollEventThrottle={16}
-      >
-        <RecordHomeHeader embedded onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
+      <TodayTimeline
+        logs={storageReady ? dayLogs : []}
+        title={timelineTitle}
+        customCategories={customCategories}
+        highlightId={highlightId}
+        onPress={openEdit}
+        limit={6}
+        onDelete={(entry) => {
+          if (canDeleteLog(myFamilyRole, entry.createdBy, me)) deleteLog(entry.id);
+        }}
+        contentContainerStyle={[styles.content, compact && styles.contentCompact]}
+        scrollProps={{
+          onScrollBeginDrag: handleScrollBegin,
+          onScrollEndDrag: handleScrollEnd,
+          onMomentumScrollBegin: handleScrollBegin,
+          onMomentumScrollEnd: handleScrollEnd,
+          scrollEventThrottle: 16,
+        }}
+        listEmpty={
+          !storageReady ? null : (
+            <EmptyState
+              title={isViewingToday ? "아직 기록이 없어요." : "이 날의 기록이 없어요."}
+              body={
+                allowAdd
+                  ? isViewingToday
+                    ? "위에서 기록하거나 자주 쓰는 조합을 눌러 보세요."
+                    : `${dayNavLabel(selectedDateKey)}에 남긴 기록이 없습니다. 위에서 이 날에 남길 수 있어요.`
+                  : isViewingToday
+                    ? "아직 기록이 없어요."
+                    : `${dayNavLabel(selectedDateKey)}에 남긴 기록이 없습니다.`
+              }
+            />
+          )
+        }
+        listHeader={
+          <>
+        <RecordHomeHeader embedded onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} />
         {!allowAdd && (
           <Text style={styles.viewerBanner}>보기 전용 계정이에요. 기록 추가·수정은 제한돼요.</Text>
         )}
         {primaryTimer ? (
           <View style={styles.timerBanner}>
-            {primaryTimerCategory ? <View style={styles.timerBannerIcon}><LogCategoryIcon categoryKey={primaryTimerCategory} customCategories={customCategories} size={18} color={colors.amber} /></View> : null}
+            {primaryTimerCategory ? <View style={styles.timerBannerIcon}><LogCategoryIcon categoryKey={primaryTimerCategory} customCategories={customCategories} size={18} color={colors.amberText} /></View> : null}
             <Pressable style={styles.timerBannerCopy} onPress={() => setTimerSheetId(primaryTimer.id)}>
               <Text style={styles.timerBannerTitle}>
                 {TIMER_LABEL[primaryTimer.kind]} 진행 중
@@ -692,10 +718,6 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
           onPressDate={() => setDatePickerOpen(true)}
         />
         <View style={styles.addSection}>
-          <View style={styles.sectionIntro}>
-            <Text style={styles.sectionTitle}>기록 추가</Text>
-            <Text style={styles.sectionDescription}>카테고리를 탭해 자세히 기록하거나 저장해둔 조합을 바로 사용하세요.</Text>
-          </View>
           <OneTouchRecordGrid
             sleepActive={Boolean(activeSleep)}
             activeTimerActions={activeTimerActions}
@@ -737,30 +759,9 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
             onSaveRecords={setQuickRecords}
           />
         </View>
-        {!storageReady ? null : dayLogs.length === 0 ? (
-          <View style={styles.historySection}>
-            <View style={styles.historyHeader}><Text style={styles.historyTitle}>{timelineTitle}</Text><Text style={styles.historyCount}>0개</Text></View>
-            <EmptyState
-              title={isViewingToday ? "아직 기록이 없어요." : "이 날의 기록이 없어요."}
-              body={isViewingToday ? "첫 기록을 남겨보세요." : `${dayNavLabel(selectedDateKey)}에 남긴 기록이 없습니다.`}
-              ctaLabel={allowAdd && isViewingToday ? "기록 추가하기" : undefined}
-              onPressCta={allowAdd && isViewingToday ? () => handleOneTouch("formula") : undefined}
-            />
-          </View>
-        ) : (
-          <TodayTimeline
-            logs={dayLogs}
-            title={timelineTitle}
-            customCategories={customCategories}
-            highlightId={highlightId}
-            onPress={openEdit}
-            limit={6}
-            onDelete={(entry) => {
-              if (canDeleteLog(myFamilyRole, entry.createdBy, me)) deleteLog(entry.id);
-            }}
-          />
-        )}
-      </ScrollView>
+          </>
+        }
+      />
 
       <RecordDatePickerModal
         visible={datePickerOpen}
@@ -770,6 +771,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
       />
 
       <ConsultFab
+        compact
         hidden={fabHidden}
         onPress={() => setConsultPromptOpen(true)}
       />
@@ -886,11 +888,12 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenConsult }: P
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  content: { paddingHorizontal: 20, paddingBottom: 112 },
+  content: { paddingHorizontal: 20, paddingBottom: 96 },
+  contentCompact: { paddingHorizontal: 16, paddingBottom: 80 },
   viewerBanner: {
     backgroundColor: colors.amberSoft,
-    color: colors.amberDark,
-    fontSize: 12.5,
+    color: colors.amberText,
+    fontSize: type.xs,
     fontWeight: "600",
     textAlign: "center",
     paddingVertical: 10,
@@ -908,20 +911,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   timerBannerIcon: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
   timerBannerCopy: { flex: 1 },
-  timerBannerTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
-  timerBannerMeta: { fontSize: 12, color: colors.muted, marginTop: 2, fontWeight: "600" },
-  timerBannerAction: { minHeight: 36, paddingHorizontal: 8, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: colors.amberSoft },
-  timerBannerActionText: { fontSize: 10.5, fontWeight: "800", color: colors.amberDark },
-  addSection: { marginBottom: 6, paddingTop: 2 },
-  sectionIntro: { marginBottom: 14 },
-  sectionTitle: { color: colors.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.35 },
-  sectionDescription: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
-  historySection: { marginBottom: 24 },
-  historyHeader: { minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
-  historyTitle: { color: colors.text, fontSize: 19, fontWeight: "800", letterSpacing: -0.3 },
-  historyCount: { color: colors.amber, fontSize: 12, fontWeight: "800" },
+  timerBannerTitle: { fontSize: type.sm, fontWeight: "800", color: colors.text },
+  timerBannerMeta: { fontSize: type.xs, color: colors.muted, marginTop: 2, fontWeight: "600" },
+  timerBannerAction: { minHeight: 44, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: colors.amberSoft },
+  timerBannerActionText: { fontSize: type.xs, fontWeight: "800", color: colors.amberText },
+  addSection: { marginBottom: 4, paddingTop: 0 },
 });

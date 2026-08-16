@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -14,14 +15,19 @@ import { useNavigation, useRoute, type RouteProp } from "@react-navigation/nativ
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { callOpenAI, OpenAIChatError, type OpenAIMessage } from "../../api/openaiChat";
 import { AppHeader } from "../../components/babylog/AppHeader";
+import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
+import { ConsultMemoSheet } from "../../components/babylog/ConsultMemoSheet";
+import { RecordCreatedToast } from "../../components/babylog/RecordCreatedToast";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { useLanguage } from "../../LanguageContext";
 import { buildBabyLogConsultPrompt, buildCareContextPack } from "../../utils/babyLogAIContext";
-import { EmptyState, ErrorState, LoadingState } from "../../components/states/FeedbackStates";
-import { BabyStickerFromModel } from "../../components/babylog/BabyStickerView";
-import { BabyStickerVaultModal } from "../../components/babylog/BabyStickerVaultModal";
+import { ErrorState, LoadingState } from "../../components/states/FeedbackStates";
 import { colors } from "../../theme";
 import { consumeQaFaultOnce } from "../../utils/qaDebug";
+import { formatDateKey } from "../../utils/dateKey";
+import { formatHHmm, formatTimeOfDay } from "../../utils/timePicker";
+import { openDeviceNotificationSettings, scheduleMemoReminder } from "../../utils/memoReminderNotifications";
+import { formatSleepDuration, type TodaySummary } from "../../utils/reportAggregates";
 
 const QUICK_CHIPS = [
   "오늘 수면 괜찮아?",
@@ -44,9 +50,11 @@ type ConsultNav = BottomTabNavigationProp<
 type Props = {
   onOpenProfile: () => void;
   onOpenSettings?: () => void;
+  onOpenNotifications?: () => void;
+  onOpenRecord?: () => void;
 };
 
-export function ConsultScreen({ onOpenProfile, onOpenSettings }: Props) {
+export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenRecord }: Props) {
   const route = useRoute<RouteProp<{ Consult: ConsultRouteParams }, "Consult">>();
   const navigation = useNavigation<ConsultNav>();
   const {
@@ -57,10 +65,7 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings }: Props) {
     pushChat,
     babyName,
     storageReady,
-    babyStickers,
-    addBabySticker,
-    deleteBabySticker,
-    logAuthor,
+    addLogWithPersistence,
   } = useBabyLog();
   const { locale, t } = useLanguage();
   const [input, setInput] = useState("");
@@ -68,8 +73,14 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings }: Props) {
   const [aiError, setAiError] = useState<string | null>(null);
   const [failedQuestion, setFailedQuestion] = useState<string | null>(null);
   const [bannerOpen, setBannerOpen] = useState(false);
-  const [stickerOpen, setStickerOpen] = useState(false);
+  const [memoOpen, setMemoOpen] = useState(false);
+  const [memoSeed, setMemoSeed] = useState("");
+  const [memoSaving, setMemoSaving] = useState(false);
+  const [memoToast, setMemoToast] = useState<string | null>(null);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [chromeH, setChromeH] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
   const historyRef = useRef<OpenAIMessage[]>([]);
   const historySeeded = useRef(false);
   const requestInFlightRef = useRef(false);
@@ -147,26 +158,95 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings }: Props) {
     }
   };
 
-  // Prefill from Record FAB prompt sheet (do not rewrite consult logic).
+  // Prefill from Record FAB prompt sheet — user sends after editing.
   useEffect(() => {
     if (!storageReady) return;
     const question = route.params?.initialQuestion?.trim();
     if (!question) return;
     if (consumedInitialRef.current === question) return;
     consumedInitialRef.current = question;
-    void send(question);
+    setInput(question);
     navigation.setParams({ initialQuestion: undefined });
-    // Allow the same question to be asked again later from the prompt sheet.
+    const focus = setTimeout(() => inputRef.current?.focus(), 80);
     const clear = setTimeout(() => {
       consumedInitialRef.current = null;
     }, 500);
-    return () => clearTimeout(clear);
+    return () => {
+      clearTimeout(focus);
+      clearTimeout(clear);
+    };
   }, [storageReady, route.params?.initialQuestion]);
+
+  const lastAiText = useMemo(() => {
+    const last = [...chatHistory].reverse().find((m) => m.role === "ai" && m.id !== "greet-1" && m.text.trim());
+    return last?.text.trim() ?? "";
+  }, [chatHistory]);
+
+  const sentChipTexts = useMemo(
+    () => new Set(chatHistory.filter((m) => m.role === "user").map((m) => m.text.trim())),
+    [chatHistory],
+  );
+  const hasUserTurn = sentChipTexts.size > 0;
+  const showChips = !hasUserTurn || inputFocused;
+  const todayLines = useMemo(() => todayEvidenceLines(pack.todaySummary), [pack.todaySummary]);
+
+  const openMemo = (seed = "") => {
+    setMemoSeed(seed);
+    setMemoOpen(true);
+  };
+
+  const saveMemo = async (input: { notes: string; remindAt?: Date }) => {
+    const now = new Date();
+    setMemoSaving(true);
+    try {
+      const saved = await addLogWithPersistence({
+        cat: "memo",
+        time: formatHHmm(now.getHours(), now.getMinutes()),
+        dateKey: formatDateKey(now),
+        notes: input.notes,
+        title: "상담 메모",
+        chip: "상담",
+        nextAt: input.remindAt
+          ? `${formatDateKey(input.remindAt, "midnight")} ${formatHHmm(input.remindAt.getHours(), input.remindAt.getMinutes())}`
+          : undefined,
+        source: "manual",
+      });
+      if (!saved) {
+        Alert.alert("메모를 저장하지 못했어요", "잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      if (input.remindAt) {
+        const scheduled = await scheduleMemoReminder({
+          logId: saved.id,
+          fireAt: input.remindAt,
+          title: "남겨 둔 메모예요",
+          body: input.notes,
+        });
+        if (!scheduled) {
+          Alert.alert("메모는 저장했어요", "알림 권한이 없어 리마인드는 맞추지 못했어요.", [
+            { text: "닫기", style: "cancel" },
+            { text: "설정 열기", onPress: () => void openDeviceNotificationSettings() },
+          ]);
+          setMemoOpen(false);
+          setMemoToast("메모를 저장했어요");
+          return;
+        }
+        setMemoToast(`${formatTimeOfDay(formatHHmm(input.remindAt.getHours(), input.remindAt.getMinutes()))}에 알려드릴게요`);
+      } else {
+        setMemoToast("메모를 저장했어요");
+      }
+      setMemoOpen(false);
+    } catch {
+      Alert.alert("메모를 저장하지 못했어요", "잠시 후 다시 시도해 주세요.");
+    } finally {
+      setMemoSaving(false);
+    }
+  };
 
   if (!storageReady) {
     return (
       <View style={styles.root}>
-        <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
+        <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} />
         <View style={styles.loadingBox}>
           <LoadingState label="상담 기록을 불러오는 중…" />
         </View>
@@ -175,147 +255,157 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings }: Props) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={88}
-    >
-      <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
-
-      <Pressable style={styles.banner} onPress={() => setBannerOpen(true)}>
-        <Text style={styles.bannerEyebrow}>AI가 참고 중</Text>
-        <Text style={styles.bannerTitle}>
-          {pack.babyName} · {pack.babyBirthMeta}
-        </Text>
-        <Text style={styles.bannerMeta}>
-          오늘 기록 {pack.todayLogCount}개 · 최근 7일 기록 {pack.weekLogCount}개 · 일기 {pack.diaryCount}개
-        </Text>
-        <Text style={styles.bannerTap}>탭하여 참고 정보 보기</Text>
-      </Pressable>
-
-      {!HAS_AI_SERVER && (
-        <View style={styles.warnBanner}>
-          <Text style={styles.warnText}>AI 서버가 없어요. `.env`에 EXPO_PUBLIC_TRANSCRIBE_URL을 넣어 주세요.</Text>
-        </View>
-      )}
-
-      {sparse && (
-        <View style={styles.sparseBanner}>
-          <Text style={styles.sparseText}>
-            기록이 부족해요. 확정적으로 말하기 어려울 수 있어요 — 판단하기 어려우면 솔직히 알려드릴게요.
+    <View style={styles.root}>
+      <View onLayout={(e) => setChromeH(e.nativeEvent.layout.height)}>
+        <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} />
+        <Pressable
+          style={styles.banner}
+          onPress={() => setBannerOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="참고 정보 보기"
+          accessibilityHint={sparse ? "오늘 요약과 안전 안내를 볼 수 있어요" : "오늘 수유·수면·배변 요약을 볼 수 있어요"}
+        >
+          <Text style={styles.bannerLine} numberOfLines={1}>
+            {sparse
+              ? `AI 참고 중 · 오늘 ${pack.todayLogCount}개 · 기록 적음`
+              : `AI 참고 중 · 오늘 ${pack.todayLogCount}개 · 7일 ${pack.weekLogCount}개`}
           </Text>
-        </View>
-      )}
-
-      <View style={styles.safetyStrip}>
-        <Text style={styles.safetyText}>
-          고열·호흡곤란·반복 구토·탈수·처짐이 있으면 소아과/응급 진료를 권해요. 의학적 진단이 아니며 최근 기록
-          기준입니다.
-        </Text>
+          <Text style={styles.bannerChevron}>›</Text>
+        </Pressable>
+        {!HAS_AI_SERVER ? (
+          <View style={styles.warnBanner}>
+            <Text style={styles.warnText}>상담을 잠시 쓸 수 없어요. 잠시 후 다시 시도해 주세요.</Text>
+          </View>
+        ) : null}
       </View>
 
-      <ScrollView
-        ref={scrollRef}
-        style={styles.messages}
-        contentContainerStyle={styles.messagesContent}
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={chromeH}
       >
-        {chatHistory.length <= 1 ? (
-          <EmptyState
-            title="아직 상담 기록이 없어요."
-            body="아래 퀵질문으로 첫 상담을 시작해 보세요."
-          />
-        ) : null}
-        {chatHistory.map((m) => {
-          const sticker = m.stickerId ? babyStickers.find((item) => item.id === m.stickerId) : null;
-          return m.role === "user" ? (
-            <View key={m.id} style={[styles.bubble, styles.userBubble]}>
-              {sticker ? <BabyStickerFromModel sticker={sticker} size={72} /> : null}
-              {m.text ? <Text style={[styles.bubbleText, styles.userText]}>{m.text}</Text> : null}
-            </View>
-          ) : (
-            <View key={m.id} style={styles.aiBlock}>
-              <View style={[styles.bubble, styles.aiBubble]}>
-                <Text style={styles.bubbleText}>{m.text}</Text>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.messages}
+          contentContainerStyle={styles.messagesContent}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+          keyboardShouldPersistTaps="handled"
+        >
+          {chatHistory.map((m) =>
+            m.role === "user" ? (
+              m.text ? (
+                <View key={m.id} style={[styles.bubble, styles.userBubble]}>
+                  <Text style={[styles.bubbleText, styles.userText]}>{m.text}</Text>
+                </View>
+              ) : null
+            ) : (
+              <View key={m.id} style={styles.aiBlock}>
+                <View style={[styles.bubble, styles.aiBubble]}>
+                  <Text style={styles.bubbleText}>{m.text}</Text>
+                </View>
+                {m.id !== "greet-1" ? (
+                  <Pressable
+                    style={styles.memoLink}
+                    onPress={() => openMemo(m.text)}
+                    accessibilityRole="button"
+                    accessibilityLabel="이 답변을 메모로 남기기"
+                  >
+                    <Text style={styles.memoLinkText}>메모·알림</Text>
+                  </Pressable>
+                ) : null}
               </View>
-              <Text style={styles.answerFootnote}>최근 기록 기준입니다.</Text>
+            ),
+          )}
+          {isTyping && (
+            <View style={styles.aiBlock}>
+              <LoadingState label="AI 분석 중…" />
             </View>
-          );
-        })}
-        {isTyping && (
-          <View style={styles.aiBlock}>
-            <LoadingState label="AI 분석 중…" />
-          </View>
-        )}
-        {aiError && !isTyping ? (
-          <View style={{ marginTop: 8 }}>
-            <ErrorState
-              title="잠시 문제가 생겼어요."
-              body={aiError}
-              onRetry={() => {
-                if (failedQuestion) void send(failedQuestion, true);
-              }}
-              busy={isTyping}
-            />
-          </View>
+          )}
+          {aiError && !isTyping ? (
+            <View style={{ marginTop: 8 }}>
+              <ErrorState
+                title="잠시 문제가 생겼어요."
+                body={aiError}
+                onRetry={() => {
+                  if (failedQuestion) void send(failedQuestion, true);
+                }}
+                busy={isTyping}
+              />
+            </View>
+          ) : null}
+        </ScrollView>
+
+        {showChips ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipsScroll}
+            contentContainerStyle={styles.chips}
+            keyboardShouldPersistTaps="handled"
+          >
+            {QUICK_CHIPS.map((chip) => {
+              const sent = sentChipTexts.has(chip);
+              return (
+                <Pressable
+                  key={chip}
+                  style={[styles.chip, sent && styles.chipSent]}
+                  onPress={() => {
+                    setInput(chip);
+                    inputRef.current?.focus();
+                  }}
+                  disabled={isTyping}
+                  accessibilityRole="button"
+                  accessibilityLabel={sent ? `${chip}, 이미 물어본 질문` : chip}
+                >
+                  <Text style={[styles.chipText, sent && styles.chipTextSent]}>{chip}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         ) : null}
-      </ScrollView>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipsScroll}
-        contentContainerStyle={styles.chips}
-      >
-        {QUICK_CHIPS.map((chip) => (
-          <Pressable key={chip} style={styles.chip} onPress={() => void send(chip)} disabled={isTyping}>
-            <Text style={styles.chipText}>{chip}</Text>
+        <View style={styles.inputRow}>
+          <Pressable
+            style={styles.memoBtn}
+            onPress={() => openMemo(lastAiText)}
+            disabled={isTyping}
+            accessibilityRole="button"
+            accessibilityLabel="메모 남기기"
+            accessibilityHint="기록으로 저장하고 알림을 맞출 수 있어요"
+          >
+            <Text style={styles.memoBtnText}>메모</Text>
           </Pressable>
-        ))}
-      </ScrollView>
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            placeholder={`${babyName}에 대해 물어보세요...`}
+            placeholderTextColor={colors.faint}
+            value={input}
+            onChangeText={setInput}
+            onSubmitEditing={() => void send(input)}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
+            returnKeyType="send"
+            editable={!isTyping}
+          />
+          <Pressable
+            style={[styles.sendBtn, (!input.trim() || isTyping) && styles.sendBtnDisabled]}
+            onPress={() => void send(input)}
+            disabled={!input.trim() || isTyping}
+            accessibilityRole="button"
+            accessibilityLabel="보내기"
+          >
+            <BabyLogIcon kind="send" size={18} color={colors.amberDark} />
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
 
-      <View style={styles.inputRow}>
-        <Pressable
-          style={styles.stickerBtn}
-          onPress={() => setStickerOpen(true)}
-          disabled={isTyping}
-          accessibilityLabel="스티커 보내기"
-        >
-          <Text style={styles.stickerBtnText}>스티커</Text>
-        </Pressable>
-        <TextInput
-          style={styles.input}
-          placeholder={`${babyName}에 대해 물어보세요...`}
-          placeholderTextColor={colors.faint}
-          value={input}
-          onChangeText={setInput}
-          onSubmitEditing={() => void send(input)}
-          returnKeyType="send"
-          editable={!isTyping}
-        />
-        <Pressable
-          style={[styles.sendBtn, (!input.trim() || isTyping) && styles.sendBtnDisabled]}
-          onPress={() => void send(input)}
-          disabled={!input.trim() || isTyping}
-        >
-          <Text style={styles.sendIcon}>➤</Text>
-        </Pressable>
-      </View>
-
-      <BabyStickerVaultModal
-        visible={stickerOpen}
-        babyName={babyName}
-        stickers={babyStickers}
-        createdBy={logAuthor.userId}
-        pickMode
-        onClose={() => setStickerOpen(false)}
-        onSaveSticker={addBabySticker}
-        onDeleteSticker={deleteBabySticker}
-        onPickSticker={(sticker) => {
-          pushChat("user", sticker.text || sticker.label, sticker.id);
-          setStickerOpen(false);
-        }}
+      <ConsultMemoSheet
+        visible={memoOpen}
+        initialText={memoSeed}
+        saving={memoSaving}
+        onClose={() => setMemoOpen(false)}
+        onSave={(payload) => void saveMemo(payload)}
       />
 
       <Modal visible={bannerOpen} transparent animationType="fade" onRequestClose={() => setBannerOpen(false)}>
@@ -323,19 +413,41 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings }: Props) {
           <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>참고한 정보</Text>
             <EvidenceRow label="아기 프로필" detail={pack.babyBirthMeta} />
-            <EvidenceRow label="오늘 기록" detail={`${pack.todayLogCount}개 · 수유/수면/배변 요약`} />
-            <EvidenceRow label="최근 7일 트렌드" detail={`${pack.weekLogCount}개 이벤트`} />
+            <EvidenceRow label="오늘 요약" detail={todayLines.join("\n")} />
+            <EvidenceRow label="최근 7일" detail={`기록 ${pack.weekLogCount}개`} />
             <EvidenceRow label="최근 일기" detail={`${pack.diaryCount}개`} />
+            {sparse ? (
+              <Text style={styles.modalNote}>
+                기록이 부족해요. 확정적으로 말하기 어려울 수 있어요. 판단하기 어려우면 솔직히 알려드릴게요.
+              </Text>
+            ) : null}
             <Text style={styles.modalNote}>
-              답변은 위 범위의 최근 기록 기준입니다. 기록이 부족하면 “판단하기 어려워요”라고 말할 수 있어요.
+              고열·호흡곤란·반복 구토·탈수·처짐이 있으면 소아과/응급 진료를 권해요. 의학적 진단이 아니며 최근 기록
+              기준입니다.
             </Text>
-            <Pressable style={styles.modalBtn} onPress={() => setBannerOpen(false)}>
+            <Pressable
+              style={styles.modalBtn}
+              onPress={() => setBannerOpen(false)}
+              accessibilityRole="button"
+              accessibilityLabel="닫기"
+            >
               <Text style={styles.modalBtnText}>닫기</Text>
             </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
-    </KeyboardAvoidingView>
+
+      <RecordCreatedToast
+        visible={Boolean(memoToast)}
+        title={memoToast ?? ""}
+        body="기록에서 보기"
+        onDismiss={() => setMemoToast(null)}
+        onPress={() => {
+          setMemoToast(null);
+          onOpenRecord?.();
+        }}
+      />
+    </View>
   );
 }
 
@@ -348,24 +460,39 @@ function EvidenceRow({ label, detail }: { label: string; detail: string }) {
   );
 }
 
+function todayEvidenceLines(summary: TodaySummary): string[] {
+  if (summary.totalCount === 0) return ["오늘 아직 기록이 없어요."];
+  const feed = summary.lastFeedAt
+    ? `수유 ${summary.feedCount}회 · 마지막 ${formatTimeOfDay(summary.lastFeedAt)}`
+    : `수유 ${summary.feedCount}회`;
+  const sleep = `수면 ${formatSleepDuration(summary.totalSleepMinutes)} · ${summary.sleepCount}회`;
+  const diaper = summary.lastDiaperAt
+    ? `배변 ${summary.diaperCount}회 · 마지막 ${formatTimeOfDay(summary.lastDiaperAt)}`
+    : `배변 ${summary.diaperCount}회`;
+  return [feed, sleep, diaper];
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
   loadingBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   banner: {
     marginHorizontal: 18,
     marginTop: 4,
     marginBottom: 6,
+    minHeight: Platform.OS === "android" ? 48 : 44,
     backgroundColor: colors.amberSoft,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(232,163,61,0.35)",
+    borderColor: colors.amber,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
-  bannerEyebrow: { fontSize: 10.5, fontWeight: "700", color: colors.amber, marginBottom: 4 },
-  bannerTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
-  bannerMeta: { fontSize: 12, color: colors.muted, marginTop: 4, lineHeight: 18 },
-  bannerTap: { fontSize: 11, color: colors.faint, marginTop: 6 },
+  bannerLine: { flex: 1, fontSize: 13, fontWeight: "700", color: colors.amberText },
+  bannerChevron: { fontSize: 18, fontWeight: "700", color: colors.amberText },
   warnBanner: {
     marginHorizontal: 18,
     marginBottom: 6,
@@ -374,22 +501,6 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   warnText: { fontSize: 12, color: colors.dangerText, lineHeight: 18 },
-  sparseBanner: {
-    marginHorizontal: 18,
-    marginBottom: 6,
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sparseText: { fontSize: 12, color: colors.muted, lineHeight: 18 },
-  safetyStrip: {
-    marginHorizontal: 18,
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  safetyText: { fontSize: 11, color: colors.faint, lineHeight: 16 },
   messages: { flex: 1 },
   messagesContent: { paddingHorizontal: 18, paddingVertical: 12, gap: 10 },
   bubble: {
@@ -413,16 +524,19 @@ const styles = StyleSheet.create({
   aiBlock: { alignSelf: "flex-start", maxWidth: "85%", marginBottom: 8 },
   bubbleText: { fontSize: 13.5, lineHeight: 21, color: colors.text },
   userText: { color: colors.amberDark },
-  answerFootnote: {
-    fontSize: 10.5,
-    color: colors.faint,
-    marginTop: 4,
-    marginLeft: 4,
+  memoLink: {
+    minHeight: Platform.OS === "android" ? 48 : 44,
+    justifyContent: "center",
+    alignSelf: "flex-start",
+    paddingHorizontal: 4,
   },
+  memoLinkText: { fontSize: 12, fontWeight: "700", color: colors.amberText },
   chipsScroll: { flexGrow: 0 },
   chips: { paddingHorizontal: 18, paddingVertical: 8, gap: 8, alignItems: "center" },
   chip: {
     alignSelf: "flex-start",
+    minHeight: Platform.OS === "android" ? 48 : 44,
+    justifyContent: "center",
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
@@ -431,6 +545,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipText: { fontSize: 12, lineHeight: 17, color: colors.muted, fontWeight: "600" },
+  chipSent: { opacity: 0.45 },
+  chipTextSent: { color: colors.faint },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -452,25 +568,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
   },
-  stickerBtn: {
+  memoBtn: {
+    minHeight: Platform.OS === "android" ? 48 : 44,
+    justifyContent: "center",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.amber,
     backgroundColor: colors.amberSoft,
     paddingHorizontal: 10,
-    paddingVertical: 9,
   },
-  stickerBtnText: { fontSize: 11.5, fontWeight: "800", color: colors.amber },
+  memoBtnText: { fontSize: 11.5, fontWeight: "800", color: colors.amberText },
   sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Platform.OS === "android" ? 48 : 44,
+    height: Platform.OS === "android" ? 48 : 44,
+    borderRadius: Platform.OS === "android" ? 24 : 22,
     backgroundColor: colors.amber,
     alignItems: "center",
     justifyContent: "center",
   },
   sendBtnDisabled: { opacity: 0.45 },
-  sendIcon: { color: colors.amberDark, fontSize: 16, fontWeight: "700" },
   modalBg: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -485,14 +601,16 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginBottom: 12 },
   evidenceRow: { marginBottom: 10 },
   evidenceLabel: { fontSize: 13.5, fontWeight: "700", color: colors.text },
-  evidenceDetail: { fontSize: 12.5, color: colors.muted, marginTop: 2, marginLeft: 10 },
+  evidenceDetail: { fontSize: 12.5, color: colors.muted, marginTop: 2, marginLeft: 10, lineHeight: 19 },
   modalNote: { fontSize: 12, color: colors.faint, marginTop: 8, lineHeight: 18 },
   modalBtn: {
     marginTop: 16,
+    minHeight: Platform.OS === "android" ? 48 : 44,
     backgroundColor: colors.amber,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
+    justifyContent: "center",
   },
   modalBtnText: { fontWeight: "700", color: colors.amberDark },
 });

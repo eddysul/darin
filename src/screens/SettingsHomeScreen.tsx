@@ -14,6 +14,7 @@ export function SettingsHomeScreen({ navigation }: Props) {
       onOpenSettings={(page) => navigation.navigate("SettingsDetail", { page })}
       onOpenGrowthRecords={() => navigation.navigate("GrowthRecords")}
       onOpenGrowthBookStorage={() => navigation.navigate("MainTabs", { screen: "Diary", params: { openGrowthBookVault: true } })}
+      onOpenConsult={() => navigation.navigate("MainTabs", { screen: "Consult" })}
     />
   );
 }

@@ -22,6 +22,12 @@ import { useLanguage } from "../LanguageContext";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { FamilyRepository } from "../repositories/FamilyRepository";
 import { ProfileRepository } from "../repositories/ProfileRepository";
+import {
+  createDarinIdentity,
+  DarinIdentityRepository,
+  generateDarinTag,
+  validateDarinNickname,
+} from "../repositories/DarinIdentityRepository";
 import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
 import type { RelationshipLabel } from "../types/growthBook";
 import { presentAvatarPicker } from "../utils/profileAvatarPicker";
@@ -37,6 +43,8 @@ import {
   type ResidenceCountry,
 } from "../types/profilePreferences";
 import { formatDateKey } from "../utils/dateKey";
+
+const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 
 export function MyProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -54,6 +62,7 @@ export function MyProfileScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const [email, setEmail] = useState("");
   const [provider, setProvider] = useState("이메일");
+  const [darinTag, setDarinTag] = useState(generateDarinTag());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -69,6 +78,10 @@ export function MyProfileScreen() {
       else if (identities.includes("google")) setProvider("Google");
       else if (identities.includes("kakao")) setProvider("Kakao");
       else setProvider("이메일");
+      if (user) {
+        const identity = await DarinIdentityRepository.get(user.id);
+        if (identity) setDarinTag(identity.tag);
+      }
 
       const profile = await ProfileRepository.getMyProfile();
       if (profile) {
@@ -107,8 +120,9 @@ export function MyProfileScreen() {
     if (saving) return;
     const displayNickname = nickname.trim();
     const confirmedRealName = realName.trim();
-    if (!displayNickname) {
-      setError("닉네임을 입력해 주세요.");
+    const nicknameError = validateDarinNickname(displayNickname);
+    if (nicknameError) {
+      setError(nicknameError);
       return;
     }
     if (!confirmedRealName) {
@@ -122,8 +136,10 @@ export function MyProfileScreen() {
     setSaving(true);
     setError("");
     try {
+      const identity = createDarinIdentity({ realNameFromProvider: confirmedRealName || displayNickname, nickname: displayNickname, tag: darinTag });
       const next = await ProfileRepository.updateMyProfile({
         displayName: displayNickname,
+        darinId: identity.darinId,
         nickname: confirmedRealName,
         defaultRelation: relation,
         preferredLanguage,
@@ -132,6 +148,9 @@ export function MyProfileScreen() {
       });
       const babyId = activeBabyId;
       const user = await AuthRepository.getUser();
+      if (user) {
+        await DarinIdentityRepository.save(user.id, identity);
+      }
       if (babyId && user?.id) {
         await FamilyRepository.updateMemberRelation({
           babyId,
@@ -209,24 +228,27 @@ export function MyProfileScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.amber} />
+        <ActivityIndicator color={colors.amberText} />
         <Text style={styles.muted}>내 프로필을 불러오는 중…</Text>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={88}>
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? undefined : "padding"} keyboardVerticalOffset={0}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <ProfileAvatar uri={avatarUrl} size={104} editable onPress={pickAvatar} label="내 사진 추가" />
 
         <View style={styles.card}>
           <Text style={styles.label}>닉네임 *</Text>
-          <Text style={styles.help}>앱에서 주로 보이는 이름이에요.</Text>
-          <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder="예: 콩이맘, 준이아빠" placeholderTextColor={colors.faint} maxLength={40} />
-          <Text style={styles.label}>이름 *</Text>
-          <Text style={styles.help}>친구와 가족이 확인할 수 있는 이름이에요.</Text>
-          <TextInput style={styles.input} value={realName} onChangeText={setRealName} placeholder="예: 김민지, 이원준" placeholderTextColor={colors.faint} maxLength={40} />
+          <Text style={styles.help}>Darin에서 보이는 이름이에요. 2~12자, #과 /는 사용할 수 없어요.</Text>
+          <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder="예: 콩이맘, 준이아빠" placeholderTextColor={colors.faint} maxLength={12} />
+          <Text style={styles.label}>Darin ID</Text>
+          <Text style={styles.help}>가족·공유 멤버 검색과 요청에 사용하는 고유 ID예요.</Text>
+          <View style={styles.darinIdRow}><View style={styles.darinIdField}><Text style={styles.darinIdText}>{nickname.trim() ? `${nickname.trim()}#${darinTag}` : "닉네임#코드"}</Text></View><Pressable style={styles.regenerateButton} onPress={() => setDarinTag(generateDarinTag())} accessibilityRole="button" accessibilityLabel="Darin ID 새 코드 만들기"><Text style={styles.regenerateText}>새 코드</Text></Pressable></View>
+          <Text style={styles.label}>가져온 이름 *</Text>
+          <Text style={styles.help}>로그인 제공자에서 가져온 이름으로, 초대 확인에 함께 보여요.</Text>
+          <View style={styles.readonlyField}><Text style={[styles.readonlyText, !realName && styles.datePlaceholder]}>{realName || "가져온 이름이 없어요"}</Text></View>
           <Text style={styles.label}>아기와의 관계</Text>
           <View style={styles.chips}>
             {PROFILE_RELATION_OPTIONS.map((option) => {
@@ -257,7 +279,7 @@ export function MyProfileScreen() {
           <Text style={styles.label}>보호자 생년월일 *</Text>
           <Pressable style={[styles.input, styles.dateInput]} onPress={() => setBirthDatePickerOpen(true)} accessibilityRole="button" accessibilityLabel="보호자 생년월일 선택">
             <Text style={[styles.dateInputText, !guardianBirthDate && styles.datePlaceholder]}>{guardianBirthDate || "YYYY-MM-DD"}</Text>
-            <BabyLogIcon kind="calendar" size={18} color={colors.amber} />
+            <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
           </Pressable>
         </View>
 
@@ -297,14 +319,21 @@ const styles = StyleSheet.create({
   label: { color: colors.text, fontSize: 13, fontWeight: "800" },
   help: { color: colors.faint, fontSize: 11.5, lineHeight: 17, marginTop: -4 },
   input: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, paddingHorizontal: 13, color: colors.text, fontSize: 15 },
+  readonlyField: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundSecondary, paddingHorizontal: 13, justifyContent: "center" },
+  readonlyText: { color: colors.text, fontSize: 15 },
+  darinIdRow: { flexDirection: "row", gap: 8 },
+  darinIdField: { flex: 1, minHeight: 48, paddingHorizontal: 13, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, justifyContent: "center" },
+  darinIdText: { color: colors.amberText, fontSize: 15, fontWeight: "800" },
+  regenerateButton: { minHeight: 48, paddingHorizontal: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberSoft, justifyContent: "center" },
+  regenerateText: { color: colors.amberText, fontSize: 13, fontWeight: "800" },
   dateInput: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   dateInputText: { color: colors.text, fontSize: 15 },
   datePlaceholder: { color: colors.faint },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { minHeight: 40, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
+  chip: { minHeight: TOUCH_MIN, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   chipText: { color: colors.muted, fontWeight: "700", fontSize: 12.5 },
-  chipTextActive: { color: colors.amber },
+  chipTextActive: { color: colors.amberText },
   metaLabel: { color: colors.faint, fontSize: 11.5, fontWeight: "700", marginTop: 4 },
   metaValue: { color: colors.text, fontSize: 14, fontWeight: "600" },
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12.5 },
