@@ -73,8 +73,11 @@ try {
 
   const familyAccept = await family.sb.rpc("respond_darin_id_invite_request", { p_request_id: familyRequestId, p_accept: true });
   if (familyAccept.error || familyAccept.data?.[0]?.permission_role !== "editor") throw familyAccept.error ?? new Error("family accept failed");
-  const familyMember = await family.sb.from("baby_members").select("permission_role").eq("baby_id", babyId).maybeSingle();
-  if (familyMember.error || familyMember.data?.permission_role !== "editor") throw new Error("family role not applied as editor");
+  const familyMember = await family.sb.from("baby_members").select("permission_role")
+    .eq("baby_id", babyId).eq("user_id", family.user.id).maybeSingle();
+  if (familyMember.error || familyMember.data?.permission_role !== "editor") {
+    throw familyMember.error ?? new Error("family role not applied as editor");
+  }
   const acceptedEvent = await owner.sb.from("notification_events").select("id").eq("event_type", "family_joined").eq("data->>requestId", familyRequestId);
   if (acceptedEvent.error || !acceptedEvent.data?.length) throw new Error("requester did not receive accepted in-app event");
 
