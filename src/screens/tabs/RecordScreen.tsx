@@ -786,11 +786,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
         onClose={() => setDatePickerOpen(false)}
       />
 
-      <ConsultFab
-        compact
-        hidden={fabHidden}
-        onPress={() => setConsultPromptOpen(true)}
-      />
+      {/* Product invariant: keep the full-size AI 상담 FAB unchanged across releases. */}
+      <ConsultFab hidden={fabHidden} onPress={() => setConsultPromptOpen(true)} />
 
       <ConsultPromptSheet
         visible={consultPromptOpen}

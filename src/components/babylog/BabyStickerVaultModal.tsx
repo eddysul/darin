@@ -28,6 +28,7 @@ import {
   DEFAULT_CIRCLE_CROP,
   STICKER_CUTOUT_MODE_OPTIONS,
   createStickerCutout,
+  explainStickerCutoutError,
   isPersonCutoutSupported,
   type CircularCutoutCrop,
 } from "../../utils/babyStickerCutout";
@@ -117,6 +118,7 @@ export function BabyStickerVaultModal({
   const [mode, setMode] = useState<Mode>("vault");
   const [draft, setDraft] = useState<BabyStickerDraft | null>(null);
   const [cutoutError, setCutoutError] = useState(false);
+  const [cutoutErrorReason, setCutoutErrorReason] = useState<string | null>(null);
   const [pendingOriginal, setPendingOriginal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [seedPhrase, setSeedPhrase] = useState<string | null>(null);
@@ -130,6 +132,7 @@ export function BabyStickerVaultModal({
       setMode("vault");
       setDraft(null);
       setCutoutError(false);
+      setCutoutErrorReason(null);
       setPendingOriginal(null);
       setSaving(false);
       setSeedPhrase(null);
@@ -140,6 +143,7 @@ export function BabyStickerVaultModal({
     if (startInCreate) {
       setDraft(null);
       setCutoutError(false);
+      setCutoutErrorReason(null);
       setPendingOriginal(null);
       setSeedPhrase(null);
       setCutoutMode("roundedRect");
@@ -166,6 +170,7 @@ export function BabyStickerVaultModal({
   const startCreate = (phrase?: string) => {
     setDraft(null);
     setCutoutError(false);
+    setCutoutErrorReason(null);
     setPendingOriginal(null);
     setSeedPhrase(phrase ?? null);
     setCutoutMode("roundedRect");
@@ -203,15 +208,13 @@ export function BabyStickerVaultModal({
     setPendingOriginal(originalUri);
     setMode("cutting");
     setCutoutError(false);
+    setCutoutErrorReason(null);
     try {
       const result = await createStickerCutout(originalUri, preferredMode, crop);
-      if (result.method === "rounded-rect-fallback") {
-        setCutoutMode("roundedRect");
-        setMode("position");
-        return;
-      }
       applyDraftFromCutout(originalUri, result.uri, result.mode);
-    } catch {
+    } catch (error) {
+      if (__DEV__) console.warn("[sticker-cutout]", error);
+      setCutoutErrorReason(explainStickerCutoutError(error));
       setCutoutError(true);
     }
   };
@@ -386,6 +389,21 @@ export function BabyStickerVaultModal({
     else setMode("vault");
   };
 
+  const cancelCreate = () => {
+    void deleteStickerAssets([
+      pendingOriginal,
+      draft?.originalImageUri,
+      draft?.faceImageUri,
+      draft?.cutoutImageUri,
+    ]);
+    setDraft(null);
+    setPendingOriginal(null);
+    setSeedPhrase(null);
+    setCircleCrop(DEFAULT_CIRCLE_CROP);
+    if (startInCreate) onClose();
+    else setMode("vault");
+  };
+
   if (!visible) return null;
 
   const body = (
@@ -401,7 +419,22 @@ export function BabyStickerVaultModal({
             <Text style={styles.headerBtn}>{mode === "vault" || (mode === "pickPhoto" && startInCreate) ? "닫기" : "뒤로"}</Text>
           </Pressable>
           <Text style={styles.headerTitle}>{title}</Text>
-          <View style={styles.headerSpacer} />
+          {mode === "position" || mode === "decorate" ? (
+            <Pressable
+              onPress={cancelCreate}
+              disabled={saving}
+              hitSlop={10}
+              style={[styles.headerBtnHit, styles.headerCancelHit, saving && styles.headerBtnDisabled]}
+              accessibilityRole="button"
+              accessibilityLabel="스티커 만들기 취소"
+              accessibilityHint="저장하지 않고 스티커 만들기를 종료합니다"
+              accessibilityState={{ disabled: saving }}
+            >
+              <Text style={[styles.headerBtn, styles.headerCancelText]}>취소</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.headerSpacer} />
+          )}
         </View>
 
         {mode === "vault" ? (
@@ -437,32 +470,36 @@ export function BabyStickerVaultModal({
           <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}>
             <Text style={styles.label}>스티커 만들기 방식</Text>
             <View style={styles.modeRow}>
-              {STICKER_CUTOUT_MODE_OPTIONS.filter((option) => !option.iosOnly || personCutoutSupported).map(
-                (option) => {
+              {STICKER_CUTOUT_MODE_OPTIONS.map((option) => {
+                  const locked = Boolean(option.iosOnly && Platform.OS !== "ios");
                   const selected = cutoutMode === option.value;
                   return (
                     <Pressable
                       key={option.value}
-                      style={[styles.modeCard, selected && styles.modeCardActive]}
-                      onPress={() => setCutoutMode(option.value)}
+                      style={[styles.modeCard, selected && styles.modeCardActive, locked && styles.modeCardLocked]}
+                      onPress={() => {
+                        if (locked) return;
+                        setCutoutMode(option.value);
+                      }}
                       accessibilityRole="button"
                       accessibilityLabel={option.label}
-                      accessibilityHint={option.hint}
-                      accessibilityState={{ selected }}
+                      accessibilityHint={locked ? "iOS에서만 사용할 수 있어요" : option.hint}
+                      accessibilityState={{ selected, disabled: locked }}
                     >
                       <Text style={[styles.modeTitle, selected && styles.modeTitleActive]}>{option.label}</Text>
-                      <Text style={styles.modeHint}>{option.hint}</Text>
+                      <Text style={styles.modeHint}>
+                        {locked ? "iOS에서만 배경을 지울 수 있어요" : option.hint}
+                      </Text>
                     </Pressable>
                   );
-                },
-              )}
+                })}
             </View>
-            {!personCutoutSupported ? (
+            {cutoutMode === "personCutout" ? (
               <Text style={styles.hint}>
-                인물 컷아웃은 iOS에서만 사용할 수 있어요. 사진을 고른 뒤 원하는 위치를 맞춰요.
+                {personCutoutSupported
+                  ? "사진을 고르면 이 기기에서 배경을 지우고 아기만 남겨요. 사진은 서버로 보내지 않아요."
+                  : "인물 컷아웃 모듈을 이 실행에서 찾지 못했어요. 앱을 다시 빌드한 뒤 시도해 주세요. 실패하면 둥근 사각형으로 이어갈 수 있어요."}
               </Text>
-            ) : cutoutMode === "personCutout" ? (
-              <Text style={styles.hint}>배경 제거는 이 기기에서만 해요. 저장한 스티커는 계정에 보관돼요.</Text>
             ) : (
               <Text style={styles.hint}>사진을 고른 뒤 원하는 위치로 움직여 맞춰요. 저장한 스티커는 이 기기 보관함과 계정에 남겨요.</Text>
             )}
@@ -502,7 +539,9 @@ export function BabyStickerVaultModal({
             {cutoutError ? (
               <>
                 <Text style={styles.errorTitle}>스티커 만들기에 실패했어요.</Text>
-                <Text style={styles.hint}>다시 시도하거나 둥근 사각형 방식으로 계속할 수 있어요.</Text>
+                <Text style={styles.hint}>
+                  {cutoutErrorReason ?? "다시 시도하거나 둥근 사각형 방식으로 계속할 수 있어요."}
+                </Text>
                 <Pressable
                   style={styles.primaryBtn}
                   onPress={() => pendingOriginal && void runCutout(pendingOriginal, cutoutMode)}
@@ -843,6 +882,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerBtn: { fontSize: 15, fontWeight: "600", color: colors.muted },
+  headerCancelHit: { alignItems: "flex-end" },
+  headerCancelText: { color: colors.amberText, fontWeight: "700" },
+  headerBtnDisabled: { opacity: 0.45 },
   headerTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
   headerSpacer: { minWidth: 48 },
   content: { paddingHorizontal: 18, paddingTop: 16 },
@@ -859,6 +901,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   modeCardActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  modeCardLocked: { opacity: 0.55 },
   modeTitle: { fontSize: 14, fontWeight: "800", color: colors.text, marginBottom: 4 },
   modeTitleActive: { color: colors.amberText },
   modeHint: { fontSize: 12, color: colors.muted, lineHeight: 17 },

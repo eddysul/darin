@@ -46,6 +46,20 @@ function asRecord(value: Json): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function referencedMediaPaths(pages: GrowthBookPageRow[]): string[] {
+  const paths = new Set<string>();
+  for (const page of pages) {
+    const content = asRecord(page.content_json);
+    const refs = [content.coverPhotoRef, ...(Array.isArray(content.photos) ? content.photos : [])];
+    for (const ref of refs) {
+      if (typeof ref !== "string") continue;
+      const path = mediaStoragePath(ref);
+      if (path) paths.add(path);
+    }
+  }
+  return [...paths];
+}
+
 function clientCommentId(row: GrowthBookCommentRow): string {
   const metadata = asRecord(row.metadata);
   return typeof metadata.clientId === "string" ? metadata.clientId : row.id;
@@ -233,13 +247,31 @@ export const GrowthBookRepository = {
   },
 
   async createSignedUrl(storagePath: string, expiresIn = GROWTH_BOOK_SIGNED_URL_TTL_SECONDS): Promise<string> {
+    const urls = await this.createSignedUrls([storagePath], expiresIn);
+    const signedUrl = urls.get(storagePath);
+    if (!signedUrl) throw new Error("Growth Book media not found or not accessible.");
+    return signedUrl;
+  },
+
+  async createSignedUrls(
+    storagePaths: string[],
+    expiresIn = GROWTH_BOOK_SIGNED_URL_TTL_SECONDS,
+  ): Promise<Map<string, string>> {
+    const paths = [...new Set(storagePaths.filter(Boolean))];
+    if (!paths.length) return new Map();
     const sb = requireSupabase();
-    const { data: media, error: mediaError } = await sb.from("growth_book_media").select("id")
-      .eq("storage_path", storagePath).single();
-    if (mediaError || !media) throw mediaError ?? new Error("Growth Book media not found or not accessible.");
-    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(storagePath, expiresIn);
+    const { data: media, error: mediaError } = await sb.from("growth_book_media").select("storage_path")
+      .in("storage_path", paths);
+    if (mediaError) throw mediaError;
+    const allowedPaths = [...new Set((media ?? []).map((item) => item.storage_path))];
+    if (!allowedPaths.length) return new Map();
+    const { data, error } = await sb.storage.from(BUCKET).createSignedUrls(allowedPaths, expiresIn);
     if (error) throw error;
-    return data.signedUrl;
+    return new Map(
+      (data ?? [])
+        .filter((item): item is typeof item & { path: string; signedUrl: string } => Boolean(item.path && item.signedUrl && !item.error))
+        .map((item) => [item.path, item.signedUrl]),
+    );
   },
 
   async listComments(growthBookId: string): Promise<GrowthBookCommentRow[]> {
@@ -295,15 +327,14 @@ export const GrowthBookRepository = {
       ProfileRepository.listDisplayProfilesForBaby(babyId).catch(() => []),
     ]);
     const authorNamesByUserId = new Map(profiles.map((profile) => [profile.userId, profile.displayName]));
+    const signedUrlByPath = await this.createSignedUrls(referencedMediaPaths(pages));
     const row = {
       id: book.id, baby_id: book.babyId, title: book.title, status: book.status,
       created_by: book.createdBy, created_at: book.createdAt, updated_at: book.updatedAt, deleted_at: null,
     };
     return growthBookRowsToEdit({
       book: row, pages, comments, babyName, authorNamesByUserId,
-      signedUrlForPath: async (path) => {
-        try { return await this.createSignedUrl(path); } catch { return null; }
-      },
+      signedUrlForPath: async (path) => signedUrlByPath.get(path) ?? null,
     });
   },
 

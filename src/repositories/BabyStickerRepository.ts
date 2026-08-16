@@ -16,6 +16,7 @@ import { AuthRepository } from "./AuthRepository";
 const BUCKET = "baby-stickers";
 const MAX_STICKER_BYTES = 10 * 1024 * 1024;
 const SIGNED_URL_TTL_SECONDS = 180;
+const STICKER_COLUMNS = "id,baby_id,created_by,label,storage_path,source,metadata,created_at,updated_at,deleted_at";
 
 type StickerMetadata = Pick<
   BabySticker,
@@ -61,9 +62,8 @@ async function signedUrlForRow(row: BabyStickerRow): Promise<string> {
   return data.signedUrl;
 }
 
-async function rowToSticker(row: BabyStickerRow): Promise<BabySticker> {
+function rowToSticker(row: BabyStickerRow, imageUri: string): BabySticker {
   const metadata = metadataObject(row.metadata);
-  const imageUri = await signedUrlForRow(row);
   return {
     id: row.id,
     babyId: row.baby_id,
@@ -91,6 +91,24 @@ async function rowToSticker(row: BabyStickerRow): Promise<BabySticker> {
   };
 }
 
+async function rowsToStickers(rows: BabyStickerRow[]): Promise<BabySticker[]> {
+  if (!rows.length) return [];
+  const { data, error } = await requireSupabase().storage
+    .from(BUCKET)
+    .createSignedUrls(rows.map((row) => row.storage_path), SIGNED_URL_TTL_SECONDS);
+  if (error) throw error;
+  const signedUrlByPath = new Map(
+    (data ?? [])
+      .filter((item): item is typeof item & { path: string; signedUrl: string } => Boolean(item.path && item.signedUrl && !item.error))
+      .map((item) => [item.path, item.signedUrl]),
+  );
+  return rows.map((row) => {
+    const imageUri = signedUrlByPath.get(row.storage_path);
+    if (!imageUri) throw new Error(`Sticker image is not accessible: ${row.id}`);
+    return rowToSticker(row, imageUri);
+  });
+}
+
 export const BabyStickerRepository = {
   async createStickerSignedUrl(storagePath: string): Promise<string> {
     const sb = requireSupabase();
@@ -110,12 +128,12 @@ export const BabyStickerRepository = {
     const sb = requireSupabase();
     const { data, error } = await sb
       .from("baby_stickers")
-      .select("*")
+      .select(STICKER_COLUMNS)
       .eq("baby_id", babyId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return Promise.all((data ?? []).map(rowToSticker));
+    return rowsToStickers((data ?? []) as BabyStickerRow[]);
   },
 
   async listBabyStickers(babyId: string): Promise<BabySticker[]> {
@@ -124,18 +142,20 @@ export const BabyStickerRepository = {
 
   async getById(stickerId: string): Promise<BabySticker | null> {
     const sb = requireSupabase();
-    const { data, error } = await sb.from("baby_stickers").select("*").eq("id", stickerId).maybeSingle();
+    const { data, error } = await sb.from("baby_stickers").select(STICKER_COLUMNS).eq("id", stickerId).maybeSingle();
     if (error) throw error;
-    return data ? rowToSticker(data) : null;
+    if (!data) return null;
+    const row = data as BabyStickerRow;
+    return rowToSticker(row, await signedUrlForRow(row));
   },
 
   async listByIds(stickerIds: string[]): Promise<BabySticker[]> {
     const ids = [...new Set(stickerIds.filter(Boolean))];
     if (!ids.length) return [];
     const sb = requireSupabase();
-    const { data, error } = await sb.from("baby_stickers").select("*").in("id", ids);
+    const { data, error } = await sb.from("baby_stickers").select(STICKER_COLUMNS).in("id", ids);
     if (error) throw error;
-    return Promise.all((data ?? []).map(rowToSticker));
+    return rowsToStickers((data ?? []) as BabyStickerRow[]);
   },
 
   async uploadSticker(sticker: BabySticker, source = "app"): Promise<BabySticker> {
@@ -163,12 +183,13 @@ export const BabyStickerRepository = {
       created_at: sticker.createdAt,
       updated_at: new Date().toISOString(),
       deleted_at: null,
-    }, { onConflict: "id" }).select("*").single();
+    }, { onConflict: "id" }).select(STICKER_COLUMNS).single();
     if (error) {
       await sb.storage.from(BUCKET).remove([storagePath]);
       throw error;
     }
-    return rowToSticker(data);
+    const row = data as BabyStickerRow;
+    return rowToSticker(row, await signedUrlForRow(row));
   },
 
   async uploadBabySticker(sticker: BabySticker, source = "app"): Promise<BabySticker> {

@@ -54,13 +54,49 @@ export const STICKER_CUTOUT_MODE_OPTIONS: Array<{
   {
     value: "personCutout",
     label: "인물 컷아웃",
-    hint: "배경을 지우고 아기만 남겨요 (기기 안에서만 처리)",
+    hint: "배경을 지우고 아기만 남겨요. 이 기기에서만 처리해요.",
     iosOnly: true,
   },
 ];
 
 export function isPersonCutoutSupported(): boolean {
   return Platform.OS === "ios" && isPersonCutoutAvailable();
+}
+
+/** Korean reason for the cutting error screen. */
+export function explainStickerCutoutError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const text = raw.toLowerCase();
+  if (
+    text.includes("이 실행에서") ||
+    text.includes("not available") ||
+    text.includes("native module") ||
+    text.includes("cannot find native")
+  ) {
+    return "인물 컷아웃 모듈을 이 실행에서 찾지 못했어요. Metro만 다시 켠 상태면 앱을 한 번 다시 빌드해 주세요.";
+  }
+  if (text.includes("얼굴을 찾지") || text.includes("no person") || text.includes("noperson")) {
+    return "사진에서 아기 얼굴을 찾지 못했어요. 얼굴이 잘 나온 사진으로 다시 시도하거나, 둥근 사각형으로 계속할 수 있어요.";
+  }
+  if (text.includes("불러오지") || text.includes("could not load") || text.includes("invalidimage")) {
+    return "사진을 불러오지 못했어요. 시뮬레이터 iCloud 사진이면 사진 앱에 저장한 로컬 사진을 골라 주세요.";
+  }
+  if (text.includes("지원하지") || text.includes("ios 15") || text.includes("unsupported")) {
+    return "이 기기는 인물 컷아웃을 지원하지 않아요. 둥근 사각형으로 계속할 수 있어요.";
+  }
+  if (
+    text.includes("genericobjc") ||
+    text.includes("couldn't be completed") ||
+    text.includes("couldn’t be completed") ||
+    text.includes("error 0")
+  ) {
+    return "시뮬레이터나 이 사진에서는 인물 분리가 실패할 수 있어요. 얼굴이 잘 나온 로컬 사진으로 다시 시도하거나, 둥근 사각형으로 계속할 수 있어요.";
+  }
+  if (text.includes("문제가 생겼") || text.includes("processing") || text.includes("createpersoncutout")) {
+    return "배경을 지우는 중 문제가 생겼어요. 다시 시도하거나 둥근 사각형으로 계속할 수 있어요.";
+  }
+  if (raw.trim() && !text.includes("function") && !text.includes("foundation.")) return raw.trim();
+  return "다시 시도하거나 둥근 사각형 방식으로 계속할 수 있어요.";
 }
 
 /**
@@ -75,15 +111,11 @@ export async function createStickerCutout(
   if (!imageUri) throw new Error("이미지 URI가 없어요.");
 
   if (mode === "personCutout") {
-    try {
-      if (!isPersonCutoutSupported()) {
-        throw new Error("Person cutout unavailable");
-      }
-      const uri = await nativePersonCutout(imageUri, 2.5);
-      return { uri, method: "personCutout", mode: "personCutout" };
-    } catch {
-      return { uri: imageUri, method: "rounded-rect-fallback", mode: "roundedRect" };
+    if (!isPersonCutoutSupported()) {
+      throw new Error("인물 컷아웃을 이 실행에서 쓸 수 없어요.");
     }
+    const uri = await nativePersonCutout(imageUri, 2.5);
+    return { uri, method: "personCutout", mode: "personCutout" };
   }
 
   return mode === "circular"

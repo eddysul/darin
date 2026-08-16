@@ -367,6 +367,26 @@ const stickerViewSource = readFileSync(
   new URL("../src/components/babylog/BabyStickerView.tsx", import.meta.url),
   "utf8",
 );
+const stickerVaultSource = readFileSync(
+  new URL("../src/components/babylog/BabyStickerVaultModal.tsx", import.meta.url),
+  "utf8",
+);
+const stickerCutoutSource = readFileSync(
+  new URL("../src/utils/babyStickerCutout.ts", import.meta.url),
+  "utf8",
+);
+const recordScreenSource = readFileSync(
+  new URL("../src/screens/tabs/RecordScreen.tsx", import.meta.url),
+  "utf8",
+);
+const stickerRepositorySource = readFileSync(
+  new URL("../src/repositories/BabyStickerRepository.ts", import.meta.url),
+  "utf8",
+);
+const growthBookRepositorySource = readFileSync(
+  new URL("../src/repositories/GrowthBookRepository.ts", import.meta.url),
+  "utf8",
+);
 for (const preset of exactArtworkPresets) {
   assert.ok(
     stickerViewSource.includes(`require("../../../assets/sticker-templates/phrase-${preset}.png")`),
@@ -377,6 +397,16 @@ assert.ok(
   stickerViewSource.includes("<ExactTemplateArtwork artwork={templateArtwork} size={size} />")
     && stickerViewSource.includes("const photoSize = usesTemplateArtwork ? basePhotoSize * 0.78 : basePhotoSize"),
   "exact artwork must reserve a separate center photo area",
+);
+assert.ok(
+  recordScreenSource.includes("<ConsultFab hidden={fabHidden}")
+    && !recordScreenSource.includes("<ConsultFab\n        compact"),
+  "Record must keep the approved full-size AI 상담 FAB",
+);
+assert.ok(
+  stickerRepositorySource.includes("createSignedUrls(rows.map")
+    && growthBookRepositorySource.includes("createSignedUrls(referencedMediaPaths(pages))"),
+  "sticker and growth-book image URLs must stay batched to avoid per-image server requests",
 );
 assert.ok(
   (stickerViewSource.match(/mainLayout: \{ x: -?\d/g) ?? []).length === 16,
@@ -402,5 +432,16 @@ assert.ok(
   "edit mode must render a static touch-safe canvas stage",
 );
 assert.ok(editorSource.includes("<View {...swipeResponder.panHandlers} style={styles.canvasStage}>"), "swipe handlers must only attach to enabled preview stages");
+assert.ok(
+  stickerVaultSource.includes('mode === "position" || mode === "decorate"')
+    && stickerVaultSource.includes('accessibilityLabel="스티커 만들기 취소"')
+    && stickerVaultSource.includes("const cancelCreate = () =>"),
+  "position and decorate steps must expose an explicit discard-and-cancel action",
+);
+assert.ok(
+  stickerVaultSource.includes('useState<StickerCutoutMode>("roundedRect")')
+    && stickerCutoutSource.indexOf('value: "roundedRect"') < stickerCutoutSource.indexOf('value: "personCutout"'),
+  "rounded rectangle must remain the first and default cutout choice",
+);
 
 console.log("growth-sticker-qa-smoke: photo counts, create/delete, placement, and persistence passed");

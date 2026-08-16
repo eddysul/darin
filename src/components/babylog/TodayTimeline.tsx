@@ -171,14 +171,22 @@ function SwipeableTimelineRow({
     [confirmDelete, onDelete, reduceMotion, reset, translateX],
   );
 
+  const underlayOpacity = translateX.interpolate({
+    inputRange: [-96, -8, 0],
+    outputRange: [1, 1, 0],
+    extrapolate: "clamp",
+  });
+
   return (
     <View style={[styles.swipeWrap, isFirst && styles.swipeFirst, isLast && styles.swipeLast]}>
-      <View style={styles.deleteUnderlay}>
+      <Animated.View style={[styles.deleteUnderlay, { opacity: underlayOpacity }]} pointerEvents="none">
         <Text style={styles.deleteText}>삭제</Text>
-      </View>
+      </Animated.View>
       <Animated.View
         style={[
           styles.rowSurface,
+          isFirst && styles.rowSurfaceFirst,
+          isLast && styles.rowSurfaceLast,
           highlighted && styles.rowHighlight,
           { transform: [{ translateX }] },
         ]}
@@ -259,16 +267,16 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    paddingTop: 5,
   },
   swipeLast: {
     borderBottomWidth: 1,
     borderBottomLeftRadius: radius.lg,
     borderBottomRightRadius: radius.lg,
-    paddingBottom: 5,
     marginBottom: 24,
   },
   rowSurface: { backgroundColor: colors.card, paddingHorizontal: 12 },
+  rowSurfaceFirst: { paddingTop: 5, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
+  rowSurfaceLast: { paddingBottom: 5, borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg },
   rowHighlight: { backgroundColor: "rgba(232,145,138,0.14)" },
   deleteUnderlay: {
     ...StyleSheet.absoluteFillObject,
