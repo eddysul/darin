@@ -72,7 +72,7 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
     <View style={[styles.wrap, embedded && styles.wrapEmbedded, compact && styles.wrapCompact, { paddingTop: Math.max(insets.top, compact ? 8 : 12) }]}>
       <View style={styles.headerRow}>
         <View style={[styles.card, compact && styles.cardCompact]}>
-          <Pressable style={[styles.avatarCircle, compact && styles.avatarCompact]} onPress={onOpenProfile} accessibilityRole="button" accessibilityLabel="아기 프로필 열기">
+          <Pressable style={[styles.avatarCircle, compact && styles.avatarCompact]} onPress={onOpenProfile} hitSlop={compact ? 4 : undefined} accessibilityRole="button" accessibilityLabel="아기 프로필 열기">
             {babyPhoto ? (
               <Image source={{ uri: babyPhoto }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
             ) : (
@@ -81,7 +81,7 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
           </Pressable>
 
           <View style={styles.info}>
-            <View style={styles.nameLine}>
+            <View style={[styles.nameLine, compact && styles.nameLineCompact]}>
               <Pressable style={styles.nameRow} onPress={onOpenProfile} accessibilityRole="button" accessibilityLabel={`${babyName} 아기 프로필 열기`}>
                 <Text style={styles.name} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>{babyName}</Text>
               </Pressable>
@@ -140,6 +140,7 @@ const styles = StyleSheet.create({
   avatarCompact: { width: 40, height: 40, borderRadius: 20 },
   info: { flex: 1, minWidth: 0, justifyContent: "center" },
   nameLine: { minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 },
+  nameLineCompact: { flexDirection: "column", alignItems: "flex-start", gap: 4 },
   nameRow: { minWidth: 0, flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 6 },
   name: { flexShrink: 1, fontSize: type.lg, fontWeight: "900", color: colors.text, letterSpacing: -0.4 },
   age: { marginTop: 2, fontSize: type.sm, color: colors.text, fontWeight: "800", flexShrink: 0 },

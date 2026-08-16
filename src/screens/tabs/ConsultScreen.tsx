@@ -51,10 +51,11 @@ type Props = {
   onOpenProfile: () => void;
   onOpenSettings?: () => void;
   onOpenNotifications?: () => void;
+  onOpenShared?: () => void;
   onOpenRecord?: () => void;
 };
 
-export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenRecord }: Props) {
+export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenShared, onOpenRecord }: Props) {
   const route = useRoute<RouteProp<{ Consult: ConsultRouteParams }, "Consult">>();
   const navigation = useNavigation<ConsultNav>();
   const {
@@ -246,7 +247,7 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
   if (!storageReady) {
     return (
       <View style={styles.root}>
-        <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} />
+        <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} onOpenShared={onOpenShared} />
         <View style={styles.loadingBox}>
           <LoadingState label="상담 기록을 불러오는 중…" />
         </View>
@@ -257,7 +258,7 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
   return (
     <View style={styles.root}>
       <View onLayout={(e) => setChromeH(e.nativeEvent.layout.height)}>
-        <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} />
+        <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} onOpenShared={onOpenShared} />
         <Pressable
           style={styles.banner}
           onPress={() => setBannerOpen(true)}

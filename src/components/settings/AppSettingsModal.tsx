@@ -868,7 +868,7 @@ function ChoiceRow({
 }: {
   label: string;
   value: string;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label: string; disabled?: boolean }>;
   onChange: (value: string) => void;
   help?: string;
 }) {
@@ -877,7 +877,7 @@ function ChoiceRow({
       <Text style={styles.rowLabel}>{label}</Text>
       <View style={styles.choiceRow}>
         {options.map((option) => (
-          <Pressable key={option.value} style={[styles.choice, value === option.value && styles.choiceOn]} onPress={() => onChange(option.value)}>
+          <Pressable key={option.value} style={[styles.choice, value === option.value && styles.choiceOn, option.disabled && styles.choiceDisabled]} onPress={() => onChange(option.value)} disabled={option.disabled} accessibilityState={{ disabled: option.disabled, selected: value === option.value }}>
             <Text style={[styles.choiceText, value === option.value && styles.choiceTextOn]}>{option.label}</Text>
           </Pressable>
         ))}
@@ -1001,6 +1001,7 @@ const styles = StyleSheet.create({
   choiceBlock: { paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 9 },
   choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   choice: { minHeight: 44, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, backgroundColor: colors.backgroundSecondary },
+  choiceDisabled: { opacity: 0.48 },
   choiceOn: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
   choiceText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   choiceTextOn: { color: colors.amberText },

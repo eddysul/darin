@@ -25,6 +25,7 @@ export type DarinInviteRequestView = {
   roleLabel: string;
   relation: string;
   createdAt: string;
+  expiresAt: string;
   title: string;
   body: string;
   direction: "incoming" | "outgoing";
@@ -35,7 +36,16 @@ function mapDarinInviteError(error: { code?: string; message: string }): Error {
   if (/does not exist|schema cache|send_darin_id_invite_request|respond_darin_id_invite_request|darin_invite_requests/i.test(message)) {
     return new Error("초대 요청 기능이 아직 준비 중이에요.");
   }
-  if (error.code === "P0002" || /not found|unavailable/i.test(message)) {
+  if (/expired/i.test(message)) {
+    return new Error("만료된 초대예요. 새 초대를 요청해 주세요.");
+  }
+  if (/already pending/i.test(message)) {
+    return new Error("이미 요청을 보냈어요. 상대방의 응답을 기다려 주세요.");
+  }
+  if (/invite request unavailable/i.test(message)) {
+    return new Error("이미 처리되었거나 사용할 수 없는 초대예요.");
+  }
+  if (error.code === "P0002" || /Darin ID not found/i.test(message)) {
     return new Error("해당 Darin ID를 찾지 못했어요.");
   }
   if (/cannot invite yourself/i.test(message)) {
@@ -46,6 +56,9 @@ function mapDarinInviteError(error: { code?: string; message: string }): Error {
   }
   if (error.code === "42501" || /only baby admin|permission/i.test(message)) {
     return new Error("초대 요청은 아기 관리자만 보낼 수 있어요.");
+  }
+  if (/network|fetch|connection|timeout/i.test(message)) {
+    return new Error("네트워크 연결을 확인하고 다시 시도해 주세요.");
   }
   return new Error("초대 요청을 보내지 못했어요.");
 }
@@ -67,6 +80,7 @@ function viewFromRow(
     roleLabel: FAMILY_ROLE_LABELS[permissionToFamilyRole(row.permission_role)],
     relation: row.relationship_label,
     createdAt: row.created_at,
+    expiresAt: row.expires_at,
     title: event?.title?.trim() || defaultTitle,
     body: event?.body?.trim() || (incoming ? "공유 요청이 도착했어요." : "상대의 수락을 기다리고 있어요."),
     direction: incoming ? "incoming" : "outgoing",
@@ -308,6 +322,7 @@ export const FamilyRepository = {
       .from("darin_invite_requests")
       .select("*")
       .eq("status", "pending")
+      .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false });
     if (error) throw mapDarinInviteError(error);
     const rows = data ?? [];

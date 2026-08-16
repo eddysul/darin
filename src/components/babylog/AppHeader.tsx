@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { SharedCaregiversRow } from "./SharedCaregiversRow";
 import { useBabyLog } from "../../context/BabyLogContext";
+import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { colors, fontScaleCap, radius } from "../../theme";
 import { BabySwitcher } from "./BabySwitcher";
 import { NotificationBellButton } from "../NotificationBellButton";
@@ -16,13 +17,14 @@ type Props = {
 
 export function AppHeader({ onOpenProfile, onOpenSettings, onOpenShared, onOpenNotifications }: Props) {
   const insets = useSafeAreaInsets();
-  const { babyName, babyBadge } = useBabyLog();
+  const compact = useCompactLayout();
+  const { babyBadge } = useBabyLog();
 
   return (
-    <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 12) }]}>
+    <View style={[styles.wrap, { paddingTop: Math.max(insets.top, compact ? 8 : 12) }]}>
       <View style={styles.row}>
         <View style={styles.left}>
-          <View style={styles.chip}>
+          <View style={[styles.chip, compact && styles.chipCompact]}>
             <BabySwitcher compact />
             <View style={styles.badge}>
               <Text style={styles.badgeText} maxFontSizeMultiplier={fontScaleCap.chrome}>{babyBadge}</Text>
@@ -53,6 +55,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 },
   left: { flex: 1 },
   chip: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
+  chipCompact: { flexDirection: "column", alignItems: "flex-start", gap: 6 },
   chipText: { color: colors.amberText, fontWeight: "700", fontSize: 15 },
   badge: {
     backgroundColor: colors.amberSoft,

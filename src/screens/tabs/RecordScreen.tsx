@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { ActiveTimerSheet } from "../../components/babylog/ActiveTimerSheet";
 import { AddCustomCategorySheet } from "../../components/babylog/AddCustomCategorySheet";
 import { ConsultFab } from "../../components/babylog/ConsultFab";
@@ -66,6 +68,7 @@ import { FEEDING_CATS, getLogsForDay } from "../../utils/reportAggregates";
 import { colors, type } from "../../theme";
 import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { loadFoodIngredients, normalizeIngredientName, saveFoodIngredients } from "../../utils/foodIngredientsStore";
+import type { MainTabParamList } from "../../navigation/types";
 
 type Props = {
   onOpenProfile: () => void;
@@ -85,6 +88,8 @@ const TIMER_LABEL: Record<ActiveTimer["kind"], string> = {
 };
 
 export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenConsult }: Props) {
+  const route = useRoute<RouteProp<MainTabParamList, "Record">>();
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList, "Record">>();
   const { settings, ready: settingsReady } = useAppSettings();
   const {
     logs,
@@ -323,6 +328,17 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     },
     [allowAdd, me, myFamilyRole],
   );
+
+  useEffect(() => {
+    const logId = route.params?.logId;
+    if (!logId || !storageReady) return;
+    const entry = logs.find((candidate) => candidate.id === logId);
+    navigation.setParams({ logId: undefined });
+    if (!entry) return;
+    if (entry.dateKey) setSelectedDateKey(entry.dateKey);
+    setHighlightId(entry.id);
+    openEdit(entry);
+  }, [logs, navigation, openEdit, route.params?.logId, storageReady]);
 
   const announceCreated = (entry: BabyLogEntry, title: string) => {
     setHighlightId(entry.id);

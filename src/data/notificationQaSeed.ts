@@ -23,13 +23,14 @@ export type NotificationItem = {
   body: string;
   period: NotificationPeriod;
   isRead: boolean;
+  data?: Record<string, unknown>;
 };
 
 const QA_NOTIFICATION_ITEMS: NotificationItem[] = [
-  { id: "qa-invite", type: "invite_request", title: "가족 초대 요청", body: "민지님이 돌봄 멤버로 함께하기를 요청했어요.", period: "today", isRead: false },
-  { id: "qa-shared-log", type: "new_shared_log", title: "새 공유 기록", body: "아빠가 수유 기록을 공유했어요.", period: "today", isRead: false },
-  { id: "qa-daily-summary", type: "daily_summary", title: "오늘의 요약", body: "오늘의 수유와 수면 기록을 확인해 보세요.", period: "week", isRead: true },
-  { id: "qa-reminder", type: "reminder", title: "예방접종 리마인더", body: "내일 오전 10시, 예방접종 일정이 있어요.", period: "older", isRead: false },
+  { id: "qa-invite", type: "invite_request", title: "가족 초대 요청", body: "민지님이 돌봄 멤버로 함께하기를 요청했어요.", period: "today", isRead: false, data: { requestStatus: "pending" } },
+  { id: "qa-shared-log", type: "new_shared_log", title: "새 공유 기록", body: "아빠가 수유 기록을 공유했어요.", period: "today", isRead: false, data: { route: "record" } },
+  { id: "qa-daily-summary", type: "daily_summary", title: "오늘의 요약", body: "오늘의 수유와 수면 기록을 확인해 보세요.", period: "week", isRead: true, data: { route: "report" } },
+  { id: "qa-reminder", type: "reminder", title: "예방접종 리마인더", body: "내일 오전 10시, 예방접종 일정이 있어요.", period: "older", isRead: false, data: { route: "record" } },
 ];
 
 export function getNotificationQaSeed(): NotificationItem[] {

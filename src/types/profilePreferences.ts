@@ -9,10 +9,10 @@ export const RESIDENCE_COUNTRY_OPTIONS: Array<{ value: ResidenceCountry; label: 
   { value: "OTHER", label: "기타" },
 ];
 
-export const APP_LANGUAGE_OPTIONS: Array<{ value: AppLanguagePreference; label: string }> = [
+export const APP_LANGUAGE_OPTIONS: Array<{ value: AppLanguagePreference; label: string; disabled?: boolean }> = [
   { value: "system", label: "기기 설정 따라가기" },
   { value: "ko", label: "한국어" },
-  { value: "en", label: "English" },
+  { value: "en", label: "English · 준비 중", disabled: true },
 ];
 
 export function isResidenceCountry(value: unknown): value is ResidenceCountry {

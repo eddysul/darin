@@ -321,22 +321,8 @@ type BabyLogContextValue = {
   updateGrowthRecord: (id: string, draft: GrowthRecordDraft) => void;
   deleteGrowthRecord: (id: string) => void;
   myFamilyRole: FamilyRole;
-  inviteFamilyMember: (draft: {
-    name: string;
-    role: FamilyRole;
-    contact: string;
-    relationshipLabel?: FamilyMember["relationshipLabel"];
-  }) => FamilyMember;
   /** Sync the local "me" member from completed CareSetup (name + relationship). */
   applyOwnerFromSetup: (setup: CareSetup) => void;
-  /** Join an existing baby via invite code (MVP mock). */
-  joinWithInvite: (payload: {
-    code: string;
-    myName: string;
-    ownerName: string;
-    relationshipLabel: FamilyMember["relationshipLabel"];
-    role?: FamilyRole;
-  }) => void;
   updateFamilyMemberRole: (id: string, role: FamilyRole) => void;
   acceptFamilyInvite: (id: string) => void;
   setFamilyMemberStatus: (id: string, status: FamilyMember["status"]) => void;
@@ -1224,34 +1210,6 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     ]);
   }, [display.babyName, localDataScope]);
 
-  const inviteFamilyMember = useCallback(
-    (draft: {
-      name: string;
-      role: FamilyRole;
-      contact: string;
-      relationshipLabel?: FamilyMember["relationshipLabel"];
-    }) => {
-      const code = Math.random().toString(36).slice(2, 8).toUpperCase();
-      const relationshipLabel =
-        draft.relationshipLabel ??
-        (draft.role === "caregiver" ? "시터" : "가족");
-      const member: FamilyMember = {
-        id: createId(),
-        name: draft.name.trim(),
-        role: draft.role,
-        relationshipLabel,
-        contact: draft.contact.trim(),
-        status: "pending",
-        inviteCode: code,
-        inviteLink: `https://darin.app/invite/${code}`,
-        emoji: draft.role === "caregiver" ? "🧑‍🍼" : "👤",
-      };
-      setFamilyMembers((prev) => [...prev, member]);
-      return member;
-    },
-    [],
-  );
-
   const applyOwnerFromSetup = useCallback((setup: CareSetup) => {
     const name = setup.parent.parentName.trim() || "나";
     const label = relationshipToLabel(setup.parent.relationshipToChild);
@@ -1284,41 +1242,6 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       ];
     });
   }, []);
-
-  const joinWithInvite = useCallback(
-    (payload: {
-      code: string;
-      myName: string;
-      ownerName: string;
-      relationshipLabel: FamilyMember["relationshipLabel"];
-      role?: FamilyRole;
-    }) => {
-      const role =
-        payload.role ??
-        (payload.relationshipLabel === "시터" ? "caregiver" : "editor");
-      setFamilyMembers([
-        {
-          id: "joined-owner",
-          name: payload.ownerName,
-          role: "owner",
-          relationshipLabel: "엄마",
-          status: "active",
-          emoji: "👩",
-        },
-        {
-          id: createId(),
-          name: payload.myName.trim() || "나",
-          role,
-          relationshipLabel: payload.relationshipLabel,
-          status: "active",
-          isMe: true,
-          inviteCode: payload.code,
-          emoji: role === "caregiver" ? "🧑‍🍼" : "👤",
-        },
-      ]);
-    },
-    [],
-  );
 
   const updateFamilyMemberRole = useCallback((id: string, role: FamilyRole) => {
     setFamilyMembers((prev) => prev.map((m) => (m.id === id && !m.isMe ? { ...m, role } : m)));
@@ -1615,9 +1538,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       updateGrowthRecord,
       deleteGrowthRecord,
       myFamilyRole,
-      inviteFamilyMember,
       applyOwnerFromSetup,
-      joinWithInvite,
       updateFamilyMemberRole,
       acceptFamilyInvite,
       setFamilyMemberStatus,
@@ -1677,9 +1598,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       updateGrowthRecord,
       deleteGrowthRecord,
       myFamilyRole,
-      inviteFamilyMember,
       applyOwnerFromSetup,
-      joinWithInvite,
       updateFamilyMemberRole,
       acceptFamilyInvite,
       setFamilyMemberStatus,

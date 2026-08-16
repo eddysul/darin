@@ -118,12 +118,12 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
         ) : null}
         <View style={styles.reactionRow}>
           <View
-            style={styles.reactionButton}
+            style={styles.likeMeta}
             accessible
             accessibilityRole="text"
             accessibilityLabel={`좋아요 ${item.reactionCount}개`}
           >
-            <BabyLogIcon kind="sparkles" size={16} color={colors.muted} /><Text style={styles.reactionText}>{item.reactionCount}</Text>
+            <Text style={styles.reactionText}>좋아요 {item.reactionCount}</Text>
           </View>
           <Pressable
             style={styles.reactionButton}
@@ -473,6 +473,7 @@ const styles = StyleSheet.create({
   moreButton: { alignSelf: "flex-start", minHeight: TOUCH_MIN, justifyContent: "center", marginTop: 2 },
   moreText: { color: colors.amberText, fontSize: 12, fontWeight: "800" },
   reactionRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  likeMeta: { minHeight: 44, paddingHorizontal: 5, justifyContent: "center" },
   reactionButton: { minWidth: 54, minHeight: 44, paddingHorizontal: 5, flexDirection: "row", alignItems: "center", gap: 5 },
   reactionSpacer: { flex: 1 },
   saveButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },

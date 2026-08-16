@@ -4,6 +4,7 @@ import type { LogCategoryKey } from "../types/logCategory";
 import { requireSupabase } from "../lib/supabase";
 import { recordedAtFromDateKeyTime } from "../utils/supabaseMappers";
 import { AuthRepository } from "./AuthRepository";
+import { NotificationRepository } from "./NotificationRepository";
 
 function payloadFromEntry(entry: BabyLogEntry | Omit<BabyLogEntry, "id">): CareLogPayload {
   return {
@@ -163,7 +164,11 @@ function isUuid(value: string): boolean {
 }
 
 export const CareLogRepository = {
-  async createCareLog(babyId: string, entry: BabyLogEntry): Promise<BabyLogEntry> {
+  async createCareLog(
+    babyId: string,
+    entry: BabyLogEntry,
+    options: { notifyFamily?: boolean } = {},
+  ): Promise<BabyLogEntry> {
     const sb = requireSupabase();
     const user = await AuthRepository.getUser();
     const insert = entryToInsert(babyId, entry, user?.id ?? null);
@@ -173,7 +178,16 @@ export const CareLogRepository = {
       .select("*")
       .single();
     if (error) throw error;
-    return careLogRowToEntry(data);
+    const created = careLogRowToEntry(data);
+    if (options.notifyFamily) {
+      void NotificationRepository.sendPushToBabyMembers({
+        eventType: "new_shared_log",
+        babyId,
+        targetId: created.id,
+        routeData: { route: "record", babyId, logId: created.id },
+      }).catch(() => undefined);
+    }
+    return created;
   },
 
   async updateCareLog(

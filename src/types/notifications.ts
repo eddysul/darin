@@ -19,11 +19,15 @@ export type NotificationSettings = {
 };
 
 export type NotificationRouteData = {
-  route: "diary" | "memory" | "growth_book" | "family";
+  route: "record" | "diary" | "memory" | "growth_book" | "family" | "report" | "settings";
   memoryPostId?: string;
+  diaryEntryId?: string;
+  logId?: string;
   growthBookId?: string;
   pageId?: string;
   babyId?: string;
+  date?: string;
+  settingsPage?: "careAlerts";
   openCompose?: boolean;
 };
 

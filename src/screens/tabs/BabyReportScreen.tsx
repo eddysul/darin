@@ -34,13 +34,14 @@ type Props = {
   onOpenProfile: () => void;
   onOpenSettings?: () => void;
   onOpenNotifications?: () => void;
+  onOpenShared?: () => void;
   onOpenConsult: (initialQuestion?: string) => void;
   onOpenRecord: () => void;
 };
 
 type ReportCat = "all" | "feeding" | BabyLogCategoryId;
 
-export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenConsult, onOpenRecord }: Props) {
+export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenShared, onOpenConsult, onOpenRecord }: Props) {
   const { logs, babyName, careSetup, diaryEntries, growthRecords, addGrowthRecord, updateGrowthRecord } = useBabyLog();
   const { settings } = useAppSettings();
   const [reportCat, setReportCat] = useState<ReportCat>("all");
@@ -119,7 +120,7 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifica
 
   return (
     <View style={styles.root}>
-      <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} />
+      <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} onOpenShared={onOpenShared} />
       <ScrollView showsVerticalScrollIndicator={false} {...scrollProps}>
         {reportCat === "all" ? (
           <View style={styles.pad}>

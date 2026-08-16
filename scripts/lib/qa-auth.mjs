@@ -26,6 +26,10 @@ function requireAdminClient() {
   });
 }
 
+export function createAdminClient() {
+  return requireAdminClient();
+}
+
 export async function createQaAccount(label) {
   const admin = requireAdminClient();
   const stamp = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;

@@ -193,7 +193,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
           <MenuRow
             icon="bell"
             title="알림 설정"
-            subtitle="일기 리마인더"
+            subtitle="일기·수유·가족 알림"
             onPress={() => setReminderOpen(true)}
           />
         </MenuSection>

@@ -9,6 +9,7 @@ import {
   diaryMediaRowToModel,
 } from "../utils/diarySupabaseMappers";
 import { AuthRepository } from "./AuthRepository";
+import { NotificationRepository } from "./NotificationRepository";
 
 const DIARY_MEDIA_BUCKET = "diary-media";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
@@ -312,7 +313,14 @@ export const DiaryRepository = {
         photoUploadFailed += 1;
       }
     }
-    return { entry: (await this.getById(created.id)) ?? created, photoUploadFailed };
+    const hydrated = (await this.getById(created.id)) ?? created;
+    void NotificationRepository.sendPushToBabyMembers({
+      eventType: "new_diary",
+      babyId,
+      targetId: created.id,
+      routeData: { route: "diary", babyId, diaryEntryId: created.id },
+    }).catch(() => undefined);
+    return { entry: hydrated, photoUploadFailed };
   },
 
   async updateWithPhotos(babyId: string, entry: DiaryEntry): Promise<DiaryWriteResult> {

@@ -2,7 +2,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 type EventType =
   | "memory_comment" | "memory_reaction" | "growth_book_comment"
-  | "growth_book_rolling_paper" | "family_joined" | "test";
+  | "growth_book_rolling_paper" | "family_joined" | "invite_request"
+  | "new_shared_log" | "new_diary" | "daily_summary" | "weekly_summary"
+  | "diary_reminder" | "reminder" | "event" | "test";
 
 type RequestBody = {
   action: "sendToBabyMembers" | "sendToUser";
@@ -19,6 +21,14 @@ const COPY: Record<EventType, { title: string; body: string }> = {
   growth_book_comment: { title: "성장책 새 코멘트", body: "가족이 성장책에 코멘트를 남겼어요." },
   growth_book_rolling_paper: { title: "성장책 롤링페이퍼", body: "가족의 새 메시지가 도착했어요." },
   family_joined: { title: "가족이 참여했어요", body: "초대한 가족이 아기 기록에 참여했어요." },
+  invite_request: { title: "가족 초대 요청", body: "새 공유 멤버 요청이 도착했어요." },
+  new_shared_log: { title: "새 공유 기록", body: "가족이 새로운 돌봄 기록을 남겼어요." },
+  new_diary: { title: "새 일기", body: "가족이 새로운 일기를 남겼어요." },
+  daily_summary: { title: "오늘의 요약", body: "오늘의 돌봄 기록 요약을 확인해 보세요." },
+  weekly_summary: { title: "이번 주 요약", body: "이번 주 성장과 돌봄 기록을 확인해 보세요." },
+  diary_reminder: { title: "일기 리마인더", body: "오늘의 순간을 일기로 남겨보세요." },
+  reminder: { title: "리마인더", body: "예정된 돌봄 일정을 확인해 주세요." },
+  event: { title: "다가오는 일정", body: "예정된 접종·검진·일정을 확인해 주세요." },
   test: { title: "Darin 알림 테스트", body: "알림이 정상적으로 연결됐어요." },
 };
 

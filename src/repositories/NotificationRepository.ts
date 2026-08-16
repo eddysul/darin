@@ -94,6 +94,13 @@ export const NotificationRepository = {
     return data ?? [];
   },
 
+  async markInAppEventRead(eventId: string): Promise<void> {
+    const { error } = await requireSupabase().rpc("mark_notification_event_read", {
+      p_event_id: eventId,
+    });
+    if (error) throw error;
+  },
+
   async createNotificationEvent(input: SendNotificationInput): Promise<void> {
     await this.sendPushToBabyMembers(input);
   },

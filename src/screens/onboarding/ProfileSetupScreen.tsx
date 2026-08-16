@@ -277,8 +277,10 @@ export function ProfileSetupScreen({
             {APP_LANGUAGE_OPTIONS.map((option) => (
               <Pressable
                 key={option.value}
-                style={[styles.chip, preferredLanguage === option.value && styles.chipActive]}
+                style={[styles.chip, preferredLanguage === option.value && styles.chipActive, option.disabled && styles.chipDisabled]}
                 onPress={() => setPreferredLanguage(option.value)}
+                disabled={option.disabled}
+                accessibilityState={{ disabled: option.disabled, selected: preferredLanguage === option.value }}
               >
                 <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>
                   {option.label}
@@ -349,6 +351,7 @@ const styles = StyleSheet.create({
   regenerateText: { color: colors.amberText, fontSize: 13, fontWeight: "800" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { minHeight: 42, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  chipDisabled: { opacity: 0.48 },
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   chipText: { color: colors.muted, fontSize: 12.5, fontWeight: "700" },
   chipTextActive: { color: colors.amberText },

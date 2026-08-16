@@ -12,6 +12,17 @@ import { AuthRepository } from "./AuthRepository";
 const BUCKET = "profile-media";
 const SIGNED_URL_TTL_SECONDS = 180;
 
+function mapProfileWriteError(error: { code?: string; message?: string }): Error {
+  const message = error.message ?? "";
+  if (error.code === "23505" && /darin_id|profiles_darin_id/i.test(message)) {
+    return new Error("이미 사용 중인 Darin ID예요. 새 코드를 눌러 다시 시도해 주세요.");
+  }
+  if (/invalid Darin ID format/i.test(message)) {
+    return new Error("Darin ID 형식을 확인해 주세요.");
+  }
+  return new Error(message || "프로필을 저장하지 못했어요.");
+}
+
 function extensionForMime(mimeType?: string): string {
   if (mimeType === "image/png") return "png";
   if (mimeType === "image/webp") return "webp";
@@ -84,7 +95,7 @@ export const ProfileRepository = {
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await sb.from("profiles").upsert(row).select("*").single();
-    if (error) throw error;
+    if (error) throw mapProfileWriteError(error);
     return data;
   },
 
@@ -118,7 +129,7 @@ export const ProfileRepository = {
       .eq("id", session.user.id)
       .select("*")
       .single();
-    if (error) throw error;
+    if (error) throw mapProfileWriteError(error);
     const avatarUrl = data.avatar_storage_path
       ? await this.createProfileAvatarSignedUrl(data.avatar_storage_path).catch(() => undefined)
       : undefined;

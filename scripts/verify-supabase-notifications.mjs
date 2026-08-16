@@ -87,6 +87,24 @@ try {
   if (actorSelfEvents?.length) throw new Error("actor received self notification");
   pass("Edge Function event created; recipient read allowed and self notification skipped");
 
+  const summaryTarget = `daily-summary-${Date.now()}`;
+  const { error: summaryInvokeError } = await actor.sb.functions.invoke("send-push-notification", { body: {
+    action: "sendToBabyMembers", eventType: "daily_summary", babyId,
+    targetId: summaryTarget, routeData: { route: "report", babyId },
+  }});
+  if (summaryInvokeError) throw new Error(`daily summary invoke: ${summaryInvokeError.message}`);
+  const { data: summaryEvent, error: summaryReadError } = await recipient.sb.from("notification_events")
+    .select("id,event_type,data,read_at").eq("baby_id", babyId).eq("event_type", "daily_summary").single();
+  if (summaryReadError || !summaryEvent || summaryEvent.data?.route !== "report") {
+    throw new Error(`daily summary event contract failed: ${summaryReadError?.message ?? "invalid route data"}`);
+  }
+  const { error: markReadError } = await recipient.sb.rpc("mark_notification_event_read", { p_event_id: summaryEvent.id });
+  if (markReadError) throw new Error(`mark notification read: ${markReadError.message}`);
+  const { data: readSummary } = await recipient.sb.from("notification_events")
+    .select("read_at").eq("id", summaryEvent.id).single();
+  if (!readSummary?.read_at) throw new Error("recipient could not mark own notification read");
+  pass("summary event route and recipient-only read state work");
+
   const { data: outsiderEvents, error: outsiderReadError } = await outsider.sb.from("notification_events").select("id").eq("baby_id", babyId);
   if (outsiderReadError || outsiderEvents?.length) throw new Error("outsider read recipient event");
   pass("non-recipient event read blocked");

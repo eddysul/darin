@@ -14,15 +14,12 @@ export type FamilyMember = {
   emoji?: string;
   /** Signed URL for profile avatar when available (short-lived). */
   avatarUrl?: string;
-  /** App permission (관리자 / 편집 가능 / 보기만 가능). */
+  /** App permission (관리자 / 기록 가능 / 보기만 가능). */
   role: FamilyRole;
   /** User-facing relationship (엄마 / 아빠 / 시터…). Independent of `role`. */
   relationshipLabel?: RelationshipLabel;
-  /** Phone or email for invite prototype */
+  /** Legacy contact metadata retained for stored family-member compatibility. */
   contact?: string;
-  inviteLink?: string;
-  /** Short mock invite code */
-  inviteCode?: string;
   status: FamilyMemberStatus;
   isMe?: boolean;
 };
@@ -30,9 +27,9 @@ export type FamilyMember = {
 export const FAMILY_ROLE_LABELS: Record<FamilyRole, string> = {
   owner: "소유자",
   admin: "관리자",
-  editor: "편집 가능",
+  editor: "기록 가능",
   viewer: "보기만 가능",
-  caregiver: "편집 가능",
+  caregiver: "기록 가능",
 };
 
 export const FAMILY_STATUS_LABELS: Record<FamilyMemberStatus, string> = {

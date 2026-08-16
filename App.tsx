@@ -63,6 +63,7 @@ import { BabyRepository } from "./src/repositories/BabyRepository";
 import { FamilyRepository } from "./src/repositories/FamilyRepository";
 import { BabyProfileRepository } from "./src/repositories/BabyProfileRepository";
 import { ProfileRepository } from "./src/repositories/ProfileRepository";
+import { NotificationRepository } from "./src/repositories/NotificationRepository";
 import {
   getTermsAccepted,
   hydrateTermsAccepted,
@@ -167,6 +168,9 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
       return;
     }
     pendingNotificationRoute.current = null;
+    if (typeof data.eventId === "string") {
+      void NotificationRepository.markInAppEventRead(data.eventId).catch(() => undefined);
+    }
     if (data.route === "memory" && typeof data.memoryPostId === "string") {
       navigationRef.navigate("MemoryDetail", { memoryPostId: data.memoryPostId });
       return;
@@ -176,12 +180,37 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
       return;
     }
     if (data.route === "family") {
-      navigationRef.navigate("BabyProfile");
+      navigationRef.navigate("FamilyShare", { tab: "people" });
+      return;
+    }
+    if (data.route === "report") {
+      navigationRef.navigate("MainTabs", { screen: "Report" });
+      return;
+    }
+    if (data.route === "settings") {
+      navigationRef.navigate("SettingsDetail", { page: "careAlerts" });
+      return;
+    }
+    if (data.route === "record") {
+      navigationRef.navigate("MainTabs", {
+        screen: "Record",
+        params: typeof data.logId === "string" ? { logId: data.logId } : undefined,
+      });
+      return;
+    }
+    if (data.route !== "diary") {
+      navigationRef.navigate("NotificationCenter");
       return;
     }
     navigationRef.navigate("MainTabs", {
       screen: "Diary",
-      params: { openCompose: Boolean(data.openCompose), source: "notification" },
+      params: typeof data.diaryEntryId === "string"
+        ? { diaryEntryId: data.diaryEntryId, source: "notification" }
+        : {
+            openCompose: Boolean(data.openCompose),
+            source: "notification",
+            date: typeof data.date === "string" ? data.date : undefined,
+          },
     });
   }, []);
 
@@ -268,7 +297,7 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
 function RootApp() {
   const { careSetup, careSetupReady, hasSavedCareSetup, setProfile, setCareSetup, resetCareSetup, clearSession } =
     useApp();
-  const { applyOwnerFromSetup, joinWithInvite, prepareForLogout, rehydrateFromServer } = useBabyLog();
+  const { applyOwnerFromSetup, prepareForLogout, rehydrateFromServer } = useBabyLog();
   const { setLocale } = useLanguage();
   const { setSettings } = useAppSettings();
   const [phase, setPhase] = useState<AppPhase>("splash");
@@ -288,6 +317,11 @@ function RootApp() {
   const [onboardingInitialChild, setOnboardingInitialChild] = useState<Partial<CareSetup["child"]>>();
   const [onboardingExistingBabyId, setOnboardingExistingBabyId] = useState<string | null>(null);
   const startupRouting = useRef(false);
+  const phaseRef = useRef<AppPhase>("splash");
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   useEffect(() => {
     void hydrateTermsAccepted().then(() => {
@@ -311,6 +345,14 @@ function RootApp() {
         const inviteCode = parseInviteCodeFromUrl(url);
         if (inviteCode) {
           await savePendingInvite(inviteCode);
+          if (phaseRef.current === "main") {
+            setOnboardingInviteCode(inviteCode);
+            setOnboardingInitialChild(undefined);
+            setOnboardingExistingBabyId(null);
+            setOnboardingStartsWithBaby(false);
+            setOnboardingVersion((value) => value + 1);
+            setPhase("setup");
+          }
           return;
         }
         const result = await AuthRepository.handleAuthUrl(url);

@@ -4,12 +4,13 @@ import type { SettingsPage } from "../components/settings/AppSettingsModal";
 export type SettingsDetailPage = Exclude<SettingsPage, "account">;
 
 export type MainTabParamList = {
-  Record: undefined;
+  Record: { logId?: string } | undefined;
   Diary: {
     openCompose?: boolean;
     date?: string;
     source?: string;
     openGrowthBookVault?: boolean;
+    diaryEntryId?: string;
   } | undefined;
   Mic: undefined;
   Report: undefined;

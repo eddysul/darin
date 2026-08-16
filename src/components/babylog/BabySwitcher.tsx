@@ -23,7 +23,7 @@ function babyAgeLabel(birthDate: string | null): string {
 
 export function BabySwitcher({ compact = false, variant = "default" }: { compact?: boolean; variant?: "default" | "switchButton" }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { babies, activeBabyId, babyName, switchActiveBaby } = useBabyLog();
+  const { babies, activeBabyId, babyName, switchActiveBaby, logAuthor } = useBabyLog();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -98,7 +98,9 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
                           <Text style={styles.babyMeta}>{babyAgeLabel(baby.birth_date)}</Text>
                           <Text style={styles.metaDot}>·</Text>
                           <BabyLogIcon kind="profile" size={15} color={colors.amberText} strokeWidth={2.1} />
-                          <Text style={styles.sharedText}>나와 공유 중</Text>
+                          <Text style={styles.sharedText}>
+                            {baby.created_by && baby.created_by === logAuthor.userId ? "내가 등록한 아기" : "나와 공유 중"}
+                          </Text>
                         </View>
                       </View>
                       {selected ? <View style={styles.selectedCircle}><Text style={styles.selectedCheck}>✓</Text></View> : null}

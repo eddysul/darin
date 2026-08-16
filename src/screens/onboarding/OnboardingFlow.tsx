@@ -430,7 +430,7 @@ export function OnboardingFlow({
     return (
       <OnboardingShell
         title="초대코드 입력"
-        subtitle="ID 요청 대신, 아직 유효한 초대코드가 있으면 입력할 수 있어요."
+        subtitle="카카오톡이나 문자로 공유받은 유효한 초대코드를 입력해 주세요."
         primaryLabel="코드 확인"
         primaryDisabled={!inviteCode.trim()}
         onPrimary={() => void previewInvite()}
@@ -450,7 +450,7 @@ export function OnboardingFlow({
           />
         </OnboardingField>
         {inviteError ? <Text style={styles.error}>{inviteError}</Text> : null}
-        <Text style={styles.hint}>앱 안 초대는 Darin ID 요청이 기본이에요. 코드는 보조 경로예요.</Text>
+        <Text style={styles.hint}>Darin ID 요청과 초대코드·링크는 상황에 맞게 선택하는 서로 다른 초대 방식이에요.</Text>
       </OnboardingShell>
     );
   }

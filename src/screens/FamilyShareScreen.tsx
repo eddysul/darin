@@ -43,7 +43,7 @@ const INVITE_DESCRIPTIONS: Record<VisibleInviteType, string> = {
 };
 
 const INVITE_PERMISSION_COPY: Record<VisibleInviteType, string> = {
-  family: "관리자 또는 편집 가능 권한으로 기록·일기·성장책을 함께 관리해요.",
+  family: "기본은 기록 가능 권한이에요. 관리자는 명시적으로 선택한 경우에만 부여해요.",
   baby_friend: "친구 공개 순간만 볼 수 있고 기록·일기·성장책은 볼 수 없어요.",
 };
 
@@ -55,11 +55,18 @@ const INVITE_ICON: Record<VisibleInviteType, MiscIconKey> = {
 type ShareTab = "create" | "enter" | "people";
 type VisibleInviteType = "family" | "baby_friend";
 type IdPreview = { darinId: string; nickname: string; tag: string };
+type CodePreview = {
+  code: string;
+  babyId: string | null;
+  babyName: string | null;
+  inviterName: string;
+  inviteType: VisibleInviteType;
+};
 type Props = NativeStackScreenProps<RootStackParamList, "FamilyShare">;
 
 export function FamilyShareScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
-  const { babyName, myFamilyRole, familyMembers, rehydrateFromServer, activeBabyId } = useBabyLog();
+  const { babyName, myFamilyRole, familyMembers, rehydrateFromServer, activeBabyId, switchActiveBaby } = useBabyLog();
   const babyId = activeBabyId;
   const isAdmin = myFamilyRole === "owner" || myFamilyRole === "admin";
   const [activeTab, setActiveTab] = useState<ShareTab>(() => route.params?.tab ?? (isAdmin ? "create" : "enter"));
@@ -75,6 +82,10 @@ export function FamilyShareScreen({ navigation, route }: Props) {
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState("");
   const [creatingCode, setCreatingCode] = useState(false);
+  const [enteredCode, setEnteredCode] = useState("");
+  const [codePreview, setCodePreview] = useState<CodePreview | null>(null);
+  const [codeWorking, setCodeWorking] = useState(false);
+  const [codeError, setCodeError] = useState("");
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
@@ -160,7 +171,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
     }
   };
 
-  const createAuxiliaryInviteCode = async () => {
+  const createInviteCode = async () => {
     if (!babyId || !isAdmin || creatingCode) return;
     setCreatingCode(true);
     setError("");
@@ -171,9 +182,8 @@ export function FamilyShareScreen({ navigation, route }: Props) {
         role,
         relationshipLabel: relation,
       });
-      const code = row?.code ?? "";
-      if (!code) throw new Error("초대코드를 만들지 못했어요.");
-      setInviteCode(code);
+      if (!row?.code) throw new Error("초대코드를 만들지 못했어요.");
+      setInviteCode(row.code);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "초대코드를 만들지 못했어요.");
     } finally {
@@ -184,12 +194,81 @@ export function FamilyShareScreen({ navigation, route }: Props) {
   const copyInviteCode = async () => {
     if (!inviteCode) return;
     await Clipboard.setStringAsync(inviteCode);
-    Alert.alert("코드를 복사했어요", "가족에게 코드를 공유해 주세요.");
+    Alert.alert("초대코드를 복사했어요", "카카오톡이나 문자에 붙여넣어 공유할 수 있어요.");
+  };
+
+  const copyInviteLink = async () => {
+    if (!inviteCode) return;
+    await Clipboard.setStringAsync(`knanny://invite/${encodeURIComponent(inviteCode)}`);
+    Alert.alert("초대 링크를 복사했어요", "앱이 열리지 않으면 초대코드를 직접 입력해 주세요.");
   };
 
   const shareInviteCode = async () => {
     if (!inviteCode) return;
-    await Share.share({ message: `다린 초대코드: ${inviteCode}` });
+    const inviteLink = `knanny://invite/${encodeURIComponent(inviteCode)}`;
+    await Share.share({
+      message: `${babyName}의 다린 ${inviteType === "family" ? "가족" : "친구"} 초대예요.\n${inviteLink}\n앱이 열리지 않으면 초대코드 ${inviteCode}를 입력해 주세요.`,
+    });
+  };
+
+  const previewEnteredCode = async () => {
+    const code = enteredCode.trim().toUpperCase();
+    if (!code || codeWorking) return;
+    setCodeWorking(true);
+    setCodeError("");
+    setCodePreview(null);
+    try {
+      const row = await FamilyRepository.previewInviteCode(code);
+      if (!row?.is_valid) {
+        throw new Error(row?.invalid_reason === "expired" ? "만료된 초대코드예요." : "유효하지 않은 초대코드예요.");
+      }
+      if (row.invite_type === "darin_friend") {
+        throw new Error("이전 버전 초대코드예요. 새로운 초대코드를 요청해 주세요.");
+      }
+      setCodePreview({
+        code,
+        babyId: row.baby_id,
+        babyName: row.baby_name,
+        inviterName: row.inviter_name,
+        inviteType: row.invite_type,
+      });
+    } catch (cause) {
+      setCodeError(cause instanceof Error ? cause.message : "초대코드를 확인하지 못했어요.");
+    } finally {
+      setCodeWorking(false);
+    }
+  };
+
+  const acceptEnteredCode = async () => {
+    if (!codePreview || codeWorking) return;
+    setCodeWorking(true);
+    setCodeError("");
+    try {
+      const profile = await ProfileRepository.getMyDisplayProfile();
+      if (!profile) throw new Error("프로필을 먼저 완성해 주세요.");
+      const accepted = await FamilyRepository.acceptInviteCode({
+        code: codePreview.code,
+        displayName: profile.displayName,
+        nickname: profile.nickname,
+        relation: profile.defaultRelation ?? "가족",
+      });
+      if (!accepted) throw new Error("초대를 수락하지 못했어요.");
+      setEnteredCode("");
+      setCodePreview(null);
+      if (accepted.invite_type === "family" && accepted.baby_id) {
+        await switchActiveBaby(accepted.baby_id);
+      } else {
+        await refresh();
+      }
+      Alert.alert(
+        "초대 수락 완료",
+        accepted.invite_type === "family" ? "가족 공유에 연결됐어요." : "친구 공개 순간에 연결됐어요.",
+      );
+    } catch (cause) {
+      setCodeError(cause instanceof Error ? cause.message : "초대를 수락하지 못했어요.");
+    } finally {
+      setCodeWorking(false);
+    }
   };
 
   const respondToRequest = async (item: DarinInviteRequestView, accept: boolean) => {
@@ -298,11 +377,11 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                           accessibilityRole="button"
                           accessibilityState={{ selected: role === value }}
                         >
-                          <Text style={[styles.chipText, role === value && styles.chipTextActive]}>{value === "admin" ? "관리자" : "편집 가능"}</Text>
+                          <Text style={[styles.chipText, role === value && styles.chipTextActive]}>{value === "admin" ? "관리자" : "기록 가능"}</Text>
                         </Pressable>
                       ))}
                     </View>
-                    <Text style={styles.permissionHint}>관리자는 구성원과 초대를 관리하고, 편집 가능은 기록을 추가·수정할 수 있어요.</Text>
+                    <Text style={styles.permissionHint}>관리자는 구성원과 초대를 관리하고, 기록 가능은 기록을 추가·수정할 수 있어요.</Text>
                   </View>
                 ) : null}
 
@@ -361,18 +440,21 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                 </View>
 
                 <View style={styles.sendSection}>
-                  <Text style={styles.sectionTitle}>초대코드 (보조)</Text>
-                  <Text style={styles.description}>상대 ID를 모를 때만 코드를 만들어 공유해요. 앱 안 초대는 Darin ID 요청이 기본이에요.</Text>
+                  <Text style={styles.sectionTitle}>초대코드로 초대</Text>
+                  <Text style={styles.description}>아직 Darin 계정이 없거나 카카오톡·문자로 공유할 때 사용해요.</Text>
                   {inviteCode ? (
                     <>
                       <View style={styles.codePill}>
                         <Text style={styles.codeText}>{inviteCode}</Text>
                       </View>
                       <View style={styles.inviteActions}>
-                        <Pressable style={styles.secondary} onPress={() => void copyInviteCode()} accessibilityRole="button" accessibilityLabel="코드 복사">
-                          <Text style={styles.secondaryText}>복사</Text>
+                        <Pressable style={styles.secondaryAction} onPress={() => void copyInviteCode()} accessibilityRole="button" accessibilityLabel="초대코드 복사">
+                          <Text style={styles.secondaryText}>코드 복사</Text>
                         </Pressable>
-                        <Pressable style={styles.primary} onPress={() => void shareInviteCode()} accessibilityRole="button" accessibilityLabel="코드 공유">
+                        <Pressable style={styles.secondaryAction} onPress={() => void copyInviteLink()} accessibilityRole="button" accessibilityLabel="초대 링크 복사">
+                          <Text style={styles.secondaryText}>링크 복사</Text>
+                        </Pressable>
+                        <Pressable style={styles.primaryAction} onPress={() => void shareInviteCode()} accessibilityRole="button" accessibilityLabel="초대코드 공유" accessibilityHint="카카오톡, 문자 또는 다른 앱으로 공유합니다">
                           <Text style={styles.primaryText}>공유</Text>
                         </Pressable>
                       </View>
@@ -380,12 +462,12 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                   ) : (
                     <Pressable
                       style={[styles.secondary, creatingCode && styles.disabled]}
-                      onPress={() => void createAuxiliaryInviteCode()}
+                      onPress={() => void createInviteCode()}
                       disabled={creatingCode}
                       accessibilityRole="button"
                       accessibilityLabel="초대코드 만들기"
                     >
-                      {creatingCode ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.secondaryText}>코드 만들기</Text>}
+                      {creatingCode ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.secondaryText}>초대코드 만들기</Text>}
                     </Pressable>
                   )}
                 </View>
@@ -476,6 +558,55 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                     </Pressable>
                   </View>
                 )}
+
+                <View style={styles.sendSection}>
+                  <Text style={styles.sectionTitle}>초대코드 입력</Text>
+                  <Text style={styles.description}>공유받은 코드를 서버에서 확인한 뒤 초대를 수락해요.</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={enteredCode}
+                    onChangeText={(value) => {
+                      setEnteredCode(value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 24));
+                      setCodePreview(null);
+                      setCodeError("");
+                    }}
+                    placeholder="예: DARIN-8F3K2Q"
+                    placeholderTextColor={colors.faint}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={() => void previewEnteredCode()}
+                    accessibilityLabel="초대코드"
+                  />
+                  {codeError ? <Text style={styles.error} accessibilityRole="alert">{codeError}</Text> : null}
+                  {codePreview ? (
+                    <View style={styles.requestCard}>
+                      <Text style={styles.person}>{codePreview.inviteType === "family" ? "가족 초대" : "친구 초대"}</Text>
+                      {codePreview.babyName ? <Text style={styles.nickname}>아기 · {codePreview.babyName}</Text> : null}
+                      <Text style={styles.nickname}>초대한 사람 · {codePreview.inviterName}</Text>
+                      <Text style={styles.permissionHint}>{codePreview.inviteType === "family" ? "가족 권한으로 연결돼요." : "친구 공개 순간만 볼 수 있어요."}</Text>
+                      <Pressable
+                        style={[styles.primary, codeWorking && styles.disabled]}
+                        disabled={codeWorking}
+                        onPress={() => void acceptEnteredCode()}
+                        accessibilityRole="button"
+                        accessibilityLabel="초대 수락"
+                      >
+                        {codeWorking ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.primaryText}>초대 수락</Text>}
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable
+                      style={[styles.secondary, (!enteredCode.trim() || codeWorking) && styles.disabled]}
+                      disabled={!enteredCode.trim() || codeWorking}
+                      onPress={() => void previewEnteredCode()}
+                      accessibilityRole="button"
+                      accessibilityLabel="초대코드 확인"
+                    >
+                      {codeWorking ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.secondaryText}>코드 확인</Text>}
+                    </Pressable>
+                  )}
+                </View>
               </View>
             ) : null}
 
@@ -592,6 +723,8 @@ const styles = StyleSheet.create({
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12.5 },
   disabled: { opacity: 0.48 },
   inviteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
+  secondaryAction: { flex: 1, minHeight: TOUCH_MIN, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  primaryAction: { flex: 1, minHeight: TOUCH_MIN, borderRadius: radius.md, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   codePill: { minHeight: TOUCH_MIN, borderRadius: radius.md, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
   codeText: { fontSize: 18, fontWeight: "800", letterSpacing: 2, color: colors.text },
   declineButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.backgroundSecondary, justifyContent: "center" },

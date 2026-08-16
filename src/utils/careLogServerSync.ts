@@ -146,7 +146,7 @@ export async function syncCareLogCreate(entry: BabyLogEntry, babyIdOverride?: st
     return null;
   }
   try {
-    const remote = await CareLogRepository.createCareLog(babyId, entry);
+    const remote = await CareLogRepository.createCareLog(babyId, entry, { notifyFamily: true });
     console.log("[supabase] care_log synced", remote.id, remote.cat);
     return remote;
   } catch (e) {

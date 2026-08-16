@@ -256,6 +256,7 @@ function DiaryTab() {
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
       onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
+      onOpenShared={() => rootNavigation?.navigate("FamilyShare")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
       }
@@ -271,6 +272,7 @@ function ReportTab() {
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
       onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
+      onOpenShared={() => rootNavigation?.navigate("FamilyShare")}
       onOpenRecord={() => navigation.navigate("Record")}
       onOpenConsult={(initialQuestion) =>
         navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
@@ -287,6 +289,7 @@ function ConsultTab() {
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
       onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
+      onOpenShared={() => rootNavigation?.navigate("FamilyShare")}
       onOpenRecord={() => navigation.navigate("Record")}
     />
   );

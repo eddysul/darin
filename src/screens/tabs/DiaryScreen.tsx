@@ -61,12 +61,13 @@ type Props = {
   onOpenProfile: () => void;
   onOpenSettings?: () => void;
   onOpenNotifications?: () => void;
+  onOpenShared?: () => void;
   onOpenConsult: (initialQuestion?: string) => void;
 };
 
 type DiaryFilter = "all" | "growth" | "book";
 
-export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenConsult }: Props) {
+export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenShared, onOpenConsult }: Props) {
   const route = useRoute<RouteProp<MainTabParamList, "Diary">>();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList, "Diary">>();
   const {
@@ -208,6 +209,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   useEffect(() => {
     const params = route.params;
     if (!params) return;
+    if (params.diaryEntryId) return;
     const shouldOpen =
       params.openCompose === true ||
       params.source === "notification" ||
@@ -217,6 +219,15 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     openFromNotification(params.date);
     navigation.setParams({ openCompose: undefined, source: undefined, date: undefined });
   }, [route.params, openFromNotification, navigation]);
+
+  useEffect(() => {
+    const diaryEntryId = route.params?.diaryEntryId;
+    if (!diaryEntryId) return;
+    const entry = diaryEntries.find((candidate) => candidate.id === diaryEntryId);
+    if (!entry) return;
+    navigation.setParams({ diaryEntryId: undefined, source: undefined });
+    openEdit(entry, true);
+  }, [diaryEntries, navigation, openEdit, route.params?.diaryEntryId]);
 
   useEffect(() => {
     if (!route.params?.openGrowthBookVault) return;
@@ -377,6 +388,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
         onOpenProfile={onOpenProfile}
         onOpenSettings={onOpenSettings}
         onOpenNotifications={onOpenNotifications}
+        onOpenShared={onOpenShared}
       />
       <SectionList
         sections={monthSections.map((section, index) => ({

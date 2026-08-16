@@ -36,6 +36,13 @@ export type NotificationEventType =
   | "family_joined"
   | "diary_reminder"
   | "invite_request"
+  | "invite_declined"
+  | "new_shared_log"
+  | "new_diary"
+  | "daily_summary"
+  | "weekly_summary"
+  | "reminder"
+  | "event"
   | "test";
 export type NotificationEventStatus = "pending" | "sent" | "failed" | "skipped";
 
@@ -460,6 +467,8 @@ export type DarinInviteRequestRow = {
   status: DarinInviteRequestStatus;
   created_at: string;
   responded_at: string | null;
+  expires_at: string;
+  updated_at: string;
 };
 
 export type ContactRequestRow = {
@@ -738,6 +747,10 @@ export type Database = {
       respond_darin_id_invite_request: {
         Args: { p_request_id: string; p_accept: boolean };
         Returns: Array<{ baby_id: string; request_type: "family" | "friend"; permission_role: string }>;
+      };
+      mark_notification_event_read: {
+        Args: { p_event_id: string };
+        Returns: undefined;
       };
       list_my_darin_friends: {
         Args: Record<string, never>;
