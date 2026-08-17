@@ -7,6 +7,8 @@ type Props = {
   todayLogCount: number;
   onClose: () => void;
   onSelectQuestion: (question: string) => void;
+  /** Open consult with an empty input — suggestions are optional. */
+  onAskFreely: () => void;
 };
 
 const EMPTY_QUESTIONS = [
@@ -27,6 +29,7 @@ export function ConsultPromptSheet({
   todayLogCount,
   onClose,
   onSelectQuestion,
+  onAskFreely,
 }: Props) {
   const insets = useSafeAreaInsets();
   const questions = todayLogCount === 0 ? EMPTY_QUESTIONS : ACTIVE_QUESTIONS;
@@ -42,18 +45,27 @@ export function ConsultPromptSheet({
           <Text style={styles.title}>무엇을 도와드릴까요?</Text>
           <Text style={styles.subtitle}>
             {todayLogCount === 0
-              ? "오늘 기록이 아직 없어요. 질문을 고르면 상담 입력칸에 들어가요."
-              : `오늘 기록 ${todayLogCount}개를 바탕으로 물어볼 수 있어요. 고르면 입력칸에 넣고, 보낸 뒤에 답해요.`}
+              ? "오늘 기록이 아직 없어도 자유롭게 물어볼 수 있어요. 아래는 필요할 때만 고르면 돼요."
+              : `오늘 기록 ${todayLogCount}개를 참고해서 답할 수 있어요. 직접 적어도 되고, 예시 질문을 골라도 돼요.`}
           </Text>
+          <Pressable
+            style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
+            onPress={onAskFreely}
+            accessibilityRole="button"
+            accessibilityLabel="직접 물어보기"
+          >
+            <Text style={styles.primaryBtnText}>직접 물어보기</Text>
+          </Pressable>
+          <Text style={styles.exampleLabel}>이런 질문도 있어요</Text>
           <View style={styles.list}>
             {questions.map((q) => (
-          <Pressable
-            key={q}
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => onSelectQuestion(q)}
-            accessibilityRole="button"
-            accessibilityLabel={q}
-          >
+              <Pressable
+                key={q}
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                onPress={() => onSelectQuestion(q)}
+                accessibilityRole="button"
+                accessibilityLabel={q}
+              >
                 <Text style={styles.rowText}>{q}</Text>
               </Pressable>
             ))}
@@ -105,6 +117,23 @@ const styles = StyleSheet.create({
     color: colors.muted,
     lineHeight: 19,
     marginBottom: 14,
+  },
+  primaryBtn: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+    backgroundColor: colors.amber,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  primaryBtnPressed: { opacity: 0.88 },
+  primaryBtnText: { fontSize: 15, fontWeight: "800", color: colors.amberDark },
+  exampleLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.faint,
+    marginBottom: 8,
   },
   list: { gap: 8 },
   row: {

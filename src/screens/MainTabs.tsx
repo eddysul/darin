@@ -242,7 +242,7 @@ function RecordTab() {
       onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenConsult={(initialQuestion) =>
-        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
+        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : { focusInput: true })
       }
     />
   );
@@ -258,7 +258,7 @@ function DiaryTab() {
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenShared={() => rootNavigation?.navigate("FamilyShare")}
       onOpenConsult={(initialQuestion) =>
-        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
+        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : { focusInput: true })
       }
     />
   );
@@ -275,7 +275,7 @@ function ReportTab() {
       onOpenShared={() => rootNavigation?.navigate("FamilyShare")}
       onOpenRecord={() => navigation.navigate("Record")}
       onOpenConsult={(initialQuestion) =>
-        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : undefined)
+        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : { focusInput: true })
       }
     />
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Modal,
   Pressable,
@@ -55,7 +56,6 @@ const ERROR_KEYS: Record<string, MessageKey> = {
 };
 
 const LOW_CONFIDENCE = 0.55;
-const DEMO_PHRASES = ["분유 120 먹었어", "응가했어 노란색", "낮잠 40분 잤어"] as const;
 
 function formatDuration(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -132,6 +132,7 @@ export function BabyLogVoiceOverlay({
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const openedRef = useRef(false);
   const appliedKeyRef = useRef<string | null>(null);
+  const lastAnnounceRef = useRef("");
 
   const resetLocal = () => {
     setStage("listening");
@@ -197,6 +198,13 @@ export function BabyLogVoiceOverlay({
     onClose();
   };
 
+  const handleManualEntry = () => {
+    void cancelRecording();
+    clearSavedNote();
+    clearRecordingError();
+    onManualEntry();
+  };
+
   const handleRetake = () => {
     clearSavedNote();
     clearRecordingError();
@@ -207,17 +215,6 @@ export function BabyLogVoiceOverlay({
   const handleRetryAnalyze = () => {
     clearRecordingError();
     void retryTranscribe();
-  };
-
-  const runDemoPhrase = (phrase: string) => {
-    void cancelRecording();
-    clearSavedNote();
-    clearRecordingError();
-    const session = buildVoiceSession(phrase);
-    setRawTranscript(session.rawTranscript);
-    setEvents(session.events);
-    setTranscriptOpen(true);
-    setStage("result");
   };
 
   const handleRemove = (id: string) => {
@@ -245,34 +242,96 @@ export function BabyLogVoiceOverlay({
     : t("voice.errorGeneric");
 
   const canRetry = Boolean(savedNote?.uri) && recordingError === "transcribeFailed";
+  const listeningStatus = isRecording ? t("voice.listening") : t("voice.preparing");
+  const listeningA11y = t("voice.statusWithTime")
+    .replace("{status}", listeningStatus)
+    .replace("{time}", formatDuration(durationMs));
+  const showClose = stage === "analyzing" || stage === "result" || stage === "error";
+
+  useEffect(() => {
+    if (!visible) {
+      lastAnnounceRef.current = "";
+      return;
+    }
+    let message = "";
+    if (stage === "listening") message = listeningStatus;
+    else if (stage === "analyzing") message = t("voice.analyzing");
+    else if (stage === "result") message = events.length === 0 ? t("voice.noEvents") : t("voice.resultTitle");
+    else if (stage === "error") message = errorText;
+    if (!message || lastAnnounceRef.current === message) return;
+    lastAnnounceRef.current = message;
+    AccessibilityInfo.announceForAccessibility(message);
+  }, [visible, stage, listeningStatus, events.length, errorText, t]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <Pressable style={styles.overlay} onPress={handleClose} accessible={false}>
-        <Pressable style={styles.stage} onPress={() => {}} accessible={false}>
+      <View style={styles.overlay} accessibilityViewIsModal>
+        <View style={styles.stage}>
+          {showClose ? (
+            <Pressable
+              style={styles.closeBtn}
+              onPress={handleClose}
+              accessibilityRole="button"
+              accessibilityLabel={t("voice.close")}
+            >
+              <Text style={styles.closeBtnText}>{t("voice.close")}</Text>
+            </Pressable>
+          ) : null}
+
           {stage === "listening" && (
             <>
-              <Text style={styles.state}>{isRecording ? t("voice.listening") : t("voice.preparing")}</Text>
-              <VoiceWaveform levels={levels} barCount={28} height={64} barColor={colors.amber} />
-              <Text style={styles.duration}>{formatDuration(durationMs)}</Text>
+              <Text
+                style={styles.state}
+                accessibilityRole="text"
+                accessibilityLiveRegion="polite"
+                accessibilityLabel={listeningStatus}
+              >
+                {listeningStatus}
+              </Text>
+              <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+                <VoiceWaveform levels={levels} barCount={28} height={64} barColor={colors.amber} />
+              </View>
+              <Text
+                style={styles.duration}
+                accessibilityRole="text"
+                accessibilityLabel={listeningA11y}
+              >
+                {formatDuration(durationMs)}
+              </Text>
               <Text style={styles.hint}>{t("voice.hint")}</Text>
-              <Pressable style={[styles.btn, styles.btnPrimary, styles.stopBtn]} onPress={() => void stopAndSave()}>
-                <Text style={styles.btnPrimaryText}>{t("voice.stop")}</Text>
-              </Pressable>
-              <Text style={styles.demoTitle}>AI 연동 전 데모 문장</Text>
-              <View style={styles.demoPhrases}>
-                {DEMO_PHRASES.map((phrase) => (
-                  <Pressable key={phrase} style={styles.demoPhrase} onPress={() => runDemoPhrase(phrase)}>
-                    <Text style={styles.demoPhraseText}>“{phrase}”</Text>
-                  </Pressable>
-                ))}
+              <View style={styles.listenActions}>
+                <Pressable
+                  style={[styles.btn, styles.btnGhost, styles.listenBtn]}
+                  onPress={handleClose}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("voice.cancel")}
+                >
+                  <Text style={styles.btnGhostText}>{t("voice.cancel")}</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.btn, styles.btnPrimary, styles.listenBtn, !isRecording && styles.btnDisabled]}
+                  disabled={!isRecording}
+                  onPress={() => void stopAndSave()}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("voice.stop")}
+                  accessibilityState={{ disabled: !isRecording }}
+                >
+                  <Text style={styles.btnPrimaryText}>{t("voice.stop")}</Text>
+                </Pressable>
               </View>
             </>
           )}
 
           {stage === "analyzing" && (
             <>
-              <Text style={styles.state}>{t("voice.analyzing")}</Text>
+              <Text
+                style={styles.state}
+                accessibilityRole="text"
+                accessibilityLiveRegion="polite"
+                accessibilityLabel={t("voice.analyzing")}
+              >
+                {t("voice.analyzing")}
+              </Text>
               <ActivityIndicator size="large" color={colors.amberText} style={{ marginBottom: 16 }} />
               <Text style={styles.analyzingText}>{t("voice.analyzingHint")}</Text>
             </>
@@ -285,7 +344,9 @@ export function BabyLogVoiceOverlay({
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.state}>{t("voice.resultTitle")}</Text>
+              <Text style={styles.state} accessibilityLiveRegion="polite">
+                {t("voice.resultTitle")}
+              </Text>
               {events.length > 1 && (
                 <Text style={styles.eventCount}>
                   {t("voice.eventCount").replace("{count}", String(events.length))}
@@ -320,53 +381,64 @@ export function BabyLogVoiceOverlay({
                 </View>
               )}
 
+              {events.length > 0 ? (
+                <Pressable
+                  style={[styles.btn, styles.btnPrimary, styles.confirmBtn]}
+                  onPress={() => onConfirmAll({ rawTranscript, events })}
+                >
+                  <Text style={styles.btnPrimaryText}>{t("voice.confirm")}</Text>
+                </Pressable>
+              ) : null}
               <Pressable
-                style={[styles.btn, styles.btnPrimary, styles.confirmBtn, events.length === 0 && styles.btnDisabled]}
-                disabled={events.length === 0}
-                onPress={() => onConfirmAll({ rawTranscript, events })}
+                style={[styles.btn, styles.btnGhost, events.length > 0 ? styles.retakeBtn : styles.confirmBtn]}
+                onPress={handleRetake}
               >
-                <Text style={styles.btnPrimaryText}>{t("voice.confirm")}</Text>
-              </Pressable>
-              <Pressable style={[styles.btn, styles.btnGhost, styles.retakeBtn]} onPress={handleRetake}>
                 <Text style={styles.btnGhostText}>{t("voice.retake")}</Text>
+              </Pressable>
+              <Pressable style={[styles.btn, styles.btnGhost, styles.retakeBtn]} onPress={handleManualEntry}>
+                <Text style={styles.btnGhostText}>{t("voice.manualEntry")}</Text>
               </Pressable>
             </ScrollView>
           )}
 
           {stage === "error" && (
             <>
-              <Text style={styles.state}>{t("voice.errorTitle")}</Text>
-              <Text style={styles.errorText}>{errorText}</Text>
-              {recordingError === "transcribeFailed" && (
+              <Text
+                style={styles.state}
+                accessibilityLiveRegion="assertive"
+                accessibilityRole="alert"
+              >
+                {recordingError === "transcribeFailed" ? t("voice.transcribeFailed") : t("voice.errorTitle")}
+              </Text>
+              {recordingError !== "transcribeFailed" ? (
+                <Text style={styles.errorText}>{errorText}</Text>
+              ) : (
                 <Text style={styles.errorHint}>{t("voice.transcribeFailedHint")}</Text>
               )}
               <View style={styles.errorActions}>
-                {canRetry && (
-                  <Pressable style={[styles.btn, styles.btnPrimary, styles.stopBtn]} onPress={handleRetryAnalyze}>
-                    <Text style={styles.btnPrimaryText}>{t("voice.retryAnalyze")}</Text>
-                  </Pressable>
-                )}
                 <Pressable
-                  style={[styles.btn, styles.btnPrimary, styles.stopBtn, !canRetry && { marginTop: 0 }]}
-                  onPress={handleRetake}
+                  style={[styles.btn, styles.btnPrimary, styles.stopBtn]}
+                  onPress={recordingError === "transcribeFailed" && canRetry ? handleRetryAnalyze : handleRetake}
+                  accessibilityRole="button"
+                  accessibilityLabel={recordingError === "transcribeFailed" ? t("voice.retry") : t("voice.retake")}
                 >
-                  <Text style={styles.btnPrimaryText}>{t("voice.retake")}</Text>
+                  <Text style={styles.btnPrimaryText}>
+                    {recordingError === "transcribeFailed" ? t("voice.retry") : t("voice.retake")}
+                  </Text>
                 </Pressable>
                 <Pressable
                   style={[styles.btn, styles.btnGhost, styles.stopBtn]}
-                  onPress={() => {
-                    clearSavedNote();
-                    clearRecordingError();
-                    onManualEntry();
-                  }}
+                  onPress={handleManualEntry}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("voice.manualEntry")}
                 >
                   <Text style={styles.btnGhostText}>{t("voice.manualEntry")}</Text>
                 </Pressable>
               </View>
             </>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
       {children}
     </Modal>
   );
@@ -456,6 +528,18 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   stage: { width: "100%", maxHeight: "92%", alignItems: "center" },
+  closeBtn: {
+    alignSelf: "flex-end",
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    marginBottom: 4,
+  },
+  closeBtnText: { color: "#A39E96", fontSize: 14, fontWeight: "700" },
+  listenActions: { flexDirection: "row", gap: 10, width: "100%" },
+  listenBtn: { flex: 1 },
   resultScroll: { width: "100%" },
   resultScrollContent: { alignItems: "stretch", paddingBottom: 8 },
   state: {
@@ -477,23 +561,6 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   hint: { fontSize: 13, color: "#A39E96", textAlign: "center", marginBottom: 20 },
-  demoTitle: {
-    marginTop: 18,
-    marginBottom: 9,
-    color: "#A39E96",
-    fontSize: 11.5,
-    fontWeight: "700",
-  },
-  demoPhrases: { width: "100%", gap: 7 },
-  demoPhrase: {
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  demoPhraseText: { color: "#FEF7F2", fontSize: 13, textAlign: "center", fontWeight: "600" },
   analyzingText: { color: "#D8D2CB", fontSize: 14, textAlign: "center", lineHeight: 22, paddingHorizontal: 8 },
   errorText: { fontSize: 14, color: "#D8D2CB", textAlign: "center", lineHeight: 22, marginBottom: 10 },
   errorHint: { fontSize: 12.5, color: "#A39E96", textAlign: "center", lineHeight: 20, marginBottom: 18 },
@@ -549,7 +616,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   transcriptBody: { color: "#D8D2CB", fontSize: 13.5, lineHeight: 20 },
-  actions: { flexDirection: "row", gap: 10, width: "100%" },
   btn: { borderRadius: 14, paddingVertical: 13, alignItems: "center" },
   stopBtn: { width: "100%" },
   confirmBtn: { width: "100%", marginTop: 6 },

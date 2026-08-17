@@ -164,6 +164,39 @@ export function completedSixDaySummary(
   };
 }
 
+export type WeeklySummary = {
+  /** 최근 6일 중 기록이 하나라도 있는 날 수. */
+  recordedDays: number;
+  lines: string[];
+};
+
+/**
+ * 최근 6일(오늘 제외) 흐름을 문장으로 정리한다.
+ * 오늘을 빼는 이유: 아직 끝나지 않은 날이라 평균을 끌어내리고, 오늘 얘기는 오늘 요약이 한다.
+ */
+export function buildWeeklySummary(logs: BabyLogEntry[], now = new Date()): WeeklySummary {
+  const past6 = weeklyTrend(logs, now).slice(0, 6);
+  const recorded = past6.filter((day) => day.totalCount > 0);
+  if (recorded.length < 3) return { recordedDays: recorded.length, lines: [] };
+
+  const avg = (pick: (day: DayAggregate) => number) => {
+    const days = recorded.filter((day) => pick(day) > 0);
+    if (!days.length) return null;
+    return days.reduce((sum, day) => sum + pick(day), 0) / days.length;
+  };
+
+  const feed = avg((day) => day.feedingCount);
+  const sleep = avg((day) => day.sleepMinutes);
+  const diaper = avg((day) => day.diaperCount);
+
+  const lines: string[] = [];
+  if (feed !== null) lines.push(`요즘 하루 평균 ${Math.round(feed)}번 정도 먹어요.`);
+  if (sleep !== null) lines.push(`잠은 하루 평균 ${formatSleepDuration(Math.round(sleep))} 정도예요.`);
+  if (diaper !== null) lines.push(`기저귀는 하루 평균 ${Math.round(diaper)}번 정도 갈아요.`);
+
+  return { recordedDays: recorded.length, lines };
+}
+
 export type FeedingVolumeSummary = {
   ml: number;
   oz: number;

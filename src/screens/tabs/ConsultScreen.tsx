@@ -40,6 +40,7 @@ const HAS_AI_SERVER = Boolean((process.env.EXPO_PUBLIC_TRANSCRIBE_URL ?? "").tri
 
 type ConsultRouteParams = {
   initialQuestion?: string;
+  focusInput?: boolean;
 };
 
 type ConsultNav = BottomTabNavigationProp<
@@ -163,12 +164,17 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
   useEffect(() => {
     if (!storageReady) return;
     const question = route.params?.initialQuestion?.trim();
-    if (!question) return;
-    if (consumedInitialRef.current === question) return;
-    consumedInitialRef.current = question;
-    setInput(question);
-    navigation.setParams({ initialQuestion: undefined });
-    const focus = setTimeout(() => inputRef.current?.focus(), 80);
+    const shouldFocus = Boolean(question) || route.params?.focusInput;
+    if (!question && !route.params?.focusInput) return;
+    if (question) {
+      if (consumedInitialRef.current === question) return;
+      consumedInitialRef.current = question;
+      setInput(question);
+    }
+    navigation.setParams({ initialQuestion: undefined, focusInput: undefined });
+    const focus = setTimeout(() => {
+      if (shouldFocus) inputRef.current?.focus();
+    }, 80);
     const clear = setTimeout(() => {
       consumedInitialRef.current = null;
     }, 500);
@@ -176,7 +182,7 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
       clearTimeout(focus);
       clearTimeout(clear);
     };
-  }, [storageReady, route.params?.initialQuestion]);
+  }, [storageReady, route.params?.initialQuestion, route.params?.focusInput, navigation]);
 
   const lastAiText = useMemo(() => {
     const last = [...chatHistory].reverse().find((m) => m.role === "ai" && m.id !== "greet-1" && m.text.trim());

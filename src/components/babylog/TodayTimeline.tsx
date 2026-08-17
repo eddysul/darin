@@ -79,34 +79,40 @@ export function TodayTimeline({
     </View>
   );
 
+  const empty =
+    listEmpty !== undefined
+      ? <View>{listEmpty}</View>
+      : sorted.length === 0
+        ? <Text style={styles.empty}>아직 기록이 없어요. 위에서 기록해 보세요.</Text>
+        : null;
+
   return (
     <FlatList
-      data={visible}
-      keyExtractor={(entry) => entry.id}
+      data={visible.length > 0 ? [{ id: "timeline-card" }] : []}
+      keyExtractor={(item) => item.id}
       style={styles.list}
       contentContainerStyle={contentContainerStyle}
       ListHeaderComponent={header}
-      ListEmptyComponent={
-        listEmpty !== undefined
-          ? <View>{listEmpty}</View>
-          : sorted.length === 0
-            ? <Text style={styles.empty}>아직 기록이 없어요. 위에서 기록해 보세요.</Text>
-            : null
-      }
-      extraData={`${highlightId ?? ""}-${expanded}-${visible.length}`}
-      initialNumToRender={8}
-      windowSize={7}
+      ListEmptyComponent={empty}
+      extraData={`${highlightId ?? ""}-${expanded}-${visible.map((entry) => entry.id).join(",")}`}
+      initialNumToRender={1}
+      windowSize={3}
       removeClippedSubviews={false}
-      renderItem={({ item, index }) => (
-        <SwipeableTimelineRow
-          entry={item}
-          customCategories={customCategories}
-          isFirst={index === 0}
-          isLast={index === visible.length - 1}
-          highlighted={highlightId === item.id}
-          onPress={() => onPress(item)}
-          onDelete={onDelete ? () => onDelete(item) : undefined}
-        />
+      renderItem={() => (
+        <View style={styles.card}>
+          {visible.map((item, index) => (
+            <SwipeableTimelineRow
+              key={item.id}
+              entry={item}
+              customCategories={customCategories}
+              isFirst={index === 0}
+              isLast={index === visible.length - 1}
+              highlighted={highlightId === item.id}
+              onPress={() => onPress(item)}
+              onDelete={onDelete ? () => onDelete(item) : undefined}
+            />
+          ))}
+        </View>
       )}
       {...scrollProps}
     />
@@ -178,7 +184,7 @@ function SwipeableTimelineRow({
   });
 
   return (
-    <View style={[styles.swipeWrap, isFirst && styles.swipeFirst, isLast && styles.swipeLast]}>
+    <View style={styles.swipeWrap}>
       <Animated.View style={[styles.deleteUnderlay, { opacity: underlayOpacity }]} pointerEvents="none">
         <Text style={styles.deleteText}>삭제</Text>
       </Animated.View>
@@ -255,28 +261,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  card: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    marginBottom: 24,
+  },
   swipeWrap: {
     position: "relative",
     overflow: "hidden",
     backgroundColor: colors.card,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: colors.border,
-  },
-  swipeFirst: {
-    borderTopWidth: 1,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-  },
-  swipeLast: {
-    borderBottomWidth: 1,
-    borderBottomLeftRadius: radius.lg,
-    borderBottomRightRadius: radius.lg,
-    marginBottom: 24,
   },
   rowSurface: { backgroundColor: colors.card, paddingHorizontal: 12 },
-  rowSurfaceFirst: { paddingTop: 5, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
-  rowSurfaceLast: { paddingBottom: 5, borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg },
+  rowSurfaceFirst: { paddingTop: 5 },
+  rowSurfaceLast: { paddingBottom: 5 },
   rowHighlight: { backgroundColor: "rgba(232,145,138,0.14)" },
   deleteUnderlay: {
     ...StyleSheet.absoluteFillObject,

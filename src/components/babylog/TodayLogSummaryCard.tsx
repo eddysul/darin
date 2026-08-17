@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dimensions,
   NativeScrollEvent,
@@ -89,6 +89,18 @@ function latestTime(logs: BabyLogEntry[], predicate: (entry: BabyLogEntry) => bo
     )?.time;
 }
 
+function formatLastAgo(time: string | undefined, isToday: boolean, now: Date): string {
+  if (!time) return "아직 없음";
+  if (!isToday) return time;
+  const current = now.getHours() * 60 + now.getMinutes();
+  const recorded = toMinutes(time);
+  let diff = current - recorded;
+  if (diff < 0) diff += 24 * 60;
+  if (diff < 1) return "방금";
+  if (diff < 60) return `${diff}분 전`;
+  return `${Math.floor(diff / 60)}시간 전`;
+}
+
 export function TodayLogSummaryCard({
   logs,
   dateKey = formatDateKey(),
@@ -100,9 +112,16 @@ export function TodayLogSummaryCard({
 }: Props) {
   const compact = useCompactLayout();
   const [page, setPage] = useState(0);
+  const [now, setNow] = useState(() => new Date());
   const isToday = dateKey === formatDateKey();
   const title = isToday ? "오늘 요약" : "하루 요약";
   const dateLabel = dayNavLabel(dateKey);
+
+  useEffect(() => {
+    if (!isToday) return;
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, [isToday]);
 
   const metrics = useMemo(() => {
     const feedingCount = countCat(logs, FEEDING_CATS);
@@ -206,6 +225,11 @@ export function TodayLogSummaryCard({
         label: extra.label,
         value: `${n}회`,
         detail: extra.detail?.(),
+        recentTime: latestTime(
+          logs,
+          (entry) =>
+            !isCustomCategoryKey(entry.cat) && extra.cats.includes(entry.cat as BabyLogCategoryId),
+        ),
         cat: extra.cat,
       });
     }
@@ -297,8 +321,15 @@ export function TodayLogSummaryCard({
               <Text style={[styles.metricDetail, !metric.detail && styles.metricDetailEmpty]}>
                 {metric.detail ?? " "}
               </Text>
-              <Text style={[styles.metricRecent, !metric.recentTime && styles.metricRecentEmpty]}>
-                {metric.recentTime ? `최근 ${metric.recentTime}` : "최근 없음"}
+              <Text
+                style={[styles.metricRecent, !metric.recentTime && styles.metricRecentEmpty]}
+                accessibilityLabel={
+                  metric.recentTime
+                    ? `마지막 ${metric.label} ${formatLastAgo(metric.recentTime, isToday, now)}`
+                    : `${metric.label} 아직 없음`
+                }
+              >
+                {formatLastAgo(metric.recentTime, isToday, now)}
               </Text>
             </View>
           );
@@ -411,7 +442,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
   },
-  metricRecentEmpty: { color: "transparent" },
+  metricRecentEmpty: { color: colors.faint, fontWeight: "600" },
   pageDots: {
     marginTop: 12,
     flexDirection: "row",

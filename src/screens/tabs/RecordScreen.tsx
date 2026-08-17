@@ -797,6 +797,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
           setConsultPromptOpen(false);
           onOpenConsult(question);
         }}
+        onAskFreely={() => {
+          setConsultPromptOpen(false);
+          onOpenConsult();
+        }}
       />
 
       <RecordCreatedToast

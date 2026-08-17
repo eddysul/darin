@@ -676,6 +676,10 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
           setPromptOpen(false);
           onOpenConsult(question);
         }}
+        onAskFreely={() => {
+          setPromptOpen(false);
+          onOpenConsult();
+        }}
       />
     </View>
   );

@@ -14,21 +14,40 @@ import type { BabyLogEntry } from "../../types/babyLog";
 import { formatDateKey } from "../../utils/dateKey";
 import {
   buildTodaySummary,
+  buildWeeklySummary,
   categoryCountsLast7,
-  completedSixDaySummary,
   FEEDING_CATS,
   formatSleepDuration,
   getLogsForDay,
-  recentFeedingSleepPattern,
   summarizeFeedingVolumes,
   weeklyTrend,
-  type FeedingSleepPatternBucket,
 } from "../../utils/reportAggregates";
 import { colors, categoryColors, radius } from "../../theme";
 import { formatDisplayTime } from "../../utils/logSummary";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import type { GrowthRecord } from "../../types/growthRecord";
 import { formatTemperature, formatWeight, lengthFromCm } from "../../utils/measurementFormat";
+import {
+  formatScheduleTiming,
+  nextByKind,
+  type ResolvedScheduleItem,
+  type ScheduleKind,
+} from "../../constants/childCareSchedule";
+import {
+  buildLastFeedSleepDistribution,
+  type DistributionBucket,
+} from "../../utils/careInsights";
+
+/** 가장 큰 값을 100%로 두되, 짧은 막대도 보이게 최소폭을 준다. */
+function barPercent(value: number, buckets: DistributionBucket[]): number {
+  const max = Math.max(...buckets.map((bucket) => bucket.value), 1);
+  return Math.max(8, Math.round((value / max) * 100));
+}
+
+/** 실제 일정이거나, 데이터 확정 전 자리만 잡은 행이거나. */
+type CareScheduleRow =
+  | { kind: ScheduleKind; item: ResolvedScheduleItem }
+  | { kind: "checkup" | "vaccine"; pendingLabel: string };
 
 type Props = {
   onOpenProfile: () => void;
@@ -48,6 +67,7 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifica
   const [growthModalOpen, setGrowthModalOpen] = useState(false);
   const [editingGrowthRecord, setEditingGrowthRecord] = useState<GrowthRecord | null>(null);
   const [chipPressing, setChipPressing] = useState(false);
+  const [rhythmOpen, setRhythmOpen] = useState(false);
   const { fabHidden, promptOpen, setPromptOpen, scrollProps } = useConsultFabBehavior(
     chipPressing || growthModalOpen,
   );
@@ -93,26 +113,34 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifica
     () => todayLogs.some((entry) => entry.cat === "sleep" || entry.cat === "diaper" || isFeedingLog(entry)),
     [todayLogs],
   );
-  const weeklySummary = useMemo(() => completedSixDaySummary(logs), [logs]);
-  const recentPattern = useMemo(() => recentFeedingSleepPattern(logs), [logs]);
-  const latestTempLog = useMemo(
-    () => [...todayLogs].reverse().find((entry) => entry.cat === "temp") ?? null,
-    [todayLogs],
-  );
-  const nextCheckup = useMemo(
-    () => findNextUserSchedule(logs, (entry) => entry.cat === "doctor" && entry.visitType === "checkup"),
-    [logs],
-  );
-  const nextVaccination = useMemo(
-    () => findNextUserSchedule(logs, (entry) => entry.cat === "vaccination"),
-    [logs],
-  );
+  const weekly = useMemo(() => buildWeeklySummary(logs), [logs]);
+  const distribution = useMemo(() => buildLastFeedSleepDistribution(logs, todayKey), [logs, todayKey]);
+  const healthSignals = useMemo(() => buildHealthSignals(todayLogs), [todayLogs]);
+  const schedule = useMemo<CareScheduleRow[]>(() => {
+    const birthDate = careSetup.child.birthDate;
+    if (!birthDate) return [];
+    const kinds: { kind: ScheduleKind; pending: string }[] = [
+      { kind: "checkup", pending: "다음 건강검진" },
+      { kind: "vaccine", pending: "다음 예방접종" },
+      { kind: "safety", pending: "" },
+    ];
+    return kinds.flatMap(({ kind, pending }): CareScheduleRow[] => {
+      const item = nextByKind(birthDate, kind);
+      if (item) return [{ kind, item }];
+      return kind === "safety" || !pending ? [] : [{ kind, pendingLabel: pending }];
+    });
+  }, [careSetup.child.birthDate]);
   const isBirthday = useMemo(() => {
     const birthDate = careSetup.child.birthDate;
     if (!birthDate) return false;
     const today = formatDateKey();
     return birthDate.slice(5) === today.slice(5);
   }, [careSetup.child.birthDate]);
+
+  const medicalSchedule = schedule.filter((row) => row.kind === "checkup" || row.kind === "vaccine");
+  const safetySchedule = schedule.filter((row): row is { kind: "safety"; item: ResolvedScheduleItem } => (
+    row.kind === "safety" && "item" in row
+  ));
 
   const todayFor = (catId: Exclude<ReportCat, "all">) => todayLogs.filter((entry) => (
     catId === "feeding" ? isFeedingLog(entry) : entry.cat === catId
@@ -124,29 +152,41 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifica
       <ScrollView showsVerticalScrollIndicator={false} {...scrollProps}>
         {reportCat === "all" ? (
           <View style={styles.pad}>
-            <DashboardCard title="건강 신호">
-              {latestTempLog ? (
-                <View style={styles.healthSignal}>
-                  <View style={styles.healthSignalIcon}><BabyLogIcon catId="temp" size={22} /></View>
-                  <View style={styles.healthSignalBody}>
-                    <Text style={styles.healthSignalTitle}>오늘 체온 기록이 있어요.</Text>
-                    <Text style={styles.healthSignalValue}>
-                      최근 체온 {formatTemperature(latestTempLog.amount ?? latestTempLog.amountValue ?? "")} · {latestTempLog.chip ? `${latestTempLog.chip} · ` : ""}{formatDisplayTime(latestTempLog.time)}
-                    </Text>
-                    <Text style={styles.healthSignalHelp}>측정 부위와 아기 상태를 함께 확인해 주세요. 필요하면 담당 의료진과 확인해 주세요.</Text>
-                  </View>
+            {healthSignals.length > 0 ? (
+              <DashboardCard title="건강 신호" tone="warning">
+                <View style={styles.signalList}>
+                  {healthSignals.map((signal) => (
+                    <View key={signal.id} style={styles.signalRow}>
+                      <Text style={styles.signalTime}>{signal.time}</Text>
+                      <Text style={styles.signalText}>{signal.text}</Text>
+                    </View>
+                  ))}
                 </View>
-              ) : <DashboardEmpty title="오늘 체온 기록이 없어요." compact />}
-            </DashboardCard>
+              </DashboardCard>
+            ) : null}
 
             <DashboardCard title="오늘 요약" caption={`${new Date().getMonth() + 1}월 ${new Date().getDate()}일 기준`}>
               {summary.totalCount > 0 ? (
-                <View style={styles.summaryGrid}>
-                  <SummaryMetric icon="formula" label="수유" value={`${summary.feedCount}회`} sub={dashboard.feedVolumeLabel} onPress={() => setReportCat("feeding")} />
-                  <SummaryMetric icon="sleep" label="수면" value={formatSleepDuration(summary.totalSleepMinutes)} sub={`낮잠 ${summary.sleepCount}회`} onPress={() => setReportCat("sleep")} />
-                  <SummaryMetric icon="diaper" label="기저귀" value={`${summary.diaperCount}회`} sub={`대변 ${dashboard.stoolCount}회`} onPress={() => setReportCat("diaper")} />
-                  <SummaryMetric icon="clock" label="마지막 수유" value={dashboard.lastFeedAgo} sub={summary.lastFeedAt ? formatDisplayTime(summary.lastFeedAt) : "기록 없음"} onPress={() => setReportCat("feeding")} last />
-                </View>
+                <>
+                  <View style={styles.summaryGrid}>
+                    <SummaryMetric icon="formula" label="수유" value={`${summary.feedCount}회`} sub={dashboard.feedVolumeLabel} onPress={() => setReportCat("feeding")} />
+                    <SummaryMetric icon="sleep" label="수면" value={formatSleepDuration(summary.totalSleepMinutes)} sub={`낮잠 ${summary.sleepCount}회`} onPress={() => setReportCat("sleep")} />
+                    <SummaryMetric icon="diaper" label="기저귀" value={`${summary.diaperCount}회`} sub={`대변 ${dashboard.stoolCount}회`} onPress={() => setReportCat("diaper")} last />
+                  </View>
+                  <Pressable
+                    style={styles.lastFeedRow}
+                    onPress={() => setReportCat("feeding")}
+                    accessibilityRole="button"
+                    accessibilityLabel={`마지막 수유 ${dashboard.lastFeedAgo}`}
+                  >
+                    <BabyLogIcon kind="clock" size={16} color="#E9A353" />
+                    <Text style={styles.lastFeedLabel}>마지막 수유</Text>
+                    <Text style={styles.lastFeedValue}>{dashboard.lastFeedAgo}</Text>
+                    {summary.lastFeedAt ? (
+                      <Text style={styles.lastFeedTime}>{formatDisplayTime(summary.lastFeedAt)}</Text>
+                    ) : null}
+                  </Pressable>
+                </>
               ) : (
                 <DashboardEmpty
                   icon="record"
@@ -157,18 +197,18 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifica
               )}
             </DashboardCard>
 
-            <DashboardCard title="주간 요약" caption="오늘을 제외한 지난 6일">
-              {weeklySummary.recordedDayCount >= 3 ? (
-                <>
-                  <View style={styles.weeklyGrid}>
-                    <WeeklyMetric label="평균 수유" value={`${formatAverage(weeklySummary.averageFeedingCount)}회`} />
-                    <WeeklyMetric label="평균 수면" value={formatSleepDuration(Math.round(weeklySummary.averageSleepMinutes))} />
-                    <WeeklyMetric label="평균 기저귀" value={`${formatAverage(weeklySummary.averageDiaperCount)}회`} last />
-                  </View>
-                  <View style={styles.evidenceBadge}><Text style={styles.evidenceBadgeText}>지난 6일 중 기록된 {weeklySummary.recordedDayCount}일 기준</Text></View>
-                </>
+            <DashboardCard
+              title="주간 요약"
+              caption={weekly.lines.length > 0 ? `최근 6일 중 ${weekly.recordedDays}일 기록 기준` : undefined}
+            >
+              {weekly.lines.length > 0 ? (
+                <View style={styles.weeklyList}>
+                  {weekly.lines.map((line) => (
+                    <Text key={line} style={styles.weeklyLine}>{line}</Text>
+                  ))}
+                </View>
               ) : (
-                <DashboardEmpty title={`기록이 3일 이상 쌓이면 주간 흐름을 보여드릴게요. 현재 ${weeklySummary.recordedDayCount}일 기록`} compact />
+                <DashboardEmpty title="3일 이상 기록이 쌓이면 요즘 흐름을 문장으로 정리해드릴게요." compact />
               )}
             </DashboardCard>
 
@@ -199,37 +239,65 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifica
             <DashboardCard title="오늘의 리듬">
               {hasRhythmData ? (
                 <>
-                  <View style={styles.rhythmContent}>
-                    <RhythmDial logs={todayLogs} />
-                    <View style={styles.rhythmNotes}>
-                      {dashboard.rhythmNotes.map((text) => <Text key={text} style={styles.rhythmNote}>• {text}</Text>)}
-                    </View>
+                  <View style={styles.rhythmNotes}>
+                    {dashboard.rhythmNotes.map((text) => (
+                      <Text key={text} style={styles.rhythmNote}>{text}</Text>
+                    ))}
                   </View>
-                  <View style={styles.rhythmLegend}>
-                    <LegendDot color={categoryColors.sleep} label="수면" />
-                    <LegendDot color={categoryColors.formula} label="수유" />
-                    <LegendDot color={categoryColors.diaper} label="기저귀" />
-                  </View>
+                  <Pressable
+                    style={styles.rhythmToggle}
+                    onPress={() => setRhythmOpen((open) => !open)}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: rhythmOpen }}
+                    accessibilityLabel={rhythmOpen ? "24시간 그림 접기" : "24시간 그림 보기"}
+                  >
+                    <Text style={styles.rhythmToggleText}>{rhythmOpen ? "24시간 그림 접기" : "24시간 그림 보기"}</Text>
+                  </Pressable>
+                  {rhythmOpen ? (
+                    <>
+                      <View style={styles.rhythmContent}>
+                        <RhythmDial logs={todayLogs} />
+                      </View>
+                      <View style={styles.rhythmLegend}>
+                        <LegendDot color={categoryColors.sleep} label="수면" />
+                        <LegendDot color={categoryColors.formula} label="수유" />
+                        <LegendDot color={categoryColors.diaper} label="기저귀" />
+                      </View>
+                    </>
+                  ) : null}
                 </>
               ) : <DashboardEmpty title="수유/수면/기저귀 기록이 쌓이면 하루 리듬을 보여드릴게요." compact />}
             </DashboardCard>
 
-            <DashboardCard title="최근 21일 패턴" icon="sparkles">
-              {recentPattern.validDayCount >= 9 ? (
-                <>
-                  <Text style={styles.patternIntro}>마지막 수유 시각과 같은 날의 총 수면 기록을 세 구간으로 나눠 비교했어요.</Text>
-                  <View style={styles.patternGrid}>
-                    {recentPattern.buckets.map((bucket, index) => (
-                      <PatternMetric key={bucket.key} bucket={bucket} last={index === recentPattern.buckets.length - 1} />
-                    ))}
+            {distribution ? (
+              <DashboardCard
+                title="수유 시각과 잠"
+                icon="sparkles"
+                caption={`${distribution.totalDays}일 기록 기준`}
+              >
+                <Text style={styles.distSubtitle}>
+                  {distribution.bucketLabel}별 {distribution.valueLabel}
+                </Text>
+                {distribution.buckets.map((bucket) => (
+                  <View key={bucket.name} style={styles.distRow}>
+                    <View style={styles.distLabelCol}>
+                      <Text style={styles.distName}>{bucket.name}</Text>
+                      <Text style={styles.distRange}>{bucket.range}</Text>
+                    </View>
+                    <View style={styles.distBarTrack}>
+                      <View style={[styles.distBarFill, { width: `${barPercent(bucket.value, distribution.buckets)}%` }]} />
+                    </View>
+                    <View style={styles.distValueCol}>
+                      <Text style={styles.distValue}>{formatSleepDuration(Math.round(bucket.value))}</Text>
+                      <Text style={styles.distDays}>{bucket.days}일</Text>
+                    </View>
                   </View>
-                  <View style={styles.evidenceBadge}><Text style={styles.evidenceBadgeText}>유효 기록일 {recentPattern.validDayCount}일 기준</Text></View>
-                  <Text style={styles.patternDisclaimer}>최근 기록에서 함께 나타난 흐름이며, 수유 시각이 수면을 원인적으로 바꾼다는 뜻은 아니에요.</Text>
-                </>
-              ) : <DashboardEmpty title={`최근 기록이 조금 더 쌓이면 패턴을 보여드릴게요. 현재 유효 기록일 ${recentPattern.validDayCount}일`} compact />}
-            </DashboardCard>
+                ))}
+                <Text style={styles.distNote}>관찰된 기록일 뿐, 원인을 뜻하지는 않아요.</Text>
+              </DashboardCard>
+            ) : null}
 
-            <DashboardCard title="마일스톤">
+            <DashboardCard title="발달">
               {isBirthday ? (
                 <View style={styles.birthdayBanner}>
                   <BabyLogIcon kind="cake" size={16} color={colors.amberText} />
@@ -243,17 +311,43 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifica
                   <Text style={styles.milestoneCurrent}>{latestMilestone?.milestoneTag ?? latestMilestone?.customMilestoneTag ?? dashboard.milestone.current}</Text>
                   <Text style={styles.milestoneTip}>다음 단계: {latestMilestone ? "아이가 즐거워하는 동작을 짧게 반복해보세요." : dashboard.milestone.tip}</Text>
                 </View>
-                <Pressable style={styles.tipBtn} onPress={() => onOpenConsult(`${babyName}의 월령에 맞는 발달 놀이 팁을 알려줘`)}>
+                <Pressable
+                  style={styles.tipBtn}
+                  onPress={() => onOpenConsult(`${babyName}의 월령에 맞는 발달 놀이 팁을 알려줘`)}
+                  accessibilityRole="button"
+                  accessibilityLabel="발달 놀이 팁 보기"
+                >
                   <Text style={styles.tipBtnText}>팁 보기</Text>
                 </Pressable>
               </View>
-              <View style={styles.scheduleList}>
-                <ScheduleRow label="다음 검진" schedule={nextCheckup} />
-                <ScheduleRow label="다음 예방접종" schedule={nextVaccination} last />
-              </View>
-              {!nextCheckup && !nextVaccination ? <Text style={styles.scheduleEmpty}>다음 검진이나 예방접종 일정을 직접 추가해 보세요.</Text> : null}
-              <Text style={styles.scheduleFootnote}>사용자가 기록한 일정만 표시해요.</Text>
             </DashboardCard>
+
+            {medicalSchedule.length > 0 || !careSetup.child.birthDate ? (
+              <DashboardCard title="일정">
+                {medicalSchedule.length > 0 ? (
+                  <View style={styles.scheduleListTight}>
+                    {medicalSchedule.map((row) => (
+                      <CareScheduleItem
+                        key={"item" in row ? row.item.id : row.pendingLabel}
+                        row={row}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.scheduleHintInline}>생년월일을 입력하면 검진·접종 일정을 알려드릴게요.</Text>
+                )}
+              </DashboardCard>
+            ) : null}
+
+            {safetySchedule.length > 0 ? (
+              <DashboardCard title="안전">
+                <View style={styles.scheduleListTight}>
+                  {safetySchedule.map((row) => (
+                    <CareScheduleItem key={row.item.id} row={row} />
+                  ))}
+                </View>
+              </DashboardCard>
+            ) : null}
           </View>
         ) : (
           <>
@@ -273,6 +367,10 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifica
         onSelectQuestion={(question) => {
           setPromptOpen(false);
           onOpenConsult(question);
+        }}
+        onAskFreely={() => {
+          setPromptOpen(false);
+          onOpenConsult();
         }}
       />
       <GrowthRecordModal
@@ -361,25 +459,47 @@ function DashboardCard({
   title,
   caption,
   icon,
+  tone,
   children,
 }: {
   title: string;
   caption?: string;
   icon?: "sparkles";
+  tone?: "warning";
   children: ReactNode;
 }) {
+  const warning = tone === "warning";
   return (
-    <View style={styles.dashboardCard}>
+    <View style={[styles.dashboardCard, warning && styles.dashboardCardWarning]}>
       <View style={styles.dashboardHeader}>
         <View style={styles.dashboardTitleRow}>
           {icon ? <BabyLogIcon kind={icon} size={16} color={colors.amberText} strokeWidth={2.1} /> : null}
-          <Text style={styles.dashboardTitle}>{title}</Text>
+          <Text style={[styles.dashboardTitle, warning && styles.dashboardTitleWarning]}>{title}</Text>
         </View>
         {caption ? <Text style={styles.dashboardCaption}>{caption}</Text> : null}
       </View>
       {children}
     </View>
   );
+}
+
+/** 체온 주의 임계 (℃). MVP 임시값 — 의학적 기준 확정 시 교체. */
+const HEALTH_TEMP_THRESHOLD = 37.5;
+
+type HealthSignal = { id: string; time: string; text: string };
+
+function buildHealthSignals(todayLogs: BabyLogEntry[]): HealthSignal[] {
+  return todayLogs
+    .filter((entry) => entry.cat === "temp")
+    .flatMap((entry) => {
+      const value = Number.parseFloat(String(entry.amountValue ?? entry.amount ?? ""));
+      if (!Number.isFinite(value) || value < HEALTH_TEMP_THRESHOLD) return [];
+      return [{
+        id: entry.id,
+        time: formatDisplayTime(entry.time),
+        text: `체온 ${formatTemperature(value)} — 평소보다 높아요.`,
+      }];
+    });
 }
 
 function SummaryMetric({
@@ -398,7 +518,12 @@ function SummaryMetric({
   last?: boolean;
 }) {
   return (
-    <Pressable style={[styles.summaryMetric, last && styles.metricLast]} onPress={onPress}>
+    <Pressable
+      style={[styles.summaryMetric, last && styles.metricLast]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} ${value}`}
+    >
       <View style={[styles.summaryIcon, icon === "sleep" ? styles.summaryIconPurple : icon === "diaper" ? styles.summaryIconMint : undefined]}>
         {icon === "clock" ? <BabyLogIcon kind="clock" size={19} color="#E9A353" /> : <BabyLogIcon catId={icon} size={20} />}
       </View>
@@ -406,6 +531,45 @@ function SummaryMetric({
       <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
       <Text style={styles.summarySub} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{sub}</Text>
     </Pressable>
+  );
+}
+
+function ScheduleKindIcon({ kind, muted }: { kind: ScheduleKind; muted?: boolean }) {
+  const color = muted ? colors.faint : colors.amberText;
+  if (kind === "checkup") return <BabyLogIcon catId="doctor" size={18} color={color} />;
+  if (kind === "vaccine") return <BabyLogIcon catId="vaccination" size={18} color={color} />;
+  return <BabyLogIcon kind="alert" size={18} color={color} />;
+}
+
+function CareScheduleItem({ row }: { row: CareScheduleRow }) {
+  const muted = !("item" in row);
+  return (
+    <View style={styles.careScheduleRow}>
+      <View style={styles.scheduleIconWrap}>
+        <ScheduleKindIcon kind={row.kind} muted={muted} />
+      </View>
+      {"item" in row ? (
+        <>
+          <View style={styles.scheduleBody}>
+            <Text style={styles.careScheduleLabel} numberOfLines={2}>{row.item.label}</Text>
+            <Text style={styles.scheduleWindow}>{row.item.window}</Text>
+          </View>
+          {row.item.kind === "safety" ? null : (
+            <Text style={[styles.scheduleTiming, row.item.active && styles.scheduleTimingActive]}>
+              {formatScheduleTiming(row.item)}
+            </Text>
+          )}
+        </>
+      ) : (
+        <>
+          <View style={styles.scheduleBody}>
+            <Text style={[styles.careScheduleLabel, styles.schedulePending]}>{row.pendingLabel}</Text>
+            <Text style={styles.scheduleWindow}>준비 중</Text>
+          </View>
+          <Text style={[styles.scheduleTiming, styles.schedulePending]}>—</Text>
+        </>
+      )}
+    </View>
   );
 }
 
@@ -426,80 +590,6 @@ function formatGrowthDate(value: string): string {
 
 function formatGrowthLength(value: number, unit: "cm" | "inch"): string {
   return `${lengthFromCm(value, unit)}${unit === "inch" ? "in" : "cm"}`;
-}
-
-function formatAverage(value: number): string {
-  return Number(value.toFixed(1)).toString();
-}
-
-function formatMinutesAsTime(minutes: number): string {
-  const hour24 = Math.floor(minutes / 60) % 24;
-  const minute = minutes % 60;
-  const period = hour24 < 12 ? "오전" : "오후";
-  const hour12 = hour24 % 12 || 12;
-  return `${period} ${hour12}:${String(minute).padStart(2, "0")}`;
-}
-
-type UserSchedule = { dateKey: string; time?: string };
-
-function parseUserSchedule(nextAt?: string): UserSchedule | null {
-  if (!nextAt) return null;
-  const match = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/.exec(nextAt.trim());
-  return match ? { dateKey: match[1], time: match[2] } : null;
-}
-
-function findNextUserSchedule(
-  logs: BabyLogEntry[],
-  predicate: (entry: BabyLogEntry) => boolean,
-  now = new Date(),
-): UserSchedule | null {
-  const todayKey = formatDateKey(now);
-  return logs
-    .filter(predicate)
-    .flatMap((entry) => {
-      const schedule = parseUserSchedule(entry.nextAt);
-      return schedule && schedule.dateKey >= todayKey ? [schedule] : [];
-    })
-    .sort((a, b) => `${a.dateKey} ${a.time ?? "00:00"}`.localeCompare(`${b.dateKey} ${b.time ?? "00:00"}`))[0] ?? null;
-}
-
-function scheduleDayLabel(schedule: UserSchedule): string {
-  const today = new Date();
-  const target = new Date(`${schedule.dateKey}T00:00:00`);
-  const current = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const days = Math.max(0, Math.round((target.getTime() - current.getTime()) / 86_400_000));
-  const [, month, day] = schedule.dateKey.split("-");
-  const date = `${Number(month)}월 ${Number(day)}일${schedule.time ? ` · ${formatDisplayTime(schedule.time)}` : ""}`;
-  return days === 0 ? `${date} · 오늘` : `${date} · ${days}일 남음`;
-}
-
-function WeeklyMetric({ label, value, last }: { label: string; value: string; last?: boolean }) {
-  return (
-    <View style={[styles.weeklyMetric, last && styles.metricLast]}>
-      <Text style={styles.weeklyLabel}>{label}</Text>
-      <Text style={styles.weeklyValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-    </View>
-  );
-}
-
-function PatternMetric({ bucket, last }: { bucket: FeedingSleepPatternBucket; last?: boolean }) {
-  return (
-    <View style={[styles.patternMetric, last && styles.metricLast]}>
-      <Text style={styles.patternLabel}>{bucket.label}</Text>
-      <Text style={styles.patternTime}>{formatMinutesAsTime(bucket.averageLastFeedMinutes)}</Text>
-      <Text style={styles.patternSleep}>수면 {formatSleepDuration(bucket.averageSleepMinutes)}</Text>
-      <Text style={styles.patternCount}>{bucket.dayCount}일</Text>
-    </View>
-  );
-}
-
-function ScheduleRow({ label, schedule, last }: { label: string; schedule: UserSchedule | null; last?: boolean }) {
-  return (
-    <View style={[styles.scheduleRow, last && styles.scheduleRowLast]}>
-      <Text style={styles.scheduleLabel}>{label}</Text>
-      <Text style={[styles.scheduleValue, !schedule && styles.scheduleValueEmpty]}>{schedule ? scheduleDayLabel(schedule) : "입력된 일정 없음"}</Text>
-    </View>
-  );
 }
 
 function growthTrendPath(values: number[]): string {
@@ -843,98 +933,152 @@ const styles = StyleSheet.create({
   },
   dashboardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 13 },
   dashboardTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  dashboardTitle: { fontSize: 15.5, fontWeight: "800", color: colors.text },
-  dashboardCaption: { fontSize: 10.5, fontWeight: "600", color: colors.faint },
+  dashboardTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
+  dashboardTitleWarning: { color: colors.dangerText },
+  dashboardCardWarning: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
+  dashboardCaption: { fontSize: 12, fontWeight: "600", color: colors.faint },
+  weeklyList: { gap: 9 },
+  weeklyLine: { fontSize: 13, lineHeight: 20, color: colors.muted },
+  signalList: { gap: 9 },
+  signalRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  signalTime: { fontSize: 12, fontWeight: "700", color: colors.dangerText, width: 46, fontVariant: ["tabular-nums"] },
+  signalText: { flex: 1, fontSize: 13, lineHeight: 20, color: colors.dangerText },
+  distSubtitle: { fontSize: 12, fontWeight: "700", color: colors.muted, marginBottom: 12 },
+  distRow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 10 },
+  distLabelCol: { width: 72 },
+  distName: { fontSize: 13, fontWeight: "700", color: colors.text },
+  distRange: { fontSize: 12, color: colors.faint, marginTop: 1 },
+  distBarTrack: { flex: 1, height: 9, borderRadius: 5, backgroundColor: colors.cardHi, overflow: "hidden" },
+  distBarFill: { height: "100%", borderRadius: 5, backgroundColor: colors.amber },
+  distValueCol: { width: 68, alignItems: "flex-end" },
+  distValue: { fontSize: 13, fontWeight: "800", color: colors.text, fontVariant: ["tabular-nums"] },
+  distDays: { fontSize: 12, color: colors.faint, marginTop: 1 },
+  distNote: { fontSize: 12, color: colors.faint, lineHeight: 18, marginTop: 3 },
+  careScheduleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  scheduleIconWrap: { width: 28, alignItems: "center" },
+  scheduleBody: { flex: 1, minWidth: 0 },
+  scheduleListTight: { gap: 12 },
+  scheduleHintInline: { fontSize: 13, lineHeight: 20, color: colors.faint },
+  careScheduleLabel: { fontSize: 13, fontWeight: "700", color: colors.text, lineHeight: 20 },
+  scheduleWindow: { fontSize: 12, color: colors.faint, marginTop: 2 },
+  scheduleTiming: { fontSize: 12, fontWeight: "800", color: colors.muted, fontVariant: ["tabular-nums"] },
+  scheduleTimingActive: { color: colors.amberText },
+  schedulePending: { color: colors.faint },
+  scheduleHint: { marginTop: 13, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, fontSize: 12, lineHeight: 18, color: colors.faint },
   summaryGrid: { flexDirection: "row", alignItems: "stretch" },
-  summaryMetric: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 4, borderRightWidth: 1, borderRightColor: colors.border },
+  summaryMetric: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: Platform.OS === "android" ? 48 : 44,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRightWidth: 1,
+    borderRightColor: colors.border,
+  },
+  lastFeedRow: {
+    marginTop: 12,
+    minHeight: Platform.OS === "android" ? 48 : 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 4,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  lastFeedLabel: { fontSize: 13, fontWeight: "700", color: colors.muted },
+  lastFeedValue: { marginLeft: "auto", fontSize: 15, fontWeight: "800", color: colors.text },
+  lastFeedTime: { fontSize: 12, fontWeight: "600", color: colors.faint },
   summaryIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft, marginBottom: 7 },
   summaryIconPurple: { backgroundColor: "rgba(155,130,215,0.14)" },
   summaryIconMint: { backgroundColor: "rgba(105,195,174,0.14)" },
-  summaryLabel: { fontSize: 10.5, color: colors.muted, fontWeight: "600" },
-  summaryValue: { width: "100%", textAlign: "center", fontSize: 15, color: colors.text, fontWeight: "900", marginTop: 4 },
-  summarySub: { maxWidth: "100%", fontSize: 9.5, color: colors.faint, fontWeight: "600", marginTop: 4 },
+  summaryLabel: { fontSize: 12, color: colors.muted, fontWeight: "600" },
+  summaryValue: { width: "100%", textAlign: "center", fontSize: 17, color: colors.text, fontWeight: "900", marginTop: 4 },
+  summarySub: { maxWidth: "100%", fontSize: 12, color: colors.faint, fontWeight: "600", marginTop: 4 },
   dashboardEmpty: { alignItems: "center", paddingVertical: 16, paddingHorizontal: 14 },
   dashboardEmptyCompact: { paddingVertical: 12 },
   dashboardEmptyIcon: { width: 44, height: 44, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft, marginBottom: 9 },
-  dashboardEmptyText: { color: colors.muted, fontSize: 12.5, lineHeight: 19, textAlign: "center" },
+  dashboardEmptyText: { color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center" },
   dashboardEmptyBtn: { marginTop: 12, minWidth: 140, alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.amber },
-  dashboardEmptyBtnText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+  dashboardEmptyBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   healthSignal: { flexDirection: "row", alignItems: "flex-start", gap: 11, borderRadius: 14, padding: 12, backgroundColor: "rgba(233,163,83,0.10)" },
   healthSignalIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
   healthSignalBody: { flex: 1, minWidth: 0 },
   healthSignalTitle: { fontSize: 13, fontWeight: "800", color: colors.text },
   healthSignalValue: { marginTop: 4, fontSize: 12, fontWeight: "700", color: colors.muted, lineHeight: 18 },
-  healthSignalHelp: { marginTop: 5, fontSize: 10.5, lineHeight: 16, color: colors.faint },
+  healthSignalHelp: { marginTop: 5, fontSize: 12, lineHeight: 18, color: colors.faint },
   weeklyGrid: { flexDirection: "row", alignItems: "stretch" },
   weeklyMetric: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 6, borderRightWidth: 1, borderRightColor: colors.border },
-  weeklyLabel: { fontSize: 10.5, fontWeight: "700", color: colors.muted },
-  weeklyValue: { width: "100%", marginTop: 7, textAlign: "center", fontSize: 14, fontWeight: "900", color: colors.text },
+  weeklyLabel: { fontSize: 12, fontWeight: "700", color: colors.muted },
+  weeklyValue: { width: "100%", marginTop: 7, textAlign: "center", fontSize: 15, fontWeight: "900", color: colors.text },
   evidenceBadge: { alignSelf: "center", marginTop: 13, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.backgroundSecondary },
-  evidenceBadgeText: { fontSize: 10, fontWeight: "700", color: colors.faint },
+  evidenceBadgeText: { fontSize: 12, fontWeight: "700", color: colors.faint },
   growthGrid: { flexDirection: "row" },
   growthMetric: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 7, borderRightWidth: 1, borderRightColor: colors.border },
   metricLast: { borderRightWidth: 0 },
-  growthLabel: { fontSize: 11, fontWeight: "700", color: colors.muted, alignSelf: "flex-start" },
-  growthValue: { width: "100%", fontSize: 16, fontWeight: "900", color: colors.text, marginTop: 6 },
+  growthLabel: { fontSize: 12, fontWeight: "700", color: colors.muted, alignSelf: "flex-start" },
+  growthValue: { width: "100%", fontSize: 17, fontWeight: "900", color: colors.text, marginTop: 6 },
   growthValueEmpty: { fontSize: 12, color: colors.faint, fontWeight: "700" },
-  growthNote: { width: "100%", fontSize: 9.5, color: colors.faint, marginTop: 3 },
+  growthNote: { width: "100%", fontSize: 12, color: colors.faint, marginTop: 3 },
   growthLegend: { flexDirection: "row", justifyContent: "center", gap: 14, marginTop: 10 },
-  growthLegendText: { fontSize: 9.5, fontWeight: "700", color: colors.faint },
+  growthLegendText: { fontSize: 12, fontWeight: "700", color: colors.faint },
   growthActions: { flexDirection: "row", gap: 8, marginTop: 14 },
   growthSecondaryBtn: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  growthSecondaryText: { fontSize: 11.5, fontWeight: "800", color: colors.amberText },
+  growthSecondaryText: { fontSize: 13, fontWeight: "800", color: colors.amberText },
   growthEditBtn: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi },
-  growthEditText: { fontSize: 11.5, fontWeight: "700", color: colors.text },
+  growthEditText: { fontSize: 13, fontWeight: "700", color: colors.text },
   growthEmpty: { alignItems: "center", paddingHorizontal: 12, paddingBottom: 4 },
   growthEmptyIcon: { width: 48, height: 48, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#E7F5F0", marginBottom: 10 },
-  growthEmptyTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
-  growthEmptyBody: { maxWidth: 300, marginTop: 6, fontSize: 11.5, lineHeight: 17, textAlign: "center", color: colors.faint },
+  growthEmptyTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
+  growthEmptyBody: { maxWidth: 300, marginTop: 6, fontSize: 13, lineHeight: 20, textAlign: "center", color: colors.faint },
   growthEmptyBtn: { marginTop: 13, minWidth: 150, alignItems: "center", paddingHorizontal: 18, paddingVertical: 11, borderRadius: 13, backgroundColor: colors.amber },
-  growthEmptyBtnText: { fontSize: 12.5, fontWeight: "800", color: colors.amberDark },
+  growthEmptyBtnText: { fontSize: 13, fontWeight: "800", color: colors.amberDark },
   highlightList: { gap: 10 },
   highlightRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   highlightDot: { width: 9, height: 9, borderRadius: 5, marginTop: 5 },
-  highlightText: { flex: 1, fontSize: 12.5, lineHeight: 19, color: colors.muted },
-  rhythmContent: { alignItems: "center", gap: 2 },
+  highlightText: { flex: 1, fontSize: 13, lineHeight: 20, color: colors.muted },
+  rhythmContent: { alignItems: "center", gap: 2, marginTop: 8 },
   dialWrap: { width: 224, height: 224 },
-  rhythmNotes: { width: "100%", gap: 6, paddingHorizontal: 4 },
-  rhythmNote: { fontSize: 11.5, lineHeight: 17, color: colors.muted },
-  rhythmLegend: { flexDirection: "row", justifyContent: "center", gap: 16, marginTop: -4 },
+  rhythmNotes: { width: "100%", gap: 8, paddingHorizontal: 2 },
+  rhythmNote: { fontSize: 13, lineHeight: 20, color: colors.muted },
+  rhythmToggle: {
+    alignSelf: "flex-start",
+    marginTop: 10,
+    minHeight: Platform.OS === "android" ? 48 : 44,
+    justifyContent: "center",
+    paddingHorizontal: 2,
+  },
+  rhythmToggleText: { fontSize: 13, fontWeight: "800", color: colors.amberText },
+  rhythmLegend: { flexDirection: "row", justifyContent: "center", gap: 16, marginTop: 4 },
   compactInsight: { flexDirection: "row", alignItems: "center", gap: 10 },
   trendIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.amber },
   trendIconText: { fontSize: 22, fontWeight: "800", color: "#FFF" },
-  compactInsightText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: colors.muted },
+  compactInsightText: { flex: 1, fontSize: 13, lineHeight: 20, color: colors.muted },
   detailBtn: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.cardHi },
-  detailBtnText: { fontSize: 10.5, fontWeight: "700", color: colors.text },
-  patternIntro: { fontSize: 11.5, lineHeight: 17, color: colors.muted, marginBottom: 12 },
+  detailBtnText: { fontSize: 12, fontWeight: "700", color: colors.text },
+  patternIntro: { fontSize: 13, lineHeight: 20, color: colors.muted, marginBottom: 12 },
   patternGrid: { flexDirection: "row", alignItems: "stretch" },
   patternMetric: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 5, borderRightWidth: 1, borderRightColor: colors.border },
-  patternLabel: { fontSize: 10, fontWeight: "800", color: colors.muted },
-  patternTime: { width: "100%", marginTop: 5, textAlign: "center", fontSize: 11.5, fontWeight: "800", color: colors.text },
-  patternSleep: { width: "100%", marginTop: 4, textAlign: "center", fontSize: 10, color: colors.muted },
-  patternCount: { marginTop: 3, fontSize: 9.5, color: colors.faint },
-  patternDisclaimer: { marginTop: 11, fontSize: 10, lineHeight: 15, textAlign: "center", color: colors.faint },
+  patternLabel: { fontSize: 12, fontWeight: "800", color: colors.muted },
+  patternTime: { width: "100%", marginTop: 5, textAlign: "center", fontSize: 13, fontWeight: "800", color: colors.text },
+  patternSleep: { width: "100%", marginTop: 4, textAlign: "center", fontSize: 12, color: colors.muted },
+  patternCount: { marginTop: 3, fontSize: 12, color: colors.faint },
+  patternDisclaimer: { marginTop: 11, fontSize: 12, lineHeight: 18, textAlign: "center", color: colors.faint },
   milestoneRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   birthdayBanner: { marginBottom: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 13, backgroundColor: colors.amberSoft, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  birthdayText: { textAlign: "center", fontSize: 12.5, fontWeight: "800", color: colors.amberText },
+  birthdayText: { textAlign: "center", fontSize: 13, fontWeight: "800", color: colors.amberText },
   milestoneIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
   milestoneBody: { flex: 1, minWidth: 0 },
   badge: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: colors.amberSoft, marginBottom: 4 },
-  badgeText: { fontSize: 9.5, fontWeight: "800", color: colors.amberText },
-  milestoneCurrent: { fontSize: 12.5, fontWeight: "800", color: colors.text, lineHeight: 18 },
-  milestoneTip: { fontSize: 10.5, color: colors.faint, lineHeight: 16, marginTop: 3 },
+  badgeText: { fontSize: 12, fontWeight: "800", color: colors.amberText },
+  milestoneCurrent: { fontSize: 13, fontWeight: "800", color: colors.text, lineHeight: 20 },
+  milestoneTip: { fontSize: 12, color: colors.faint, lineHeight: 18, marginTop: 3 },
   tipBtn: { minHeight: Platform.OS === "android" ? 48 : 44, borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 11, justifyContent: "center", backgroundColor: colors.cardHi },
-  tipBtnText: { fontSize: 10.5, fontWeight: "700", color: colors.text },
-  scheduleList: { marginTop: 13, borderTopWidth: 1, borderTopColor: colors.border },
-  scheduleRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
-  scheduleRowLast: { borderBottomWidth: 0 },
-  scheduleLabel: { width: 82, fontSize: 11, fontWeight: "800", color: colors.text },
-  scheduleValue: { flex: 1, textAlign: "right", fontSize: 10.5, fontWeight: "700", color: colors.muted },
-  scheduleValueEmpty: { color: colors.faint, fontWeight: "500" },
-  scheduleEmpty: { marginTop: 5, fontSize: 10.5, lineHeight: 16, textAlign: "center", color: colors.faint },
-  scheduleFootnote: { marginTop: 5, fontSize: 9.5, textAlign: "center", color: colors.faint },
+  tipBtnText: { fontSize: 12, fontWeight: "700", color: colors.text },
+  scheduleList: { marginTop: 13, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 11 },
   backToOverview: { alignSelf: "flex-start", marginHorizontal: 18, marginBottom: 10, minHeight: Platform.OS === "android" ? 48 : 44, paddingHorizontal: 10, justifyContent: "center" },
-  backToOverviewText: { color: colors.amberText, fontSize: 12.5, fontWeight: "800" },
+  backToOverviewText: { color: colors.amberText, fontSize: 13, fontWeight: "800" },
   filterRow: { paddingHorizontal: 18, paddingVertical: 2, gap: 8, paddingBottom: 14 },
   filterChip: {
     backgroundColor: colors.card,
@@ -946,7 +1090,7 @@ const styles = StyleSheet.create({
   },
   filterChipInner: { flexDirection: "row", alignItems: "center", gap: 6 },
   filterChipActive: { backgroundColor: colors.amber, borderColor: colors.amber },
-  filterChipText: { fontSize: 12.5, fontWeight: "700", color: colors.muted },
+  filterChipText: { fontSize: 13, fontWeight: "700", color: colors.muted },
   filterChipTextActive: { color: colors.amberDark },
   aiSummary: {
     backgroundColor: colors.card,
@@ -967,14 +1111,14 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     marginBottom: 10,
   },
-  aiTagText: { fontSize: 10.5, fontWeight: "700", color: colors.amberText },
-  aiText: { fontSize: 13, lineHeight: 22, color: colors.muted },
+  aiTagText: { fontSize: 12, fontWeight: "700", color: colors.amberText },
+  aiText: { fontSize: 13, lineHeight: 20, color: colors.muted },
   empty: {
     textAlign: "center",
     color: colors.faint,
-    fontSize: 12.5,
+    fontSize: 13,
     paddingVertical: 8,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   insightGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20, marginTop: 8 },
   insightCard: {
@@ -988,17 +1132,17 @@ const styles = StyleSheet.create({
   insightTop: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 7 },
   insightTopText: { fontSize: 12, fontWeight: "700", color: colors.muted },
   insightVal: { fontSize: 15, fontWeight: "700", color: colors.text },
-  insightSub: { fontSize: 10.5, color: colors.faint, marginTop: 2 },
-  chartTitle: { fontSize: 12.5, fontWeight: "700", color: colors.text, marginBottom: 10 },
-  chartSub: { fontSize: 10.5, color: colors.faint, fontWeight: "500" },
+  insightSub: { fontSize: 12, color: colors.faint, marginTop: 2 },
+  chartTitle: { fontSize: 13, fontWeight: "700", color: colors.text, marginBottom: 10 },
+  chartSub: { fontSize: 12, color: colors.faint, fontWeight: "500" },
   barRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 7 },
-  barDay: { fontSize: 10.5, color: colors.faint, width: 28 },
+  barDay: { fontSize: 12, color: colors.faint, width: 28 },
   barTrack: { flex: 1, height: 8, backgroundColor: colors.card, borderRadius: 6, overflow: "hidden" },
   barFill: { height: "100%", borderRadius: 6 },
   legend: { flexDirection: "row", gap: 14, marginTop: 6, marginBottom: 8 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 10.5, color: colors.faint },
+  legendText: { fontSize: 12, color: colors.faint },
   statRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
   statCard: {
     flex: 1,
@@ -1011,16 +1155,16 @@ const styles = StyleSheet.create({
   },
   statIco: { height: 22, alignItems: "center", justifyContent: "center" },
   statNum: { fontSize: 15, fontWeight: "700", color: colors.text, marginTop: 4 },
-  statLbl: { fontSize: 10, color: colors.faint, marginTop: 1 },
-  hint: { textAlign: "center", color: colors.faint, fontSize: 12.5, paddingVertical: 20 },
+  statLbl: { fontSize: 12, color: colors.faint, marginTop: 1 },
+  hint: { textAlign: "center", color: colors.faint, fontSize: 13, paddingVertical: 20 },
   intervalRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 7 },
-  intervalTime: { fontSize: 12.5, color: colors.muted, width: 42, fontVariant: ["tabular-nums"] },
+  intervalTime: { fontSize: 13, color: colors.muted, width: 48, fontVariant: ["tabular-nums"] },
   intervalDot: { width: 9, height: 9, borderRadius: 5 },
   intervalLabelRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
   intervalLabel: { fontSize: 13, fontWeight: "700", color: colors.text, flex: 1 },
   gapRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 18, paddingVertical: 2 },
   gapPill: {
-    fontSize: 11,
+    fontSize: 12,
     backgroundColor: colors.card,
     color: colors.muted,
     paddingHorizontal: 10,
@@ -1032,12 +1176,12 @@ const styles = StyleSheet.create({
   gapShort: { backgroundColor: colors.dangerSoft, color: colors.dangerText },
   gapLong: { backgroundColor: "rgba(232,163,61,0.2)", color: colors.amberText },
   gapFlagRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: 4 },
-  gapFlag: { flex: 1, fontSize: 10.5, color: colors.faint },
+  gapFlag: { flex: 1, fontSize: 12, color: colors.faint },
   trendChart: { flexDirection: "row", alignItems: "flex-end", gap: 7, height: 118, paddingVertical: 16 },
   trendCol: { flex: 1, alignItems: "center", height: "100%", justifyContent: "flex-end" },
   trendFlag: { height: 16, alignItems: "center", justifyContent: "center" },
   trendTrack: { flex: 1, width: "100%", justifyContent: "flex-end" },
   trendBar: { width: "100%", borderRadius: 5, minHeight: 4 },
-  trendDay: { fontSize: 10, color: colors.faint, fontWeight: "600", marginTop: 6 },
-  trendNote: { fontSize: 11.5, color: colors.faint, marginTop: 10, lineHeight: 18 },
+  trendDay: { fontSize: 12, color: colors.faint, fontWeight: "600", marginTop: 6 },
+  trendNote: { fontSize: 12, color: colors.faint, marginTop: 10, lineHeight: 18 },
 });

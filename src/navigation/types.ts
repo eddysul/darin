@@ -14,7 +14,7 @@ export type MainTabParamList = {
   } | undefined;
   Mic: undefined;
   Report: undefined;
-  Consult: { initialQuestion?: string } | undefined;
+  Consult: { initialQuestion?: string; focusInput?: boolean } | undefined;
   Memories: undefined;
 };
 
