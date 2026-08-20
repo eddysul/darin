@@ -1,22 +1,36 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Image } from "expo-image";
-import { Dimensions, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from "react-native";
+import { ErrorState } from "../components/states/FeedbackStates";
+import { colors } from "../theme";
 
 /** Matches `assets/darin-logo.png` / native splash imageset (1024×768). */
 const LOGO_ASPECT_RATIO = 1024 / 768;
 
 type SplashScreenProps = {
   onComplete: () => void;
+  routingError?: string | null;
+  routingBusy?: boolean;
+  onRetryRouting?: () => void;
 };
 
-export function SplashScreen({ onComplete }: SplashScreenProps) {
+export function SplashScreen({
+  onComplete,
+  routingError,
+  routingBusy,
+  onRetryRouting,
+}: SplashScreenProps) {
   // Native Expo splash pins the image view edge-to-edge with aspect-fit (contain).
   const screenWidth = Dimensions.get("window").width;
   const logoWidth = Math.min(screenWidth, 430);
   const logoHeight = logoWidth / LOGO_ASPECT_RATIO;
+  const [routing, setRouting] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(onComplete, 2600);
+    const timer = setTimeout(() => {
+      setRouting(true);
+      onComplete();
+    }, 2600);
     return () => clearTimeout(timer);
   }, [onComplete]);
 
@@ -28,6 +42,22 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           style={{ width: logoWidth, height: logoHeight }}
           contentFit="contain"
         />
+        {routingError ? (
+          <View style={styles.errorWrap}>
+            <ErrorState
+              title="불러오지 못했어요"
+              body={routingError}
+              retryLabel="다시 시도"
+              onRetry={onRetryRouting}
+              busy={routingBusy}
+            />
+          </View>
+        ) : routing ? (
+          <View style={styles.busy} accessibilityLiveRegion="polite">
+            <ActivityIndicator color={colors.amberText} />
+            <Text style={styles.busyLabel}>불러오는 중…</Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -46,5 +76,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     // Nudge slightly below true center to match native splash feel
     paddingTop: 28,
+  },
+  busy: {
+    position: "absolute",
+    bottom: 96,
+    alignItems: "center",
+    gap: 10,
+  },
+  errorWrap: {
+    position: "absolute",
+    bottom: 72,
+    left: 24,
+    right: 24,
+  },
+  busyLabel: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "700",
   },
 });

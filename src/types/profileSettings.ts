@@ -29,8 +29,11 @@ export type BabyProfile = {
   name: string;
   nickname?: string;
   birthDate?: string;
+  dueDate?: string;
+  childStatus?: string;
   gender?: string;
   note?: string;
+  birthWeight?: string;
   avatarStoragePath?: string;
   avatarUrl?: string;
   photoUrl?: string;
@@ -52,8 +55,11 @@ export type UpdateBabyProfileInput = {
   name: string;
   nickname?: string | null;
   birthDate?: string | null;
+  dueDate?: string | null;
+  childStatus?: string | null;
   gender?: string | null;
   note?: string | null;
+  birthWeight?: string | null;
   clearAvatar?: boolean;
 };
 

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,12 +10,14 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { BABY_LOG_CATEGORIES } from "../../constants/babyLogCategories";
+import { BABY_LOG_CATEGORIES, PREGNANCY_LOG_CATEGORIES } from "../../constants/babyLogCategories";
 import {
   CUSTOM_CATEGORY_ICON_OPTIONS,
+  PREGNANCY_CATEGORY_SUGGESTIONS,
+  customCategoryIconOptionsForStage,
   type CustomCategoryIconKey,
 } from "../../constants/customCategoryTemplates";
-import { QUICK_RECORD_ACTIONS } from "../../constants/quickRecordActions";
+import { PREGNANCY_QUICK_RECORD_ACTIONS, QUICK_RECORD_ACTIONS } from "../../constants/quickRecordActions";
 import type { CustomCategory, CustomCategoryInputMode } from "../../types/logCategory";
 import { CUSTOM_CATEGORY_INPUT_MODES } from "../../types/logCategory";
 import { colors, radius } from "../../theme";
@@ -38,6 +42,7 @@ const DEFAULT_ICON_KEY: CustomCategoryIconKey = CUSTOM_CATEGORY_ICON_OPTIONS[0]?
 type Props = {
   visible: boolean;
   existingCategories: CustomCategory[];
+  pregnancy?: boolean;
   onClose: () => void;
   onSave: (input: {
     label: string;
@@ -50,6 +55,7 @@ type Props = {
 export function AddCustomCategorySheet({
   visible,
   existingCategories,
+  pregnancy = false,
   onClose,
   onSave,
 }: Props) {
@@ -59,22 +65,27 @@ export function AddCustomCategorySheet({
   const [inputMode, setInputMode] = useState<CustomCategoryInputMode>("memo");
   const [error, setError] = useState("");
 
+  const iconOptions = useMemo(() => customCategoryIconOptionsForStage(pregnancy), [pregnancy]);
+  const defaultIconKey = iconOptions[0]?.iconKey ?? DEFAULT_ICON_KEY;
+
   useEffect(() => {
     if (!visible) return;
     setLabel("");
     setColor(COLOR_OPTIONS[0]);
-    setIconKey(DEFAULT_ICON_KEY);
+    setIconKey(defaultIconKey);
     setInputMode("memo");
     setError("");
-  }, [visible]);
+  }, [defaultIconKey, visible]);
 
   const reservedNames = useMemo(() => {
     const names = new Set<string>();
-    for (const item of BABY_LOG_CATEGORIES) names.add(item.label.trim().toLowerCase());
-    for (const item of QUICK_RECORD_ACTIONS) names.add(item.label.trim().toLowerCase());
+    const builtIn = pregnancy ? PREGNANCY_LOG_CATEGORIES : BABY_LOG_CATEGORIES;
+    const actions = pregnancy ? PREGNANCY_QUICK_RECORD_ACTIONS : QUICK_RECORD_ACTIONS;
+    for (const item of builtIn) names.add(item.label.trim().toLowerCase());
+    for (const item of actions) names.add(item.label.trim().toLowerCase());
     for (const item of existingCategories) names.add(item.label.trim().toLowerCase());
     return names;
-  }, [existingCategories]);
+  }, [existingCategories, pregnancy]);
 
   const handleSave = () => {
     const trimmed = label.trim();
@@ -96,13 +107,46 @@ export function AddCustomCategorySheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.handle} />
-          <Text style={styles.title}>기록 카테고리 추가</Text>
-          <Text style={styles.subtitle}>새 기록에 사용할 이름, 아이콘, 색상, 기록 방식을 정해 주세요.</Text>
+          <Text style={styles.title}>{pregnancy ? "임신 기록 카테고리 추가" : "기록 카테고리 추가"}</Text>
+          <Text style={styles.subtitle}>
+            {pregnancy
+              ? "태교, 산책, 자궁수축처럼 임신 중에만 쓰는 칸을 만들 수 있어요."
+              : "새 기록에 사용할 이름, 아이콘, 색상, 기록 방식을 정해 주세요."}
+          </Text>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {pregnancy ? (
+              <>
+                <Text style={styles.fieldLabel}>추천</Text>
+                <View style={styles.suggestRow}>
+                  {PREGNANCY_CATEGORY_SUGGESTIONS.map((suggestion) => {
+                    const active = label === suggestion.label && iconKey === suggestion.iconKey;
+                    return (
+                      <Pressable
+                        key={suggestion.label}
+                        style={[styles.suggestChip, active && styles.suggestChipActive]}
+                        onPress={() => {
+                          setLabel(suggestion.label);
+                          setIconKey(suggestion.iconKey);
+                          setInputMode(suggestion.inputMode);
+                          setError("");
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${suggestion.label} 추천 적용`}
+                      >
+                        <Text style={[styles.suggestChipText, active && styles.suggestChipTextActive]}>
+                          {suggestion.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
             <Text style={styles.fieldLabel}>카테고리 이름</Text>
             <TextInput
               style={styles.input}
@@ -111,7 +155,7 @@ export function AddCustomCategorySheet({
                 setLabel(value.slice(0, MAX_LABEL_LENGTH));
                 setError("");
               }}
-              placeholder="예: 산책, 마사지, 병원 전화"
+              placeholder={pregnancy ? "예: 태교, 산책, 자궁수축" : "예: 산책, 마사지, 병원 전화"}
               placeholderTextColor={colors.faint}
               maxLength={MAX_LABEL_LENGTH}
               autoFocus
@@ -119,7 +163,7 @@ export function AddCustomCategorySheet({
 
             <Text style={styles.fieldLabel}>아이콘</Text>
             <View style={styles.iconGrid}>
-              {CUSTOM_CATEGORY_ICON_OPTIONS.map((option) => {
+              {iconOptions.map((option) => {
                 const active = iconKey === option.iconKey;
                 return (
                   <Pressable
@@ -135,7 +179,7 @@ export function AddCustomCategorySheet({
                 );
               })}
               {Array.from({
-                length: (ICON_COLUMNS - (CUSTOM_CATEGORY_ICON_OPTIONS.length % ICON_COLUMNS)) % ICON_COLUMNS,
+                length: (ICON_COLUMNS - (iconOptions.length % ICON_COLUMNS)) % ICON_COLUMNS,
               }).map((_, index) => (
                 <View key={`spacer-${index}`} style={styles.iconChipSpacer} />
               ))}
@@ -190,11 +234,13 @@ export function AddCustomCategorySheet({
           </View>
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  fill: { flex: 1 },
   backdrop: { flex: 1, backgroundColor: "rgba(30,26,23,0.48)", justifyContent: "flex-end" },
   sheet: {
     backgroundColor: colors.backgroundSecondary,
@@ -258,6 +304,20 @@ const styles = StyleSheet.create({
     color: colors.muted,
     textAlign: "center",
   },
+  suggestRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
+  suggestChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  suggestChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  suggestChipText: { fontSize: 12.5, fontWeight: "700", color: colors.muted },
+  suggestChipTextActive: { color: colors.amberText },
   colorRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 16 },
   colorDot: { width: 44, height: 44, borderRadius: 22 },
   colorDotActive: { borderWidth: 3, borderColor: colors.text },
@@ -290,5 +350,5 @@ const styles = StyleSheet.create({
   btnGhost: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   btnGhostText: { color: colors.muted, fontWeight: "700", fontSize: 14.5 },
   btnPrimary: { backgroundColor: colors.amber },
-  btnPrimaryText: { color: "#FFFFFF", fontWeight: "800", fontSize: 14.5 },
+  btnPrimaryText: { color: colors.amberDark, fontWeight: "800", fontSize: 14.5 },
 });

@@ -30,14 +30,16 @@ import { GrowthRecordModal } from "../../components/babylog/GrowthRecordModal";
 import { TodayLogSummaryCard } from "../../components/babylog/TodayLogSummaryCard";
 import { RecordDatePickerModal } from "../../components/babylog/RecordDatePickerModal";
 import { TodayTimeline } from "../../components/babylog/TodayTimeline";
-import { EmptyState } from "../../components/states/FeedbackStates";
+import { EmptyState, LoadingState } from "../../components/states/FeedbackStates";
 import { useBabyLog } from "../../context/BabyLogContext";
+import { PREGNANCY_QUICK_ACTION_IDS } from "../../constants/quickRecordActions";
+import { isPregnancyStage } from "../../utils/childDisplay";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import type { ActiveTimer, TimerSide } from "../../types/activeTimer";
 import { formatElapsedClock, elapsedMsNow, isTimerAction } from "../../types/activeTimer";
 import type { BabyLogEntry } from "../../types/babyLog";
 import type { CustomCategory, LogCategoryKey } from "../../types/logCategory";
-import { customCategoryKey, isCustomCategoryKey } from "../../types/logCategory";
+import { customCategoriesForStage, customCategoryKey, isCustomCategoryKey } from "../../types/logCategory";
 import type { QuickRecord } from "../../types/quickRecord";
 import type { FoodIngredient, FoodIngredientSource } from "../../types/foodIngredient";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
@@ -71,11 +73,14 @@ import { loadFoodIngredients, normalizeIngredientName, saveFoodIngredients } fro
 import type { MainTabParamList } from "../../navigation/types";
 
 type Props = {
-  onOpenProfile: () => void;
+  onOpenProfile: (opts?: { convertBirth?: boolean }) => void;
   onOpenSettings: () => void;
   onOpenNotifications?: () => void;
   onOpenConsult: (initialQuestion?: string) => void;
 };
+
+/** Window in which a repeated tap on the same quick record is treated as a mis-tap. */
+const QUICK_RECORD_REPEAT_GUARD_MS = 1200;
 
 const TIMER_LABEL: Record<ActiveTimer["kind"], string> = {
   breastfeeding: "모유수유",
@@ -109,6 +114,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     updateGrowthRecord,
     localDataScope,
     logAuthor,
+    careSetup,
   } = useBabyLog();
   const [sheetCat, setSheetCat] = useState<LogCategoryKey | null>(null);
   const [prefill, setPrefill] = useState<RecordSheetPrefill | null>(null);
@@ -133,6 +139,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   const activeTimersScopeRef = useRef<string | null>(null);
   const activeSleepRef = useRef<BabyLogEntry | undefined>(undefined);
   const suppressedRestoredSleepId = useRef<string | null>(null);
+  const lastQuickRecordTap = useRef<{ id: string; at: number } | null>(null);
 
   useEffect(() => {
     if (settingsReady) setSelectedDateKey(formatDateKey());
@@ -148,6 +155,13 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
 
   const me = familyMembers.find((m) => m.isMe);
   const allowAdd = canAddLog(myFamilyRole);
+  const allowRecord = allowAdd && storageReady;
+  const pregnancy = isPregnancyStage(careSetup.child);
+  const stageCustomCategories = customCategoriesForStage(customCategories, pregnancy);
+  const visibleRecordActions = pregnancy
+    ? PREGNANCY_QUICK_ACTION_IDS
+    : settings.categories.order.filter((action) => settings.categories.visible.includes(action));
+  const coreRecordActions = pregnancy ? PREGNANCY_QUICK_ACTION_IDS : settings.categories.core;
   const compact = useCompactLayout();
   const todayKey = formatDateKey();
   const dayLogs = useMemo(
@@ -257,7 +271,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   }, [activeTimers, settings.timers.keepScreenAwake]);
 
   const openSheet = (catKey: LogCategoryKey, nextPrefill?: RecordSheetPrefill) => {
-    if (!nextPrefill?.editId && !allowAdd) return;
+    if (!nextPrefill?.editId && !allowRecord) return;
     setPrefill(nextPrefill ?? null);
     setSheetCat(catKey);
   };
@@ -352,7 +366,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       if (existing && canEditLog(myFamilyRole, existing.createdBy, me)) {
         updateLog(editId, entry);
       }
-    } else if (allowAdd) {
+    } else if (allowRecord) {
       addLog(entry);
     }
   };
@@ -376,14 +390,33 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     return ingredient;
   };
 
+  const endActiveSleep = () => {
+    const sleep = activeSleepRef.current;
+    if (!sleep || !allowRecord) return;
+    const elapsed = Math.max(1, elapsedClockMinutes(sleep.time, nowTime()));
+    const { id, ...entry } = sleep;
+    updateLog(id, { ...entry, duration: String(elapsed) });
+    announceCreated({ ...entry, id, duration: String(elapsed) }, "수면 종료 완료");
+    suppressedRestoredSleepId.current = id;
+    setActiveTimers((prev) => prev.filter((timer) => timer.kind !== "sleep"));
+    setTimerSheetId((openId) => {
+      const open = activeTimers.find((timer) => timer.id === openId);
+      return open?.kind === "sleep" ? null : openId;
+    });
+  };
+
   const handleOneTouch = (action: OneTouchAction) => {
-    if (!allowAdd) return;
+    if (!allowRecord) return;
+    if (action === "sleep" && activeSleep) {
+      endActiveSleep();
+      return;
+    }
     const next = longPressSheetPrefill(action, selectedDateKey);
     openSheet(next.cat ?? actionToCategory(action), next);
   };
 
   const startOrOpenTimer = (action: OneTouchAction) => {
-    if (!allowAdd || !isTimerAction(action)) return;
+    if (!allowRecord || !isTimerAction(action)) return;
     const existing = activeTimers.find((t) => t.action === action);
     if (existing) {
       setTimerSheetId(existing.id);
@@ -430,7 +463,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   };
 
   const handleLongPress = (action: OneTouchAction) => {
-    if (!allowAdd) return;
+    if (!allowRecord) return;
     if (longPressModeFor(action) === "timer") {
       const timerEnabled =
         action === "breastfeeding"
@@ -537,7 +570,13 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   };
 
   const handleQuickRecord = (record: QuickRecord) => {
-    if (!allowAdd) return;
+    if (!allowRecord) return;
+    // Every tap mints a fresh log id, so the server upsert cannot dedupe an
+    // accidental double tap. Ignore an immediate repeat of the same record.
+    const tappedAt = Date.now();
+    const lastTap = lastQuickRecordTap.current;
+    if (lastTap && lastTap.id === record.id && tappedAt - lastTap.at < QUICK_RECORD_REPEAT_GUARD_MS) return;
+    lastQuickRecordTap.current = { id: record.id, at: tappedAt };
     const time = nowTime();
     const { defaults } = record;
 
@@ -680,7 +719,9 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
           scrollEventThrottle: 16,
         }}
         listEmpty={
-          !storageReady ? null : (
+          !storageReady ? (
+            <LoadingState label="기록을 불러오는 중…" />
+          ) : (
             <EmptyState
               title={isViewingToday ? "아직 기록이 없어요." : "이 날의 기록이 없어요."}
               body={
@@ -727,6 +768,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
         <TodayLogSummaryCard
           logs={dayLogs}
           dateKey={selectedDateKey}
+          pregnancy={pregnancy}
           canGoPrev={canGoPrev}
           canGoNext={canGoNext}
           onPrevDay={() => setSelectedDateKey((key) => offsetDateKey(key, -1))}
@@ -737,20 +779,18 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
           <OneTouchRecordGrid
             sleepActive={Boolean(activeSleep)}
             activeTimerActions={activeTimerActions}
-            visibleActions={settings.categories.order.filter((action) =>
-              settings.categories.visible.includes(action),
-            )}
-            coreActions={settings.categories.core}
+            visibleActions={visibleRecordActions}
+            coreActions={coreRecordActions}
             logs={logs}
             babyScopeKey={localDataScope?.babyId}
-            customCategories={customCategories}
-            disabled={!allowAdd}
+            customCategories={stageCustomCategories}
+            disabled={!allowRecord}
             onSelect={handleOneTouch}
             onLongPress={handleLongPress}
             onInteractionChange={setCategoryPressing}
-            onAdd={allowAdd ? () => setAddCategoryOpen(true) : undefined}
+            onAdd={allowRecord ? () => setAddCategoryOpen(true) : undefined}
             onSelectCustom={(category: CustomCategory) => {
-              if (!allowAdd) return;
+              if (!allowRecord) return;
               openSheet(customCategoryKey(category.id), {
                 cat: customCategoryKey(category.id),
                 dateKey: selectedDateKey,
@@ -758,19 +798,24 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
                 source: "manual",
               });
             }}
-            onOpenGrowth={() => {
+            onOpenGrowth={pregnancy || !allowRecord ? undefined : () => {
               setGrowthMeasuredAt(selectedDateKey);
               setGrowthRecordOpen(true);
             }}
             onOpenActiveTimer={(action) => {
               const found = activeTimers.find((t) => t.action === action);
-              if (found) setTimerSheetId(found.id);
+              if (found) {
+                setTimerSheetId(found.id);
+                return;
+              }
+              if (action === "sleep") startOrOpenTimer("sleep");
             }}
           />
           <QuickRecordsBar
             records={quickRecords}
-            visibleActions={settings.categories.visible}
-            disabled={!allowAdd}
+            visibleActions={visibleRecordActions}
+            pregnancy={pregnancy}
+            disabled={!allowRecord}
             onTap={handleQuickRecord}
             onSaveRecords={setQuickRecords}
           />
@@ -844,7 +889,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
 
       <AddCustomCategorySheet
         visible={addCategoryOpen}
-        existingCategories={customCategories}
+        existingCategories={stageCustomCategories}
+        pregnancy={pregnancy}
         onClose={() => setAddCategoryOpen(false)}
         onSave={(input) => {
           upsertCustomCategory({
@@ -859,6 +905,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
             duration: input.inputMode === "duration",
             amount: input.inputMode === "amount" ? "회/량" : undefined,
             chips: input.inputMode === "check" ? ["완료", "미완료"] : undefined,
+            stage: pregnancy ? "pregnancy" : "born",
           });
           setAddCategoryOpen(false);
         }}

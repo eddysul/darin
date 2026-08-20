@@ -36,6 +36,9 @@ import { AuthRepository } from "../../repositories/AuthRepository";
 import { authProviderFlags } from "../../config/authProviders";
 import type { ContactRequestCategory } from "../../types/database";
 import { createId } from "../../utils/id";
+import { isPregnancyStage } from "../../utils/childDisplay";
+import { getMarketingConsent, saveMarketingConsent } from "../../utils/termsStore";
+import { customCategoriesForStage } from "../../types/logCategory";
 import type { AppSettings } from "../../types/appSettings";
 
 function applyCategoryOrder(current: AppSettings, order: OneTouchAction[]): AppSettings {
@@ -205,6 +208,9 @@ export function AppSettingsModal({
   const [kakaoLinkBusy, setKakaoLinkBusy] = useState(false);
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
   const [categoryDragging, setCategoryDragging] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(() => getMarketingConsent()?.optIn ?? false);
+  const pregnancy = isPregnancyStage(careSetup.child);
+  const stageCustomCategories = customCategoriesForStage(customCategories, pregnancy);
 
   const accountDirty = page === "account" && accountReady && (
     name !== (careSetup.parent.parentName || profile.name) ||
@@ -216,6 +222,7 @@ export function AppSettingsModal({
   useEffect(() => {
     if (page !== "legal") setOpenLegalSection(null);
     if (page !== "categories") setAddCategoryOpen(false);
+    if (page === "careAlerts") setMarketingOptIn(getMarketingConsent()?.optIn ?? false);
   }, [page]);
 
   useEffect(() => {
@@ -513,13 +520,15 @@ export function AppSettingsModal({
                   }}
                 />
               </SettingsSection>
-              <SettingsSection title="내 기록 카테고리">
-                {customCategories.length === 0 ? (
+              <SettingsSection title={pregnancy ? "임신 기록 카테고리" : "내 기록 카테고리"}>
+                {stageCustomCategories.length === 0 ? (
                   <View style={styles.settingRow}>
-                    <Text style={styles.rowMeta}>아직 추가한 카테고리가 없어요.</Text>
+                    <Text style={styles.rowMeta}>
+                      {pregnancy ? "아직 추가한 임신 기록 칸이 없어요." : "아직 추가한 카테고리가 없어요."}
+                    </Text>
                   </View>
                 ) : (
-                  customCategories.map((category) => (
+                  stageCustomCategories.map((category) => (
                     <View key={category.id} style={styles.categoryRow}>
                       <View style={[styles.customColorDot, { backgroundColor: category.color }]} />
                       <View style={styles.categoryCopy}>
@@ -559,7 +568,8 @@ export function AppSettingsModal({
               </SettingsSection>
               <AddCustomCategorySheet
                 visible={addCategoryOpen}
-                existingCategories={customCategories}
+                existingCategories={stageCustomCategories}
+                pregnancy={pregnancy}
                 onClose={() => setAddCategoryOpen(false)}
                 onSave={(input) => {
                   upsertCustomCategory({
@@ -574,6 +584,7 @@ export function AppSettingsModal({
                     duration: input.inputMode === "duration",
                     amount: input.inputMode === "amount" ? "회/량" : undefined,
                     chips: input.inputMode === "check" ? ["완료", "미완료"] : undefined,
+                    stage: pregnancy ? "pregnancy" : "born",
                   });
                   setAddCategoryOpen(false);
                 }}
@@ -607,6 +618,20 @@ export function AppSettingsModal({
               {settings.notifications.feedingEnabled ? <ChoiceRow label="수유 간격" value={String(settings.notifications.feedingIntervalMinutes)} options={[{ value: "120", label: "2시간" }, { value: "180", label: "3시간" }, { value: "240", label: "4시간" }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, feedingIntervalMinutes: Number(value) } }))} /> : null}
               <ToggleRow label="수면 알림" value={settings.notifications.sleepEnabled} onChange={(sleepEnabled) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, sleepEnabled } }))} />
               {settings.notifications.sleepEnabled ? <ChoiceRow label="수면 간격" value={String(settings.notifications.sleepIntervalMinutes)} options={[{ value: "60", label: "1시간" }, { value: "120", label: "2시간" }, { value: "180", label: "3시간" }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, sleepIntervalMinutes: Number(value) } }))} /> : null}
+            </SettingsSection>
+          ) : null}
+
+          {page === "careAlerts" ? (
+            <SettingsSection title="마케팅 알림">
+              <ToggleRow
+                label="마케팅 알림 수신 (선택)"
+                value={marketingOptIn}
+                onChange={(next) => {
+                  setMarketingOptIn(next);
+                  void saveMarketingConsent(next);
+                }}
+              />
+              <Text style={styles.help}>가입할 때 선택한 동의를 언제든 바꿀 수 있어요. 돌봄 알림에는 영향을 주지 않아요.</Text>
             </SettingsSection>
           ) : null}
 
@@ -1041,7 +1066,7 @@ const styles = StyleSheet.create({
   accordionParagraph: { gap: 6 },
   accountEmailHelp: { paddingHorizontal: 14, paddingVertical: 10 },
   primaryButton: { minHeight: 50, borderRadius: 15, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
+  primaryButtonText: { color: colors.amberDark, fontSize: 14, fontWeight: "800" },
   secondaryButton: { minHeight: 48, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   secondaryButtonDisabled: { opacity: 0.55 },
   secondaryButtonText: { color: colors.text, fontSize: 14, fontWeight: "800" },

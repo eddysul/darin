@@ -6,6 +6,7 @@ import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { ConsultFab } from "../../components/babylog/ConsultFab";
 import { ConsultPromptSheet } from "../../components/babylog/ConsultPromptSheet";
 import { GrowthRecordModal } from "../../components/babylog/GrowthRecordModal";
+import { EmptyState } from "../../components/states/FeedbackStates";
 import { BABY_LOG_CATEGORIES, getCategory, type BabyLogCategoryId } from "../../constants/babyLogCategories";
 import { formatLogMeta, toMinutes } from "../../utils/formatLog";
 import { useBabyLog } from "../../context/BabyLogContext";
@@ -23,6 +24,7 @@ import {
   weeklyTrend,
 } from "../../utils/reportAggregates";
 import { colors, categoryColors, radius } from "../../theme";
+import { isPregnancyStage } from "../../utils/childDisplay";
 import { formatDisplayTime } from "../../utils/logSummary";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import type { GrowthRecord } from "../../types/growthRecord";
@@ -141,6 +143,20 @@ export function BabyReportScreen({ onOpenProfile, onOpenSettings, onOpenNotifica
   const safetySchedule = schedule.filter((row): row is { kind: "safety"; item: ResolvedScheduleItem } => (
     row.kind === "safety" && "item" in row
   ));
+
+  if (isPregnancyStage(careSetup.child)) {
+    return (
+      <View style={styles.root}>
+        <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} onOpenShared={onOpenShared} />
+        <ScrollView contentContainerStyle={styles.pregnancyEmpty} showsVerticalScrollIndicator={false}>
+          <EmptyState
+            title="육아 리포트는 아기가 태어난 후 확인할 수 있어요."
+            body="출생 등록 후 수유·수면·기저귀 기록을 바탕으로 하루와 주간 흐름을 정리해드려요."
+          />
+        </ScrollView>
+      </View>
+    );
+  }
 
   const todayFor = (catId: Exclude<ReportCat, "all">) => todayLogs.filter((entry) => (
     catId === "feeding" ? isFeedingLog(entry) : entry.cat === catId
@@ -918,6 +934,7 @@ function IntervalRow({ entry, c }: { entry: BabyLogEntry; c: ReturnType<typeof g
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   pad: { paddingHorizontal: 18, paddingBottom: 164 },
+  pregnancyEmpty: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 18, paddingBottom: 120 },
   dashboardCard: {
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -1001,7 +1018,7 @@ const styles = StyleSheet.create({
   dashboardEmptyIcon: { width: 44, height: 44, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft, marginBottom: 9 },
   dashboardEmptyText: { color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center" },
   dashboardEmptyBtn: { marginTop: 12, minWidth: 140, alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.amber },
-  dashboardEmptyBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  dashboardEmptyBtnText: { color: colors.amberDark, fontSize: 13, fontWeight: "800" },
   healthSignal: { flexDirection: "row", alignItems: "flex-start", gap: 11, borderRadius: 14, padding: 12, backgroundColor: "rgba(233,163,83,0.10)" },
   healthSignalIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
   healthSignalBody: { flex: 1, minWidth: 0 },
@@ -1053,7 +1070,7 @@ const styles = StyleSheet.create({
   rhythmLegend: { flexDirection: "row", justifyContent: "center", gap: 16, marginTop: 4 },
   compactInsight: { flexDirection: "row", alignItems: "center", gap: 10 },
   trendIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.amber },
-  trendIconText: { fontSize: 22, fontWeight: "800", color: "#FFF" },
+  trendIconText: { fontSize: 22, fontWeight: "800", color: colors.amberDark },
   compactInsightText: { flex: 1, fontSize: 13, lineHeight: 20, color: colors.muted },
   detailBtn: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.cardHi },
   detailBtnText: { fontSize: 12, fontWeight: "700", color: colors.text },

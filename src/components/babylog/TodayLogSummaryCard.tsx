@@ -25,6 +25,7 @@ import { useCompactLayout } from "../../hooks/useCompactLayout";
 type Props = {
   logs: BabyLogEntry[];
   dateKey?: string;
+  pregnancy?: boolean;
   onPrevDay?: () => void;
   onNextDay?: () => void;
   canGoNext?: boolean;
@@ -104,6 +105,7 @@ function formatLastAgo(time: string | undefined, isToday: boolean, now: Date): s
 export function TodayLogSummaryCard({
   logs,
   dateKey = formatDateKey(),
+  pregnancy = false,
   onPrevDay,
   onNextDay,
   canGoNext = true,
@@ -124,6 +126,83 @@ export function TodayLogSummaryCard({
   }, [isToday]);
 
   const metrics = useMemo(() => {
+    if (pregnancy) {
+      const symptomCount = countCat(logs, ["pregSymptom"]);
+      const weightCount = countCat(logs, ["pregWeight"]);
+      const kickCount = countCat(logs, ["pregKick"]);
+      const latestWeight = [...logs]
+        .filter((entry) => entry.cat === "pregWeight" && entry.amount)
+        .sort((a, b) => b.time.localeCompare(a.time))[0];
+
+      const core: MetricCard[] = [
+        {
+          key: "pregSymptom",
+          label: "입덧",
+          value: `${symptomCount}회`,
+          recentTime: latestTime(logs, (entry) => entry.cat === "pregSymptom"),
+          cat: "pregSymptom",
+        },
+        {
+          key: "pregWeight",
+          label: "체중",
+          value: `${weightCount}회`,
+          detail: latestWeight?.amount ? `${latestWeight.amount}kg` : undefined,
+          recentTime: latestTime(logs, (entry) => entry.cat === "pregWeight"),
+          cat: "pregWeight",
+        },
+        {
+          key: "pregKick",
+          label: "태동",
+          value: `${kickCount}회`,
+          recentTime: latestTime(logs, (entry) => entry.cat === "pregKick"),
+          cat: "pregKick",
+        },
+      ];
+
+      const extras: Array<{
+        key: string;
+        label: string;
+        cats: BabyLogCategoryId[];
+        cat: BabyLogCategoryId;
+        detail?: () => string | undefined;
+      }> = [
+        { key: "pregMood", label: "컨디션", cats: ["pregMood"], cat: "pregMood" },
+        {
+          key: "pregBp",
+          label: "혈압",
+          cats: ["pregBp"],
+          cat: "pregBp",
+          detail: () => {
+            const latest = [...logs]
+              .filter((entry) => entry.cat === "pregBp" && (entry.amount || entry.chip))
+              .sort((a, b) => b.time.localeCompare(a.time))[0];
+            return latest?.amount ? `${latest.amount}${latest.amount.includes("/") ? "" : "mmHg"}` : undefined;
+          },
+        },
+        { key: "pregMed", label: "약/영양제", cats: ["pregMed"], cat: "pregMed" },
+        { key: "pregHospital", label: "병원", cats: ["pregHospital"], cat: "pregHospital" },
+      ];
+
+      const dynamic: MetricCard[] = [];
+      for (const extra of extras) {
+        const n = countCat(logs, extra.cats);
+        if (n <= 0) continue;
+        dynamic.push({
+          key: extra.key,
+          label: extra.label,
+          value: `${n}회`,
+          detail: extra.detail?.(),
+          recentTime: latestTime(
+            logs,
+            (entry) =>
+              !isCustomCategoryKey(entry.cat) && extra.cats.includes(entry.cat as BabyLogCategoryId),
+          ),
+          cat: extra.cat,
+        });
+      }
+
+      return [...core, ...dynamic];
+    }
     const feedingCount = countCat(logs, FEEDING_CATS);
     const feedingAmount = sumAmount(logs, FEEDING_CATS);
     const sleepCount = countCat(logs, ["sleep"]);
@@ -235,7 +314,7 @@ export function TodayLogSummaryCard({
     }
 
     return [...core, ...dynamic];
-  }, [logs]);
+  }, [logs, pregnancy]);
 
   const pageCount = Math.max(1, Math.ceil(metrics.length / 3));
 

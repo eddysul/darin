@@ -294,7 +294,7 @@ export function MyProfileScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Pressable style={[styles.save, saving && styles.disabled]} onPress={() => void save()} disabled={saving}>
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>저장</Text>}
+          {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.saveText}>저장</Text>}
         </Pressable>
         <RecordDatePickerModal
           visible={birthDatePickerOpen}
@@ -339,6 +339,6 @@ const styles = StyleSheet.create({
   metaValue: { color: colors.text, fontSize: 14, fontWeight: "600" },
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12.5 },
   save: { minHeight: 52, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  saveText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  saveText: { color: colors.amberDark, fontWeight: "800", fontSize: 15 },
   disabled: { opacity: 0.55 },
 });

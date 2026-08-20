@@ -16,7 +16,6 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
-import { Bookmark } from "lucide-react-native";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
 import { BabyStickerFromModel } from "../components/babylog/BabyStickerView";
 import { BabyStickerVaultModal } from "../components/babylog/BabyStickerVaultModal";
@@ -28,9 +27,10 @@ import { memoryPrivacyPresentation } from "../components/memories/memoryPresenta
 import { useBabyLog } from "../context/BabyLogContext";
 import type { RootStackParamList } from "../navigation/types";
 import { AuthRepository } from "../repositories/AuthRepository";
-import { MemoriesRepository } from "../repositories/MemoriesRepository";
+import { MemoriesRepository, MEMORY_DETAIL_IMAGE_WIDTH } from "../repositories/MemoriesRepository";
 import type { BabySticker } from "../types/babySticker";
 import type { MemoryComment, MemoryPostBundle } from "../types/memory";
+import { getLocalUriForMedia } from "../utils/eagerMediaUpload";
 import { memberRelationshipLabel } from "../types/family";
 import { colors, radius } from "../theme";
 
@@ -39,13 +39,14 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 export function MemoryDetailScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const { babyName, familyMembers, myFamilyRole, logAuthor, babyStickers, addBabySticker, deleteBabySticker } = useBabyLog();
+  const { babyName, babies, familyMembers, myFamilyRole, logAuthor, babyStickers, addBabySticker, deleteBabySticker } = useBabyLog();
   const [bundle, setBundle] = useState<MemoryPostBundle | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [userId, setUserId] = useState("");
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [likeWorking, setLikeWorking] = useState(false);
   const [error, setError] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -62,7 +63,15 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       if (!next) throw new Error("삭제되었거나 볼 수 없는 추억이에요.");
       setBundle(next);
       setIsSaved(await MemoriesRepository.isSaved(next.post.id));
-      setImageUrls(await Promise.all(next.media.map((media) => MemoriesRepository.createSignedUrl(media.storagePath))));
+      setImageUrls(await Promise.all(next.media.map(async (media) => {
+        const localUri = getLocalUriForMedia(media.id);
+        if (media.uploadStatus !== "ready") return localUri ?? "";
+        try {
+          return await MemoriesRepository.createSignedUrl(media.storagePath, undefined, { width: MEMORY_DETAIL_IMAGE_WIDTH });
+        } catch {
+          return localUri ?? "";
+        }
+      })));
     } catch (cause) {
       setBundle(null);
       setError(cause instanceof Error ? cause.message : "추억을 불러오지 못했어요.");
@@ -161,8 +170,8 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   };
 
   const toggleReaction = async () => {
-    if (!bundle || working) return;
-    setWorking(true);
+    if (!bundle || likeWorking) return;
+    setLikeWorking(true);
     setError("");
     try {
       if (myReaction) await MemoriesRepository.removeReaction(bundle.post.id);
@@ -171,13 +180,13 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "반응을 저장하지 못했어요.");
     } finally {
-      setWorking(false);
+      setLikeWorking(false);
     }
   };
 
   const likeFromDoubleTap = async () => {
-    if (!bundle || working || myReaction) return;
-    setWorking(true);
+    if (!bundle || likeWorking || myReaction) return;
+    setLikeWorking(true);
     setError("");
     try {
       await MemoriesRepository.setReaction({ memoryPostId: bundle.post.id, reactionType: "heart" });
@@ -185,7 +194,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "반응을 저장하지 못했어요.");
     } finally {
-      setWorking(false);
+      setLikeWorking(false);
     }
   };
 
@@ -216,7 +225,9 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   );
 
   const familyTagLabels = bundle.tags.flatMap((tag) => {
-    if (tag.tagType === "baby") return [babyName];
+    if (tag.tagType === "baby") {
+      return [babies.find((baby) => baby.id === tag.babyId)?.name ?? babyName];
+    }
     if (tag.tagType === "family_member" && tag.taggedUserId) return [authorName(tag.taggedUserId)];
     return [];
   });
@@ -229,8 +240,21 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? undefined : "padding"} keyboardVerticalOffset={0}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <MemoryMediaViewer media={bundle.media} imageUrls={imageUrls} onDoubleTap={() => void likeFromDoubleTap()} />
+        {bundle.media.some((media) => media.uploadStatus === "failed") && canEdit ? (
+          <Pressable
+            style={styles.retryBanner}
+            onPress={() => {
+              void MemoriesRepository.retryFailedMedia(bundle.post.id).then(() => load(false));
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="실패한 사진 다시 올리기"
+          >
+            <Text style={styles.retryBannerText}>사진 업로드 실패</Text>
+            <Text style={styles.retryBannerAction}>다시 시도</Text>
+          </Pressable>
+        ) : null}
 
-        <View style={[styles.postCard, { borderColor: privacy.accent }]}>
+        <View style={styles.postCard}>
           <View style={styles.metaRow}>
             <ProfileAvatar uri={authorAvatar(bundle.post.authorId)} size={38} />
             <View style={styles.metaCopy}>
@@ -243,15 +267,36 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
             </View>
           </View>
           <View style={styles.actionRow}>
-            <Pressable style={styles.actionButton} onPress={() => void toggleReaction()} disabled={working} accessibilityLabel={myReaction ? "좋아요 취소" : "좋아요"}>
-              <BabyLogIcon kind="sparkles" size={20} color={myReaction ? colors.amberText : colors.muted} strokeWidth={2.2} />
+            <Pressable
+              style={({ pressed }) => [styles.actionPair, pressed && styles.pressed]}
+              onPress={() => void toggleReaction()}
+              disabled={likeWorking}
+              accessibilityRole="button"
+              accessibilityLabel={myReaction ? "좋아요 취소" : "좋아요"}
+              accessibilityState={{ selected: Boolean(myReaction), disabled: likeWorking }}
+            >
+              <BabyLogIcon kind="heart" size={20} color={myReaction ? colors.amberText : colors.muted} strokeWidth={2.2} fill={myReaction ? colors.amberText : "transparent"} />
+              <Text style={[styles.actionPairText, myReaction && styles.actionPairTextActive]}>좋아요 {bundle.reactions.length}</Text>
             </Pressable>
-            <Pressable style={styles.actionButton} onPress={() => setCommentsOpen(true)} accessibilityLabel="댓글 열기">
+            <Pressable
+              style={({ pressed }) => [styles.actionPair, pressed && styles.pressed]}
+              onPress={() => setCommentsOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`댓글 ${bundle.comments.length}개`}
+            >
               <BabyLogIcon kind="chat" size={20} color={colors.muted} />
+              <Text style={styles.actionPairText}>댓글 {bundle.comments.length}</Text>
             </Pressable>
-            <Text style={styles.actionCount}>좋아요 {bundle.reactions.length} · 댓글 {bundle.comments.length}</Text>
-            <Pressable style={styles.actionButton} onPress={() => void toggleSave()} disabled={working} accessibilityLabel={isSaved ? "저장 취소" : "추억 저장"}>
-              <Bookmark size={20} color={isSaved ? colors.amber : colors.muted} fill={isSaved ? colors.amber : "transparent"} />
+            <View style={styles.actionSpacer} />
+            <Pressable
+              style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
+              onPress={() => void toggleSave()}
+              disabled={working}
+              accessibilityRole="button"
+              accessibilityLabel={isSaved ? "저장 취소" : "나중에 다시 보기"}
+              accessibilityState={{ selected: isSaved, disabled: working }}
+            >
+              <BabyLogIcon kind="bookmark" size={20} color={isSaved ? colors.amberText : colors.muted} fill={isSaved ? colors.amberText : "transparent"} />
             </Pressable>
           </View>
           {bundle.post.caption ? (
@@ -292,7 +337,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       <MemoryEditModal visible={editOpen} bundle={bundle} familyMembers={serverFamilyMembers} onClose={() => setEditOpen(false)} onSaved={() => void load()} />
 
       <Modal visible={commentsOpen} transparent animationType="slide" onRequestClose={() => setCommentsOpen(false)}>
-        <KeyboardAvoidingView style={styles.sheetOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView style={styles.sheetOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <Pressable style={styles.sheetBackdrop} onPress={() => setCommentsOpen(false)} />
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) }]}>
             <View style={styles.sheetHandle} />
@@ -321,11 +366,32 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
                         </View>
                       ) : <Text style={styles.commentBody}>{item.body}</Text>}
                     </View>
-                    {mayDelete ? <Pressable style={styles.commentDelete} onPress={() => {
-                      if (working) return;
-                      setWorking(true);
-                      void MemoriesRepository.deleteComment(item.id).then(() => load(false)).catch((cause) => setError(cause instanceof Error ? cause.message : "댓글을 삭제하지 못했어요.")).finally(() => setWorking(false));
-                    }}><Text style={styles.commentDeleteText}>삭제</Text></Pressable> : null}
+                    {mayDelete ? (
+                      <Pressable
+                        style={styles.commentDelete}
+                        onPress={() => {
+                          if (working) return;
+                          Alert.alert("댓글을 삭제할까요?", "삭제한 댓글은 되돌릴 수 없어요.", [
+                            { text: "취소", style: "cancel" },
+                            {
+                              text: "삭제",
+                              style: "destructive",
+                              onPress: () => {
+                                setWorking(true);
+                                void MemoriesRepository.deleteComment(item.id)
+                                  .then(() => load(false))
+                                  .catch((cause) => setError(cause instanceof Error ? cause.message : "댓글을 삭제하지 못했어요."))
+                                  .finally(() => setWorking(false));
+                              },
+                            },
+                          ]);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="댓글 삭제"
+                      >
+                        <Text style={styles.commentDeleteText}>삭제</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 );
               })}
@@ -349,9 +415,21 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
                 <Pressable style={styles.stickerCreateButton} onPress={() => setStickerVaultOpen(true)}><Text style={styles.stickerCreateText}>스티커 만들기</Text></Pressable>
               </View>
             )}
-            <View style={styles.composer}>
-              <TextInput style={styles.commentInput} value={comment} onChangeText={setComment} placeholder="가족에게 댓글 남기기" placeholderTextColor={colors.faint} maxLength={500} multiline />
-              {comment.trim() ? <Pressable style={[styles.send, working && styles.disabled]} onPress={() => void submitComment()} disabled={working}><Text style={styles.sendText}>보내기</Text></Pressable> : null}
+            <View style={styles.composerBlock}>
+              <Text style={styles.composerLabel}>가족에게 댓글</Text>
+              <View style={styles.composer}>
+                <TextInput
+                  style={styles.commentInput}
+                  value={comment}
+                  onChangeText={setComment}
+                  placeholder="마음을 남겨 보세요"
+                  placeholderTextColor={colors.faint}
+                  maxLength={500}
+                  multiline
+                  accessibilityLabel="가족에게 댓글"
+                />
+                {comment.trim() ? <Pressable style={[styles.send, working && styles.disabled]} onPress={() => void submitComment()} disabled={working}><Text style={styles.sendText}>보내기</Text></Pressable> : null}
+              </View>
             </View>
           </View>
           <BabyStickerVaultModal
@@ -381,6 +459,9 @@ const styles = StyleSheet.create({
   outlineButton: { minHeight: 44, marginTop: 16, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
   outlineText: { color: colors.amberText, fontWeight: "800" },
   content: { gap: 12 },
+  retryBanner: { marginHorizontal: 16, minHeight: 44, paddingHorizontal: 14, borderRadius: radius.lg, backgroundColor: colors.dangerSoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  retryBannerText: { color: colors.dangerText, fontSize: 13, fontWeight: "700", flexShrink: 1 },
+  retryBannerAction: { color: colors.dangerText, fontSize: 13, fontWeight: "800" },
   postCard: { marginHorizontal: 16, padding: 16, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   authorAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
@@ -389,9 +470,13 @@ const styles = StyleSheet.create({
   date: { color: colors.faint, fontSize: 10.5, marginTop: 2 },
   privacyBadge: { minHeight: 28, maxWidth: 140, paddingHorizontal: 9, borderRadius: radius.full, flexDirection: "row", alignItems: "center", gap: 4 },
   privacyBadgeText: { fontSize: 10.5, fontWeight: "800", textAlign: "right" },
-  actionRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 },
+  actionRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
+  actionPair: { minHeight: 44, paddingRight: 2, flexDirection: "row", alignItems: "center", gap: 4 },
+  actionPairText: { color: colors.muted, fontSize: 13, fontWeight: "700" },
+  actionPairTextActive: { color: colors.amberText },
+  actionSpacer: { flex: 1 },
   actionButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  actionCount: { flex: 1, color: colors.muted, fontSize: 12.5, fontWeight: "700" },
+  pressed: { opacity: 0.7 },
   caption: { color: colors.text, fontSize: 15, lineHeight: 23, marginTop: 6 },
   captionAuthor: { fontWeight: "800" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
@@ -439,10 +524,12 @@ const styles = StyleSheet.create({
   stickerEmptyText: { flex: 1, color: colors.faint, fontSize: 11.5 },
   stickerCreateButton: { minHeight: 40, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
   stickerCreateText: { color: colors.amberText, fontSize: 11, fontWeight: "800" },
-  composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  composerBlock: { paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  composerLabel: { color: colors.text, fontSize: 12, fontWeight: "800", marginBottom: 6 },
+  composer: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   commentInput: { flex: 1, minHeight: 46, maxHeight: 100, borderRadius: 16, backgroundColor: colors.cardHi, color: colors.text, paddingHorizontal: 13, paddingVertical: 12, fontSize: 13 },
   send: { minWidth: 54, minHeight: 44, borderRadius: 14, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  sendText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+  sendText: { color: colors.amberDark, fontSize: 12, fontWeight: "800" },
   disabled: { opacity: 0.45 },
   inlineError: { marginHorizontal: 16, color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12 },
 });

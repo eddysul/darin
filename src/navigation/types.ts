@@ -14,13 +14,13 @@ export type MainTabParamList = {
   } | undefined;
   Mic: undefined;
   Report: undefined;
-  Consult: { initialQuestion?: string; focusInput?: boolean } | undefined;
   Memories: undefined;
 };
 
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
-  BabyProfile: { mode?: "create" } | undefined;
+  Consult: { initialQuestion?: string; focusInput?: boolean } | undefined;
+  BabyProfile: { mode?: "create" | "convertBirth" } | undefined;
   FamilyShare: { tab?: "create" | "enter" | "people" } | undefined;
   MyProfile: undefined;
   SettingsHome: undefined;

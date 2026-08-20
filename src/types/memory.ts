@@ -9,6 +9,8 @@ export type MemoryCommentType = "text" | "sticker";
 export type MemoryMediaType = "image" | "video";
 export type MemoryTagType = "baby" | "family_member" | "friend_baby" | "manual_guest";
 export type MemoryTagStatus = "approved" | "pending" | "rejected";
+export type MemoryPostStatus = "posting" | "published" | "failed";
+export type MemoryUploadStatus = "uploading" | "ready" | "failed";
 
 export type MemoryPost = {
   id: string;
@@ -17,6 +19,7 @@ export type MemoryPost = {
   caption?: string;
   privacyType: MemoryPrivacyType;
   isFamilyMoment: boolean;
+  status: MemoryPostStatus;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -28,6 +31,7 @@ export type MemoryMedia = {
   babyId: string;
   storagePath: string;
   mediaType: MemoryMediaType;
+  uploadStatus: MemoryUploadStatus;
   width?: number;
   height?: number;
   createdAt: string;
@@ -85,7 +89,20 @@ export type MemoryCard = {
   tags: MemoryTag[];
   commentCount: number;
   reactionCount: number;
+  isLiked: boolean;
   isSaved: boolean;
+  hasFailedMedia?: boolean;
+  isOptimistic?: boolean;
+  publishError?: string;
+};
+
+export type PreparedMemoryPhoto = {
+  id: string;
+  localUri: string;
+  storagePath: string;
+  width?: number;
+  height?: number;
+  uploadStatus: MemoryUploadStatus;
 };
 
 export type MemoryImageDraft = {
@@ -108,6 +125,7 @@ export type CreateMemoryPostInput = {
   privacyType: MemoryPrivacyType;
   isFamilyMoment?: boolean;
   selectedUserIds?: string[];
+  status?: MemoryPostStatus;
 };
 
 export type UpdateMemoryPostInput = {
@@ -142,8 +160,20 @@ export type AddMemoryMediaInput = {
   babyId: string;
   storagePath: string;
   mediaType?: MemoryMediaType;
+  uploadStatus?: MemoryUploadStatus;
   width?: number;
   height?: number;
+};
+
+export type PublishEagerMemoryInput = {
+  id: string;
+  babyId: string;
+  caption?: string;
+  privacyType: MemoryPrivacyType;
+  isFamilyMoment?: boolean;
+  selectedUserIds?: string[];
+  tags?: MemoryTagDraft[];
+  photos: PreparedMemoryPhoto[];
 };
 
 export type AddMemoryCommentInput = {

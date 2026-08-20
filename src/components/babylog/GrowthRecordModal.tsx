@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import type {
   GrowthLengthUnit,
@@ -164,6 +164,7 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={requestClose} onDismiss={onDismiss}>
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <Pressable style={styles.backdrop} onPress={requestClose} accessible={false}>
         <Pressable style={styles.sheet} onPress={() => {}} accessible={false}>
           <View style={styles.handle} />
@@ -210,6 +211,7 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
           />
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -227,6 +229,7 @@ function MeasurementField({ label, value, onChangeText, unit, placeholder }: { l
 }
 
 const styles = StyleSheet.create({
+  fill: { flex: 1 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.52)", justifyContent: "flex-end" },
   sheet: { maxHeight: "92%", backgroundColor: colors.backgroundSecondary, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 22, paddingBottom: 28 },
   handle: { width: 38, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginVertical: 10 },

@@ -114,6 +114,9 @@ export function migrateDiaryEntry(raw: unknown, fallbackBabyId = "baby-1"): Diar
       (typeof d.careLogSummarySnapshot === "string" && d.careLogSummarySnapshot) ||
       (typeof d.careLogSnapshot === "string" && d.careLogSnapshot) ||
       "",
+    stageLabelSnapshot: typeof d.stageLabelSnapshot === "string" && d.stageLabelSnapshot.trim()
+      ? d.stageLabelSnapshot.trim()
+      : null,
     momentSuggestionsUsed: Array.isArray(d.momentSuggestionsUsed)
       ? (d.momentSuggestionsUsed as unknown[]).filter((x): x is string => typeof x === "string")
       : [],

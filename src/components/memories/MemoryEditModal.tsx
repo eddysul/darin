@@ -19,6 +19,7 @@ import type { FamilyMember } from "../../types/family";
 import type { MemoryPostBundle, MemoryPrivacyType, MemoryTagDraft } from "../../types/memory";
 import { MemoriesRepository } from "../../repositories/MemoriesRepository";
 import { colors, radius } from "../../theme";
+import { BabyLogIcon } from "../babylog/BabyLogIcon";
 import { MemoryPeoplePicker } from "./MemoryPeoplePicker";
 import { MemoryPrivacyPicker } from "./MemoryPrivacyPicker";
 
@@ -163,13 +164,15 @@ export function MemoryEditModal({
         >
           <View style={styles.field}>
             <Text style={styles.label}>사진</Text>
-            <Text style={styles.photoGuide}>선택한 사진 {existingPhotos.length + newImages.length}장 · 최대 5장까지 추가할 수 있어요.</Text>
+            <Text style={styles.photoGuide}>선택한 사진 {existingPhotos.length + newImages.length}장 · 지금은 사진만, 최대 5장까지 추가할 수 있어요.</Text>
             {!mediaReady ? <ActivityIndicator color={colors.amberText} /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
               {existingPhotos.map((photo, index) => (
                 <View key={photo.mediaId} style={styles.photoThumbWrap}>
                   <Image source={{ uri: photo.uri }} style={styles.photoThumb} contentFit="cover" />
                   {index === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>대표</Text></View> : null}
-                  <Pressable style={styles.photoRemove} onPress={() => setExistingPhotos((current) => current.filter((item) => item.mediaId !== photo.mediaId))} accessibilityLabel={`기존 사진 ${index + 1} 삭제`}><Text style={styles.photoRemoveText}>×</Text></Pressable>
+                  <Pressable style={styles.photoRemove} onPress={() => setExistingPhotos((current) => current.filter((item) => item.mediaId !== photo.mediaId))} accessibilityRole="button" accessibilityLabel={`기존 사진 ${index + 1} 삭제`}>
+                    <BabyLogIcon kind="trash" size={16} color={colors.onDark} strokeWidth={2.2} />
+                  </Pressable>
                 </View>
               ))}
               {newImages.map((image, index) => {
@@ -177,10 +180,17 @@ export function MemoryEditModal({
                 return <View key={`${image.uri}-${index}`} style={styles.photoThumbWrap}>
                   <Image source={{ uri: image.uri }} style={styles.photoThumb} contentFit="cover" />
                   {position === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>대표</Text></View> : null}
-                  <Pressable style={styles.photoRemove} onPress={() => setNewImages((current) => current.filter((_, photoIndex) => photoIndex !== index))} accessibilityLabel={`새 사진 ${index + 1} 삭제`}><Text style={styles.photoRemoveText}>×</Text></Pressable>
+                  <Pressable style={styles.photoRemove} onPress={() => setNewImages((current) => current.filter((_, photoIndex) => photoIndex !== index))} accessibilityRole="button" accessibilityLabel={`새 사진 ${index + 1} 삭제`}>
+                    <BabyLogIcon kind="trash" size={16} color={colors.onDark} strokeWidth={2.2} />
+                  </Pressable>
                 </View>;
               })}
-              {existingPhotos.length + newImages.length < MAX_MEMORY_PHOTOS ? <Pressable style={styles.photoAddTile} onPress={() => void pickImages()}><Text style={styles.photoPlus}>＋</Text><Text style={styles.photoAddText}>사진 추가</Text></Pressable> : null}
+              {existingPhotos.length + newImages.length < MAX_MEMORY_PHOTOS ? (
+                <Pressable style={styles.photoAddTile} onPress={() => void pickImages()} accessibilityRole="button" accessibilityLabel="사진 추가">
+                  <BabyLogIcon kind="new" size={22} color={colors.amberText} strokeWidth={2.2} />
+                  <Text style={styles.photoAddText}>사진 추가</Text>
+                </Pressable>
+              ) : null}
             </ScrollView>}
           </View>
           <View style={styles.field}>
@@ -222,10 +232,8 @@ const styles = StyleSheet.create({
   photoThumb: { width: "100%", height: "100%" },
   coverBadge: { position: "absolute", left: 7, bottom: 7, borderRadius: 999, backgroundColor: "rgba(46,42,38,0.72)", paddingHorizontal: 7, paddingVertical: 3 },
   coverBadgeText: { color: "#fff", fontSize: 9.5, fontWeight: "800" },
-  photoRemove: { position: "absolute", right: 6, top: 6, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(46,42,38,0.72)" },
-  photoRemoveText: { color: "#fff", fontSize: 21, lineHeight: 23 },
+  photoRemove: { position: "absolute", right: 2, top: 2, width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(46,42,38,0.72)" },
   photoAddTile: { width: 96, height: 112, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center", gap: 4 },
-  photoPlus: { color: colors.amberText, fontSize: 26, lineHeight: 28 },
   photoAddText: { color: colors.amberText, fontSize: 11.5, fontWeight: "800" },
   caption: { minHeight: 110, borderRadius: radius.md, backgroundColor: colors.cardHi, padding: 12, color: colors.text, fontSize: 14, lineHeight: 21 },
   counter: { color: colors.faint, fontSize: 10.5, textAlign: "right" },

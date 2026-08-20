@@ -45,6 +45,41 @@ export type CustomCategoryTemplate = {
   amount?: string;
 };
 
+/** Pregnancy add-sheet suggestions: tap to fill name, icon, and input mode. */
+export const PREGNANCY_CATEGORY_SUGGESTIONS: Array<{
+  label: string;
+  iconKey: CustomCategoryIconKey;
+  inputMode: "memo" | "duration" | "amount" | "check";
+}> = [
+  { label: "태교", iconKey: "book", inputMode: "duration" },
+  { label: "산책", iconKey: "walk", inputMode: "duration" },
+  { label: "운동", iconKey: "play", inputMode: "duration" },
+  { label: "수면", iconKey: "sleep", inputMode: "duration" },
+  { label: "자궁수축", iconKey: "symptom", inputMode: "check" },
+  { label: "마사지", iconKey: "massage", inputMode: "duration" },
+  { label: "병원 전화", iconKey: "phone", inputMode: "memo" },
+  { label: "초음파", iconKey: "photo", inputMode: "memo" },
+];
+
+const PREGNANCY_ICON_KEYS = new Set<CustomCategoryIconKey>([
+  "book",
+  "walk",
+  "outing",
+  "play",
+  "sleep",
+  "massage",
+  "hospital",
+  "med",
+  "temp",
+  "growth",
+  "mood",
+  "symptom",
+  "photo",
+  "phone",
+  "memo",
+  "other",
+]);
+
 export const CUSTOM_CATEGORY_ICON_OPTIONS: CustomCategoryIconOption[] = [
   { iconKey: "play", label: "놀이", color: categoryColors.play },
   { iconKey: "book", label: "책", color: "#7c83fd" },
@@ -113,6 +148,12 @@ export const RECOMMENDED_CUSTOM_TEMPLATES: CustomCategoryTemplate[] = [
     duration: true,
   },
 ];
+
+export function customCategoryIconOptionsForStage(pregnancy: boolean): CustomCategoryIconOption[] {
+  if (!pregnancy) return CUSTOM_CATEGORY_ICON_OPTIONS;
+  const preferred = CUSTOM_CATEGORY_ICON_OPTIONS.filter((option) => PREGNANCY_ICON_KEYS.has(option.iconKey));
+  return preferred.length ? preferred : CUSTOM_CATEGORY_ICON_OPTIONS;
+}
 
 export function isCustomCategoryIconKey(value: string): value is CustomCategoryIconKey {
   return ICON_BY_KEY.has(value as CustomCategoryIconKey);

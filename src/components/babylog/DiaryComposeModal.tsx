@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import {
   Alert,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -24,8 +25,20 @@ import {
   type DiarySkyId,
 } from "../../constants/diaryCompose";
 import { useBabyLog } from "../../context/BabyLogContext";
+import {
+  createUploadSessionId,
+  discardSession,
+  enqueuePickedPhotos,
+  findJobByLocalUri,
+  listEagerPhotos,
+  removeEagerPhoto,
+  retryEagerPhoto,
+  subscribeEagerSession,
+  type EagerPhoto,
+} from "../../utils/eagerMediaUpload";
 import type { DiaryEntry } from "../../types/babyLog";
 import { formatDateKey } from "../../utils/dateKey";
+import { formatDiaryStageLabel, formatDottedDate } from "../../utils/childDisplay";
 import { entryToComposeDraft } from "../../utils/diaryToday";
 import {
   appendMomentSuggestion,
@@ -71,11 +84,23 @@ export function DiaryComposeModal({
   onDelete,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const { logs, babyName, babyStickers, addBabySticker, deleteBabySticker, logAuthor } = useBabyLog();
+  const { logs, babyName, babyStickers, addBabySticker, deleteBabySticker, logAuthor, activeBabyId, careSetup } = useBabyLog();
   const isEdit = !!editingEntry;
+  const stageLabel = editingEntry?.stageLabelSnapshot
+    ?? formatDiaryStageLabel(
+      careSetup.child,
+      editingEntry?.dateKey ?? formatDateKey(),
+    );
+  const stageDate = formatDottedDate(editingEntry?.dateKey ?? formatDateKey());
 
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [eagerPhotos, setEagerPhotos] = useState<EagerPhoto[]>([]);
+  const [photoError, setPhotoError] = useState("");
+  const sessionIdRef = useRef(createUploadSessionId());
+  const handedOffRef = useRef(false);
+  const savingRef = useRef(false);
+  const baselineRef = useRef<string | null>(null);
   const [stickerIds, setStickerIds] = useState<string[]>([]);
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
   const [weather, setWeather] = useState<DiarySkyId | null>(DEFAULT_DIARY_SKY);
@@ -108,6 +133,9 @@ export function DiaryComposeModal({
   const resolvedPreset = customMode ? null : milestoneTag;
 
   const canSave = notes.trim().length > 0 || photos.length > 0 || stickerIds.length > 0;
+  const pendingUploads = eagerPhotos.filter((photo) => photo.status !== "uploaded" && photo.status !== "failed").length;
+  const failedUploads = eagerPhotos.filter((photo) => photo.status === "failed").length;
+  const canSubmit = canSave && pendingUploads === 0 && failedUploads === 0;
 
   const buildDraft = (): DiaryComposeDraft => ({
     comment: notes.trim() || (photos.length || stickerIds.length ? DIARY_PHOTO_ONLY_COMMENT : notes),
@@ -121,6 +149,20 @@ export function DiaryComposeModal({
     careLogSummarySnapshot: isEdit ? frozenSnapshot || liveSummary : liveSummary,
     momentSuggestionsUsed: usedSuggestions,
   });
+
+  // Only the fields the user edits. The care-log snapshot is excluded because it
+  // can drift on its own while the sheet is open.
+  const dirtySignature = () =>
+    JSON.stringify({
+      comment: notes.trim(),
+      photos,
+      stickerIds,
+      weather,
+      mood,
+      milestoneTag: resolvedPreset,
+      customMilestoneTag: resolvedCustom,
+      inBook,
+    });
 
   useEffect(() => {
     if (!visible) {
@@ -169,7 +211,37 @@ export function DiaryComposeModal({
       setFrozenSnapshot(undefined);
     }
     setReady(true);
+    setPhotoError("");
   }, [visible, editingEntry, initialDraft]);
+
+  useEffect(() => {
+    if (!visible || !ready) {
+      baselineRef.current = null;
+      return;
+    }
+    baselineRef.current = dirtySignature();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot the populated form once
+  }, [visible, ready]);
+
+  // Photos upload as soon as they are picked. If the compose sheet is dismissed
+  // without handing them to the save path, those objects would linger in the
+  // bucket's temp prefix until the 24h server sweep.
+  useEffect(() => {
+    if (!visible) return;
+    handedOffRef.current = false;
+    const sessionId = sessionIdRef.current;
+    const refresh = () => setEagerPhotos(listEagerPhotos(sessionId));
+    refresh();
+    const unsubscribe = subscribeEagerSession(sessionId, refresh);
+    return () => {
+      unsubscribe();
+      const handedOff = handedOffRef.current;
+      sessionIdRef.current = createUploadSessionId();
+      setEagerPhotos([]);
+      if (handedOff) return;
+      void discardSession(sessionId).catch(() => undefined);
+    };
+  }, [visible]);
 
   useEffect(() => {
     if (!visible || !ready || isEdit || readOnly || !onDraftChange) return;
@@ -201,24 +273,39 @@ export function DiaryComposeModal({
       Alert.alert("사진은 최대 5장까지", "사진을 더 추가하려면 먼저 한 장을 삭제해 주세요.");
       return;
     }
+    if (!activeBabyId) {
+      setPhotoError("사진을 올리려면 현재 아기가 필요해요.");
+      return;
+    }
     try {
       const permission = await ImagePicker.getMediaLibraryPermissionsAsync();
       const resolvedPermission = permission.granted
         ? permission
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!resolvedPermission.granted) {
-        Alert.alert("사진 접근 권한이 필요해요", "설정에서 사진 접근을 허용한 뒤 다시 시도해 주세요.");
+        Alert.alert(
+          "사진 접근 권한이 필요해요",
+          "설정에서 사진 접근을 허용한 뒤 다시 시도해 주세요.",
+        );
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
-        quality: 0.8,
+        quality: 1,
         allowsMultipleSelection: true,
         selectionLimit: remaining,
         orderedSelection: true,
         preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
       });
       if (!result.canceled && result.assets.length > 0) {
+        setPhotoError("");
+        enqueuePickedPhotos({
+          babyId: activeBabyId,
+          bucket: "diary-media",
+          sessionId: sessionIdRef.current,
+          assets: result.assets.map((asset) => ({ uri: asset.uri, width: asset.width, height: asset.height })),
+        });
+        setEagerPhotos(listEagerPhotos(sessionIdRef.current));
         setPhotos((current) => {
           const next = [...current];
           for (const asset of result.assets) {
@@ -237,15 +324,25 @@ export function DiaryComposeModal({
   };
 
   const handleSave = () => {
-    if (readOnly || !canSave) return;
+    if (readOnly || !canSubmit || savingRef.current) return;
+    savingRef.current = true;
     const draft = buildDraft();
     draft.comment = notes.trim() || DIARY_PHOTO_ONLY_COMMENT;
+    handedOffRef.current = true;
     onSave(draft);
     onClose();
   };
 
   const handleClose = () => {
     if (!readOnly && !isEdit && onDraftChange) onDraftChange(buildDraft());
+    // New entries are kept as a draft, so only edits can actually lose work.
+    if (!readOnly && isEdit && baselineRef.current !== null && dirtySignature() !== baselineRef.current) {
+      Alert.alert("수정한 내용을 지울까요?", "저장하지 않고 닫으면 변경한 내용이 사라져요.", [
+        { text: "계속 쓰기", style: "cancel" },
+        { text: "닫기", style: "destructive", onPress: onClose },
+      ]);
+      return;
+    }
     onClose();
   };
 
@@ -288,10 +385,19 @@ export function DiaryComposeModal({
             <Pressable
               onPress={handleSave}
               hitSlop={10}
-              style={[styles.headerBtn, !canSave && styles.headerBtnDisabled]}
-              disabled={!canSave}
+              style={[styles.headerBtn, !canSubmit && styles.headerBtnDisabled]}
+              disabled={!canSubmit}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSubmit }}
+              accessibilityHint={
+                pendingUploads > 0
+                  ? "사진 업로드가 끝나면 저장할 수 있어요"
+                  : failedUploads > 0
+                    ? "올리지 못한 사진을 다시 시도하거나 삭제해 주세요"
+                    : undefined
+              }
             >
-              <Text style={[styles.saveHeaderText, !canSave && styles.saveHeaderTextDisabled]}>저장</Text>
+              <Text style={[styles.saveHeaderText, !canSubmit && styles.saveHeaderTextDisabled]}>저장</Text>
             </Pressable>
           )}
         </View>
@@ -317,7 +423,8 @@ export function DiaryComposeModal({
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.dateLabel}>{dateLabel}</Text>
+            {stageLabel ? <Text style={styles.dateLabel}>{stageLabel}</Text> : null}
+            <Text style={styles.dateLabel}>{stageDate ? `${dateLabel} · ${stageDate}` : dateLabel}</Text>
 
             <View style={styles.careCard}>
               <View style={styles.careTagRow}>
@@ -367,19 +474,49 @@ export function DiaryComposeModal({
                     <Text style={styles.mediaBtnSecondaryText}>스티커 추가</Text>
                   </Pressable>
                 </View>
-                <Text style={styles.photoLimit}>선택한 사진 {photos.length}장 · 최대 5장까지 추가할 수 있어요.</Text>
+                <Text style={styles.photoLimit}>
+                  {pendingUploads > 0
+                    ? `사진 ${pendingUploads}장을 올리는 중이에요. 업로드가 끝나면 저장할 수 있어요.`
+                    : failedUploads > 0
+                      ? "올리지 못한 사진이 있어요. 다시 시도하거나 삭제해 주세요."
+                      : `선택한 사진 ${photos.length}장 · 최대 5장까지 추가할 수 있어요.`}
+                </Text>
+                {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
               </>
             )}
             {photos.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
-                {photos.map((uri, index) => (
+                {photos.map((uri, index) => {
+                  const job = findJobByLocalUri(uri) ?? eagerPhotos.find((photo) => photo.localUri === uri);
+                  return (
                   <View key={`${uri}-${index}`} style={styles.photoThumbWrap}>
                     <Image source={{ uri }} style={styles.photoThumb} contentFit="cover" />
                     {index === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>대표</Text></View> : null}
+                    {job?.status === "failed" ? (
+                      <Pressable
+                        style={styles.photoFail}
+                        onPress={() => retryEagerPhoto(job.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel="사진 다시 올리기"
+                      >
+                        <Text style={styles.photoFailText}>다시 시도</Text>
+                      </Pressable>
+                    ) : job && job.status !== "uploaded" ? (
+                      <View style={styles.photoUploading} pointerEvents="none">
+                        <ActivityIndicator size="small" color={colors.onDark} />
+                        <Text style={styles.photoUploadingText}>올리는 중</Text>
+                      </View>
+                    ) : null}
                     {readOnly ? null : (
                       <Pressable
                         style={styles.photoRemove}
-                        onPress={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}
+                        onPress={() => {
+                          const removed = photos[index];
+                          const removedJob = removed ? findJobByLocalUri(removed) : undefined;
+                          if (removedJob) removeEagerPhoto(removedJob.id);
+                          setEagerPhotos(listEagerPhotos(sessionIdRef.current));
+                          setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index));
+                        }}
                         accessibilityRole="button"
                         accessibilityLabel={`사진 ${index + 1} 삭제`}
                       >
@@ -389,7 +526,8 @@ export function DiaryComposeModal({
                       </Pressable>
                     )}
                   </View>
-                ))}
+                  );
+                })}
                 {!readOnly && photos.length < MAX_DIARY_PHOTOS ? (
                   <Pressable style={styles.photoAddTile} onPress={() => void pickPhoto()}>
                     <Text style={styles.photoAddPlus}>＋</Text>
@@ -527,14 +665,20 @@ export function DiaryComposeModal({
             {readOnly ? null : (
               <View>
                 <Pressable
-                  style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
+                  style={[styles.saveBtn, !canSubmit && styles.saveBtnDisabled]}
                   onPress={handleSave}
-                  disabled={!canSave}
+                  disabled={!canSubmit}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !canSubmit }}
                 >
                   <Text style={styles.saveBtnText}>{isEdit ? "수정 저장" : "일기 저장"}</Text>
                 </Pressable>
                 {!canSave ? (
                   <Text style={styles.saveHint}>사진 또는 코멘트 중 하나는 필요해요</Text>
+                ) : pendingUploads > 0 ? (
+                  <Text style={styles.saveHint}>사진 업로드가 끝나면 저장할 수 있어요</Text>
+                ) : failedUploads > 0 ? (
+                  <Text style={styles.saveHint}>올리지 못한 사진을 다시 시도하거나 삭제해 주세요</Text>
                 ) : null}
 
                 {isEdit && onDelete ? (
@@ -676,11 +820,16 @@ const styles = StyleSheet.create({
   },
   mediaBtnSecondaryText: { color: colors.amberText, fontWeight: "800", fontSize: 13 },
   photoLimit: { color: colors.faint, fontSize: 11.5, lineHeight: 17, marginBottom: 8 },
+  photoError: { color: colors.dangerText, fontSize: 12, fontWeight: "700", marginBottom: 8 },
   photoRow: { gap: 10, paddingRight: 4 },
   photoThumbWrap: { width: 112, height: 112, borderRadius: 16, overflow: "hidden", backgroundColor: colors.cardHi },
   photoThumb: { width: "100%", height: "100%" },
   coverBadge: { position: "absolute", left: 7, bottom: 7, borderRadius: 999, backgroundColor: "rgba(46,42,38,0.72)", paddingHorizontal: 7, paddingVertical: 3 },
-  coverBadgeText: { color: "#fff", fontSize: 9.5, fontWeight: "800" },
+  coverBadgeText: { color: colors.onDark, fontSize: 9.5, fontWeight: "800" },
+  photoFail: { position: "absolute", left: 7, right: 7, bottom: 7, minHeight: 36, borderRadius: 999, backgroundColor: "rgba(46,42,38,0.82)", alignItems: "center", justifyContent: "center" },
+  photoFailText: { color: colors.onDark, fontSize: 11.5, fontWeight: "800" },
+  photoUploading: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, gap: 6, backgroundColor: "rgba(46,42,38,0.44)", alignItems: "center", justifyContent: "center" },
+  photoUploadingText: { color: colors.onDark, fontSize: 11, fontWeight: "800" },
   photoRemove: {
     position: "absolute",
     right: 0,
@@ -698,7 +847,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(46,42,38,0.72)",
   },
-  photoRemoveText: { color: "#fff", fontSize: 21, lineHeight: 23, fontWeight: "500" },
+  photoRemoveText: { color: colors.onDark, fontSize: 21, lineHeight: 23, fontWeight: "500" },
   photoAddTile: { width: 96, height: 112, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center", gap: 4 },
   photoAddPlus: { color: colors.amberText, fontSize: 26, lineHeight: 28 },
   photoAddText: { color: colors.amberText, fontSize: 11.5, fontWeight: "800" },

@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   introTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
   introBody: { marginTop: 4, color: colors.faint, fontSize: 11.5, lineHeight: 17 },
   addButton: { marginTop: 12, alignItems: "center", paddingVertical: 13, borderRadius: 14, backgroundColor: colors.amber },
-  addButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
+  addButtonText: { color: colors.amberDark, fontSize: 14, fontWeight: "800" },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 22, marginBottom: 9, paddingHorizontal: 2 },
   sectionTitle: { color: colors.text, fontSize: 15, fontWeight: "800" },
   sectionCount: { color: colors.faint, fontSize: 11.5, fontWeight: "700" },

@@ -8,13 +8,13 @@ export function SettingsHomeScreen({ navigation }: Props) {
   return (
     <MenuScreen
       embedded
-      onOpenProfile={() => navigation.navigate("BabyProfile")}
+      onOpenProfile={() => navigation.navigate("BabyProfile", { mode: undefined })}
       onOpenMyProfile={() => navigation.navigate("MyProfile")}
       onOpenFamilyShare={() => navigation.navigate("FamilyShare")}
       onOpenSettings={(page) => navigation.navigate("SettingsDetail", { page })}
       onOpenGrowthRecords={() => navigation.navigate("GrowthRecords")}
       onOpenGrowthBookStorage={() => navigation.navigate("MainTabs", { screen: "Diary", params: { openGrowthBookVault: true } })}
-      onOpenConsult={() => navigation.navigate("MainTabs", { screen: "Consult" })}
+      onOpenConsult={() => navigation.navigate("Consult")}
     />
   );
 }

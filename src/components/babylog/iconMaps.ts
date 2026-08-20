@@ -20,6 +20,7 @@ import {
   FileText,
   FolderOpen,
   Handshake,
+  Heart,
   Image as ImageIcon,
   LayoutGrid,
   GlassWater,
@@ -76,6 +77,13 @@ export const CATEGORY_ICONS: Record<BabyLogCategoryId, IconComponent> = {
   play: RattleIcon,
   memo: FileText,
   other: Star,
+  pregMood: Heart,
+  pregSymptom: AlertTriangle,
+  pregWeight: Activity,
+  pregBp: Activity,
+  pregMed: Pill,
+  pregKick: Baby,
+  pregHospital: Stethoscope,
 };
 
 export type TabIconKey = "record" | "diary" | "report" | "consult" | "mic" | "menu" | "memories";
@@ -93,6 +101,7 @@ export type MiscIconKey =
   | "interval"
   | "bell"
   | "sparkles"
+  | "heart"
   | "voice"
   | "trash"
   | "bot"
@@ -132,6 +141,7 @@ export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
   interval: ArrowLeftRight,
   bell: Bell,
   sparkles: Sparkles,
+  heart: Heart,
   voice: Mic,
   trash: Trash2,
   bot: Bot,

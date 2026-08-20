@@ -2,7 +2,10 @@ import { requireSupabase } from "../lib/supabase";
 import type { DiaryEntry } from "../types/babyLog";
 import type { DiaryMedia, DiaryMigrationResult } from "../types/diary";
 import type { DiaryMediaRow } from "../types/database";
+import { compressImageForUpload } from "../utils/compressImage";
+import { bindJobsToDiaryEntry, findJobByLocalUri } from "../utils/eagerMediaUpload";
 import { createId } from "../utils/id";
+import { isAllowedMediaStoragePath } from "../utils/tempMediaPath";
 import {
   diaryEntryColumns,
   diaryEntryRowToModel,
@@ -19,23 +22,6 @@ export type DiaryWriteResult = {
   entry: DiaryEntry;
   photoUploadFailed: number;
 };
-
-function imageContentType(uri: string): string {
-  const normalized = uri.toLowerCase().split("?")[0];
-  if (normalized.endsWith(".png")) return "image/png";
-  if (normalized.endsWith(".heic")) return "image/heic";
-  if (normalized.endsWith(".heif")) return "image/heif";
-  if (normalized.endsWith(".webp")) return "image/webp";
-  return "image/jpeg";
-}
-
-function imageExtension(contentType: string): string {
-  if (contentType === "image/png") return "png";
-  if (contentType === "image/heic") return "heic";
-  if (contentType === "image/heif") return "heif";
-  if (contentType === "image/webp") return "webp";
-  return "jpg";
-}
 
 function isRemotePhoto(uri: string): boolean {
   return /^https?:\/\//i.test(uri);
@@ -62,6 +48,7 @@ async function requireUserId(): Promise<string> {
 async function signedPhotos(media: DiaryMediaRow[]): Promise<Map<string, string[]>> {
   const result = new Map<string, string[]>();
   for (const row of media) {
+    if (row.upload_status && row.upload_status !== "ready") continue;
     try {
       const url = await DiaryRepository.createSignedUrl(row.storage_path);
       const current = result.get(row.diary_entry_id) ?? [];
@@ -114,6 +101,7 @@ export const DiaryRepository = {
       baby_id: item.babyId,
       storage_path: item.storagePath,
       media_type: item.mediaType,
+      upload_status: item.uploadStatus,
       width: item.width ?? null,
       height: item.height ?? null,
       created_at: item.createdAt,
@@ -198,12 +186,12 @@ export const DiaryRepository = {
     diaryEntryId: string;
     babyId: string;
     storagePath: string;
+    uploadStatus?: "uploading" | "ready" | "failed";
     width?: number;
     height?: number;
   }): Promise<DiaryMedia> {
-    const expectedPrefix = `${input.babyId}/${input.diaryEntryId}/`;
-    if (!input.storagePath.startsWith(expectedPrefix)) {
-      throw new Error(`Diary storage path must start with ${expectedPrefix}`);
+    if (!isAllowedMediaStoragePath(input.babyId, input.diaryEntryId, input.storagePath)) {
+      throw new Error("Diary storage path is not allowed for this baby.");
     }
     const sb = requireSupabase();
     const { data, error } = await sb.from("diary_media").insert({
@@ -212,6 +200,7 @@ export const DiaryRepository = {
       baby_id: input.babyId,
       storage_path: input.storagePath,
       media_type: "image",
+      upload_status: input.uploadStatus ?? "ready",
       width: input.width ?? null,
       height: input.height ?? null,
     }).select("*").single();
@@ -249,16 +238,16 @@ export const DiaryRepository = {
     width?: number;
     height?: number;
   }): Promise<DiaryMedia> {
-    const contentType = imageContentType(input.photoUri);
+    const compressed = await compressImageForUpload(input.photoUri, input.width, input.height);
     const mediaId = createId();
-    const storagePath = `${input.babyId}/${input.diaryEntryId}/${mediaId}.${imageExtension(contentType)}`;
-    const response = await fetch(input.photoUri);
+    const storagePath = `${input.babyId}/${input.diaryEntryId}/${mediaId}.jpg`;
+    const response = await fetch(compressed.uri);
     const bytes = await response.arrayBuffer();
     if (bytes.byteLength === 0) throw new Error("선택한 일기 사진을 읽지 못했어요.");
     if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("일기 사진은 25MB 이하만 올릴 수 있어요.");
     const sb = requireSupabase();
     const { error: uploadError } = await sb.storage.from(DIARY_MEDIA_BUCKET).upload(storagePath, bytes, {
-      contentType,
+      contentType: compressed.mimeType,
       upsert: false,
     });
     if (uploadError) throw uploadError;
@@ -268,8 +257,9 @@ export const DiaryRepository = {
         diaryEntryId: input.diaryEntryId,
         babyId: input.babyId,
         storagePath,
-        width: input.width,
-        height: input.height,
+        uploadStatus: "ready",
+        width: compressed.width,
+        height: compressed.height,
       });
     } catch (error) {
       await sb.storage.from(DIARY_MEDIA_BUCKET).remove([storagePath]);
@@ -306,21 +296,42 @@ export const DiaryRepository = {
   async createWithPhotos(babyId: string, entry: DiaryEntry): Promise<DiaryWriteResult> {
     const created = await this.create(babyId, entry);
     let photoUploadFailed = 0;
+    const attachedIds: string[] = [];
     for (const photoUri of entry.photos) {
+      if (isRemotePhoto(photoUri)) continue;
+      const job = findJobByLocalUri(photoUri);
+      if (job) {
+        try {
+          await this.addMedia({
+            id: job.id,
+            diaryEntryId: created.id,
+            babyId,
+            storagePath: job.storagePath,
+            uploadStatus: job.status === "uploaded" ? "ready" : job.status === "failed" ? "failed" : "uploading",
+            width: job.width,
+            height: job.height,
+          });
+          attachedIds.push(job.id);
+          if (job.status === "failed") photoUploadFailed += 1;
+        } catch {
+          photoUploadFailed += 1;
+        }
+        continue;
+      }
       try {
         await this.uploadLocalPhoto({ babyId, diaryEntryId: created.id, photoUri });
       } catch {
         photoUploadFailed += 1;
       }
     }
-    const hydrated = (await this.getById(created.id)) ?? created;
+    bindJobsToDiaryEntry(attachedIds, created.id);
     void NotificationRepository.sendPushToBabyMembers({
       eventType: "new_diary",
       babyId,
       targetId: created.id,
       routeData: { route: "diary", babyId, diaryEntryId: created.id },
     }).catch(() => undefined);
-    return { entry: hydrated, photoUploadFailed };
+    return { entry: { ...created, photos: entry.photos }, photoUploadFailed };
   },
 
   async updateWithPhotos(babyId: string, entry: DiaryEntry): Promise<DiaryWriteResult> {
@@ -329,20 +340,43 @@ export const DiaryRepository = {
     const desiredRemotePaths = new Set(entry.photos.map(signedDiaryStoragePath).filter((path): path is string => Boolean(path)));
     const localPhotos = entry.photos.filter((uri) => !isRemotePhoto(uri));
     const uploaded: DiaryMedia[] = [];
+    const attachedIds: string[] = [];
     for (const photoUri of localPhotos) {
+      const job = findJobByLocalUri(photoUri);
+      if (job) {
+        desiredRemotePaths.add(job.storagePath);
+        if (!existing.some((media) => media.id === job.id || media.storagePath === job.storagePath)) {
+          try {
+            uploaded.push(await this.addMedia({
+              id: job.id,
+              diaryEntryId: entry.id,
+              babyId,
+              storagePath: job.storagePath,
+              uploadStatus: job.status === "uploaded" ? "ready" : job.status === "failed" ? "failed" : "uploading",
+              width: job.width,
+              height: job.height,
+            }));
+          } catch {
+            return { entry: { ...updated, photos: entry.photos }, photoUploadFailed: 1 };
+          }
+        }
+        attachedIds.push(job.id);
+        continue;
+      }
       try {
         uploaded.push(await this.uploadLocalPhoto({ babyId, diaryEntryId: entry.id, photoUri }));
       } catch {
         for (const media of uploaded) {
           try { await this.deleteMedia(media.id); } catch { /* keep tracked cleanup failures */ }
         }
-        return { entry: (await this.getById(updated.id)) ?? updated, photoUploadFailed: 1 };
+        return { entry: { ...updated, photos: entry.photos }, photoUploadFailed: 1 };
       }
     }
+    bindJobsToDiaryEntry(attachedIds, entry.id);
     for (const media of existing) {
       if (!desiredRemotePaths.has(media.storagePath)) await this.deleteMedia(media.id);
     }
-    return { entry: (await this.getById(updated.id)) ?? updated, photoUploadFailed: 0 };
+    return { entry: { ...updated, photos: entry.photos }, photoUploadFailed: 0 };
   },
 
   async hydrate(babyId: string): Promise<DiaryEntry[]> {

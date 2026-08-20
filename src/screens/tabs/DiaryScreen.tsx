@@ -60,6 +60,7 @@ import { EmptyState } from "../../components/states/FeedbackStates";
 import { colors, radius, type } from "../../theme";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
 import type { MainTabParamList } from "../../navigation/types";
+import { diaryStageLabel, formatDottedDate } from "../../utils/childDisplay";
 
 type Props = {
   onOpenProfile: () => void;
@@ -91,6 +92,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     babyStickers,
     addBabySticker,
     deleteBabySticker,
+    careSetup,
   } = useBabyLog();
   const me = familyMembers.find((member) => member.isMe);
   const allowAdd = canAddLog(myFamilyRole);
@@ -117,6 +119,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     pushVisible || sheetOpen || chipPressing,
   );
   const diaryEntriesRef = useRef(diaryEntries);
+  const persistLockRef = useRef(false);
   diaryEntriesRef.current = diaryEntries;
   const draftRef = useRef(draftMemory);
   draftRef.current = draftMemory;
@@ -326,73 +329,79 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   const writeDisabled = !todayDiary && !allowAdd;
 
   const persistFromDraft = (draft: DiaryComposeDraft, source: "manual" | "notification") => {
-    const existingToday = diaryEntries.find((d) => d.dateKey === todayKey);
-    const target = editingEntry ?? existingToday;
-    if (target) {
-      if (!canEditLog(myFamilyRole, target.createdBy, me)) return;
-    } else if (!allowAdd) {
-      return;
-    }
-    void clearDiaryDraft(localDataScope, todayKey);
-    setDraftMemory(null);
-    const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-    const now = new Date();
-    const dateLabel = `${now.getMonth() + 1}월 ${now.getDate()}일 (${weekdays[now.getDay()]})`;
+    if (persistLockRef.current) return;
+    persistLockRef.current = true;
+    try {
+      const existingToday = diaryEntries.find((d) => d.dateKey === todayKey);
+      const target = editingEntry ?? existingToday;
+      if (target) {
+        if (!canEditLog(myFamilyRole, target.createdBy, me)) return;
+      } else if (!allowAdd) {
+        return;
+      }
+      void clearDiaryDraft(localDataScope, todayKey);
+      setDraftMemory(null);
+      const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+      const now = new Date();
+      const dateLabel = `${now.getMonth() + 1}월 ${now.getDate()}일 (${weekdays[now.getDay()]})`;
 
-    if (editingEntry) {
-      updateDiary(editingEntry.id, {
+      if (editingEntry) {
+        updateDiary(editingEntry.id, {
+          photos: draft.photos,
+          stickerIds: draft.stickerIds ?? [],
+          comment: draft.comment,
+          weatherStamp: draft.weatherStamp,
+          moodStamp: draft.moodStamp,
+          milestoneTag: draft.milestoneTag,
+          customMilestoneTag: draft.customMilestoneTag,
+          includedInGrowthBook: draft.includedInGrowthBook,
+          // Keep frozen snapshot on edit — do not overwrite with live summary
+          careLogSummarySnapshot: editingEntry.careLogSummarySnapshot,
+          momentSuggestionsUsed: draft.momentSuggestionsUsed,
+          dateKey: editingEntry.dateKey || todayKey,
+          draftStatus: "saved",
+        });
+        return;
+      }
+
+      if (existingToday) {
+        updateDiary(existingToday.id, {
+          photos: draft.photos,
+          stickerIds: draft.stickerIds ?? [],
+          comment: draft.comment,
+          weatherStamp: draft.weatherStamp,
+          moodStamp: draft.moodStamp,
+          milestoneTag: draft.milestoneTag,
+          customMilestoneTag: draft.customMilestoneTag,
+          includedInGrowthBook: draft.includedInGrowthBook,
+          careLogSummarySnapshot: existingToday.careLogSummarySnapshot,
+          momentSuggestionsUsed: draft.momentSuggestionsUsed,
+          draftStatus: "saved",
+        });
+        return;
+      }
+
+      addDiary({
+        babyId: localDataScope?.babyId ?? "",
+        date: dateLabel,
+        dateKey: todayKey,
         photos: draft.photos,
         stickerIds: draft.stickerIds ?? [],
         comment: draft.comment,
         weatherStamp: draft.weatherStamp,
         moodStamp: draft.moodStamp,
+        careLogSummarySnapshot: draft.careLogSummarySnapshot,
+        momentSuggestionsUsed: draft.momentSuggestionsUsed,
         milestoneTag: draft.milestoneTag,
         customMilestoneTag: draft.customMilestoneTag,
         includedInGrowthBook: draft.includedInGrowthBook,
-        // Keep frozen snapshot on edit — do not overwrite with live summary
-        careLogSummarySnapshot: editingEntry.careLogSummarySnapshot,
-        momentSuggestionsUsed: draft.momentSuggestionsUsed,
-        dateKey: editingEntry.dateKey || todayKey,
+        createdBy: logAuthor,
+        source,
         draftStatus: "saved",
       });
-      return;
+    } finally {
+      persistLockRef.current = false;
     }
-
-    if (existingToday) {
-      updateDiary(existingToday.id, {
-        photos: draft.photos,
-        stickerIds: draft.stickerIds ?? [],
-        comment: draft.comment,
-        weatherStamp: draft.weatherStamp,
-        moodStamp: draft.moodStamp,
-        milestoneTag: draft.milestoneTag,
-        customMilestoneTag: draft.customMilestoneTag,
-        includedInGrowthBook: draft.includedInGrowthBook,
-        careLogSummarySnapshot: existingToday.careLogSummarySnapshot,
-        momentSuggestionsUsed: draft.momentSuggestionsUsed,
-        draftStatus: "saved",
-      });
-      return;
-    }
-
-    addDiary({
-      babyId: localDataScope?.babyId ?? "",
-      date: dateLabel,
-      dateKey: todayKey,
-      photos: draft.photos,
-      stickerIds: draft.stickerIds ?? [],
-      comment: draft.comment,
-      weatherStamp: draft.weatherStamp,
-      moodStamp: draft.moodStamp,
-      careLogSummarySnapshot: draft.careLogSummarySnapshot,
-      momentSuggestionsUsed: draft.momentSuggestionsUsed,
-      milestoneTag: draft.milestoneTag,
-      customMilestoneTag: draft.customMilestoneTag,
-      includedInGrowthBook: draft.includedInGrowthBook,
-      createdBy: logAuthor,
-      source,
-      draftStatus: "saved",
-    });
   };
 
   return (
@@ -570,6 +579,8 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
         renderItem={({ item: d }) => (
           <DiaryCard
             entry={d}
+            ageLabel={diaryStageLabel(d, careSetup.child)}
+            dateLabel={formatDottedDate(d.dateKey) ?? d.date}
             canToggleBook={canEditLog(myFamilyRole, d.createdBy, me)}
             onOpen={() => openEdit(d)}
             onToggleBook={() => toggleDiaryInGrowthBook(d.id)}
@@ -694,11 +705,15 @@ const BOOKMARK_NUDGE = 4;
 
 function DiaryCard({
   entry,
+  ageLabel,
+  dateLabel,
   canToggleBook,
   onOpen,
   onToggleBook,
 }: {
   entry: DiaryEntry;
+  ageLabel: string | null;
+  dateLabel: string;
   canToggleBook: boolean;
   onOpen: () => void;
   onToggleBook: () => void;
@@ -738,7 +753,7 @@ function DiaryCard({
         <View style={styles.body}>
           <View style={styles.dateRow}>
             <Text style={styles.date} numberOfLines={1}>
-              {entry.date}
+              {ageLabel ? `${ageLabel} · ${dateLabel}` : entry.date}
             </Text>
             <DiaryStampPair skyId={entry.weatherStamp} moodId={entry.moodStamp} size="sm" />
           </View>

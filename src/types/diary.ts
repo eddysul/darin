@@ -4,6 +4,7 @@ export type DiaryMedia = {
   babyId: string;
   storagePath: string;
   mediaType: "image";
+  uploadStatus: "uploading" | "ready" | "failed";
   width?: number;
   height?: number;
   createdAt: string;

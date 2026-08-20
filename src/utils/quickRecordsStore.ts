@@ -1,14 +1,22 @@
-import { DEFAULT_QUICK_RECORDS } from "../constants/defaultQuickRecords";
+import { ALL_DEFAULT_QUICK_RECORDS, DEFAULT_PREGNANCY_QUICK_RECORDS } from "../constants/defaultQuickRecords";
 import type { QuickRecord } from "../types/quickRecord";
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
 import { qaStorage } from "./qaStorage";
+import {
+  isValidLocalDataScope,
+  localDataScopeId,
+  readScopedWithLegacyMigration,
+  scopedStorageKey,
+  type LocalDataScope,
+} from "./scopedLocalStorage";
 
 const STORAGE_KEY = STORAGE_KEYS.quickRecords;
 
 let memory: QuickRecord[] | null = null;
 let hydrated = false;
 let hydratePromise: Promise<boolean> | null = null;
+let activeScopeId: string | null = null;
 
 function isQuickRecord(item: unknown): item is QuickRecord {
   if (typeof item !== "object" || item === null) return false;
@@ -26,8 +34,14 @@ function isQuickRecord(item: unknown): item is QuickRecord {
   );
 }
 
+function withPregnancySeeds(records: QuickRecord[]): QuickRecord[] {
+  const ids = new Set(records.map((record) => record.id));
+  const missing = DEFAULT_PREGNANCY_QUICK_RECORDS.filter((record) => !ids.has(record.id));
+  return missing.length ? [...records, ...missing] : records;
+}
+
 function normalize(raw: unknown): QuickRecord[] {
-  if (!Array.isArray(raw)) return [...DEFAULT_QUICK_RECORDS];
+  if (!Array.isArray(raw)) return [...ALL_DEFAULT_QUICK_RECORDS];
   const parsed = raw.filter(isQuickRecord).map((record) =>
     record.id === "qr-diaper" && record.defaults.cat === "diaper" && !record.defaults.chip
       ? {
@@ -38,20 +52,51 @@ function normalize(raw: unknown): QuickRecord[] {
         }
       : record,
   );
-  return parsed.length ? parsed : [...DEFAULT_QUICK_RECORDS];
+  return parsed.length ? withPregnancySeeds(parsed) : [...ALL_DEFAULT_QUICK_RECORDS];
 }
 
-export async function hydrateQuickRecords(force = false): Promise<boolean> {
+function parseRecords(raw: string): QuickRecord[] {
+  return normalize(JSON.parse(raw));
+}
+
+function mergeRecords(scoped: QuickRecord[] | null, legacy: QuickRecord[]): QuickRecord[] {
+  if (scoped && scoped.length > 0) return scoped;
+  return legacy;
+}
+
+export async function hydrateQuickRecords(
+  scope: LocalDataScope | null,
+  force = false,
+): Promise<boolean> {
+  if (!isValidLocalDataScope(scope)) {
+    resetQuickRecordsMemory();
+    return true;
+  }
+  const nextScopeId = localDataScopeId(scope);
+  if (activeScopeId !== nextScopeId) {
+    memory = null;
+    hydrated = false;
+    hydratePromise = null;
+    activeScopeId = nextScopeId;
+  }
   if (force) {
     hydrated = false;
     hydratePromise = null;
   }
   if (hydrated) return true;
   if (!hydratePromise) {
+    const requestedScopeId = nextScopeId;
     hydratePromise = (async () => {
       try {
-        const raw = await qaStorage.getItem(STORAGE_KEY);
-        memory = raw ? normalize(JSON.parse(raw)) : null;
+        const result = await readScopedWithLegacyMigration({
+          baseKey: STORAGE_KEY,
+          scope,
+          parse: parseRecords,
+          serialize: JSON.stringify,
+          merge: mergeRecords,
+        });
+        if (activeScopeId !== requestedScopeId) return false;
+        memory = result.value;
         hydrated = true;
         return true;
       } catch {
@@ -64,15 +109,28 @@ export async function hydrateQuickRecords(force = false): Promise<boolean> {
 }
 
 export function getQuickRecords(): QuickRecord[] {
-  return memory ?? [...DEFAULT_QUICK_RECORDS];
+  return memory ?? [...ALL_DEFAULT_QUICK_RECORDS];
 }
 
-export async function saveQuickRecords(records: QuickRecord[]): Promise<void> {
+export async function saveQuickRecords(
+  records: QuickRecord[],
+  scope: LocalDataScope | null,
+): Promise<void> {
+  if (!isValidLocalDataScope(scope)) return;
+  const scopeId = localDataScopeId(scope);
+  if (activeScopeId !== scopeId) return;
   memory = records;
   hydrated = true;
   try {
-    await qaStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    await qaStorage.setItem(scopedStorageKey(STORAGE_KEY, scope), JSON.stringify(records));
   } catch {
     reportStorageIssue("save", STORAGE_KEY);
   }
+}
+
+export function resetQuickRecordsMemory(): void {
+  memory = null;
+  hydrated = false;
+  hydratePromise = null;
+  activeScopeId = null;
 }

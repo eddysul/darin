@@ -91,7 +91,7 @@ const TEMPLATE_ARTWORK: Partial<Record<StickerTemplateId, TemplateArtworkPieces>
     decorations: [
       { source: DECOR.question, x: -0.05, y: -0.03, size: 0.32, rotate: "8deg" },
       { source: DECOR.star, x: 0.78, y: -0.05, size: 0.21 },
-      { source: DECOR.sparkle, x: 0.81, y: 0.31, size: 0.17 },
+      { source: DECOR.sparkle, x: 0.81, y: 0.70, size: 0.17 },
     ],
   },
   wow: {
@@ -105,19 +105,18 @@ const TEMPLATE_ARTWORK: Partial<Record<StickerTemplateId, TemplateArtworkPieces>
   },
   yummy: {
     main: require("../../../assets/sticker-templates/phrase-yummy.png"),
-    mainLayout: { x: 0.58, y: 0.36, size: 0.5 },
+    mainLayout: { x: 0.58, y: -0.10, size: 0.5 },
     decorations: [
       { source: DECOR.spoon, x: 0.73, y: 0.62, size: 0.31, rotate: "-16deg" },
-      { source: DECOR.heart, x: -0.03, y: -0.02, size: 0.27, rotate: "-10deg" },
+      { source: DECOR.heart, x: -0.03, y: 0.50, size: 0.27, rotate: "-10deg" },
       { source: DECOR.heart, x: -0.04, y: 0.25, size: 0.23, rotate: "12deg" },
     ],
   },
   sleepy: {
     main: require("../../../assets/sticker-templates/phrase-sleepy.png"),
-    mainLayout: { x: 0.58, y: 0.1, size: 0.5 },
+    mainLayout: { x: 0.60, y: 0.04, size: 0.5 },
     decorations: [
       { source: DECOR.moon, x: -0.05, y: 0.22, size: 0.31, rotate: "-8deg" },
-      { source: DECOR.tear, x: -0.04, y: -0.04, size: 0.23, rotate: "12deg" },
       { source: DECOR.cloud, x: -0.04, y: 0.63, size: 0.26 },
       { source: DECOR.sleep, x: 0.76, y: -0.06, size: 0.27 },
     ],
@@ -126,9 +125,10 @@ const TEMPLATE_ARTWORK: Partial<Record<StickerTemplateId, TemplateArtworkPieces>
     main: require("../../../assets/sticker-templates/phrase-cry.png"),
     mainLayout: { x: 0.59, y: 0.15, size: 0.49 },
     decorations: [
-      { source: DECOR.tear, x: -0.05, y: 0.12, size: 0.29, rotate: "-12deg" },
-      { source: DECOR.tear, x: -0.02, y: 0.5, size: 0.25, rotate: "14deg" },
-      { source: DECOR.tear, x: 0.78, y: -0.04, size: 0.22, rotate: "10deg" },
+      { source: DECOR.tear, x: 0.20, y: 0.72, size: 0.20, rotate: "-12deg" },
+      { source: DECOR.tear, x: 0.60, y: 0.72, size: 0.20, rotate: "-12deg" },
+      { source: DECOR.tear, x: 0.01, y: 0.12, size: 0.25, rotate: "14deg" },
+      { source: DECOR.tear, x: 0.70, y: 0.03, size: 0.22, rotate: "10deg" },
     ],
   },
   daze: {

@@ -24,9 +24,13 @@ import type {
   MemoryTag,
   MemoryTagDraft,
   SetMemoryReactionInput,
+  PublishEagerMemoryInput,
   UpdateMemoryPostInput,
 } from "../types/memory";
+import { compressImageForUpload } from "../utils/compressImage";
+import { bindJobsToMemoryPost, retryEagerPhoto } from "../utils/eagerMediaUpload";
 import { createId } from "../utils/id";
+import { isAllowedMediaStoragePath } from "../utils/tempMediaPath";
 import { AuthRepository } from "./AuthRepository";
 import { BabyStickerRepository } from "./BabyStickerRepository";
 import { NotificationRepository } from "./NotificationRepository";
@@ -35,8 +39,14 @@ const MEMORIES_BUCKET = "memories";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 const CAPTION_MAX_LENGTH = 1200;
 const COMMENT_MAX_LENGTH = 500;
+const UPLOAD_CONCURRENCY = 3;
+export const MEMORY_FEED_IMAGE_WIDTH = 800;
+export const MEMORY_DETAIL_IMAGE_WIDTH = 1400;
 /** Short TTL so revoked viewers lose access soon. Known limitation: old URLs work until expiry. */
 export const MEMORY_SIGNED_URL_TTL_SECONDS = 180;
+
+type SignedUrlCacheEntry = { url: string; expiresAt: number };
+const signedUrlCache = new Map<string, SignedUrlCacheEntry>();
 
 export function memoryPostRowToModel(row: MemoryPostRow): MemoryPost {
   return {
@@ -46,6 +56,7 @@ export function memoryPostRowToModel(row: MemoryPostRow): MemoryPost {
     caption: row.caption ?? undefined,
     privacyType: row.privacy_type,
     isFamilyMoment: row.is_family_moment ?? false,
+    status: row.status ?? "published",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? undefined,
@@ -59,6 +70,7 @@ export function memoryMediaRowToModel(row: MemoryMediaRow): MemoryMedia {
     babyId: row.baby_id,
     storagePath: row.storage_path,
     mediaType: row.media_type,
+    uploadStatus: row.upload_status ?? "ready",
     width: row.width ?? undefined,
     height: row.height ?? undefined,
     createdAt: row.created_at,
@@ -113,12 +125,6 @@ function normalizeCaption(caption?: string | null): string | null {
   return value || null;
 }
 
-function imageExtension(mimeType?: string): string {
-  if (mimeType === "image/png") return "png";
-  if (mimeType === "image/heic" || mimeType === "image/heif") return "heic";
-  return "jpg";
-}
-
 async function replaceSelectedPeople(memoryPostId: string, userIds: string[]): Promise<void> {
   const sb = requireSupabase();
   const uniqueIds = [...new Set(userIds.filter(Boolean))];
@@ -160,6 +166,19 @@ async function requireUserId(): Promise<string> {
   return user.id;
 }
 
+async function mapPool<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(items.length, 1)) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(items[index]);
+    }
+  }));
+  return results;
+}
+
 async function uploadMemoryImage(input: {
   memoryPostId: string;
   babyId: string;
@@ -168,15 +187,16 @@ async function uploadMemoryImage(input: {
   if (input.image.fileSize !== undefined && input.image.fileSize > MAX_IMAGE_BYTES) {
     throw new Error("사진은 25MB 이하만 올릴 수 있어요.");
   }
+  const compressed = await compressImageForUpload(input.image.uri, input.image.width, input.image.height);
   const mediaId = createId();
-  const storagePath = `${input.babyId}/${input.memoryPostId}/${mediaId}.${imageExtension(input.image.mimeType)}`;
-  const response = await fetch(input.image.uri);
+  const storagePath = `${input.babyId}/${input.memoryPostId}/${mediaId}.jpg`;
+  const response = await fetch(compressed.uri);
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength === 0) throw new Error("선택한 사진을 읽지 못했어요.");
   if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("사진은 25MB 이하만 올릴 수 있어요.");
   const sb = requireSupabase();
   const { error: uploadError } = await sb.storage.from(MEMORIES_BUCKET).upload(storagePath, bytes, {
-    contentType: input.image.mimeType ?? "image/jpeg",
+    contentType: compressed.mimeType,
     upsert: false,
   });
   if (uploadError) throw uploadError;
@@ -186,8 +206,9 @@ async function uploadMemoryImage(input: {
     baby_id: input.babyId,
     storage_path: storagePath,
     media_type: "image",
-    width: input.image.width ?? null,
-    height: input.image.height ?? null,
+    upload_status: "ready",
+    width: compressed.width,
+    height: compressed.height,
   }).select("*").single();
   if (error) {
     await sb.storage.from(MEMORIES_BUCKET).remove([storagePath]);
@@ -242,6 +263,7 @@ export const MemoriesRepository = {
         caption: normalizeCaption(input.caption),
         privacy_type: input.privacyType,
         is_family_moment: input.isFamilyMoment ?? false,
+        status: input.status ?? "published",
       })
       .select("*")
       .single();
@@ -265,9 +287,8 @@ export const MemoriesRepository = {
   },
 
   async addMedia(input: AddMemoryMediaInput): Promise<MemoryMedia> {
-    const expectedPrefix = `${input.babyId}/${input.memoryPostId}/`;
-    if (!input.storagePath.startsWith(expectedPrefix)) {
-      throw new Error(`Memory storage path must start with ${expectedPrefix}`);
+    if (!isAllowedMediaStoragePath(input.babyId, input.memoryPostId, input.storagePath)) {
+      throw new Error("Memory storage path is not allowed for this baby.");
     }
     const sb = requireSupabase();
     const { data, error } = await sb
@@ -278,6 +299,7 @@ export const MemoriesRepository = {
         baby_id: input.babyId,
         storage_path: input.storagePath,
         media_type: input.mediaType ?? "image",
+        upload_status: input.uploadStatus ?? "ready",
         width: input.width ?? null,
         height: input.height ?? null,
       })
@@ -498,23 +520,48 @@ export const MemoriesRepository = {
   async createSignedUrl(
     storagePath: string,
     expiresInSeconds = MEMORY_SIGNED_URL_TTL_SECONDS,
+    options?: { width?: number },
   ): Promise<string> {
+    const cacheKey = `${storagePath}:${options?.width ?? "full"}`;
+    const cached = signedUrlCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.url;
+
     const sb = requireSupabase();
     // Gate on memory_media SELECT RLS (can_view_memory_post) before minting a URL.
     const { data: media, error: mediaError } = await sb
       .from("memory_media")
-      .select("id")
+      .select("id, upload_status")
       .eq("storage_path", storagePath)
       .single();
     if (mediaError || !media) {
       throw mediaError ?? new Error("Memory media not found or not accessible.");
     }
+    if (media.upload_status && media.upload_status !== "ready") {
+      throw new Error("Memory media is not ready.");
+    }
 
-    const { data, error } = await sb.storage
-      .from(MEMORIES_BUCKET)
-      .createSignedUrl(storagePath, expiresInSeconds);
-    if (error) throw error;
-    return data.signedUrl;
+    const mint = async (width?: number) => {
+      const { data, error } = await sb.storage.from(MEMORIES_BUCKET).createSignedUrl(
+        storagePath,
+        expiresInSeconds,
+        width ? { transform: { width, quality: 75, resize: "contain" } } : undefined,
+      );
+      if (error || !data?.signedUrl) throw error ?? new Error("Signed URL missing.");
+      return data.signedUrl;
+    };
+
+    let url: string;
+    try {
+      url = await mint(options?.width);
+    } catch (error) {
+      if (!options?.width) throw error;
+      url = await mint();
+    }
+    signedUrlCache.set(cacheKey, {
+      url,
+      expiresAt: Date.now() + Math.max(20, expiresInSeconds - 20) * 1000,
+    });
+    return url;
   },
 
   async listMedia(memoryPostId: string): Promise<MemoryMedia[]> {
@@ -605,7 +652,11 @@ export const MemoriesRepository = {
   },
 
   async listCardsByBabyId(babyId: string): Promise<MemoryCard[]> {
-    const [posts, savedPostIds] = await Promise.all([this.listByBabyId(babyId), this.listSavedPostIds(babyId)]);
+    const [posts, savedPostIds, userId] = await Promise.all([
+      this.listByBabyId(babyId),
+      this.listSavedPostIds(babyId),
+      requireUserId(),
+    ]);
     const saved = new Set(savedPostIds);
     return Promise.all(posts.map(async (post) => {
       const [media, tags, comments, reactions] = await Promise.all([
@@ -615,7 +666,9 @@ export const MemoriesRepository = {
         this.listReactions(post.id),
       ]);
       const coverMedia = media[0];
-      const coverUrl = coverMedia ? await this.createSignedUrl(coverMedia.storagePath) : undefined;
+      const coverUrl = coverMedia?.uploadStatus === "ready"
+        ? await this.createSignedUrl(coverMedia.storagePath, MEMORY_SIGNED_URL_TTL_SECONDS, { width: MEMORY_FEED_IMAGE_WIDTH }).catch(() => undefined)
+        : undefined;
       return {
         post,
         coverMedia,
@@ -624,7 +677,9 @@ export const MemoriesRepository = {
         tags,
         commentCount: comments.length,
         reactionCount: reactions.length,
+        isLiked: reactions.some((reaction) => reaction.authorId === userId),
         isSaved: saved.has(post.id),
+        hasFailedMedia: media.some((item) => item.uploadStatus === "failed"),
       };
     }));
   },
@@ -646,7 +701,11 @@ export const MemoriesRepository = {
         selectedUserIds: input.selectedUserIds,
       });
       postCreated = true;
-      for (const image of input.images) uploaded.push(await uploadMemoryImage({ memoryPostId: postId, babyId: input.babyId, image }));
+      await mapPool(input.images, UPLOAD_CONCURRENCY, async (image) => {
+        const media = await uploadMemoryImage({ memoryPostId: postId, babyId: input.babyId, image });
+        uploaded.push(media);
+        return media;
+      });
       await replaceTags(postId, input.tags ?? [{ tagType: "baby", babyId: input.babyId }]);
       const bundle = await this.getBundleById(postId);
       if (!bundle) throw new Error("업로드한 추억을 다시 불러오지 못했어요.");
@@ -655,6 +714,65 @@ export const MemoriesRepository = {
       for (const media of uploaded) await sb.storage.from(MEMORIES_BUCKET).remove([media.storagePath]);
       if (postCreated) await sb.from("memory_posts").delete().eq("id", postId);
       throw error;
+    }
+  },
+
+  async publishEagerMemory(input: PublishEagerMemoryInput): Promise<MemoryPostBundle> {
+    if (input.photos.length === 0) throw new Error("사진을 한 장 이상 추가해 주세요.");
+    if (input.photos.length > 5) throw new Error("사진은 최대 5장까지 추가할 수 있어요.");
+    const uploading = input.photos.some((photo) => photo.uploadStatus === "uploading");
+    const sb = requireSupabase();
+    const post = await this.createMemoryPost({
+      id: input.id,
+      babyId: input.babyId,
+      caption: input.caption,
+      privacyType: input.privacyType,
+      isFamilyMoment: input.isFamilyMoment,
+      selectedUserIds: input.selectedUserIds,
+      status: uploading ? "posting" : "published",
+    });
+    try {
+      for (const photo of input.photos) {
+        await this.addMedia({
+          id: photo.id,
+          memoryPostId: post.id,
+          babyId: input.babyId,
+          storagePath: photo.storagePath,
+          uploadStatus: photo.uploadStatus,
+          width: photo.width,
+          height: photo.height,
+        });
+      }
+      await replaceTags(post.id, input.tags ?? [{ tagType: "baby", babyId: input.babyId }]);
+      bindJobsToMemoryPost(input.photos.map((photo) => photo.id), post.id);
+    } catch (error) {
+      // Drop the half-linked post so the feed never shows a photoless memory and
+      // so a retry can reuse the same client id. The storage objects stay put:
+      // the retry republishes the very same eager photos.
+      try {
+        await sb.from("memory_posts").delete().eq("id", post.id);
+      } catch {
+        // Report the original failure rather than the cleanup failure.
+      }
+      throw error instanceof Error ? error : new Error("추억 사진을 연결하지 못했어요.");
+    }
+    const bundle = await this.getBundleById(post.id);
+    if (!bundle) throw new Error("올린 추억을 다시 불러오지 못했어요.");
+    return bundle;
+  },
+
+  async retryFailedMedia(memoryPostId: string): Promise<void> {
+    const media = await this.listMedia(memoryPostId);
+    for (const item of media) {
+      if (item.uploadStatus === "failed") retryEagerPhoto(item.id);
+    }
+  },
+
+  async cleanupOrphanTempMedia(): Promise<void> {
+    try {
+      await requireSupabase().rpc("cleanup_orphan_temp_media");
+    } catch {
+      // Maintenance must not block the feed.
     }
   },
 

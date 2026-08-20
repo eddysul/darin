@@ -59,7 +59,7 @@ export function ConsultFab({ onPress, compact = false, hidden = false, bottomOff
         accessibilityRole="button"
         accessibilityLabel="AI 상담"
       >
-        <BabyLogIcon kind="bot" size={compact ? 22 : 25} color="#FFFFFF" strokeWidth={1.9} />
+        <BabyLogIcon kind="bot" size={compact ? 22 : 25} color={colors.amberDark} strokeWidth={1.9} />
         {compact ? null : <Text style={styles.text}>AI 상담</Text>}
       </Pressable>
     </Animated.View>
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   },
   pressed: { transform: [{ scale: 0.96 }], opacity: 0.92 },
   text: {
-    color: "#FFFFFF",
+    color: colors.amberDark,
     fontSize: type.xs,
     fontWeight: "800",
     letterSpacing: -0.2,

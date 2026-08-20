@@ -49,6 +49,7 @@ function normalizeCategory(item: unknown): CustomCategory | null {
     chips: Array.isArray(raw.chips) ? raw.chips.filter((c): c is string => typeof c === "string") : undefined,
     duration: typeof raw.duration === "boolean" ? raw.duration : undefined,
     amount: typeof raw.amount === "string" ? raw.amount : undefined,
+    stage: raw.stage === "pregnancy" ? "pregnancy" : "born",
   };
 }
 

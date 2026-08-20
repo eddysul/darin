@@ -22,6 +22,7 @@ import {
 import { TermsConsentScreen } from "./src/screens/onboarding/TermsConsentScreen";
 import { MainTabs } from "./src/screens/MainTabs";
 import { BabyProfileScreen } from "./src/screens/BabyProfileScreen";
+import { ConsultScreen } from "./src/screens/tabs/ConsultScreen";
 import { FamilyShareScreen } from "./src/screens/FamilyShareScreen";
 import { GrowthRecordsManagerScreen } from "./src/screens/GrowthRecordsManagerScreen";
 import { MemoryDetailScreen } from "./src/screens/MemoryDetailScreen";
@@ -51,6 +52,7 @@ import { WebAppShell } from "./src/components/WebAppShell";
 import { colors } from "./src/theme";
 import { resolvePostSplashPhase } from "./src/utils/appStartup";
 import { isBabyProfileComplete, isUserProfileComplete, resolveAuthenticatedRoute } from "./src/utils/profileCompletion";
+import { getSupabaseSync, hydrateSupabaseSync } from "./src/utils/supabaseSyncStore";
 import {
   clearPendingInvite,
   hydratePendingInvite,
@@ -67,6 +69,7 @@ import { NotificationRepository } from "./src/repositories/NotificationRepositor
 import {
   getTermsAccepted,
   hydrateTermsAccepted,
+  saveMarketingConsent,
   saveTermsAccepted,
 } from "./src/utils/termsStore";
 import { registerCurrentPushToken, unregisterCurrentPushToken } from "./src/utils/pushNotifications";
@@ -240,11 +243,11 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
             },
             Record: "record",
             Report: "report",
-            Consult: "consult",
             Memories: "memories",
             Mic: "mic",
           },
         },
+        Consult: "consult",
       },
     },
   };
@@ -270,6 +273,7 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
         }}
       >
         <RootStack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+        <RootStack.Screen name="Consult" component={ConsultScreen} options={{ headerShown: false }} />
         <RootStack.Screen name="BabyProfile" component={BabyProfileScreen} options={{ title: "아기 프로필" }} />
         <RootStack.Screen name="FamilyShare" component={FamilyShareScreen} options={{ title: "가족·친구 초대" }} />
         <RootStack.Screen name="MyProfile" component={MyProfileScreen} options={{ title: "내 프로필" }} />
@@ -316,6 +320,8 @@ function RootApp() {
   const [onboardingStartsWithBaby, setOnboardingStartsWithBaby] = useState(false);
   const [onboardingInitialChild, setOnboardingInitialChild] = useState<Partial<CareSetup["child"]>>();
   const [onboardingExistingBabyId, setOnboardingExistingBabyId] = useState<string | null>(null);
+  const [startupError, setStartupError] = useState<string | null>(null);
+  const [startupRoutingBusy, setStartupRoutingBusy] = useState(false);
   const startupRouting = useRef(false);
   const phaseRef = useRef<AppPhase>("splash");
 
@@ -436,7 +442,7 @@ function RootApp() {
         relationshipToChild: relationshipToCareValue(
           me?.relationship_label ?? displayProfile?.defaultRelation,
         ),
-        postpartumStatus: careSetup.parent.postpartumStatus,
+        postpartumStatus: childStatus === "unborn" ? "pregnant" : careSetup.parent.postpartumStatus,
         preferredLanguage: resolveAppLocale(
           isAppLanguagePreference(ownProfile?.preferred_language)
             ? ownProfile.preferred_language
@@ -543,7 +549,14 @@ function RootApp() {
     }
 
     const babies = await BabyRepository.listMyBabies();
-    const preferredBaby = babies.find((baby) => baby.id === input?.preferredBabyId) ?? babies[0];
+    await hydrateSupabaseSync();
+    const sync = getSupabaseSync();
+    // A cold start carries no explicit hint. Without the last-active pointer a
+    // multi-baby account would silently fall back to the oldest baby on every launch.
+    const lastActiveBabyId = sync.userId === session.user.id ? sync.babyId : null;
+    const preferredBaby = babies.find((baby) => baby.id === input?.preferredBabyId)
+      ?? babies.find((baby) => baby.id === lastActiveBabyId)
+      ?? babies[0];
     const route = resolveAuthenticatedRoute({
       profileComplete,
       hasPendingInvite: Boolean(validPendingCode),
@@ -570,6 +583,29 @@ function RootApp() {
     if (serverBaby) await restoreWorkspace(serverBaby, displayName);
   }, [resetCareSetup, restoreWorkspace]);
 
+  const retryStartupRouting = useCallback(() => {
+    if (startupRouting.current) return;
+    startupRouting.current = true;
+    setStartupError(null);
+    setStartupRoutingBusy(true);
+    void routeAuthenticatedSession()
+      .then(() => {
+        setStartupError(null);
+      })
+      .catch(() => {
+        startupRouting.current = false;
+        if (hasSavedCareSetup) {
+          setStartupError(null);
+          setPhase("main");
+          return;
+        }
+        setStartupError("네트워크를 확인한 뒤 다시 시도해 주세요.");
+      })
+      .finally(() => {
+        setStartupRoutingBusy(false);
+      });
+  }, [hasSavedCareSetup, routeAuthenticatedSession]);
+
   useEffect(() => {
     if (phase !== "splash") return;
     const nextPhase = resolvePostSplashPhase({
@@ -585,10 +621,23 @@ function RootApp() {
     if (nextPhase === "postAuth") {
       if (startupRouting.current) return;
       startupRouting.current = true;
-      void routeAuthenticatedSession().catch(() => {
-        setProfileSetupInitial({ nickname: careSetup.parent.parentName || "", darinTag: generateDarinTag() });
-        setPhase("profileSetup");
-      });
+      setStartupRoutingBusy(true);
+      void routeAuthenticatedSession()
+        .then(() => {
+          setStartupError(null);
+        })
+        .catch(() => {
+          startupRouting.current = false;
+          if (hasSavedCareSetup) {
+            setStartupError(null);
+            setPhase("main");
+            return;
+          }
+          setStartupError("네트워크를 확인한 뒤 다시 시도해 주세요.");
+        })
+        .finally(() => {
+          setStartupRoutingBusy(false);
+        });
       return;
     }
     setPhase(nextPhase);
@@ -602,11 +651,12 @@ function RootApp() {
     termsReady,
     authReady,
     hasAuthSession,
+    hasSavedCareSetup,
     routeAuthenticatedSession,
   ]);
 
   const handleTermsAccept = useCallback((marketingOptIn: boolean) => {
-    void marketingOptIn;
+    void saveMarketingConsent(marketingOptIn);
     void saveTermsAccepted(true);
     setTermsAccepted(true);
     setPhase("auth");
@@ -674,7 +724,22 @@ function RootApp() {
 
       try {
         const baby = await BabyRepository.ensureFromCareSetup(result.setup, onboardingExistingBabyId);
+        const pickedPhotoUri = result.setup.child.photoUri;
+        let avatarUploadFailed = false;
+        if (pickedPhotoUri && !/^https?:\/\//i.test(pickedPhotoUri)) {
+          try {
+            await BabyProfileRepository.uploadBabyAvatar(baby.id, { uri: pickedPhotoUri });
+          } catch {
+            avatarUploadFailed = true;
+          }
+        }
         await restoreWorkspace(baby, result.setup.parent.parentName);
+        if (avatarUploadFailed) {
+          Alert.alert(
+            "아기 정보는 저장했어요",
+            "사진은 올리지 못했어요. 아기 프로필에서 다시 추가해 주세요.",
+          );
+        }
       } catch (cause) {
         Alert.alert(
           "아기 프로필을 저장하지 못했어요",
@@ -690,7 +755,14 @@ function RootApp() {
       <View style={styles.root}>
         <StatusBar style="dark" />
         {phase === "main" && <MainNavigator onboardingProfile={onboardingProfile} />}
-        {phase === "splash" && <SplashScreen onComplete={handleSplashComplete} />}
+        {phase === "splash" && (
+          <SplashScreen
+            onComplete={handleSplashComplete}
+            routingError={startupError}
+            routingBusy={startupRoutingBusy}
+            onRetryRouting={retryStartupRouting}
+          />
+        )}
         {phase === "terms" && <TermsConsentScreen onAccept={handleTermsAccept} />}
         {phase === "auth" && <AuthStartScreen recoveryMode={authRecovery} onAuthenticated={handleAuthenticated} />}
         {phase === "profileSetup" && (

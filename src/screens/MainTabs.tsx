@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { BottomTabBarProps, BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -15,9 +15,8 @@ import {
 import { BabyLogIcon, type TabIconKey } from "../components/babylog/BabyLogIcon";
 import { RecordDetailSheet, type RecordSheetPrefill } from "../components/babylog/RecordDetailSheet";
 import { useBabyLog } from "../context/BabyLogContext";
-import { getCategory } from "../constants/babyLogCategories";
+import { getCategory, isPregnancyLogCategoryId } from "../constants/babyLogCategories";
 import { BabyReportScreen } from "./tabs/BabyReportScreen";
-import { ConsultScreen } from "./tabs/ConsultScreen";
 import { DiaryScreen } from "./tabs/DiaryScreen";
 import { RecordScreen } from "./tabs/RecordScreen";
 import { MemoriesScreen } from "./tabs/MemoriesScreen";
@@ -28,6 +27,7 @@ import { colors, fontScaleCap, gradients, type } from "../theme";
 import { isCustomCategoryKey } from "../types/logCategory";
 import { canAddLog, canDeleteLog, canEditLog } from "../types/family";
 import { ErrorBanner } from "../components/states/FeedbackStates";
+import { isPregnancyStage } from "../utils/childDisplay";
 import { formatLogMeta } from "../utils/formatLog";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 
@@ -36,7 +36,6 @@ const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
   Diary: "tabs.diary",
   Mic: "tabs.voice",
   Report: "tabs.overview",
-  Consult: "tabs.consult",
   Memories: "tabs.memories",
 };
 
@@ -46,9 +45,15 @@ const TAB_ICONS: Record<Exclude<keyof MainTabParamList, "Mic">, TabIconKey> = {
   Record: "record",
   Diary: "diary",
   Report: "report",
-  Consult: "consult",
   Memories: "memories",
 };
+
+function openConsult(
+  navigation: NativeStackNavigationProp<RootStackParamList> | undefined,
+  initialQuestion?: string,
+) {
+  navigation?.navigate("Consult", initialQuestion ? { initialQuestion } : { focusInput: true });
+}
 
 function MicPlaceholder() {
   return <View style={{ flex: 1, backgroundColor: colors.background }} />;
@@ -67,14 +72,34 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     logAuthor,
     myFamilyRole,
     familyMembers,
+    careSetup,
   } = useBabyLog();
   const me = familyMembers.find((member) => member.isMe);
   const allowAdd = canAddLog(myFamilyRole);
+  const pregnancyStage = isPregnancyStage(careSetup.child);
+  const allowVoice = allowAdd;
+  const voiceBlockedReason = allowVoice ? null : "보기 전용 계정이라 기록을 추가할 수 없어요.";
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceSheetCat, setVoiceSheetCat] = useState<LogCategoryKey | null>(null);
   const [voicePrefill, setVoicePrefill] = useState<RecordSheetPrefill | null>(null);
   const [editingVoiceId, setEditingVoiceId] = useState<string | null>(null);
   const [voiceEventPatch, setVoiceEventPatch] = useState<VoiceResult | null>(null);
+
+  useEffect(() => {
+    if (!voiceNotice) return;
+    const timer = setTimeout(() => setVoiceNotice(null), 3200);
+    return () => clearTimeout(timer);
+  }, [voiceNotice]);
+
+  useEffect(() => {
+    if (allowVoice) return;
+    setVoiceOpen(false);
+    setVoiceSheetCat(null);
+    setVoicePrefill(null);
+    setEditingVoiceId(null);
+    setVoiceEventPatch(null);
+  }, [allowVoice]);
 
   const tabs: { name: keyof MainTabParamList; center?: boolean }[] = [
     { name: "Record" },
@@ -87,6 +112,11 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   return (
     <>
       <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        {voiceNotice ? (
+          <View style={styles.voiceNotice} accessibilityLiveRegion="polite">
+            <Text style={styles.voiceNoticeText}>{voiceNotice}</Text>
+          </View>
+        ) : null}
         {tabs.map(({ name, center }) => {
           const active = state.routes[state.index]?.name === name;
           const labelKey = TAB_LABEL_KEYS[name];
@@ -96,17 +126,29 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
             return (
               <Pressable
                 key={name}
-                style={[styles.tabItem, !allowAdd && styles.disabled]}
-                disabled={!allowAdd}
+                style={styles.tabItem}
                 accessibilityRole="button"
                 accessibilityLabel="음성으로 기록"
-                accessibilityState={{ disabled: !allowAdd }}
-                onPress={() => setVoiceOpen(true)}
+                accessibilityHint={voiceBlockedReason ?? undefined}
+                accessibilityState={{ disabled: !allowVoice }}
+                onPress={() => {
+                  if (voiceBlockedReason) {
+                    setVoiceNotice(voiceBlockedReason);
+                    return;
+                  }
+                  setVoiceOpen(true);
+                }}
               >
-                <View style={styles.centerBtnWrap}>
-                  <LinearGradient colors={[...gradients.mic]} style={styles.centerBtn}>
-                    <BabyLogIcon kind="tab" tab="mic" size={24} color="#FFFFFF" strokeWidth={2.2} />
-                  </LinearGradient>
+                <View style={[styles.centerBtnWrap, !allowVoice && styles.centerBtnWrapLocked]}>
+                  {allowVoice ? (
+                    <LinearGradient colors={[...gradients.mic]} style={styles.centerBtn}>
+                      <BabyLogIcon kind="tab" tab="mic" size={24} color={colors.amberDark} strokeWidth={2.2} />
+                    </LinearGradient>
+                  ) : (
+                    <View style={[styles.centerBtn, styles.centerBtnLocked]}>
+                      <BabyLogIcon kind="lock" size={22} color={colors.muted} strokeWidth={2.2} />
+                    </View>
+                  )}
                 </View>
                 <Text style={[styles.tabLabel, styles.centerLabel]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} maxFontSizeMultiplier={fontScaleCap.tab}>{t("tabs.voice")}</Text>
               </Pressable>
@@ -132,6 +174,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
       <BabyLogVoiceOverlay
         visible={voiceOpen}
+        pregnancy={pregnancyStage}
         onClose={() => {
           setVoiceOpen(false);
           setEditingVoiceId(null);
@@ -140,8 +183,12 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           setVoicePrefill(null);
         }}
         onConfirmAll={({ rawTranscript, events }) => {
-          if (!allowAdd) return;
-          addLogs(events.map((event) => voiceResultToLog(event, rawTranscript, logAuthor)));
+          if (!allowVoice) return;
+          const stageEvents = pregnancyStage
+            ? events.filter((event) => isPregnancyLogCategoryId(event.cat))
+            : events;
+          if (!stageEvents.length) return;
+          addLogs(stageEvents.map((event) => voiceResultToLog(event, rawTranscript, logAuthor)));
           setVoiceOpen(false);
           setEditingVoiceId(null);
           navigation.navigate("Record");
@@ -161,11 +208,11 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           setVoiceSheetCat(event.cat);
         }}
         onManualEntry={() => {
-          if (!allowAdd) return;
+          if (!allowVoice) return;
           setVoiceOpen(false);
           setEditingVoiceId(null);
           setVoicePrefill(null);
-          setVoiceSheetCat("memo");
+          setVoiceSheetCat(pregnancyStage ? "pregMood" : "memo");
           navigation.navigate("Record");
         }}
         eventPatch={voiceEventPatch}
@@ -190,6 +237,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
               return;
             }
             if (voiceOpen && editingVoiceId && !isCustomCategoryKey(entry.cat)) {
+              if (pregnancyStage && !isPregnancyLogCategoryId(entry.cat)) return;
               const cat = entry.cat as BabyLogCategoryId;
               const meta = formatLogMeta(entry, customCategories);
               const label = getCategory(cat).label;
@@ -238,12 +286,16 @@ function RecordTab() {
   const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <RecordScreen
-      onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenProfile={(opts) =>
+        rootNavigation?.navigate({
+          name: "BabyProfile",
+          params: { mode: opts?.convertBirth ? "convertBirth" : undefined },
+          merge: false,
+        })
+      }
       onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
-      onOpenConsult={(initialQuestion) =>
-        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : { focusInput: true })
-      }
+      onOpenConsult={(initialQuestion) => openConsult(rootNavigation, initialQuestion)}
     />
   );
 }
@@ -253,13 +305,11 @@ function DiaryTab() {
   const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <DiaryScreen
-      onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenProfile={() => rootNavigation?.navigate("BabyProfile", { mode: undefined })}
       onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenShared={() => rootNavigation?.navigate("FamilyShare")}
-      onOpenConsult={(initialQuestion) =>
-        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : { focusInput: true })
-      }
+      onOpenConsult={(initialQuestion) => openConsult(rootNavigation, initialQuestion)}
     />
   );
 }
@@ -269,28 +319,12 @@ function ReportTab() {
   const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <BabyReportScreen
-      onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
+      onOpenProfile={() => rootNavigation?.navigate("BabyProfile", { mode: undefined })}
       onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenShared={() => rootNavigation?.navigate("FamilyShare")}
       onOpenRecord={() => navigation.navigate("Record")}
-      onOpenConsult={(initialQuestion) =>
-        navigation.navigate("Consult", initialQuestion ? { initialQuestion } : { focusInput: true })
-      }
-    />
-  );
-}
-
-function ConsultTab() {
-  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
-  const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
-  return (
-    <ConsultScreen
-      onOpenProfile={() => rootNavigation?.navigate("BabyProfile")}
-      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
-      onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
-      onOpenShared={() => rootNavigation?.navigate("FamilyShare")}
-      onOpenRecord={() => navigation.navigate("Record")}
+      onOpenConsult={(initialQuestion) => openConsult(rootNavigation, initialQuestion)}
     />
   );
 }
@@ -327,7 +361,6 @@ export function MainTabs() {
         <Tab.Screen name="Mic" component={MicPlaceholder} />
         <Tab.Screen name="Report" component={ReportTab} />
         <Tab.Screen name="Memories" component={MemoriesTab} />
-        <Tab.Screen name="Consult" component={ConsultTab} />
       </Tab.Navigator>
       {storageIssue ? (
         <View style={[styles.storageBanner, { top: insets.top + 8 }]}>
@@ -376,6 +409,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
+  centerBtnWrapLocked: { backgroundColor: colors.border, shadowOpacity: 0, elevation: 0 },
   centerBtn: {
     width: 62,
     height: 62,
@@ -383,10 +417,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  centerBtnLocked: {
+    backgroundColor: colors.cardHi,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   tabLabel: { fontSize: type.xs, fontWeight: "700", color: colors.muted },
   tabLabelActive: { color: colors.amberText },
   centerLabel: { marginTop: 2 },
-  disabled: { opacity: 0.45 },
+  voiceNotice: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    top: -44,
+    zIndex: 80,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  voiceNoticeText: { fontSize: type.xs, fontWeight: "700", color: colors.text, textAlign: "center" },
   storageBanner: {
     position: "absolute",
     left: 16,

@@ -90,7 +90,7 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="닫기" />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
           <View style={styles.handle} />

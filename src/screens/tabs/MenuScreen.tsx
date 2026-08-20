@@ -24,6 +24,7 @@ import {
 } from "../../components/settings/AppSettingsModal";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { useBabyLog } from "../../context/BabyLogContext";
+import { isPregnancyStage } from "../../utils/childDisplay";
 import { useLogout } from "../../context/LogoutContext";
 import { AuthRepository } from "../../repositories/AuthRepository";
 import { colors, radius, type } from "../../theme";
@@ -68,6 +69,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
     clearAllUserData,
     rehydrateFromServer,
     localDataScope,
+    careSetup,
   } = useBabyLog();
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
@@ -284,6 +286,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         visible={quickRecordsOpen}
         records={quickRecords}
         editing={null}
+        pregnancy={isPregnancyStage(careSetup.child)}
         onClose={() => setQuickRecordsOpen(false)}
         onSave={setQuickRecords}
       />

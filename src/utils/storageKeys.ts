@@ -19,6 +19,8 @@ export const STORAGE_KEYS = {
   activeTimers: "darin:active-timers",
   appSettings: "darin:app-settings",
   termsAccepted: "darin:terms-accepted",
+  /** Optional marketing consent captured on the terms screen, with the decision time. */
+  marketingConsent: "darin:marketing-consent",
   /** Supabase sync pointers (babyId / userId) — not secrets. */
   supabaseSync: "darin:supabase-sync",
   /** Legacy fallback credential key. Read/write is forbidden; cleanup only. */

@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     marginBottom: 4,
   },
-  appleBtnText: { fontSize: 14, fontWeight: "600", color: colors.primaryForeground },
+  appleBtnText: { fontSize: 14, fontWeight: "600", color: colors.onDark },
   switchMode: { marginTop: 20, alignItems: "center" },
   switchText: { fontSize: 14, color: colors.muted },
   switchLink: { fontWeight: "700", color: colors.text },

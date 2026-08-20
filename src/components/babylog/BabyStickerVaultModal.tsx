@@ -407,7 +407,7 @@ export function BabyStickerVaultModal({
   if (!visible) return null;
 
   const body = (
-      <View style={[styles.root, embedded && styles.embeddedRoot, { paddingTop: Math.max(insets.top, 12) }]}>
+      <View style={[styles.root, embedded && styles.embeddedRoot, { paddingTop: embedded ? 8 : Math.max(insets.top, 12) }]}>
         <View style={styles.header}>
           <Pressable
             onPress={goBack}
@@ -619,19 +619,25 @@ function VaultHome({
   return (
     <View style={{ flex: 1 }}>
     <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 28 }]}>
-      <Pressable style={styles.primaryBtn} onPress={onCreate}>
-        <Text style={styles.primaryBtnText}>+ 새 스티커 만들기</Text>
-      </Pressable>
-
-      <Text style={styles.sectionTitle}>내 스티커</Text>
       {sorted.length === 0 ? (
         <EmptyState
           title="아직 만든 스티커가 없어요."
-          body="아기 사진으로 귀여운 스티커를 만들어보세요."
+          body={pickMode ? "아기 사진으로 스티커를 만들면 이 페이지에 붙일 수 있어요." : "아기 사진으로 귀여운 스티커를 만들어보세요."}
           ctaLabel="첫 스티커 만들기"
           onPressCta={onCreate}
         />
       ) : (
+        <>
+      <Pressable
+        style={styles.primaryBtn}
+        onPress={onCreate}
+        accessibilityRole="button"
+        accessibilityLabel="새 스티커 만들기"
+      >
+        <BabyLogIcon kind="new" size={18} color={colors.amberDark} strokeWidth={2.2} />
+        <Text style={styles.primaryBtnText}>새 스티커 만들기</Text>
+      </Pressable>
+      <Text style={styles.sectionTitle}>내 스티커</Text>
         <View style={styles.grid}>
           {sorted.map((sticker) => (
             <Pressable
@@ -663,6 +669,7 @@ function VaultHome({
             </Pressable>
           ))}
         </View>
+        </>
       )}
 
       {!pickMode ? (
@@ -912,8 +919,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.amber,
     borderRadius: 14,
     paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
     marginBottom: 10,
   },
   primaryBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 14.5 },

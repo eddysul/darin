@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { QuickRecord } from "../../types/quickRecord";
-import type { OneTouchAction } from "../../constants/quickRecordActions";
-import { QUICK_RECORD_ACTIONS } from "../../constants/quickRecordActions";
+import { PREGNANCY_QUICK_RECORD_ACTIONS, QUICK_RECORD_ACTIONS, type OneTouchAction } from "../../constants/quickRecordActions";
+import { quickRecordsForStage } from "../../constants/defaultQuickRecords";
 import { colors, type } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { LogCategoryIcon } from "./LogCategoryIcon";
@@ -11,6 +11,7 @@ import { QuickRecordEditorSheet } from "./QuickRecordEditorSheet";
 type Props = {
   records: QuickRecord[];
   visibleActions?: OneTouchAction[];
+  pregnancy?: boolean;
   disabled?: boolean;
   onTap: (record: QuickRecord) => void;
   onSaveRecords: (next: QuickRecord[] | ((prev: QuickRecord[]) => QuickRecord[])) => void;
@@ -19,6 +20,7 @@ type Props = {
 export function QuickRecordsBar({
   records,
   visibleActions,
+  pregnancy = false,
   disabled,
   onTap,
   onSaveRecords,
@@ -26,19 +28,21 @@ export function QuickRecordsBar({
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<QuickRecord | null>(null);
   const [startInForm, setStartInForm] = useState(false);
+  const catalog = pregnancy ? PREGNANCY_QUICK_RECORD_ACTIONS : QUICK_RECORD_ACTIONS;
+  const stageRecords = useMemo(() => quickRecordsForStage(records, pregnancy), [pregnancy, records]);
 
   const pinned = useMemo(
     () =>
-      records.filter((record) => {
+      stageRecords.filter((record) => {
         if (!record.pinned) return false;
         if (!visibleActions) return true;
-        return QUICK_RECORD_ACTIONS.some(
+        return catalog.some(
           (action) =>
             visibleActions.includes(action.id) &&
             action.cat === record.defaults.cat,
         );
       }),
-    [records, visibleActions],
+    [catalog, stageRecords, visibleActions],
   );
 
   const openManage = () => {
@@ -57,8 +61,8 @@ export function QuickRecordsBar({
     <View style={styles.card}>
       <View style={styles.header}>
         <View style={styles.headingCopy}>
-          <Text style={styles.title}>자주 쓰는</Text>
-          <Text style={styles.subtitle}>한 번 탭하면 바로 기록돼요.</Text>
+          <Text style={styles.title}>자주 쓰는 기록</Text>
+          <Text style={styles.subtitle}>한 번 탭하면 바로 저장돼요.</Text>
         </View>
         <Pressable
           style={[styles.editBtn, disabled && styles.disabled]}
@@ -78,7 +82,11 @@ export function QuickRecordsBar({
         {pinned.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>아직 자주 쓰는 기록이 없어요.</Text>
-            <Text style={styles.emptyBody}>자주 쓰는 조합을 저장해두면 한 번에 기록할 수 있어요.</Text>
+            <Text style={styles.emptyBody}>
+              {pregnancy
+                ? "영양제, 입덧, 태동처럼 반복되는 기록을 저장해 보세요."
+                : "자주 쓰는 조합을 저장해두면 한 번에 기록할 수 있어요."}
+            </Text>
           </View>
         ) : null}
         {pinned.map((record) => (
@@ -93,7 +101,8 @@ export function QuickRecordsBar({
             ]}
             onPress={() => onTap(record)}
             accessibilityRole="button"
-            accessibilityLabel={`${record.label} 바로 기록`}
+            accessibilityLabel={`${record.label} 바로 저장`}
+            accessibilityHint="길게 누르면 이 조합을 수정할 수 있어요"
             accessibilityState={{ disabled }}
             onLongPress={
               disabled
@@ -134,6 +143,7 @@ export function QuickRecordsBar({
         visible={editorOpen}
         records={records}
         editing={editing}
+        pregnancy={pregnancy}
         startInForm={startInForm}
         onClose={() => {
           setEditorOpen(false);

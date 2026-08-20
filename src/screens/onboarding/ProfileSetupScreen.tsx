@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -103,6 +103,16 @@ export function ProfileSetupScreen({
     preferredLanguage,
     guardianBirthDate,
   }) && !nicknameError && !saving;
+
+  const missingFields = useMemo(() => {
+    const missing: string[] = [];
+    if (!nickname.trim() || nicknameError) missing.push("닉네임");
+    if (!relation) missing.push("아기와의 관계");
+    if (!residenceCountry) missing.push("거주 국가");
+    if (!preferredLanguage) missing.push("앱 언어");
+    if (!guardianBirthDate.trim()) missing.push("보호자 생년월일");
+    return missing;
+  }, [nickname, nicknameError, relation, residenceCountry, preferredLanguage, guardianBirthDate]);
 
   const pickAvatar = () => {
     presentAvatarPicker({
@@ -228,6 +238,9 @@ export function ProfileSetupScreen({
             autoFocus={!nickname.trim()}
             returnKeyType="next"
           />
+          {nickname.trim() && nicknameError ? (
+            <Text style={styles.fieldError}>{nicknameError}</Text>
+          ) : null}
 
           <Text style={styles.label}>가져온 이름</Text>
           <Text style={styles.help}>Google, Apple 또는 카카오에서 가져온 이름이에요.</Text>
@@ -289,7 +302,7 @@ export function ProfileSetupScreen({
             ))}
           </View>
 
-          <Text style={styles.label}>보호자 생년월일</Text>
+          <Text style={styles.label}>보호자 생년월일 *</Text>
           <Text style={styles.help}>맞춤 안내를 위해 사용해요.</Text>
           <Pressable
             style={[styles.input, styles.dateInput]}
@@ -304,16 +317,26 @@ export function ProfileSetupScreen({
           </Pressable>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable
-          style={[styles.next, !canContinue && styles.disabled]}
-          onPress={() => void save()}
-          disabled={!canContinue}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canContinue }}
-        >
-          {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.nextText}>다음</Text>}
-        </Pressable>
+        <View style={styles.footer}>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {missingFields.length > 0 && !saving ? (
+            <Text style={styles.missingHint}>
+              {`${missingFields.join(", ")}을(를) 입력하면 다음으로 넘어갈 수 있어요.`}
+            </Text>
+          ) : null}
+          <Pressable
+            style={[styles.next, !canContinue && styles.disabled]}
+            onPress={() => void save()}
+            disabled={!canContinue}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canContinue }}
+            accessibilityHint={
+              missingFields.length > 0 ? `남은 필수 항목: ${missingFields.join(", ")}` : undefined
+            }
+          >
+            {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.nextText}>다음</Text>}
+          </Pressable>
+        </View>
         <RecordDatePickerModal
           visible={birthDatePickerOpen}
           selectedDateKey={
@@ -356,10 +379,13 @@ const styles = StyleSheet.create({
   chipText: { color: colors.muted, fontSize: 12.5, fontWeight: "700" },
   chipTextActive: { color: colors.amberText },
   error: { padding: 12, borderRadius: radius.md, backgroundColor: colors.dangerSoft, color: colors.dangerText, fontSize: 12.5, lineHeight: 19 },
+  fieldError: { color: colors.dangerText, fontSize: 11.5, lineHeight: 17, marginTop: -4 },
+  missingHint: { color: colors.muted, fontSize: 12.5, lineHeight: 19, textAlign: "center" },
+  footer: { marginTop: "auto", gap: 12 },
   dateInput: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   dateInputText: { color: colors.text, fontSize: 15 },
   datePlaceholder: { color: colors.faint },
-  next: { minHeight: 54, marginTop: "auto", borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  nextText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
+  next: { minHeight: 54, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  nextText: { color: colors.amberDark, fontSize: 15, fontWeight: "800" },
   disabled: { opacity: 0.45 },
 });

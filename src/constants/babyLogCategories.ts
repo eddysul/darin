@@ -1,6 +1,6 @@
 import { categoryColors } from "../theme";
 
-export type BabyLogCategoryId =
+export type BornLogCategoryId =
   | "breast"
   | "formula"
   | "storedMilk"
@@ -20,6 +20,17 @@ export type BabyLogCategoryId =
   | "play"
   | "memo"
   | "other";
+
+export type PregnancyLogCategoryId =
+  | "pregMood"
+  | "pregSymptom"
+  | "pregWeight"
+  | "pregBp"
+  | "pregMed"
+  | "pregKick"
+  | "pregHospital";
+
+export type BabyLogCategoryId = BornLogCategoryId | PregnancyLogCategoryId;
 
 export type BabyLogCategory = {
   id: BabyLogCategoryId;
@@ -60,17 +71,34 @@ export const BABY_LOG_CATEGORIES: BabyLogCategory[] = [
   { id: "other", label: "기타", emoji: "", color: categoryColors.other },
 ];
 
+/** Pregnancy-stage record categories. Stored as distinct IDs so labels stay after birth. */
+export const PREGNANCY_LOG_CATEGORIES: BabyLogCategory[] = [
+  { id: "pregMood", label: "컨디션", emoji: "", color: categoryColors.play, chips: ["좋음", "보통", "힘듦"] },
+  { id: "pregSymptom", label: "입덧/증상", emoji: "", color: categoryColors.temp, chips: ["입덧", "두통", "부종", "피로", "기타"] },
+  { id: "pregWeight", label: "체중", emoji: "", color: categoryColors.food, amount: "kg" },
+  { id: "pregBp", label: "혈압", emoji: "", color: categoryColors.water, amount: "mmHg" },
+  { id: "pregMed", label: "약/영양제", emoji: "", color: categoryColors.med, chips: ["영양제", "약", "기타"] },
+  { id: "pregKick", label: "태동", emoji: "", color: categoryColors.tummy, chips: ["느꼈어요", "활발", "적음"] },
+  { id: "pregHospital", label: "병원/진료", emoji: "", color: categoryColors.doctor, chips: ["검진", "진료", "초음파"] },
+];
+
+const ALL_LOG_CATEGORIES: BabyLogCategory[] = [...BABY_LOG_CATEGORIES, ...PREGNANCY_LOG_CATEGORIES];
+
 /** Fixed main record grid categories (same order as BABY_LOG_CATEGORIES). */
-export const MAIN_LOG_CATEGORY_IDS: BabyLogCategoryId[] = BABY_LOG_CATEGORIES.map((c) => c.id);
+export const MAIN_LOG_CATEGORY_IDS: BornLogCategoryId[] = BABY_LOG_CATEGORIES.map((c) => c.id as BornLogCategoryId);
+
+export function isPregnancyLogCategoryId(id: string): id is PregnancyLogCategoryId {
+  return PREGNANCY_LOG_CATEGORIES.some((c) => c.id === id);
+}
 
 export function getCategory(id: BabyLogCategoryId): BabyLogCategory {
-  const cat = BABY_LOG_CATEGORIES.find((c) => c.id === id);
+  const cat = ALL_LOG_CATEGORIES.find((c) => c.id === id);
   if (!cat) throw new Error(`Unknown category: ${id}`);
   return cat;
 }
 
 /** Demo-only historical stubs — report UI no longer reads these. */
-export const CAT_HISTORY: Record<BabyLogCategoryId, number[]> = {
+export const CAT_HISTORY: Record<BornLogCategoryId, number[]> = {
   breast: [3, 4, 3, 4, 4, 3],
   formula: [3, 3, 4, 3, 4, 4],
   storedMilk: [1, 1, 0, 1, 1, 0],

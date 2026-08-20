@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
@@ -55,7 +55,7 @@ type Props = {
   skipProfileStep?: boolean;
   startAtBabySetup?: boolean;
   initialChild?: Partial<CareSetup["child"]>;
-  onComplete: (result: OnboardingResult) => void;
+  onComplete: (result: OnboardingResult) => void | Promise<void>;
 };
 
 type Step =
@@ -112,6 +112,8 @@ export function OnboardingFlow({
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [requestError, setRequestError] = useState("");
   const [datePickerTarget, setDatePickerTarget] = useState<"birthDate" | "dueDate" | null>(null);
+  const [submittingSetup, setSubmittingSetup] = useState(false);
+  const submittingSetupRef = useRef(false);
 
   const setParent = <K extends keyof CareSetup["parent"]>(key: K, value: CareSetup["parent"][K]) =>
     setSetup((s) => ({ ...s, parent: { ...s.parent, [key]: value } }));
@@ -126,6 +128,29 @@ export function OnboardingFlow({
     const current = setup.preferences.enabledLogCategories;
     const next = current.includes(group) ? current.filter((g) => g !== group) : [...current, group];
     setPref("enabledLogCategories", next.length ? next : [group]);
+  };
+
+  const completeSetup = async () => {
+    if (submittingSetupRef.current) return;
+    submittingSetupRef.current = true;
+    setSubmittingSetup(true);
+    try {
+      await onComplete({
+        mode: "create",
+        setup: {
+          ...setup,
+          preferences: {
+            ...setup.preferences,
+            enabledLogCategories: setup.preferences.enabledLogCategories.length
+              ? setup.preferences.enabledLogCategories
+              : [...ALL_LOG_CATEGORY_GROUPS],
+          },
+        },
+      });
+    } finally {
+      submittingSetupRef.current = false;
+      setSubmittingSetup(false);
+    }
   };
 
   const progressStep = useMemo((): 1 | 2 | 3 | undefined => {
@@ -496,24 +521,32 @@ export function OnboardingFlow({
     return (
       <OnboardingShell
         progressStep={progressStep}
-        title="아기가 태어났나요?"
+        title="아기는 지금 어떤 상태인가요?"
         subtitle="상태에 맞게 입력 항목이 달라져요."
         secondaryLabel="뒤로"
         onSecondary={() => setStep("connect")}
       >
         <ChoiceCard
-          title="네, 태어났어요"
+          title="이미 태어났어요"
           body="이름과 생년월일로 바로 시작해요."
           onPress={() => {
-            setChild("childStatus", "newborn");
+            setSetup((s) => ({
+              ...s,
+              parent: { ...s.parent, postpartumStatus: "postpartum" },
+              child: { ...s.child, childStatus: "newborn" },
+            }));
             setStep("baby");
           }}
         />
         <ChoiceCard
-          title="아직 태어나지 않았어요"
+          title="아직 뱃속에 있어요"
           body="태명과 예정일로 준비해요."
           onPress={() => {
-            setChild("childStatus", "unborn");
+            setSetup((s) => ({
+              ...s,
+              parent: { ...s.parent, postpartumStatus: "pregnant" },
+              child: { ...s.child, childStatus: "unborn", birthDate: undefined },
+            }));
             setStep("baby");
           }}
         />
@@ -534,7 +567,7 @@ export function OnboardingFlow({
         subtitle={born ? "필수만 채우고 나중에 더 적을 수 있어요." : "태명과 예정일만 있으면 충분해요."}
         primaryLabel="다음"
         primaryDisabled={!canNext}
-        onPrimary={() => setStep("care")}
+        onPrimary={() => setStep(born ? "care" : "complete")}
         secondaryLabel="뒤로"
         onSecondary={() => setStep("born")}
       >
@@ -712,29 +745,19 @@ export function OnboardingFlow({
     <OnboardingShell
       title={`${setup.child.childName.trim() || "아기"}의 기록을 시작할까요?`}
       subtitle="확인 후 바로 메인으로 이동해요."
-      primaryLabel="시작하기"
-      onPrimary={() =>
-        onComplete({
-          mode: "create",
-          setup: {
-            ...setup,
-            preferences: {
-              ...setup.preferences,
-              enabledLogCategories: setup.preferences.enabledLogCategories.length
-                ? setup.preferences.enabledLogCategories
-                : [...ALL_LOG_CATEGORY_GROUPS],
-            },
-          },
-        })
-      }
+      primaryLabel={submittingSetup ? "저장 중…" : "시작하기"}
+      primaryDisabled={submittingSetup}
+      onPrimary={() => void completeSetup()}
       secondaryLabel="뒤로"
-      onSecondary={() => setStep("care")}
+      onSecondary={() => setStep(setup.child.childStatus === "unborn" ? "baby" : "care")}
     >
       <View style={styles.summaryCard}>
         <SummaryRow label="아기 이름" value={setup.child.childName.trim()} />
         <SummaryRow label={setup.child.childStatus === "unborn" ? "예정일" : "생년월일"} value={dateLine.split(": ")[1] ?? "-"} />
         <SummaryRow label="나의 관계" value={relationshipLabel} />
-        <SummaryRow label="기본 수유" value={feedingLabel} />
+        {setup.child.childStatus === "unborn" ? null : (
+          <SummaryRow label="기본 수유" value={feedingLabel} />
+        )}
         <SummaryRow
           label="작성자 표시"
           value={formatAuthorByline(setup.parent.parentName, setup.parent.relationshipToChild)}

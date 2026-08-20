@@ -247,7 +247,7 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
       <Pressable style={[styles.primary, busy && styles.disabled]} onPress={() => void submit()} disabled={busy}>
-        {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{buttonLabel}</Text>}
+        {busy ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.primaryText}>{buttonLabel}</Text>}
       </Pressable>
 
       {mode === "confirm" ? (
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     width: "100%",
   },
-  primaryText: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
+  primaryText: { color: colors.amberDark, fontSize: 16, fontWeight: "900" },
   disabled: { opacity: 0.6 },
   linkButton: { alignSelf: "center", paddingVertical: 4, paddingHorizontal: 4, marginTop: 2 },
   linkText: { color: colors.primary, fontSize: 13, fontWeight: "700" },

@@ -114,6 +114,7 @@ export function GrowthBookEditorModal({
   const { babyStickers } = useBabyLog();
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [pageMode, setPageMode] = useState<GrowthBookCanvasMode>("edit");
+  const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
   const [pageTurnDirection, setPageTurnDirection] = useState<-1 | 1>(-1);
   const pageTurnProgress = useRef(new Animated.Value(0)).current;
   const pageTurnAnimating = useRef(false);
@@ -142,6 +143,7 @@ export function GrowthBookEditorModal({
       pageTurnAnimating.current = false;
       setActivePageIndex(0);
       setPageMode("edit");
+      setStickerPickerOpen(false);
     }
     wasVisible.current = visible;
   }, [bookPages, initialDiaryId, pageTurnProgress, visible]);
@@ -209,27 +211,29 @@ export function GrowthBookEditorModal({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose} onDismiss={onDismiss}>
       <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) }]}>
-        <View style={styles.header}>
-          <Pressable
-            onPress={onClose}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="목차로"
-            style={styles.headerBtnHit}
-          >
-            <Text style={styles.headerBtn}>목차로</Text>
-          </Pressable>
-          <Text style={styles.headerTitle}>성장책 편집</Text>
-          <Pressable
-            onPress={() => setPageMode((current) => current === "edit" ? "preview" : "edit")}
-            hitSlop={10}
-            style={styles.headerModeBtn}
-            accessibilityRole="button"
-            accessibilityLabel={pageMode === "edit" ? "미리보기" : "편집"}
-          >
-            <Text style={styles.headerBtn}>{pageMode === "edit" ? "미리보기" : "편집"}</Text>
-          </Pressable>
-        </View>
+        {stickerPickerOpen ? null : (
+          <View style={styles.header}>
+            <Pressable
+              onPress={onClose}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="목차로"
+              style={styles.headerBtnHit}
+            >
+              <Text style={styles.headerBtn}>목차로</Text>
+            </Pressable>
+            <Text style={styles.headerTitle}>성장책 편집</Text>
+            <Pressable
+              onPress={() => setPageMode((current) => current === "edit" ? "preview" : "edit")}
+              hitSlop={10}
+              style={styles.headerModeBtn}
+              accessibilityRole="button"
+              accessibilityLabel={pageMode === "edit" ? "미리보기" : "편집"}
+            >
+              <Text style={styles.headerBtn}>{pageMode === "edit" ? "미리보기" : "편집"}</Text>
+            </Pressable>
+          </View>
+        )}
 
         {pageMode === "preview" ? (
           <View style={styles.editorReaderWrap}>
@@ -274,6 +278,7 @@ export function GrowthBookEditorModal({
             mode={pageMode}
             navigation={navigation}
             onPatch={patch}
+            onStickerPickerOpenChange={setStickerPickerOpen}
           />
         ) : null}
 
@@ -696,6 +701,7 @@ function PageEditor({
   mode,
   navigation,
   onPatch,
+  onStickerPickerOpenChange,
 }: {
   babyId: string;
   babyName: string;
@@ -707,6 +713,7 @@ function PageEditor({
   mode: GrowthBookCanvasMode;
   navigation: BookPageNavigationProps;
   onPatch: (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => void;
+  onStickerPickerOpenChange?: (open: boolean) => void;
 }) {
   const pageEdit = resolvePageEdit(entry.id, entry, edit);
   const photos = resolvePagePhotos(entry, pageEdit);
@@ -741,6 +748,11 @@ function PageEditor({
       setSelectedPageStickerId(null);
     }
   }, [mode]);
+
+  useEffect(() => {
+    onStickerPickerOpenChange?.(stickerPickerOpen);
+    return () => onStickerPickerOpenChange?.(false);
+  }, [onStickerPickerOpenChange, stickerPickerOpen]);
 
   useEffect(() => {
     setPhotoSwapSourceIndex(null);
@@ -1563,22 +1575,22 @@ const styles = StyleSheet.create({
   layoutThumbnailSlot: { position: "absolute", borderRadius: 3, borderWidth: 1, borderColor: colors.border, backgroundColor: "#F3E8DA" },
   layoutThumbnailSlotSelected: { borderColor: colors.amber, backgroundColor: "rgba(232,145,138,0.28)" },
   sheetOptionText: { fontSize: 11.5, lineHeight: 15, fontWeight: "700", color: colors.muted, textAlign: "center" },
-  sheetOptionTextSelected: { color: colors.amberDark },
+  sheetOptionTextSelected: { color: colors.amberText },
   ratioOptionSection: { width: "100%", borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: colors.card, padding: 12, marginTop: 2 },
   ratioOptionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
   ratioOptionTitle: { fontSize: 12.5, fontWeight: "800", color: colors.text },
-  ratioOptionValue: { fontSize: 11, fontWeight: "800", color: colors.amberDark },
+  ratioOptionValue: { fontSize: 11, fontWeight: "800", color: colors.amberText },
   ratioOptionRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   ratioChip: { minWidth: 46, height: 30, paddingHorizontal: 8, borderRadius: 15, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi },
   ratioChipSelected: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   ratioChipText: { fontSize: 11, fontWeight: "700", color: colors.muted },
-  ratioChipTextSelected: { color: colors.amberDark },
+  ratioChipTextSelected: { color: colors.amberText },
   ratioOptionHint: { marginTop: 7, fontSize: 10.5, lineHeight: 15, color: colors.faint },
   sheetTextArea: { minHeight: 112, textAlignVertical: "top" },
   commentStickerHeader: { marginTop: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   commentStickerTitle: { fontSize: 13, fontWeight: "800", color: colors.text },
   commentStickerAdd: { borderWidth: 1, borderColor: colors.amber, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: colors.amberSoft },
-  commentStickerAddText: { fontSize: 11, fontWeight: "800", color: colors.amberDark },
+  commentStickerAddText: { fontSize: 11, fontWeight: "800", color: colors.amberText },
   commentStickerList: { paddingTop: 8, paddingRight: 8, gap: 8 },
   commentStickerChip: { width: 74, minHeight: 70, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.card },
   commentStickerRemove: { position: "absolute", top: 3, right: 3, zIndex: 5, elevation: 5, width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerText },

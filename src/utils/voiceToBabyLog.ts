@@ -1,5 +1,5 @@
 import type { BabyLogCategoryId } from "../constants/babyLogCategories";
-import { getCategory } from "../constants/babyLogCategories";
+import { getCategory, isPregnancyLogCategoryId } from "../constants/babyLogCategories";
 import { formatLogMeta } from "./formatLog";
 import type { BabyLogFlag } from "../types/babyLog";
 import type { CareEvent } from "../types/transcribe";
@@ -26,6 +26,10 @@ export type VoiceEventDraft = {
 export type VoiceSessionResult = {
   rawTranscript: string;
   events: VoiceEventDraft[];
+};
+
+export type VoiceParseOptions = {
+  pregnancy?: boolean;
 };
 
 /** @deprecated use VoiceEventDraft */
@@ -94,7 +98,195 @@ function detectFlags(text: string): BabyLogFlag[] {
   return flags;
 }
 
-function fromCareEvent(rawTranscript: string, event: CareEvent, now = new Date()): VoiceEventDraft | null {
+function pregnancyMoodChip(text: string): string | undefined {
+  if (/힘들|별로|안\s*좋|우울|지쳐|짜증/.test(text)) return "힘듦";
+  if (/좋|괜찮|개운/.test(text)) return "좋음";
+  if (/보통|그냥|평범/.test(text)) return "보통";
+  return undefined;
+}
+
+function pregnancyKickChip(text: string): string | undefined {
+  if (/적|안\s*느껴|없|약하/.test(text)) return "적음";
+  if (/활발|많이|세게|자주|쿵쿵/.test(text)) return "활발";
+  return "느꼈어요";
+}
+
+function pregnancySymptomChip(text: string): string | undefined {
+  if (/입덧|메스꺼|구역|토했|게웠|토할/.test(text)) return "입덧";
+  if (/두통|머리\s*아/.test(text)) return "두통";
+  if (/부종|부었|부어|붓/.test(text)) return "부종";
+  if (/피로|피곤/.test(text)) return "피로";
+  return "기타";
+}
+
+function pregnancyHospitalChip(text: string): string | undefined {
+  if (/초음파/.test(text)) return "초음파";
+  if (/검진|정기/.test(text)) return "검진";
+  return "진료";
+}
+
+function pregnancyMedChip(text: string): string | undefined {
+  if (/영양제|엽산|철분|칼슘|비타민/.test(text)) return "영양제";
+  if (/약/.test(text)) return "약";
+  return "기타";
+}
+
+function extractKgAmount(text: string): string | undefined {
+  const explicit = text.match(/(\d+(?:\.\d+)?)\s*(?:kg|킬로)/i);
+  if (explicit?.[1]) return explicit[1];
+  const labeled = text.match(/(?:체중|몸무게)\s*(?:은|는|이)?\s*(\d+(?:\.\d+)?)/);
+  return labeled?.[1];
+}
+
+function extractBpAmount(text: string): string | undefined {
+  const match = text.match(/(\d{2,3})\s*[/／]\s*(\d{2,3})/);
+  return match ? `${match[1]}/${match[2]}` : undefined;
+}
+
+function inferPregnancySegment(segment: string, now = new Date()): VoiceEventDraft | null {
+  const text = segment.trim();
+  if (!text) return null;
+  const parsedTime = parseVoiceTime(text, now);
+  const flags: BabyLogFlag[] = parsedTime.ambiguous ? ["time_ambiguous"] : [];
+  const relativeNote = parsedTime.relativeNote ? `원문 시점: ${parsedTime.relativeNote}` : undefined;
+
+  if (/체중|몸무게|\d+(?:\.\d+)?\s*(?:kg|킬로)/i.test(text)) {
+    return draft({
+      cat: "pregWeight",
+      time: parsedTime.time,
+      dateKey: parsedTime.dateKey,
+      amount: extractKgAmount(text),
+      notes: relativeNote,
+      flags,
+      confidence: 0.9,
+      timeAmbiguous: parsedTime.ambiguous,
+      timeOptions: parsedTime.options,
+    });
+  }
+
+  if (/혈압|\d{2,3}\s*[/／]\s*\d{2,3}/.test(text)) {
+    return draft({
+      cat: "pregBp",
+      time: parsedTime.time,
+      dateKey: parsedTime.dateKey,
+      amount: extractBpAmount(text),
+      notes: relativeNote,
+      flags,
+      confidence: 0.9,
+      timeAmbiguous: parsedTime.ambiguous,
+      timeOptions: parsedTime.options,
+    });
+  }
+
+  if (/태동|발차|킥킥|발로\s*차|아기(?:가)?\s*(?:움직|놀|차)/.test(text)) {
+    return draft({
+      cat: "pregKick",
+      time: parsedTime.time,
+      dateKey: parsedTime.dateKey,
+      chip: pregnancyKickChip(text),
+      notes: [relativeNote, text].filter(Boolean).join(" · ") || undefined,
+      flags,
+      confidence: 0.9,
+      timeAmbiguous: parsedTime.ambiguous,
+      timeOptions: parsedTime.options,
+    });
+  }
+
+  if (/산부인과|초음파|검진|진찰|병원\s*(?:갔|다녀|왔어|옴)|진료/.test(text)) {
+    return draft({
+      cat: "pregHospital",
+      time: parsedTime.time,
+      dateKey: parsedTime.dateKey,
+      chip: pregnancyHospitalChip(text),
+      notes: [relativeNote, text].filter(Boolean).join(" · ") || undefined,
+      flags,
+      confidence: 0.88,
+      timeAmbiguous: parsedTime.ambiguous,
+      timeOptions: parsedTime.options,
+    });
+  }
+
+  if (/영양제|엽산|철분|칼슘|비타민|약\s*(?:먹|복용)|복용/.test(text)) {
+    return draft({
+      cat: "pregMed",
+      time: parsedTime.time,
+      dateKey: parsedTime.dateKey,
+      chip: pregnancyMedChip(text),
+      notes: [relativeNote, text].filter(Boolean).join(" · ") || undefined,
+      flags,
+      confidence: 0.86,
+      timeAmbiguous: parsedTime.ambiguous,
+      timeOptions: parsedTime.options,
+    });
+  }
+
+  if (/입덧|메스꺼|구역|토했|게웠|토할|속쓰림|속이\s*안|두통|머리\s*아|부종|부었|부어|붓|피로|피곤|요통|허리\s*아|어지러/.test(text)) {
+    return draft({
+      cat: "pregSymptom",
+      time: parsedTime.time,
+      dateKey: parsedTime.dateKey,
+      chip: pregnancySymptomChip(text),
+      notes: [relativeNote, text].filter(Boolean).join(" · ") || undefined,
+      flags,
+      confidence: 0.86,
+      timeAmbiguous: parsedTime.ambiguous,
+      timeOptions: parsedTime.options,
+    });
+  }
+
+  if (/컨디션|기분|힘들|우울|괜찮|별로|좋아|좋았/.test(text)) {
+    return draft({
+      cat: "pregMood",
+      time: parsedTime.time,
+      dateKey: parsedTime.dateKey,
+      chip: pregnancyMoodChip(text),
+      notes: [relativeNote, text].filter(Boolean).join(" · ") || undefined,
+      flags,
+      confidence: 0.82,
+      timeAmbiguous: parsedTime.ambiguous,
+      timeOptions: parsedTime.options,
+    });
+  }
+
+  return null;
+}
+
+function fromPregnancyCareEvent(rawTranscript: string, event: CareEvent, now = new Date()): VoiceEventDraft | null {
+  const category = String(event.category ?? "");
+  const blob = `${category} ${event.type ?? ""} ${event.note ?? ""} ${rawTranscript}`;
+  if (category === "진료" || /병원|검진|초음파|산부인과/.test(blob)) {
+    const parsedTime = parseVoiceTime([String(event.time ?? ""), blob].join(" "), now);
+    const note = typeof event.note === "string" ? event.note : undefined;
+    return draft({
+      cat: "pregHospital",
+      time: typeof event.time === "string" && /^\d{1,2}:\d{2}$/.test(event.time) ? event.time : parsedTime.time,
+      dateKey: parsedTime.dateKey,
+      chip: pregnancyHospitalChip(blob),
+      notes: note || undefined,
+      confidence: 0.84,
+      timeAmbiguous: parsedTime.ambiguous,
+      timeOptions: parsedTime.options,
+    });
+  }
+  if (category === "영양제" || category === "복용 약" || /영양제|엽산|철분|약/.test(String(event.type ?? ""))) {
+    const parsedTime = parseVoiceTime([String(event.time ?? ""), blob].join(" "), now);
+    const note = typeof event.note === "string" ? event.note : undefined;
+    return draft({
+      cat: "pregMed",
+      time: typeof event.time === "string" && /^\d{1,2}:\d{2}$/.test(event.time) ? event.time : parsedTime.time,
+      dateKey: parsedTime.dateKey,
+      chip: pregnancyMedChip(blob),
+      notes: note || undefined,
+      confidence: 0.84,
+      timeAmbiguous: parsedTime.ambiguous,
+      timeOptions: parsedTime.options,
+    });
+  }
+  return null;
+}
+
+function fromCareEvent(rawTranscript: string, event: CareEvent, now = new Date(), pregnancy = false): VoiceEventDraft | null {
+  if (pregnancy) return fromPregnancyCareEvent(rawTranscript, event, now);
   const category = String(event.category ?? "");
   const noteBits = [event.note, event.type].filter(Boolean).map(String).join(" ");
   const timeSource = [String(event.time ?? ""), String(event.time_start ?? ""), noteBits, rawTranscript].join(" ");
@@ -418,57 +610,58 @@ export function splitVoiceClauses(text: string): string[] {
     .filter((s) => s.length >= 2);
 }
 
-function heuristicEvents(rawTranscript: string, now = new Date()): VoiceEventDraft[] {
+function fallbackVoiceDraft(rawTranscript: string, now: Date, pregnancy: boolean): VoiceEventDraft {
+  return draft({
+    cat: pregnancy ? "pregMood" : "memo",
+    time: formatHhMm(now),
+    notes: rawTranscript,
+    confidence: 0.4,
+    flags: ["low_confidence"],
+  });
+}
+
+function heuristicEvents(rawTranscript: string, now = new Date(), pregnancy = false): VoiceEventDraft[] {
+  const infer = pregnancy ? inferPregnancySegment : inferSegment;
   const clauses = splitVoiceClauses(rawTranscript);
   const events: VoiceEventDraft[] = [];
   for (const clause of clauses) {
-    const item = inferSegment(clause, now);
+    const item = infer(clause, now);
     if (item) events.push(item);
   }
   if (events.length) return events;
 
-  const whole = inferSegment(rawTranscript, now);
+  const whole = infer(rawTranscript, now);
   if (whole) return [whole];
 
-  return [
-    draft({
-      cat: "memo",
-      time: formatHhMm(now),
-      notes: rawTranscript,
-      confidence: 0.4,
-      flags: ["low_confidence"],
-    }),
-  ];
+  return [fallbackVoiceDraft(rawTranscript, now, pregnancy)];
 }
 
 function dedupeKey(e: VoiceEventDraft): string {
   return `${e.cat}|${e.time}|${e.chip ?? ""}|${e.amount ?? ""}|${e.duration ?? ""}`;
 }
 
-export function buildVoiceSession(rawText: string, serverEvents: CareEvent[] = [], now = new Date()): VoiceSessionResult {
+export function buildVoiceSession(
+  rawText: string,
+  serverEvents: CareEvent[] = [],
+  now = new Date(),
+  options: VoiceParseOptions = {},
+): VoiceSessionResult {
+  const pregnancy = Boolean(options.pregnancy);
   const rawTranscript = rawText.trim();
   if (!rawTranscript) {
     return {
       rawTranscript: "",
-      events: [
-        draft({
-          cat: "memo",
-          time: formatHhMm(now),
-          notes: "음성 기록",
-          confidence: 0.2,
-          flags: ["low_confidence"],
-        }),
-      ],
+      events: [fallbackVoiceDraft("음성 기록", now, pregnancy)],
     };
   }
 
   const fromServer: VoiceEventDraft[] = [];
   for (const event of serverEvents) {
-    const mapped = fromCareEvent(rawTranscript, event, now);
+    const mapped = fromCareEvent(rawTranscript, event, now, pregnancy);
     if (mapped) fromServer.push(mapped);
   }
 
-  const fromText = heuristicEvents(rawTranscript, now);
+  const fromText = heuristicEvents(rawTranscript, now, pregnancy);
 
   // Prefer server events when present; supplement with text-only detections not covered
   const merged: VoiceEventDraft[] = [];
@@ -484,7 +677,10 @@ export function buildVoiceSession(rawText: string, serverEvents: CareEvent[] = [
     merged.push(e);
   };
 
-  if (fromServer.length) {
+  if (pregnancy) {
+    fromText.forEach(push);
+    fromServer.forEach(push);
+  } else if (fromServer.length) {
     fromServer.forEach(push);
     // Add spit/burp memo from text if feeding didn't carry flag
     for (const e of fromText) {
@@ -496,7 +692,16 @@ export function buildVoiceSession(rawText: string, serverEvents: CareEvent[] = [
     fromText.forEach(push);
   }
 
-  return { rawTranscript, events: coalesceRelatedDiaper(merged) };
+  const events = pregnancy
+    ? merged.filter((event) => isPregnancyLogCategoryId(event.cat)).filter((event, _, all) => {
+        if (all.length === 1) return true;
+        return !(event.cat === "pregMood" && event.flags?.includes("low_confidence"));
+      })
+    : coalesceRelatedDiaper(merged);
+  return {
+    rawTranscript,
+    events: events.length ? events : [fallbackVoiceDraft(rawTranscript, now, pregnancy)],
+  };
 }
 
 /** "기저귀 갈았어" + "소변이었어" → one diaper with chip. */
@@ -534,12 +739,20 @@ function coalesceRelatedDiaper(events: VoiceEventDraft[]): VoiceEventDraft[] {
   return out;
 }
 
-export function transcribeToVoiceResults(rawText: string, events: CareEvent[] = []): VoiceEventDraft[] {
-  return buildVoiceSession(rawText, events).events;
+export function transcribeToVoiceResults(
+  rawText: string,
+  events: CareEvent[] = [],
+  options: VoiceParseOptions = {},
+): VoiceEventDraft[] {
+  return buildVoiceSession(rawText, events, new Date(), options).events;
 }
 
-export function transcribeToVoiceResult(rawText: string, events: CareEvent[] = []): VoiceEventDraft {
-  return buildVoiceSession(rawText, events).events[0];
+export function transcribeToVoiceResult(
+  rawText: string,
+  events: CareEvent[] = [],
+  options: VoiceParseOptions = {},
+): VoiceEventDraft {
+  return buildVoiceSession(rawText, events, new Date(), options).events[0];
 }
 
 export function voiceEventToLogFields(event: VoiceEventDraft, rawTranscript: string) {
@@ -561,8 +774,12 @@ export function voiceEventToLogFields(event: VoiceEventDraft, rawTranscript: str
 }
 
 /** Keep API for overlay reclassify of a single edited card snippet */
-export function reclassifyVoiceText(text: string, previous?: VoiceEventDraft | null): VoiceEventDraft {
-  const session = buildVoiceSession(text.trim() || previous?.notes || "음성 기록", []);
+export function reclassifyVoiceText(
+  text: string,
+  previous?: VoiceEventDraft | null,
+  options: VoiceParseOptions = {},
+): VoiceEventDraft {
+  const session = buildVoiceSession(text.trim() || previous?.notes || "음성 기록", [], new Date(), options);
   const next = session.events[0];
   if (previous) {
     return { ...next, id: previous.id };

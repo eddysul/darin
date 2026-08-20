@@ -19,8 +19,11 @@ function rowToBabyProfile(row: BabyRow, avatarUrl?: string): BabyProfile {
     name: row.name,
     nickname: row.nickname ?? undefined,
     birthDate: row.birth_date ?? undefined,
+    dueDate: row.due_date ?? undefined,
+    childStatus: row.child_status,
     gender: row.gender ?? undefined,
     note: row.special_notes ?? undefined,
+    birthWeight: row.birth_weight ?? undefined,
     avatarStoragePath: row.avatar_storage_path ?? undefined,
     avatarUrl: avatarUrl ?? (row.photo_url?.startsWith("http") ? row.photo_url : undefined),
     photoUrl: row.photo_url ?? undefined,
@@ -53,11 +56,22 @@ export const BabyProfileRepository = {
     const patch: Partial<BabyRow> = {
       name,
       nickname: input.nickname?.trim() || null,
-      birth_date: input.birthDate || null,
       gender: input.gender || null,
       special_notes: input.note?.trim() || null,
       updated_at: new Date().toISOString(),
     };
+    if (input.birthDate !== undefined) {
+      patch.birth_date = input.birthDate || null;
+    }
+    if (input.dueDate !== undefined) {
+      patch.due_date = input.dueDate || null;
+    }
+    if (input.childStatus !== undefined) {
+      patch.child_status = input.childStatus || "newborn";
+    }
+    if (input.birthWeight !== undefined) {
+      patch.birth_weight = input.birthWeight || null;
+    }
     if (input.clearAvatar) {
       patch.avatar_storage_path = null;
     }

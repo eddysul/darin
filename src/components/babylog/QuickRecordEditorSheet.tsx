@@ -12,7 +12,8 @@ import {
   View,
 } from "react-native";
 import { QUICK_RECORD_COLORS } from "../../constants/defaultQuickRecords";
-import { getCategory, type BabyLogCategoryId } from "../../constants/babyLogCategories";
+import { getCategory, PREGNANCY_LOG_CATEGORIES, type BabyLogCategoryId } from "../../constants/babyLogCategories";
+import { quickRecordsForStage } from "../../constants/defaultQuickRecords";
 import type { QuickRecord } from "../../types/quickRecord";
 import { createId } from "../../utils/id";
 import { colors, radius } from "../../theme";
@@ -21,7 +22,7 @@ import { useAppSettings } from "../../context/AppSettingsContext";
 import { formatVolume, volumeFromMl, volumeToMl } from "../../utils/measurementFormat";
 import { DurationPickerField, DurationPickerSheet } from "../inputs/TimePickerFields";
 
-const LINK_CATS: BabyLogCategoryId[] = [
+const BORN_LINK_CATS: BabyLogCategoryId[] = [
   "formula",
   "breast",
   "storedMilk",
@@ -42,6 +43,8 @@ const LINK_CATS: BabyLogCategoryId[] = [
   "other",
 ];
 
+const PREGNANCY_LINK_CATS: BabyLogCategoryId[] = PREGNANCY_LOG_CATEGORIES.map((category) => category.id);
+
 const VOLUME_CATS: BabyLogCategoryId[] = [
   "formula",
   "storedMilk",
@@ -51,13 +54,27 @@ const VOLUME_CATS: BabyLogCategoryId[] = [
 ];
 
 const DURATION_CATS: BabyLogCategoryId[] = ["breast", "sleep", "pump", "tummy", "bath", "play"];
-const AMOUNT_CATS: BabyLogCategoryId[] = [...VOLUME_CATS, "food", "snack", "med", "temp"];
-const STATE_CATS: BabyLogCategoryId[] = ["breast", "sleep", "diaper", "food", "snack", "pump", "temp"];
+const AMOUNT_CATS: BabyLogCategoryId[] = [...VOLUME_CATS, "food", "snack", "med", "temp", "pregWeight", "pregBp"];
+const STATE_CATS: BabyLogCategoryId[] = [
+  "breast",
+  "sleep",
+  "diaper",
+  "food",
+  "snack",
+  "pump",
+  "temp",
+  "pregMood",
+  "pregSymptom",
+  "pregKick",
+  "pregMed",
+  "pregHospital",
+];
 
 type Props = {
   visible: boolean;
   records: QuickRecord[];
   editing: QuickRecord | null;
+  pregnancy?: boolean;
   /** Open directly on the create/edit form instead of the manage list. */
   startInForm?: boolean;
   onClose: () => void;
@@ -68,11 +85,15 @@ export function QuickRecordEditorSheet({
   visible,
   records,
   editing,
+  pregnancy = false,
   startInForm = false,
   onClose,
   onSave,
 }: Props) {
   const { settings } = useAppSettings();
+  const linkCats = pregnancy ? PREGNANCY_LINK_CATS : BORN_LINK_CATS;
+  const defaultCat: BabyLogCategoryId = pregnancy ? "pregMood" : "formula";
+  const stageRecords = useMemo(() => quickRecordsForStage(records, pregnancy), [pregnancy, records]);
   const [label, setLabel] = useState("");
   const [color, setColor] = useState(QUICK_RECORD_COLORS[0]);
   const [cat, setCat] = useState<BabyLogCategoryId>("formula");
@@ -110,7 +131,7 @@ export function QuickRecordEditorSheet({
   const resetForm = () => {
     setLabel("");
     setColor(QUICK_RECORD_COLORS[0]);
-    setCat("formula");
+    setCat(defaultCat);
     setAmount("");
     setChip("");
     setDuration("");
@@ -128,7 +149,7 @@ export function QuickRecordEditorSheet({
     resetForm();
     setEditId(null);
     setMode(startInForm ? "form" : "list");
-  }, [visible, editing, startInForm]);
+  }, [visible, editing, startInForm, defaultCat]);
 
   const canSave = useMemo(
     () => label.trim().length > 0 && (cat !== "diaper" || ["소변", "대변", "소변+대변"].includes(chip)),
@@ -182,7 +203,7 @@ export function QuickRecordEditorSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.keyboardRoot} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.keyboardRoot} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.handle} />
@@ -208,7 +229,14 @@ export function QuickRecordEditorSheet({
 
           {mode === "list" ? (
             <ScrollView showsVerticalScrollIndicator={false}>
-              {records.map((r) => (
+              {stageRecords.length === 0 ? (
+                <Text style={styles.hint}>
+                  {pregnancy
+                    ? "임신 중 자주 쓰는 조합을 만들면 한 번에 기록할 수 있어요."
+                    : "자주 쓰는 조합을 만들면 한 번에 기록할 수 있어요."}
+                </Text>
+              ) : null}
+              {stageRecords.map((r) => (
                 <View key={r.id} style={styles.listRow}>
                   <View style={[styles.listIcon, { backgroundColor: `${r.color}16` }]}>
                     <LogCategoryIcon
@@ -233,14 +261,30 @@ export function QuickRecordEditorSheet({
                       {r.defaults.duration ? ` · ${r.defaults.duration}분` : ""}
                     </Text>
                   </View>
-                  <Pressable style={styles.miniBtn} onPress={() => togglePin(r.id)}>
+                  <Pressable
+                    style={styles.miniBtn}
+                    onPress={() => togglePin(r.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: r.pinned }}
+                    accessibilityLabel={`${r.label} ${r.pinned ? "고정 해제" : "고정"}`}
+                  >
                     <Text style={styles.miniBtnText}>{r.pinned ? "고정됨" : "고정"}</Text>
                   </Pressable>
-                  <Pressable style={styles.miniBtn} onPress={() => loadRecord(r)}>
+                  <Pressable
+                    style={styles.miniBtn}
+                    onPress={() => loadRecord(r)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${r.label} 수정`}
+                  >
                     <Text style={styles.miniBtnText}>수정</Text>
                   </Pressable>
                   {r.isCustom ? (
-                    <Pressable style={styles.miniBtn} onPress={() => remove(r.id)}>
+                    <Pressable
+                      style={styles.miniBtn}
+                      onPress={() => remove(r.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${r.label} 삭제`}
+                    >
                       <Text style={[styles.miniBtnText, styles.danger]}>삭제</Text>
                     </Pressable>
                   ) : null}
@@ -257,7 +301,7 @@ export function QuickRecordEditorSheet({
                 style={styles.input}
                 value={label}
                 onChangeText={setLabel}
-                placeholder="예: 비타민D"
+                placeholder={pregnancy ? "예: 영양제 저녁" : "예: 비타민D"}
                 placeholderTextColor={colors.faint}
                 autoFocus={startInForm && !editing}
               />
@@ -278,7 +322,7 @@ export function QuickRecordEditorSheet({
 
               <Text style={styles.label}>연결 카테고리</Text>
               <View style={styles.chipRow}>
-                {LINK_CATS.map((id) => {
+                {linkCats.map((id) => {
                   const active = cat === id;
                   return (
                     <Pressable
@@ -303,9 +347,15 @@ export function QuickRecordEditorSheet({
                     style={styles.input}
                     value={amount}
                     onChangeText={setAmount}
-                    placeholder={cat === "temp" ? "예: 36.5" : cat === "med" ? "예: 1 drop" : "예: 120"}
+                    placeholder={
+                      cat === "temp" ? "예: 36.5"
+                      : cat === "med" ? "예: 1 drop"
+                      : cat === "pregWeight" ? "예: 58.2"
+                      : cat === "pregBp" ? "예: 120/80"
+                      : "예: 120"
+                    }
                     placeholderTextColor={colors.faint}
-                    keyboardType={cat === "med" ? "default" : "decimal-pad"}
+                    keyboardType={cat === "med" || cat === "pregBp" ? "default" : "decimal-pad"}
                   />
                 </>
               ) : null}
@@ -342,13 +392,29 @@ export function QuickRecordEditorSheet({
               ) : STATE_CATS.includes(cat) ? (
                 <>
                   <Text style={styles.label}>기본 상태</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={chip}
-                    onChangeText={setChip}
-                    placeholder={cat === "sleep" ? "예: 낮잠 또는 밤잠" : "선택 사항"}
-                    placeholderTextColor={colors.faint}
-                  />
+                  {(getCategory(cat).chips ?? []).length > 0 ? (
+                    <View style={styles.chipRow}>
+                      {(getCategory(cat).chips ?? []).map((option) => (
+                        <Pressable
+                          key={option}
+                          style={[styles.chip, chip === option && styles.chipActive]}
+                          onPress={() => setChip(chip === option ? "" : option)}
+                        >
+                          <Text style={[styles.chipText, chip === option && styles.chipTextActive]}>
+                            {option}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : (
+                    <TextInput
+                      style={styles.input}
+                      value={chip}
+                      onChangeText={setChip}
+                      placeholder={cat === "sleep" ? "예: 낮잠 또는 밤잠" : "선택 사항"}
+                      placeholderTextColor={colors.faint}
+                    />
+                  )}
                 </>
               ) : null}
 
@@ -357,7 +423,7 @@ export function QuickRecordEditorSheet({
                 style={styles.input}
                 value={notes}
                 onChangeText={setNotes}
-                placeholder="예: 비타민D 1 drop"
+                placeholder={pregnancy ? "예: 저녁 식후" : "예: 비타민D 1 drop"}
                 placeholderTextColor={colors.faint}
               />
 
@@ -426,11 +492,14 @@ const styles = StyleSheet.create({
   listLabel: { fontSize: 14, fontWeight: "700", color: colors.text },
   listMeta: { fontSize: 11.5, color: colors.faint, marginTop: 2 },
   miniBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 8,
-    paddingVertical: 5,
   },
   miniBtnText: { fontSize: 11, fontWeight: "700", color: colors.muted },
   danger: { color: "#B45309" },

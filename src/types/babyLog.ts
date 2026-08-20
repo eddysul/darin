@@ -108,6 +108,8 @@ export type DiaryEntry = {
   moodStamp: DiaryMoodId | null;
   /** Frozen Care Log summary at save time */
   careLogSummarySnapshot: string;
+  /** Frozen pregnancy/postnatal label at save time. Past diaries must not move when due_date is edited. */
+  stageLabelSnapshot?: string | null;
   /** Moment suggestion ids the parent tapped while composing */
   momentSuggestionsUsed: string[];
   /** Preset milestone e.g. "첫 목욕" */

@@ -115,6 +115,41 @@ target 'Darin' do
     if File.exist?(hermes_build_script)
       source = File.read(hermes_build_script)
       source = source.sub("set -x\n", "set -x -e\n")
+      # Xcode 26 can export a duplicated CMAKE_APPLE_ARCH_SYSROOTS. Force unique
+      # ARCHS and wipe a stale CMake cache so configure cannot reuse a mismatch.
+      hermes_sysroot_block = <<~'PATCH'
+        # darin-hermes-sysroot-begin
+        unset CMAKE_APPLE_ARCH_SYSROOTS
+        architectures=$(echo "$ARCHS" | tr ' ;' '\n' | awk 'NF && !seen[$0]++' | paste -sd ';' -)
+        [ -n "$architectures" ] || architectures="arm64"
+        hermes_sysroots=$(echo "$architectures" | awk -F';' -v sdk="$SDKROOT" '{
+          n=split($0, a, ";")
+          out=sdk
+          for (i=2; i<=n; i++) out=out ";" sdk
+          print out
+        }')
+        rm -f "${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/CMakeCache.txt"
+        # darin-hermes-sysroot-end
+      PATCH
+      if source.include?("# darin-hermes-sysroot-begin")
+        source = source.sub(
+          /# darin-hermes-sysroot-begin\n.*?# darin-hermes-sysroot-end\n/m,
+          hermes_sysroot_block
+        )
+      else
+        source = source.sub(
+          /architectures=\$\(.*\)\n(?:hermes_sysroots=.*\n(?:if \[ -n "\$architectures" \]; then\n(?:.*\n)*?fi\n)?)?/,
+          hermes_sysroot_block
+        )
+      end
+      unless source.include?("CMAKE_APPLE_ARCH_SYSROOTS:STRING")
+        source = source.sub(
+          "  -DCMAKE_OSX_ARCHITECTURES:STRING=\"$architectures\" \\\n",
+          "  -DCMAKE_OSX_ARCHITECTURES:STRING=\"$architectures\" \\\n" \
+            "  -DCMAKE_OSX_SYSROOT:PATH=\"$SDKROOT\" \\\n" \
+            "  -DCMAKE_APPLE_ARCH_SYSROOTS:STRING=\"$hermes_sysroots\" \\\n"
+        )
+      end
       File.chmod(0755, hermes_build_script)
       File.write(hermes_build_script, source)
     end

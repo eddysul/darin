@@ -7,6 +7,7 @@ import { migrateDiaryEntry } from "./diaryModel";
 type DiaryMetadata = {
   dateLabel?: string;
   careLogSummarySnapshot?: string;
+  stageLabelSnapshot?: string | null;
   momentSuggestionsUsed?: string[];
   milestoneTag?: string | null;
   customMilestoneTag?: string | null;
@@ -30,6 +31,7 @@ function entryMetadata(entry: DiaryEntry): Json {
   const metadata: Record<string, Json> = {
     dateLabel: entry.date,
     careLogSummarySnapshot: entry.careLogSummarySnapshot,
+    stageLabelSnapshot: entry.stageLabelSnapshot ?? null,
     momentSuggestionsUsed: entry.momentSuggestionsUsed,
     milestoneTag: entry.milestoneTag,
     customMilestoneTag: entry.customMilestoneTag,
@@ -84,6 +86,9 @@ export function diaryEntryRowToModel(row: DiaryEntryRow, photos: string[] = []):
     weatherStamp: row.weather,
     moodStamp: row.mood,
     careLogSummarySnapshot: typeof metadata.careLogSummarySnapshot === "string" ? metadata.careLogSummarySnapshot : "",
+    stageLabelSnapshot: typeof metadata.stageLabelSnapshot === "string" && metadata.stageLabelSnapshot.trim()
+      ? metadata.stageLabelSnapshot.trim()
+      : null,
     momentSuggestionsUsed: Array.isArray(metadata.momentSuggestionsUsed) ? metadata.momentSuggestionsUsed : [],
     milestoneTag: typeof metadata.milestoneTag === "string" ? metadata.milestoneTag : row.tags[0] ?? null,
     customMilestoneTag: typeof metadata.customMilestoneTag === "string" ? metadata.customMilestoneTag : null,
@@ -106,6 +111,7 @@ export function diaryMediaRowToModel(row: DiaryMediaRow): DiaryMedia {
     babyId: row.baby_id,
     storagePath: row.storage_path,
     mediaType: row.media_type,
+    uploadStatus: row.upload_status ?? "ready",
     width: row.width ?? undefined,
     height: row.height ?? undefined,
     createdAt: row.created_at,

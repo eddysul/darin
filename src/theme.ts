@@ -7,16 +7,22 @@ export const colors = {
   card: "#FFFFFF",
   cardHi: "#FAF4EE",
   text: "#2E2A26",
-  muted: "#7A746C",
-  faint: "#A39E96",
+  /** Secondary text. >=4.5:1 on every light surface incl. cardHi. */
+  muted: "#6B655E",
+  /** Tertiary text and placeholders. >=4.5:1 on every light surface incl. cardHi. */
+  faint: "#736D65",
   border: "#EDE5DC",
   /** Fill / border accent. Do not use as text on cream or white. */
   amber: AMBER,
   amberSoft: AMBER_SOFT,
   /** Text/icon on light surfaces. ~5.4:1 on #FFFFFF. */
   amberText: "#B03A34",
-  /** Text on coral fills. */
+  /** Content on coral fills (primary buttons, selected chips, FAB). */
   amberDark: "#FFFFFF",
+  /** Content on dark fills and scrims (photo overlays, Apple button). */
+  onDark: "#FFFFFF",
+  /** Accent text on dark surfaces (toasts). ~9:1 on the toast scrim. */
+  accentOnDark: "#F7B3AB",
   danger: "#C0463F",
   dangerSoft: "rgba(192,70,63,0.12)",
   dangerText: "#B03A34",
@@ -27,6 +33,7 @@ export const colors = {
   yellowSoft: AMBER_SOFT,
   /** Alias of amber. Prefer amber in new code. */
   primary: AMBER,
+  /** Alias of amberDark. Content on the primary coral fill. */
   primaryForeground: "#FFFFFF",
   /** Alias of amber. Prefer amber in new code. */
   accent: AMBER,

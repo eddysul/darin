@@ -1,4 +1,5 @@
 import type { ChildProfile, ParentProfile, PostpartumStatus } from "../types/careSetup";
+import type { DiaryEntry } from "../types/babyLog";
 import type { Locale } from "../i18n";
 import type { BabyAgeFormat } from "../types/appSettings";
 
@@ -26,19 +27,61 @@ function calendarDayDifference(later: Date, earlier: Date): number {
   return Math.floor((laterUtc - earlierUtc) / 86_400_000);
 }
 
-/** Compact, non-abbreviated age label used in the record header. */
-export function formatRecordHeaderAge(child: ChildProfile, now = new Date()): string | null {
-  const today = startOfLocalDay(now);
-  const birthDate = parseCalendarDate(child.birthDate);
+/** Full-term pregnancy in days (40w0d). Due date is treated as day 280. */
+const PREGNANCY_TERM_DAYS = 280;
 
-  if (!birthDate) {
-    const dueDate = parseCalendarDate(child.dueDate);
-    if (!dueDate) return null;
-    const remainingDays = calendarDayDifference(startOfLocalDay(dueDate), today);
-    return remainingDays >= 0 ? `출산 예정 D-${remainingDays}` : `출산 예정 D+${Math.abs(remainingDays)}`;
-  }
+/** Accepts a raw `child_status` string so callers can pass a `BabyRow` directly. */
+export function isPregnancyStage(child: { childStatus: string; birthDate?: string }): boolean {
+  return child.childStatus === "unborn" && !child.birthDate;
+}
 
-  const birth = startOfLocalDay(birthDate);
+export function formatDottedDate(value?: string): string | null {
+  const parsed = parseCalendarDate(value);
+  if (!parsed) return null;
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${parsed.getFullYear()}.${month}.${day}`;
+}
+
+export function formatGestationalAge(dueDate?: string, onDate: Date | string = new Date()): string | null {
+  const due = parseCalendarDate(dueDate);
+  const on = typeof onDate === "string" ? parseCalendarDate(onDate) : onDate;
+  if (!due || !on) return null;
+  const remainingDays = calendarDayDifference(startOfLocalDay(due), startOfLocalDay(on));
+  const gestationalDays = PREGNANCY_TERM_DAYS - remainingDays;
+  if (gestationalDays < 0) return "임신 중 0주 0일";
+  const weeks = Math.floor(gestationalDays / 7);
+  const days = gestationalDays % 7;
+  return `임신 중 ${weeks}주 ${days}일`;
+}
+
+const BIRTH_CTA_WINDOW_DAYS = 7;
+
+/** Home birth CTA: last week before due date, and while overdue until converted. */
+export function shouldShowBirthCta(child: Pick<ChildProfile, "childStatus" | "birthDate" | "dueDate">, now = new Date()): boolean {
+  if (!isPregnancyStage(child)) return false;
+  const due = parseCalendarDate(child.dueDate);
+  if (!due) return false;
+  const remainingDays = calendarDayDifference(startOfLocalDay(due), startOfLocalDay(now));
+  return remainingDays <= BIRTH_CTA_WINDOW_DAYS;
+}
+
+export function formatDueCountdown(dueDate?: string, onDate: Date | string = new Date()): string | null {
+  const due = parseCalendarDate(dueDate);
+  const on = typeof onDate === "string" ? parseCalendarDate(onDate) : onDate;
+  if (!due || !on) return null;
+  const remainingDays = calendarDayDifference(startOfLocalDay(due), startOfLocalDay(on));
+  return remainingDays >= 0
+    ? `출산 예정일까지 D-${remainingDays}`
+    : `출산 예정일까지 D+${Math.abs(remainingDays)}`;
+}
+
+export function formatPostnatalAge(birthDate?: string, onDate: Date | string = new Date()): string | null {
+  const birthDateValue = parseCalendarDate(birthDate);
+  const on = typeof onDate === "string" ? parseCalendarDate(onDate) : onDate;
+  if (!birthDateValue || !on) return null;
+  const birth = startOfLocalDay(birthDateValue);
+  const today = startOfLocalDay(on);
   const ageDays = Math.max(0, calendarDayDifference(today, birth));
   if (ageDays <= 30) return `생후 ${ageDays}일`;
 
@@ -54,6 +97,42 @@ export function formatRecordHeaderAge(child: ChildProfile, now = new Date()): st
   if (completedMonths < 24) return `${completedMonths}개월 ${remainingDays}일`;
 
   return `만 ${Math.floor(completedMonths / 12)}세 ${completedMonths % 12}개월`;
+}
+
+/**
+ * Age label for a diary/log written on `onDateKey`.
+ * Uses due_date before birth_date, and actual birth_date from the birthday onward.
+ */
+export function formatDiaryStageLabel(
+  child: Pick<ChildProfile, "birthDate" | "dueDate">,
+  onDateKey: string,
+): string | null {
+  if (child.birthDate && onDateKey >= child.birthDate) {
+    return formatPostnatalAge(child.birthDate, onDateKey);
+  }
+  if (child.dueDate) return formatGestationalAge(child.dueDate, onDateKey);
+  return null;
+}
+
+/** Prefer the label frozen at save; fall back for legacy rows without a snapshot. */
+export function diaryStageLabel(
+  entry: Pick<DiaryEntry, "dateKey" | "stageLabelSnapshot">,
+  child: Pick<ChildProfile, "birthDate" | "dueDate">,
+): string | null {
+  const frozen = entry.stageLabelSnapshot?.trim();
+  if (frozen) return frozen;
+  return formatDiaryStageLabel(child, entry.dateKey);
+}
+
+/** Compact, non-abbreviated age label used in the record header. */
+export function formatRecordHeaderAge(child: ChildProfile, now = new Date()): string | null {
+  if (isPregnancyStage(child)) {
+    const gestational = formatGestationalAge(child.dueDate, now);
+    const countdown = formatDueCountdown(child.dueDate, now);
+    if (gestational && countdown) return `${gestational}\n${countdown}`;
+    return gestational ?? countdown;
+  }
+  return formatPostnatalAge(child.birthDate, now);
 }
 
 function formatDateLabel(value: string, locale: Locale): string {
@@ -73,6 +152,7 @@ export function computeChildAgeDays(child: ChildProfile): number | null {
 }
 
 export function formatBabyAge(child: ChildProfile, format: BabyAgeFormat): string | null {
+  if (isPregnancyStage(child)) return formatGestationalAge(child.dueDate);
   const days = computeChildAgeDays(child);
   if (days == null) return null;
   if (format === "weeks") return `${Math.floor(days / 7)}주 ${days % 7}일`;
@@ -85,22 +165,25 @@ export function formatBabyAge(child: ChildProfile, format: BabyAgeFormat): strin
 
 export function buildBabyDisplay(child: ChildProfile, locale: Locale = "ko") {
   const name = child.childName.trim() || (locale === "ko" ? "아기" : "Baby");
-  const emoji = child.childStatus === "unborn" ? "🤰" : child.childStatus === "newborn" ? "👶" : "🧒";
+  const emoji = isPregnancyStage(child) ? "🤰" : child.childStatus === "newborn" ? "👶" : "🧒";
 
-  const ageDays = computeChildAgeDays(child);
-  if (child.childStatus === "unborn" && child.dueDate) {
+  if (isPregnancyStage(child) && child.dueDate) {
+    const gestational = formatGestationalAge(child.dueDate);
+    const countdown = formatDueCountdown(child.dueDate);
     const dueLabel = formatDateLabel(child.dueDate, locale);
-    const badge = locale === "ko" ? `출산 예정 · ${dueLabel}` : `Due · ${dueLabel}`;
-    const birthMeta = locale === "ko" ? `예정일 ${dueLabel}` : `Due date ${dueLabel}`;
+    const badge = gestational ?? (locale === "ko" ? `출산 예정 · ${dueLabel}` : `Due · ${dueLabel}`);
+    const birthMeta = [gestational, countdown].filter(Boolean).join(" · ") || (locale === "ko" ? `예정일 ${dueLabel}` : `Due date ${dueLabel}`);
     return { babyName: name, babyEmoji: emoji, babyBadge: badge, babyBirthMeta: birthMeta };
   }
 
+  const ageDays = computeChildAgeDays(child);
   if (ageDays != null) {
-    const badge = locale === "ko" ? `생후 ${ageDays}일 · D+${ageDays}` : `Day ${ageDays} · D+${ageDays}`;
+    const postnatal = formatPostnatalAge(child.birthDate);
+    const badge = postnatal ?? (locale === "ko" ? `생후 ${ageDays}일 · D+${ageDays}` : `Day ${ageDays} · D+${ageDays}`);
     const birthMeta =
       locale === "ko"
-        ? `${child.birthDate ? formatDateLabel(child.birthDate, locale) + " 출생 · " : ""}생후 ${ageDays}일`
-        : `${child.birthDate ? "Born " + formatDateLabel(child.birthDate, locale) + " · " : ""}Day ${ageDays}`;
+        ? `${child.birthDate ? formatDateLabel(child.birthDate, locale) + " 출생 · " : ""}${postnatal ?? `생후 ${ageDays}일`}`
+        : `${child.birthDate ? "Born " + formatDateLabel(child.birthDate, locale) + " · " : ""}${postnatal ?? `Day ${ageDays}`}`;
     return { babyName: name, babyEmoji: emoji, babyBadge: badge, babyBirthMeta: birthMeta };
   }
 
@@ -161,7 +244,7 @@ export function buildProfileContextBlock(
         `산후 상태: ${postpartumStatusLabel(parent.postpartumStatus, locale)}`,
         parent.birthRecoveryNote ? `회복 메모: ${parent.birthRecoveryNote}` : null,
         `아기: ${display.babyName} · ${display.babyBirthMeta}`,
-        child.gestationalAgeWeeks ? `임신 주수: ${child.gestationalAgeWeeks}주` : null,
+        child.gestationalAgeWeeks ? `임신 주수: ${child.gestationalAgeWeeks}주` : isPregnancyStage(child) ? `임신 주수: ${formatGestationalAge(child.dueDate) ?? "-"}` : null,
         child.birthWeight ? `출생 체중: ${child.birthWeight}` : null,
         child.specialNotes ? `특이사항: ${child.specialNotes}` : null,
       ]
@@ -171,7 +254,7 @@ export function buildProfileContextBlock(
         `Postpartum status: ${postpartumStatusLabel(parent.postpartumStatus, locale)}`,
         parent.birthRecoveryNote ? `Recovery note: ${parent.birthRecoveryNote}` : null,
         `Baby: ${display.babyName} · ${display.babyBirthMeta}`,
-        child.gestationalAgeWeeks ? `Gestational age: ${child.gestationalAgeWeeks} wks` : null,
+        child.gestationalAgeWeeks ? `Gestational age: ${child.gestationalAgeWeeks} wks` : isPregnancyStage(child) ? `Gestational age: ${formatGestationalAge(child.dueDate) ?? "-"}` : null,
         child.birthWeight ? `Birth weight: ${child.birthWeight}` : null,
         child.specialNotes ? `Special notes: ${child.specialNotes}` : null,
       ];

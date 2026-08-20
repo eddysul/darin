@@ -7,14 +7,14 @@ import type { CareSetup, DefaultFeedingMethod } from "../types/careSetup";
 import { relationshipToLabel } from "../types/careSetup";
 import type { FamilyMember, FamilyRole } from "../types/family";
 import type { QuickRecord } from "../types/quickRecord";
-import { buildBabyDisplay } from "../utils/childDisplay";
+import { buildBabyDisplay, formatDiaryStageLabel } from "../utils/childDisplay";
 import {
   getCustomCategories,
   hydrateCustomCategories,
   resetCustomCategoriesMemory,
   saveCustomCategories,
 } from "../utils/customCategoriesStore";
-import { getQuickRecords, hydrateQuickRecords, saveQuickRecords } from "../utils/quickRecordsStore";
+import { getQuickRecords, hydrateQuickRecords, resetQuickRecordsMemory, saveQuickRecords } from "../utils/quickRecordsStore";
 import { getBabyLogs, hydrateBabyLogs, resetBabyLogsMemory, saveBabyLogs } from "../utils/babyLogsStore";
 import {
   bootstrapCareLogsFromServer,
@@ -39,7 +39,12 @@ import {
   syncDiaryDelete,
   syncDiaryUpdate,
 } from "../utils/diaryServerSync";
-import { getChatHistory, hydrateChatHistory, saveChatHistory } from "../utils/chatHistoryStore";
+import {
+  getChatHistory,
+  hydrateChatHistory,
+  resetChatHistoryMemory,
+  saveChatHistory,
+} from "../utils/chatHistoryStore";
 import {
   getFamilyMembers,
   hydrateFamilyMembers,
@@ -344,6 +349,8 @@ type BabyLogContextValue = {
   deleteDiary: (id: string) => void;
   toggleDiaryInGrowthBook: (id: string) => void;
   pushChat: (role: "user" | "ai", text: string, stickerId?: string) => void;
+  /** True after the active baby’s consult history has been loaded (or reset). */
+  chatHydrated: boolean;
   /** True after AsyncStorage hydrate finishes (2.7). */
   storageReady: boolean;
   storageIssue: StorageIssue | null;
@@ -461,12 +468,15 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setStickersHydrated(false);
       setGrowthRecordsHydrated(false);
       setGrowthBookHydrated(false);
+      setChatHydrated(false);
+      setStorageReady(false);
       setDiaryEntries([]);
       setLogs([]);
       setGrowthRecords([]);
       setCautionFoods([]);
       setFamilyMembers([]);
       setBabyStickers([]);
+      setChatHistory([DEFAULT_GREETING]);
       setGrowthBookEditState(createEmptyGrowthBookEdit({ babyId: scope?.babyId ?? "", babyName: careSetup.child.childName }));
       resetDiaryEntriesMemory();
       resetBabyLogsMemory();
@@ -476,7 +486,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       resetGrowthRecordsMemory();
       resetFamilyMembersMemory();
       resetCustomCategoriesMemory();
+      resetQuickRecordsMemory();
+      resetChatHistoryMemory();
       setCustomCategoriesState([]);
+      setQuickRecordsState(getQuickRecords());
       localDataScopeRef.current = scope;
       setLocalDataScope(scope);
     }
@@ -484,10 +497,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     const [customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, growthRecordsOk, syncOk] =
       await Promise.all([
       hydrateCustomCategories(scope, force),
-      hydrateQuickRecords(force),
+      hydrateQuickRecords(scope, force),
       hydrateBabyLogs(scope, force),
       hydrateDiaryEntries(scope, force),
-      hydrateChatHistory(force),
+      hydrateChatHistory(scope, force),
       hydrateFamilyMembers(scope, force),
       hydrateGrowthBookEdit(scope, force),
       hydrateBabyStickers(scope, force),
@@ -553,9 +566,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     }
     if (chatOk) {
       const storedChat = getChatHistory();
-      if (storedChat !== null) setChatHistory(storedChat);
-      setChatHydrated(true);
+      setChatHistory(storedChat && storedChat.length > 0 ? storedChat : [DEFAULT_GREETING]);
+    } else {
+      setChatHistory([DEFAULT_GREETING]);
     }
+    setChatHydrated(true);
     if (familyOk) {
       const storedFamily = getFamilyMembers();
       if (storedFamily !== null) {
@@ -685,8 +700,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!chatHydrated) return;
-    void saveChatHistory(chatHistory);
-  }, [chatHistory, chatHydrated]);
+    void saveChatHistory(chatHistory, localDataScope);
+  }, [chatHistory, chatHydrated, localDataScope]);
 
   useEffect(() => {
     if (!familyHydrated) return;
@@ -847,7 +862,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     (records: QuickRecord[] | ((prev: QuickRecord[]) => QuickRecord[])) => {
       setQuickRecordsState((prev) => {
         const next = typeof records === "function" ? records(prev) : records;
-        void saveQuickRecords(next);
+        void saveQuickRecords(next, localDataScopeRef.current);
         return next;
       });
     },
@@ -1099,6 +1114,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         milestoneTag: entry.milestoneTag ?? null,
         customMilestoneTag: entry.customMilestoneTag ?? null,
         careLogSummarySnapshot: entry.careLogSummarySnapshot ?? "",
+        stageLabelSnapshot: entry.stageLabelSnapshot
+          ?? formatDiaryStageLabel(careSetup.child, entry.dateKey || formatDateKey()),
         source: entry.source ?? "manual",
         draftStatus: "saved",
         createdAt: entry.createdAt ?? now,
@@ -1108,13 +1125,17 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       void syncDiaryCreate(scope, optimistic).then((remote) => {
         if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
         if (remote) {
-          setDiaryEntries((current) => current.map((item) => item.id === optimistic.id ? remote : item));
+          setDiaryEntries((current) => current.map((item) => (
+            item.id === optimistic.id
+              ? { ...remote, photos: remote.photos.length ? remote.photos : item.photos }
+              : item
+          )));
         } else if (isSupabaseConfigured()) {
           setDiaryEntries((current) => current.filter((item) => item.id !== optimistic.id));
         }
       });
     },
-    [localDataScope],
+    [localDataScope, careSetup.child],
   );
 
   const updateDiary = useCallback((id: string, patch: Partial<Omit<DiaryEntry, "id">>) => {
@@ -1122,17 +1143,28 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     const scope = localDataScope;
     const previous = diaryEntries.find((entry) => entry.id === id);
     if (!previous) return;
-    const optimistic: DiaryEntry = { ...previous, ...patch, updatedAt: patch.updatedAt ?? now };
+    const optimistic: DiaryEntry = {
+      ...previous,
+      ...patch,
+      stageLabelSnapshot: patch.stageLabelSnapshot
+        ?? previous.stageLabelSnapshot
+        ?? formatDiaryStageLabel(careSetup.child, patch.dateKey ?? previous.dateKey),
+      updatedAt: patch.updatedAt ?? now,
+    };
     setDiaryEntries((current) => current.map((entry) => entry.id === id ? optimistic : entry));
     void syncDiaryUpdate(scope, optimistic).then((remote) => {
       if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) return;
       if (remote) {
-        setDiaryEntries((current) => current.map((entry) => entry.id === id ? remote : entry));
+        setDiaryEntries((current) => current.map((entry) => (
+          entry.id === id
+            ? { ...remote, photos: remote.photos.length ? remote.photos : entry.photos }
+            : entry
+        )));
       } else if (isSupabaseConfigured()) {
         setDiaryEntries((current) => current.map((entry) => entry.id === id ? previous : entry));
       }
     });
-  }, [diaryEntries, localDataScope]);
+  }, [diaryEntries, localDataScope, careSetup.child]);
 
   const deleteDiary = useCallback((id: string) => {
     const scope = localDataScope;
@@ -1202,9 +1234,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveBabyStickers([], localDataScope),
       saveGrowthRecords([], localDataScope),
       clearGrowthRecordsMigrationState(),
-      saveChatHistory([]),
+      saveChatHistory([], localDataScope),
       saveCustomCategories([], localDataScope),
-      saveQuickRecords([]),
+      saveQuickRecords([], localDataScope),
       clearSupabaseSync(),
       isSupabaseConfigured() ? AuthRepository.signOut().catch(() => undefined) : Promise.resolve(),
     ]);
@@ -1274,12 +1306,12 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveCareSetup(careSetup),
       saveBabyLogs(logs, localDataScope),
       saveDiaryEntries(diaryEntries, localDataScope),
-      saveChatHistory(chatHistory),
+      saveChatHistory(chatHistory, localDataScope),
       saveFamilyMembers(familyMembers, localDataScope),
       saveGrowthBookEdit(growthBookEdit, localDataScope),
       saveBabyStickers(babyStickers, localDataScope),
       saveGrowthRecords(growthRecords, localDataScope),
-      saveQuickRecords(quickRecords),
+      saveQuickRecords(quickRecords, localDataScope),
       saveCustomCategories(customCategories, localDataScope),
       saveDiaryReminder(reminder, localDataScope),
       ...(draft ? [saveDiaryDraft(draft, localDataScope)] : []),
@@ -1313,6 +1345,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         nickname: baby.nickname ?? undefined,
         birthDate: baby.birth_date ?? undefined,
         dueDate: baby.due_date ?? undefined,
+        childStatus: ["unborn", "newborn", "infant"].includes(baby.child_status)
+          ? (baby.child_status as "unborn" | "newborn" | "infant")
+          : baby.birth_date
+            ? "newborn"
+            : careSetup.child.childStatus,
         gender: baby.gender === "girl" || baby.gender === "boy" ? baby.gender : "unknown",
         photoUri: baby.photo_url ?? undefined,
         birthWeight: baby.birth_weight ?? undefined,
@@ -1424,6 +1461,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     growthBookSyncRunRef.current += 1;
     setDiaryHydrated(false);
     setGrowthBookHydrated(false);
+    setChatHydrated(false);
+    if (scope) {
+      await saveChatHistory(chatHistory, scope);
+    }
     localDataScopeRef.current = null;
     setLocalDataScope(null);
     resetDiaryEntriesMemory();
@@ -1434,6 +1475,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     resetGrowthRecordsMemory();
     resetFamilyMembersMemory();
     resetCustomCategoriesMemory();
+    resetQuickRecordsMemory();
+    resetChatHistoryMemory();
     const emptyGrowthBook = createEmptyGrowthBookEdit({ babyId: "", babyName: "" });
     setLogs([]);
     setDiaryEntries([]);
@@ -1442,6 +1485,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setBabyStickers([]);
     setGrowthRecords([]);
     setCustomCategoriesState([]);
+    setQuickRecordsState(getQuickRecords());
     setBabies([]);
     setCautionFoods([]);
     setChatHistory([DEFAULT_GREETING]);
@@ -1449,10 +1493,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveBabyLogs([], scope),
       saveFamilyMembers([], scope),
       saveGrowthRecords([], scope),
-      saveChatHistory([DEFAULT_GREETING]),
       clearSupabaseSync(),
     ]);
-  }, [careSetup.child.childName, diaryEntries, growthBookEdit]);
+  }, [careSetup.child.childName, chatHistory, diaryEntries, growthBookEdit]);
 
   const qaDebug = useMemo<BabyLogContextValue["qaDebug"]>(() => {
     if (!__DEV__) return null;
@@ -1471,7 +1514,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       await Promise.all([
         saveBabyLogs(sampleLogs, localDataScope),
         saveDiaryEntries(SEED_DIARY, localDataScope),
-        saveChatHistory([DEFAULT_GREETING]),
+        saveChatHistory([DEFAULT_GREETING], localDataScope),
         saveFamilyMembers(SEED_FAMILY, localDataScope),
       ]);
     };
@@ -1496,7 +1539,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
           return !(message.role === "ai" && previous?.role === "user" && previous.text.startsWith("QA "));
         });
         setChatHistory(next);
-        await saveChatHistory(next);
+        await saveChatHistory(next, localDataScope);
       },
     };
   }, [chatHistory, hydrateStorageState, localDataScope]);
@@ -1544,6 +1587,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setFamilyMemberStatus,
       removeFamilyMember,
       chatHistory,
+      chatHydrated,
       profileOpen,
       setProfileOpen,
       addLog,
@@ -1604,6 +1648,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setFamilyMemberStatus,
       removeFamilyMember,
       chatHistory,
+      chatHydrated,
       profileOpen,
       addLog,
       addLogWithPersistence,

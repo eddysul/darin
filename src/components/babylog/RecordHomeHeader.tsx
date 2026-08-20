@@ -8,13 +8,13 @@ import { useApp } from "../../context/AppContext";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { BabyProfileRepository } from "../../repositories/BabyProfileRepository";
 import { colors, fontScaleCap, type } from "../../theme";
-import { formatRecordHeaderAge } from "../../utils/childDisplay";
+import { formatRecordHeaderAge, shouldShowBirthCta } from "../../utils/childDisplay";
 import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { BabySwitcher } from "./BabySwitcher";
 import { NotificationBellButton } from "../NotificationBellButton";
 
 type Props = {
-  onOpenProfile: () => void;
+  onOpenProfile: (opts?: { convertBirth?: boolean }) => void;
   onOpenSettings?: () => void;
   onOpenNotifications?: () => void;
   embedded?: boolean;
@@ -28,6 +28,7 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
   const { babyName, babyBirthMeta, activeBabyId, familyMembers } = useBabyLog();
   const compact = useCompactLayout();
   const ageLabel = formatRecordHeaderAge(careSetup.child) ?? babyBirthMeta;
+  const showBirthCta = shouldShowBirthCta(careSetup.child);
   const isShared = familyMembers.filter((member) => member.status === "active").length > 1;
   const [babyPhoto, setBabyPhoto] = useState(careSetup.child.photoUri);
 
@@ -47,6 +48,8 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
             profile.name === current.child.childName &&
             (profile.nickname ?? undefined) === (current.child.nickname ?? undefined) &&
             (profile.birthDate ?? undefined) === (current.child.birthDate ?? undefined) &&
+            (profile.dueDate ?? undefined) === (current.child.dueDate ?? undefined) &&
+            (profile.childStatus ?? undefined) === (current.child.childStatus ?? undefined) &&
             (nextUri ?? undefined) === (current.child.photoUri ?? undefined);
           if (same) return;
           setCareSetup({
@@ -56,8 +59,14 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
               childName: profile.name,
               nickname: profile.nickname,
               birthDate: profile.birthDate,
+              dueDate: profile.dueDate ?? current.child.dueDate,
+              childStatus:
+                profile.childStatus === "unborn" || profile.childStatus === "newborn" || profile.childStatus === "infant"
+                  ? profile.childStatus
+                  : current.child.childStatus,
               photoUri: nextUri,
               specialNotes: profile.note ?? current.child.specialNotes,
+              birthWeight: profile.birthWeight ?? current.child.birthWeight,
             },
           });
         })
@@ -72,7 +81,7 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
     <View style={[styles.wrap, embedded && styles.wrapEmbedded, compact && styles.wrapCompact, { paddingTop: Math.max(insets.top, compact ? 8 : 12) }]}>
       <View style={styles.headerRow}>
         <View style={[styles.card, compact && styles.cardCompact]}>
-          <Pressable style={[styles.avatarCircle, compact && styles.avatarCompact]} onPress={onOpenProfile} hitSlop={compact ? 4 : undefined} accessibilityRole="button" accessibilityLabel="아기 프로필 열기">
+          <Pressable style={[styles.avatarCircle, compact && styles.avatarCompact]} onPress={() => onOpenProfile()} hitSlop={compact ? 4 : undefined} accessibilityRole="button" accessibilityLabel="아기 프로필 열기">
             {babyPhoto ? (
               <Image source={{ uri: babyPhoto }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
             ) : (
@@ -82,12 +91,21 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
 
           <View style={styles.info}>
             <View style={[styles.nameLine, compact && styles.nameLineCompact]}>
-              <Pressable style={styles.nameRow} onPress={onOpenProfile} accessibilityRole="button" accessibilityLabel={`${babyName} 아기 프로필 열기`}>
+              <Pressable style={styles.nameRow} onPress={() => onOpenProfile()} accessibilityRole="button" accessibilityLabel={`${babyName} 아기 프로필 열기`}>
                 <Text style={styles.name} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>{babyName}</Text>
               </Pressable>
               <View style={styles.switchWrap}><BabySwitcher variant="switchButton" /></View>
             </View>
             <Text style={styles.age} maxFontSizeMultiplier={fontScaleCap.chrome}>{ageLabel}</Text>
+            {showBirthCta ? (
+              <Pressable
+                onPress={() => onOpenProfile({ convertBirth: true })}
+                accessibilityRole="button"
+                accessibilityLabel="아기가 태어났어요"
+              >
+                <Text style={styles.birthCta} maxFontSizeMultiplier={fontScaleCap.chrome}>아기가 태어났어요 🎉</Text>
+              </Pressable>
+            ) : null}
             {isShared ? (
               <View style={styles.sharedMeta}>
                 <BabyLogIcon kind="profile" size={14} color={colors.amberText} strokeWidth={2.1} />
@@ -144,6 +162,7 @@ const styles = StyleSheet.create({
   nameRow: { minWidth: 0, flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 6 },
   name: { flexShrink: 1, fontSize: type.lg, fontWeight: "900", color: colors.text, letterSpacing: -0.4 },
   age: { marginTop: 2, fontSize: type.sm, color: colors.text, fontWeight: "800", flexShrink: 0 },
+  birthCta: { marginTop: 4, fontSize: type.xs, color: colors.amberText, fontWeight: "800" },
   sharedMeta: { minWidth: 0, marginTop: 2, flexDirection: "row", alignItems: "center", gap: 4 },
   sharedText: { flexShrink: 1, color: colors.muted, fontSize: type.xs, fontWeight: "700" },
   switchWrap: { flexShrink: 0, alignItems: "flex-end" },

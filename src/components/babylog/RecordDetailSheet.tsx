@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import type { BabyLogCategoryId } from "../../constants/babyLogCategories";
+import { isPregnancyLogCategoryId, type BabyLogCategoryId } from "../../constants/babyLogCategories";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
 import type { CustomCategory, LogCategoryKey } from "../../types/logCategory";
@@ -473,7 +473,17 @@ export function RecordDetailSheet({
   const effectiveCat = selectedCat ?? catKey;
   const c = resolveLogCategory(effectiveCat, customCategories);
   const builtinId = isCustomCategoryKey(effectiveCat) ? null : (effectiveCat as BabyLogCategoryId);
+  const pregnancyCat = builtinId ? isPregnancyLogCategoryId(builtinId) : false;
   const isEdit = Boolean(prefill?.editId);
+
+  const confirmDelete = () => {
+    const editId = prefill?.editId;
+    if (!editId || !onDelete) return;
+    Alert.alert("기록 삭제", "이 기록을 삭제할까요?", [
+      { text: "취소", style: "cancel" },
+      { text: "삭제", style: "destructive", onPress: () => onDelete(editId) },
+    ]);
+  };
 
   const handleSave = () => {
     if (!isValidClockInput(time) || (endTime && !isValidClockInput(endTime))) {
@@ -667,7 +677,7 @@ export function RecordDetailSheet({
   };
 
   const sheet = (
-    <KeyboardAvoidingView style={styles.keyboardRoot} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={styles.keyboardRoot} behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <Pressable
       style={[styles.backdrop, embedded && styles.embeddedBackdrop]}
       onPress={onClose}
@@ -1141,6 +1151,28 @@ export function RecordDetailSheet({
                 </>
               ) : null}
             </>
+          ) : pregnancyCat ? (
+            <>
+              {c.chips ? (
+                <>
+                  <Text style={styles.fieldLabel}>상태</Text>
+                  <ChipRow options={c.chips} value={chip} onChange={setChip} />
+                </>
+              ) : null}
+              {c.amount ? (
+                <>
+                  <Text style={styles.fieldLabel}>{builtinId === "pregWeight" ? "체중 (kg)" : builtinId === "pregBp" ? "혈압" : `양 (${c.amount})`}</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={amount}
+                    onChangeText={setAmount}
+                    keyboardType={builtinId === "pregBp" ? "default" : "numeric"}
+                    placeholder={builtinId === "pregWeight" ? "예: 62.4" : builtinId === "pregBp" ? "예: 120/80" : "예: 150"}
+                    placeholderTextColor={colors.faint}
+                  />
+                </>
+              ) : null}
+            </>
           ) : !builtinId ? (
             <>
               {c.chips ? (
@@ -1189,7 +1221,12 @@ export function RecordDetailSheet({
           ) : null}
 
           {isEdit && prefill?.editId && onDelete && (
-            <Pressable style={styles.deleteBtn} onPress={() => onDelete(prefill.editId!)}>
+            <Pressable
+              style={styles.deleteBtn}
+              onPress={confirmDelete}
+              accessibilityRole="button"
+              accessibilityLabel="이 기록 삭제하기"
+            >
               <Text style={styles.deleteText}>이 기록 삭제하기</Text>
             </Pressable>
           )}
@@ -1355,7 +1392,7 @@ const styles = StyleSheet.create({
   ingredientChip: { minWidth: 92, minHeight: 52, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 11, paddingVertical: 8, justifyContent: "center" },
   ingredientChipSelected: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   ingredientName: { color: colors.text, fontSize: 13, fontWeight: "800" },
-  ingredientNameSelected: { color: colors.amberDark },
+  ingredientNameSelected: { color: colors.amberText },
   ingredientHistory: { marginTop: 3, color: colors.faint, fontSize: 9.5, fontWeight: "600" },
   ingredientHistorySelected: { color: colors.amberText },
   addIngredientButton: { alignSelf: "flex-start", minHeight: 44, marginTop: 10, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, alignItems: "center", justifyContent: "center" },

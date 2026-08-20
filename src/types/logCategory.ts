@@ -18,6 +18,8 @@ export function isCustomCategoryInputMode(value: unknown): value is CustomCatego
   return value === "memo" || value === "duration" || value === "amount" || value === "check";
 }
 
+export type CustomCategoryStage = "pregnancy" | "born";
+
 export type CustomCategory = {
   id: string;
   label: string;
@@ -34,7 +36,21 @@ export type CustomCategory = {
   chips?: string[];
   duration?: boolean;
   amount?: string;
+  /** Pregnancy custom tiles stay hidden after birth, and vice versa. Missing = born. */
+  stage?: CustomCategoryStage;
 };
+
+export function resolveCustomCategoryStage(category: Pick<CustomCategory, "stage">): CustomCategoryStage {
+  return category.stage === "pregnancy" ? "pregnancy" : "born";
+}
+
+export function customCategoriesForStage(
+  categories: CustomCategory[],
+  pregnancy: boolean,
+): CustomCategory[] {
+  const stage: CustomCategoryStage = pregnancy ? "pregnancy" : "born";
+  return categories.filter((category) => resolveCustomCategoryStage(category) === stage);
+}
 
 export type LogCategoryKey = BabyLogCategoryId | `custom:${string}`;
 

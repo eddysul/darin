@@ -1,4 +1,4 @@
-import type { BabyLogCategoryId } from "./babyLogCategories";
+import type { BabyLogCategoryId, PregnancyLogCategoryId } from "./babyLogCategories";
 
 export type OneTouchAction =
   | "breastfeeding"
@@ -19,7 +19,8 @@ export type OneTouchAction =
   | "doctor"
   | "vaccination"
   | "memo"
-  | "other";
+  | "other"
+  | PregnancyLogCategoryId;
 
 export type QuickRecordActionDefinition = {
   id: OneTouchAction;
@@ -50,3 +51,23 @@ export const QUICK_RECORD_ACTIONS: QuickRecordActionDefinition[] = [
   { id: "memo", label: "빠른 메모", cat: "memo", core: false },
   { id: "other", label: "기타", cat: "other", core: false },
 ];
+
+export const PREGNANCY_QUICK_RECORD_ACTIONS: QuickRecordActionDefinition[] = [
+  { id: "pregMood", label: "컨디션", cat: "pregMood", core: true },
+  { id: "pregSymptom", label: "입덧/증상", cat: "pregSymptom", core: true },
+  { id: "pregWeight", label: "체중", cat: "pregWeight", core: true },
+  { id: "pregBp", label: "혈압", cat: "pregBp", core: true },
+  { id: "pregMed", label: "약/영양제", cat: "pregMed", core: true },
+  { id: "pregKick", label: "태동", cat: "pregKick", core: true },
+  { id: "pregHospital", label: "병원/진료", cat: "pregHospital", core: false },
+];
+
+export const PREGNANCY_QUICK_ACTION_IDS: OneTouchAction[] = PREGNANCY_QUICK_RECORD_ACTIONS.map(
+  (action) => action.id,
+);
+
+const ALL_QUICK_RECORD_ACTIONS = [...QUICK_RECORD_ACTIONS, ...PREGNANCY_QUICK_RECORD_ACTIONS];
+
+export function getQuickRecordAction(id: OneTouchAction): QuickRecordActionDefinition | undefined {
+  return ALL_QUICK_RECORD_ACTIONS.find((action) => action.id === id);
+}

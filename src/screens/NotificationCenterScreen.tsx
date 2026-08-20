@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
@@ -98,6 +98,7 @@ export function NotificationCenterScreen({ navigation }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
   const [items, setItems] = useState<CenterItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [responding, setResponding] = useState<string | null>(null);
   const load = useCallback(async () => {
     setLoading(true);
@@ -112,8 +113,10 @@ export function NotificationCenterScreen({ navigation }: Props) {
         ...item,
         requestStatus: item.type === "invite_request" ? "pending" : undefined,
       })));
+      setLoadFailed(false);
     } catch {
       setItems([]);
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -197,10 +200,25 @@ export function NotificationCenterScreen({ navigation }: Props) {
   };
   return <ScrollView style={styles.root} contentContainerStyle={styles.content}>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>{FILTERS.map((item) => <Pressable key={item.key} style={[styles.filter, filter === item.key && styles.filterActive]} onPress={() => setFilter(item.key)}><Text style={[styles.filterText, filter === item.key && styles.filterTextActive]}>{item.label}</Text></Pressable>)}</ScrollView>
-    <Section title="오늘" items={visible.filter((item) => item.period === "today")} open={open} respond={respond} responding={responding} />
-    <Section title="이번 주" items={visible.filter((item) => item.period === "week")} open={open} respond={respond} responding={responding} />
-    <Section title="이전 알림" items={visible.filter((item) => item.period === "older")} open={open} respond={respond} responding={responding} />
-    {!loading && !visible.length ? <View style={styles.empty}><BabyLogIcon kind="bell" size={26} color={colors.faint} /><Text style={styles.emptyTitle}>새 알림이 없어요</Text><Text style={styles.emptyText}>가족 초대, 공유 기록, 요약과 리마인더가 여기에 모여요.</Text></View> : null}
+    {loading && !items.length ? (
+      <View style={styles.empty}><ActivityIndicator color={colors.amberText} /><Text style={styles.emptyText}>알림을 불러오는 중이에요.</Text></View>
+    ) : loadFailed ? (
+      <View style={styles.empty}>
+        <BabyLogIcon kind="alert" size={26} color={colors.muted} />
+        <Text style={styles.emptyTitle}>알림을 불러오지 못했어요</Text>
+        <Text style={styles.emptyText}>네트워크 상태를 확인한 뒤 다시 시도해 주세요.</Text>
+        <Pressable style={styles.retryButton} onPress={() => void load()} accessibilityRole="button">
+          <Text style={styles.retryText}>다시 시도</Text>
+        </Pressable>
+      </View>
+    ) : (
+      <>
+        <Section title="오늘" items={visible.filter((item) => item.period === "today")} open={open} respond={respond} responding={responding} />
+        <Section title="이번 주" items={visible.filter((item) => item.period === "week")} open={open} respond={respond} responding={responding} />
+        <Section title="이전 알림" items={visible.filter((item) => item.period === "older")} open={open} respond={respond} responding={responding} />
+        {!visible.length ? <View style={styles.empty}><BabyLogIcon kind="bell" size={26} color={colors.faint} /><Text style={styles.emptyTitle}>새 알림이 없어요</Text><Text style={styles.emptyText}>가족 초대, 공유 기록, 요약과 리마인더가 여기에 모여요.</Text></View> : null}
+      </>
+    )}
     <Pressable style={styles.settingsRow} onPress={() => navigation.navigate("SettingsHome")}><View style={styles.settingsIcon}><BabyLogIcon kind="settings" size={18} color={colors.muted} /></View><Text style={styles.settingsText}>알림 설정</Text><BabyLogIcon kind="chevron" size={18} color={colors.faint} /></Pressable>
   </ScrollView>;
 }
@@ -210,5 +228,5 @@ function Section({ title, items, open, respond, responding }: { title: string; i
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background }, content: { padding: 18, paddingBottom: 32 }, filters: { gap: 8, paddingBottom: 20 }, filter: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, justifyContent: "center" }, filterActive: { backgroundColor: colors.amberSoft, borderColor: colors.amber }, filterText: { color: colors.muted, fontSize: 13, fontWeight: "700" }, filterTextActive: { color: colors.amberText }, section: { gap: 9, marginBottom: 22 }, sectionTitle: { marginLeft: 2, color: colors.text, fontSize: 15, fontWeight: "800" }, sectionEmpty: { paddingLeft: 2, color: colors.faint, fontSize: 13 }, card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }, unreadCard: { borderColor: "#E8918A" }, cardMain: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: 11, padding: 13 }, cardIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }, cardCopy: { flex: 1 }, cardTitle: { color: colors.text, fontSize: 14, fontWeight: "800" }, cardBody: { marginTop: 3, color: colors.muted, fontSize: 12.5, lineHeight: 18 }, requestStatus: { marginTop: 5, color: colors.faint, fontSize: 11.5, fontWeight: "700" }, unreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#E8918A" }, inviteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, paddingHorizontal: 13, paddingBottom: 13 }, declineButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.backgroundSecondary, justifyContent: "center" }, declineText: { color: colors.muted, fontWeight: "700", fontSize: 13 }, acceptButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.amber, justifyContent: "center" }, acceptText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 }, empty: { alignItems: "center", paddingHorizontal: 30, paddingVertical: 52 }, emptyTitle: { marginTop: 12, color: colors.text, fontSize: 16, fontWeight: "800" }, emptyText: { marginTop: 6, color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center" }, settingsRow: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 13, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }, settingsIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }, settingsText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800" },
+  root: { flex: 1, backgroundColor: colors.background }, content: { padding: 18, paddingBottom: 32 }, filters: { gap: 8, paddingBottom: 20 }, filter: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, justifyContent: "center" }, filterActive: { backgroundColor: colors.amberSoft, borderColor: colors.amber }, filterText: { color: colors.muted, fontSize: 13, fontWeight: "700" }, filterTextActive: { color: colors.amberText }, section: { gap: 9, marginBottom: 22 }, sectionTitle: { marginLeft: 2, color: colors.text, fontSize: 15, fontWeight: "800" }, sectionEmpty: { paddingLeft: 2, color: colors.faint, fontSize: 13 }, card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }, unreadCard: { borderColor: "#E8918A" }, cardMain: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: 11, padding: 13 }, cardIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }, cardCopy: { flex: 1 }, cardTitle: { color: colors.text, fontSize: 14, fontWeight: "800" }, cardBody: { marginTop: 3, color: colors.muted, fontSize: 12.5, lineHeight: 18 }, requestStatus: { marginTop: 5, color: colors.faint, fontSize: 11.5, fontWeight: "700" }, unreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#E8918A" }, inviteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, paddingHorizontal: 13, paddingBottom: 13 }, declineButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.backgroundSecondary, justifyContent: "center" }, declineText: { color: colors.muted, fontWeight: "700", fontSize: 13 }, acceptButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.amber, justifyContent: "center" }, acceptText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 }, empty: { alignItems: "center", paddingHorizontal: 30, paddingVertical: 52 }, emptyTitle: { marginTop: 12, color: colors.text, fontSize: 16, fontWeight: "800" }, emptyText: { marginTop: 6, color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center" }, retryButton: { marginTop: 16, minHeight: TOUCH_MIN, paddingHorizontal: 20, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" }, retryText: { color: colors.amberDark, fontSize: 13, fontWeight: "800" }, settingsRow: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 13, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }, settingsIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }, settingsText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800" },
 });

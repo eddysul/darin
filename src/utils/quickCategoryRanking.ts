@@ -1,4 +1,4 @@
-import { QUICK_RECORD_ACTIONS, type OneTouchAction } from "../constants/quickRecordActions";
+import { PREGNANCY_QUICK_RECORD_ACTIONS, QUICK_RECORD_ACTIONS, type OneTouchAction } from "../constants/quickRecordActions";
 import type { BabyLogEntry } from "../types/babyLog";
 import { isCustomCategoryKey } from "../types/logCategory";
 
@@ -13,7 +13,8 @@ function recordedAt(entry: BabyLogEntry): number | null {
 }
 
 export function rankQuickActions(logs: BabyLogEntry[], visibleActions: OneTouchAction[], now = new Date()): OneTouchAction[] {
-  const visible = QUICK_RECORD_ACTIONS.filter((action) => visibleActions.includes(action.id));
+  const catalog = [...QUICK_RECORD_ACTIONS, ...PREGNANCY_QUICK_RECORD_ACTIONS];
+  const visible = catalog.filter((action) => visibleActions.includes(action.id));
   const actionByCategory = new Map(visible.map((action) => [action.cat, action]));
   const nowMs = now.getTime();
   const day = 24 * 60 * 60 * 1000;

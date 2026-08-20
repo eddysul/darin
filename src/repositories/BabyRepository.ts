@@ -5,6 +5,10 @@ import { toDbRelationshipLabel } from "../utils/supabaseMappers";
 import { AuthRepository } from "./AuthRepository";
 import { ProfileRepository } from "./ProfileRepository";
 
+function remotePhotoUrl(value?: string): string | undefined {
+  return value?.startsWith("http://") || value?.startsWith("https://") ? value : undefined;
+}
+
 export type CreateBabyInput = {
   name: string;
   birthDate?: string;
@@ -70,21 +74,21 @@ export const BabyRepository = {
     }>,
   ): Promise<BabyRow> {
     const sb = requireSupabase();
+    const payload: Partial<BabyRow> = {};
+    if (patch.name !== undefined) payload.name = patch.name;
+    if (patch.nickname !== undefined) payload.nickname = patch.nickname;
+    if (patch.birthDate !== undefined) payload.birth_date = patch.birthDate;
+    if (patch.dueDate !== undefined) payload.due_date = patch.dueDate;
+    if (patch.childStatus !== undefined) payload.child_status = patch.childStatus;
+    if (patch.gender !== undefined) payload.gender = patch.gender;
+    if (patch.photoUrl !== undefined) payload.photo_url = patch.photoUrl;
+    if (patch.avatarStoragePath !== undefined) payload.avatar_storage_path = patch.avatarStoragePath;
+    if (patch.gestationalAgeWeeks !== undefined) payload.gestational_age_weeks = patch.gestationalAgeWeeks;
+    if (patch.birthWeight !== undefined) payload.birth_weight = patch.birthWeight;
+    if (patch.specialNotes !== undefined) payload.special_notes = patch.specialNotes;
     const { data, error } = await sb
       .from("babies")
-      .update({
-        name: patch.name,
-        nickname: patch.nickname,
-        birth_date: patch.birthDate,
-        due_date: patch.dueDate,
-        child_status: patch.childStatus,
-        gender: patch.gender,
-        photo_url: patch.photoUrl,
-        avatar_storage_path: patch.avatarStoragePath,
-        gestational_age_weeks: patch.gestationalAgeWeeks,
-        birth_weight: patch.birthWeight,
-        special_notes: patch.specialNotes,
-      })
+      .update(payload)
       .eq("id", babyId)
       .select("*")
       .single();
@@ -109,7 +113,9 @@ export const BabyRepository = {
           dueDate: setup.child.dueDate ?? null,
           childStatus: setup.child.childStatus,
           gender: setup.child.gender ?? null,
-          photoUrl: setup.child.photoUri ?? null,
+          photoUrl: setup.child.photoUri
+            ? remotePhotoUrl(setup.child.photoUri) ?? existing.photo_url
+            : null,
           gestationalAgeWeeks: setup.child.gestationalAgeWeeks ?? null,
           birthWeight: setup.child.birthWeight ?? null,
           specialNotes: setup.child.specialNotes ?? null,
@@ -131,7 +137,7 @@ export const BabyRepository = {
       dueDate: setup.child.dueDate,
       childStatus: setup.child.childStatus,
       gender: setup.child.gender,
-      photoUrl: setup.child.photoUri,
+      photoUrl: remotePhotoUrl(setup.child.photoUri),
       gestationalAgeWeeks: setup.child.gestationalAgeWeeks,
       birthWeight: setup.child.birthWeight,
       specialNotes: setup.child.specialNotes,

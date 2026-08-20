@@ -36,6 +36,7 @@ type Stage = "listening" | "analyzing" | "result" | "error";
 
 type Props = {
   visible: boolean;
+  pregnancy?: boolean;
   onClose: () => void;
   onConfirmAll: (session: VoiceSessionPayload) => void;
   onEditEvent: (event: VoiceResult, rawTranscript: string) => void;
@@ -82,6 +83,8 @@ function cardSummary(event: VoiceResult): string {
   if (event.amount) {
     if (event.cat === "temp") bits.push(formatTemperature(event.amount));
     else if (event.cat === "food") bits.push(`${event.amount}g`);
+    else if (event.cat === "pregWeight") bits.push(`${event.amount}kg`);
+    else if (event.cat === "pregBp") bits.push(event.amount);
     else bits.push(formatVolume(event.amount));
   }
   if (event.duration) bits.push(`${event.duration}분`);
@@ -102,6 +105,7 @@ function needsConfirm(event: VoiceResult) {
 
 export function BabyLogVoiceOverlay({
   visible,
+  pregnancy = false,
   onClose,
   onConfirmAll,
   onEditEvent,
@@ -174,16 +178,16 @@ export function BabyLogVoiceOverlay({
     }
 
     if (savedNote?.transcript) {
-      const applyKey = `${savedNote.id}:${savedNote.transcript}`;
+      const applyKey = `${savedNote.id}:${savedNote.transcript}:${pregnancy ? "p" : "b"}`;
       if (appliedKeyRef.current === applyKey) return;
-      const session = buildVoiceSession(savedNote.transcript, savedNote.events ?? []);
+      const session = buildVoiceSession(savedNote.transcript, savedNote.events ?? [], new Date(), { pregnancy });
       appliedKeyRef.current = applyKey;
       setRawTranscript(session.rawTranscript);
       setEvents(session.events);
       setTranscriptOpen(false);
       setStage("result");
     }
-  }, [visible, isTranscribing, savedNote, recordingError, isRecording]);
+  }, [visible, isTranscribing, savedNote, recordingError, isRecording, pregnancy]);
 
   useEffect(() => {
     if (!eventPatch) return;
@@ -579,7 +583,7 @@ const styles = StyleSheet.create({
   warnBanner: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: colors.amberDark,
+    color: colors.amberText,
     marginBottom: 10,
   },
   resultCat: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -588,7 +592,7 @@ const styles = StyleSheet.create({
   resultLabel: { fontSize: 16, fontWeight: "700", color: colors.text },
   resultMeta: { fontSize: 12.5, color: colors.muted, marginTop: 2 },
   resultNotes: { fontSize: 11.5, color: colors.faint, marginTop: 4 },
-  understoodAs: { fontSize: 11.5, color: colors.amberDark, marginTop: 6 },
+  understoodAs: { fontSize: 11.5, color: colors.muted, marginTop: 6 },
   timeChoices: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
   timeChoice: {
     backgroundColor: colors.amberSoft,
@@ -596,7 +600,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  timeChoiceText: { fontSize: 13, fontWeight: "700", color: colors.amberDark },
+  timeChoiceText: { fontSize: 13, fontWeight: "700", color: colors.amberText },
   cardActions: { flexDirection: "row", gap: 8, marginTop: 14 },
   cardBtn: {
     flex: 1,

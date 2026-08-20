@@ -64,7 +64,18 @@ export function MemoryMediaViewer({ media, imageUrls = [], onDoubleTap }: Props)
           onMomentumScrollEnd={(event) => setActiveIndex(Math.round(event.nativeEvent.contentOffset.x / Math.max(pageWidth, 1)))}
         >
           {imageUrls.map((url, index) => (
-            <Pressable key={media[index]?.id ?? `${url}-${index}`} style={[styles.page, { width: pageWidth || undefined }]} onPress={handlePress}>
+            <Pressable
+              key={media[index]?.id ?? `${url}-${index}`}
+              style={[styles.page, { width: pageWidth || undefined }]}
+              onPress={handlePress}
+              accessibilityRole="image"
+              accessibilityLabel={
+                imageUrls.length > 1
+                  ? `추억 사진 ${index + 1} / ${imageUrls.length}`
+                  : "추억 사진"
+              }
+              accessibilityHint={onDoubleTap ? "두 번 연속 탭하면 좋아요를 남겨요" : undefined}
+            >
               <Image source={{ uri: url }} style={StyleSheet.absoluteFill} contentFit="contain" transition={reduceMotion ? 0 : 150} />
             </Pressable>
           ))}
@@ -84,7 +95,7 @@ export function MemoryMediaViewer({ media, imageUrls = [], onDoubleTap }: Props)
           },
         ]}
       >
-        <BabyLogIcon kind="sparkles" size={56} color={colors.amberText} />
+        <BabyLogIcon kind="heart" size={56} color={colors.amberText} fill={colors.amberText} />
       </Animated.View>
       {imageUrls.length > 1 ? (
         <View style={styles.dots} pointerEvents="none">

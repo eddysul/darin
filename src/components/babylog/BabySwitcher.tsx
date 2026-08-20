@@ -6,13 +6,18 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useBabyLog } from "../../context/BabyLogContext";
 import type { RootStackParamList } from "../../navigation/types";
 import { BabyProfileRepository } from "../../repositories/BabyProfileRepository";
+import type { BabyRow } from "../../types/database";
 import { colors, fontScaleCap, radius } from "../../theme";
+import { isPregnancyStage } from "../../utils/childDisplay";
 import { BabyLogIcon } from "./BabyLogIcon";
 
-function babyAgeLabel(birthDate: string | null): string {
-  if (!birthDate) return "생년월일 미입력";
-  const birth = new Date(`${birthDate}T00:00:00`);
-  if (!Number.isFinite(birth.getTime())) return birthDate;
+function babyAgeLabel(baby: Pick<BabyRow, "birth_date" | "child_status">): string {
+  if (isPregnancyStage({ childStatus: baby.child_status, birthDate: baby.birth_date ?? undefined })) {
+    return "임신 중";
+  }
+  if (!baby.birth_date) return "출생일 미입력";
+  const birth = new Date(`${baby.birth_date}T00:00:00`);
+  if (!Number.isFinite(birth.getTime())) return baby.birth_date;
   const days = Math.floor((Date.now() - birth.getTime()) / 86_400_000);
   if (days < 0) return `D-${Math.abs(days)}`;
   if (days < 31) return `D+${days}`;
@@ -55,7 +60,7 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
         <Text style={[styles.chevron, variant === "switchButton" && styles.switchChevron]}>⌄</Text>
       </Pressable>
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
           <View style={styles.sheet}>
             <View style={styles.handle} />
@@ -95,7 +100,7 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
                       <View style={styles.babyCopy}>
                         <Text style={[styles.babyName, selected && styles.babyNameActive]} numberOfLines={1}>{baby.name}</Text>
                         <View style={styles.babyMetaRow}>
-                          <Text style={styles.babyMeta}>{babyAgeLabel(baby.birth_date)}</Text>
+                          <Text style={styles.babyMeta}>{babyAgeLabel(baby)}</Text>
                           <Text style={styles.metaDot}>·</Text>
                           <BabyLogIcon kind="profile" size={15} color={colors.amberText} strokeWidth={2.1} />
                           <Text style={styles.sharedText}>
@@ -163,7 +168,7 @@ const styles = StyleSheet.create({
   metaDot: { color: colors.faint, fontSize: 13 },
   sharedText: { color: colors.muted, fontSize: 12.5, fontWeight: "600" },
   selectedCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  selectedCheck: { color: "#FFFFFF", fontSize: 24, lineHeight: 27, fontWeight: "800" },
+  selectedCheck: { color: colors.amberDark, fontSize: 24, lineHeight: 27, fontWeight: "800" },
   addButton: { minHeight: 66, marginTop: 2, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center" },
   addIcon: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
   addIconText: { color: colors.amberText, fontSize: 22, lineHeight: 24, fontWeight: "500" },
@@ -171,6 +176,6 @@ const styles = StyleSheet.create({
   label: { marginTop: 10, marginBottom: 6, color: colors.text, fontSize: 12.5, fontWeight: "800" }, input: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card, paddingHorizontal: 12, color: colors.text, fontSize: 15 },
   avatarWrap: { alignItems: "center", marginBottom: 6 },
   genderRow: { flexDirection: "row", gap: 8 }, genderChip: { minHeight: 44, minWidth: 74, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border }, genderChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft }, genderText: { color: colors.muted, fontWeight: "700" }, genderTextActive: { color: colors.amberText },
-  error: { marginTop: 10, color: colors.dangerText, fontSize: 12 }, actionRow: { flexDirection: "row", gap: 8, marginTop: 18 }, secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border }, secondaryText: { color: colors.muted, fontWeight: "800" }, primary: { flex: 2, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, backgroundColor: colors.amber }, primaryText: { color: "#fff", fontWeight: "800" },
+  error: { marginTop: 10, color: colors.dangerText, fontSize: 12 }, actionRow: { flexDirection: "row", gap: 8, marginTop: 18 }, secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border }, secondaryText: { color: colors.muted, fontWeight: "800" }, primary: { flex: 2, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, backgroundColor: colors.amber }, primaryText: { color: colors.amberDark, fontWeight: "800" },
   empty: { color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center", paddingVertical: 18 },
 });

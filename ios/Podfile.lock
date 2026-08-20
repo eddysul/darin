@@ -31,6 +31,10 @@ PODS:
     - SDWebImage (~> 5.19.1)
     - SDWebImageAVIFCoder (~> 0.11.0)
     - SDWebImageSVGCoder (~> 1.7.0)
+  - ExpoImageManipulator (13.0.6):
+    - EXImageLoader
+    - ExpoModulesCore
+    - SDWebImageWebPCoder
   - ExpoImagePicker (16.0.6):
     - ExpoModulesCore
   - ExpoKeepAwake (14.0.3):
@@ -88,6 +92,18 @@ PODS:
     - libavif/core
     - libdav1d (>= 0.6.0)
   - libdav1d (1.2.0)
+  - libwebp (1.6.0):
+    - libwebp/demux (= 1.6.0)
+    - libwebp/mux (= 1.6.0)
+    - libwebp/sharpyuv (= 1.6.0)
+    - libwebp/webp (= 1.6.0)
+  - libwebp/demux (1.6.0):
+    - libwebp/webp
+  - libwebp/mux (1.6.0):
+    - libwebp/demux
+  - libwebp/sharpyuv (1.6.0)
+  - libwebp/webp (1.6.0):
+    - libwebp/sharpyuv
   - PersonCutout (1.0.0):
     - ExpoModulesCore
   - RCT-Folly (2024.10.14.00):
@@ -1676,6 +1692,9 @@ PODS:
     - SDWebImage (~> 5.10)
   - SDWebImageSVGCoder (1.7.0):
     - SDWebImage/Core (~> 5.6)
+  - SDWebImageWebPCoder (0.15.0):
+    - libwebp (~> 1.0)
+    - SDWebImage/Core (~> 5.17)
   - SocketRocket (0.7.1)
   - Yoga (0.0.0)
 
@@ -1694,6 +1713,7 @@ DEPENDENCIES:
   - "ExpoFileSystem (from `../node_modules/.pnpm/expo-file-system@18.0.12_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babe_504ce5a22fe461592970a3cf90f1a0fb/node_modules/expo-file-system/ios`)"
   - "ExpoFont (from `../node_modules/.pnpm/expo-font@13.0.4_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core@7_8131bacf19875f64597c5f7d0e6e69c3/node_modules/expo-font/ios`)"
   - "ExpoImage (from `../node_modules/.pnpm/expo-image@2.0.7_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core@7_1d8b4cb785ed1d9342a0e263b63b0ce7/node_modules/expo-image/ios`)"
+  - "ExpoImageManipulator (from `../node_modules/.pnpm/expo-image-manipulator@13.0.6_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7__54a9ee86588c588cea1a551b3ba59dae/node_modules/expo-image-manipulator/ios`)"
   - "ExpoImagePicker (from `../node_modules/.pnpm/expo-image-picker@16.0.6_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babe_cec806cf258612fad5e6b54cec4f9c66/node_modules/expo-image-picker/ios`)"
   - "ExpoKeepAwake (from `../node_modules/.pnpm/expo-keep-awake@14.0.3_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+_41432c932eb684a6a143f4ec9ccb25fb/node_modules/expo-keep-awake/ios`)"
   - "ExpoLinearGradient (from `../node_modules/.pnpm/expo-linear-gradient@14.0.2_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@b_06a36c52ef5dfb8c91f3ab53aa003b6a/node_modules/expo-linear-gradient/ios`)"
@@ -1776,9 +1796,11 @@ SPEC REPOS:
   trunk:
     - libavif
     - libdav1d
+    - libwebp
     - SDWebImage
     - SDWebImageAVIFCoder
     - SDWebImageSVGCoder
+    - SDWebImageWebPCoder
     - SocketRocket
 
 EXTERNAL SOURCES:
@@ -1810,6 +1832,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/.pnpm/expo-font@13.0.4_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core@7_8131bacf19875f64597c5f7d0e6e69c3/node_modules/expo-font/ios"
   ExpoImage:
     :path: "../node_modules/.pnpm/expo-image@2.0.7_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core@7_1d8b4cb785ed1d9342a0e263b63b0ce7/node_modules/expo-image/ios"
+  ExpoImageManipulator:
+    :path: "../node_modules/.pnpm/expo-image-manipulator@13.0.6_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7__54a9ee86588c588cea1a551b3ba59dae/node_modules/expo-image-manipulator/ios"
   ExpoImagePicker:
     :path: "../node_modules/.pnpm/expo-image-picker@16.0.6_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babe_cec806cf258612fad5e6b54cec4f9c66/node_modules/expo-image-picker/ios"
   ExpoKeepAwake:
@@ -1977,6 +2001,7 @@ SPEC CHECKSUMS:
   ExpoFileSystem: 42d363d3b96f9afab980dcef60d5657a4443c655
   ExpoFont: f354e926f8feae5e831ec8087f36652b44a0b188
   ExpoImage: d840b256050f4428d2942bc2b6e9251f9e0d7021
+  ExpoImageManipulator: 4aca9cc1d84e31f62a7e8075c19026d3ad62f852
   ExpoImagePicker: 24e5ba8da111f74519b1e6dc556e0b438b2b8464
   ExpoKeepAwake: b0171a73665bfcefcfcc311742a72a956e6aa680
   ExpoLinearGradient: 35ebd83b16f80b3add053a2fd68cc328ed927f60
@@ -1992,6 +2017,7 @@ SPEC CHECKSUMS:
   hermes-engine: c180b7603a4e9e322f003b3a64b75acd1aa8d87d
   libavif: 5f8e715bea24debec477006f21ef9e95432e254d
   libdav1d: 23581a4d8ec811ff171ed5e2e05cd27bad64c39f
+  libwebp: af5937a13536ef73f3784d69cc342b98961acf33
   PersonCutout: f7b1ed7a20c5582c0c02247389e6fdc6d3ae2256
   RCT-Folly: ea9d9256ba7f9322ef911169a9f696e5857b9e17
   RCTDeprecation: ebe712bb05077934b16c6bf25228bdec34b64f83
@@ -2056,9 +2082,10 @@ SPEC CHECKSUMS:
   SDWebImage: 8a6b7b160b4d710e2a22b6900e25301075c34cb3
   SDWebImageAVIFCoder: afe194a084e851f70228e4be35ef651df0fc5c57
   SDWebImageSVGCoder: 15a300a97ec1c8ac958f009c02220ac0402e936c
+  SDWebImageWebPCoder: 0e06e365080397465cc73a7a9b472d8a3bd0f377
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   Yoga: feb4910aba9742cfedc059e2b2902e22ffe9954a
 
-PODFILE CHECKSUM: 24a8da41969f2c1ffe5814bf15f9b1efc94a7b84
+PODFILE CHECKSUM: 9f75f2899bee4b6c49a3ff3138aa5b0bad65b3c3
 
 COCOAPODS: 1.17.0

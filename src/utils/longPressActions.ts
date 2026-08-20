@@ -1,5 +1,5 @@
 import type { OneTouchAction } from "../constants/quickRecordActions";
-import { QUICK_RECORD_ACTIONS } from "../constants/quickRecordActions";
+import { getQuickRecordAction } from "../constants/quickRecordActions";
 import type { LogCategoryKey } from "../types/logCategory";
 import type { RecordSheetPrefill } from "../components/babylog/RecordDetailSheet";
 import { isTimerAction } from "../types/activeTimer";
@@ -14,8 +14,7 @@ export function longPressModeFor(action: OneTouchAction): LongPressMode {
 }
 
 export function actionToCategory(action: OneTouchAction): LogCategoryKey {
-  const def = QUICK_RECORD_ACTIONS.find((item) => item.id === action);
-  return def?.cat ?? "other";
+  return getQuickRecordAction(action)?.cat ?? "other";
 }
 
 /** Prefill for long-press detail sheets (no auto-create). */

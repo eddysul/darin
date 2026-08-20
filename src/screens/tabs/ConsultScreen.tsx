@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  KeyboardAvoidingView,
+  Keyboard,
+  LayoutAnimation,
   Modal,
   Platform,
   Pressable,
@@ -9,15 +10,16 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  UIManager,
   View,
 } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
-import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { callOpenAI, OpenAIChatError, type OpenAIMessage } from "../../api/openaiChat";
-import { AppHeader } from "../../components/babylog/AppHeader";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { ConsultMemoSheet } from "../../components/babylog/ConsultMemoSheet";
 import { RecordCreatedToast } from "../../components/babylog/RecordCreatedToast";
+import { NavigationHeader } from "../../components/navigation/NavigationHeader";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { useLanguage } from "../../LanguageContext";
 import { buildBabyLogConsultPrompt, buildCareContextPack } from "../../utils/babyLogAIContext";
@@ -28,6 +30,7 @@ import { formatDateKey } from "../../utils/dateKey";
 import { formatHHmm, formatTimeOfDay } from "../../utils/timePicker";
 import { openDeviceNotificationSettings, scheduleMemoReminder } from "../../utils/memoReminderNotifications";
 import { formatSleepDuration, type TodaySummary } from "../../utils/reportAggregates";
+import type { RootStackParamList } from "../../navigation/types";
 
 const QUICK_CHIPS = [
   "오늘 수면 괜찮아?",
@@ -38,34 +41,22 @@ const QUICK_CHIPS = [
 
 const HAS_AI_SERVER = Boolean((process.env.EXPO_PUBLIC_TRANSCRIBE_URL ?? "").trim());
 
-type ConsultRouteParams = {
-  initialQuestion?: string;
-  focusInput?: boolean;
-};
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
-type ConsultNav = BottomTabNavigationProp<
-  { Consult: ConsultRouteParams; Record: undefined },
-  "Consult"
->;
-
-type Props = {
-  onOpenProfile: () => void;
-  onOpenSettings?: () => void;
-  onOpenNotifications?: () => void;
-  onOpenShared?: () => void;
-  onOpenRecord?: () => void;
-};
-
-export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenShared, onOpenRecord }: Props) {
-  const route = useRoute<RouteProp<{ Consult: ConsultRouteParams }, "Consult">>();
-  const navigation = useNavigation<ConsultNav>();
+export function ConsultScreen() {
+  const route = useRoute<RouteProp<RootStackParamList, "Consult">>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, "Consult">>();
   const {
     careSetup,
     logs,
     diaryEntries,
     chatHistory,
+    chatHydrated,
     pushChat,
     babyName,
+    activeBabyId,
     storageReady,
     addLogWithPersistence,
   } = useBabyLog();
@@ -80,7 +71,7 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
   const [memoSaving, setMemoSaving] = useState(false);
   const [memoToast, setMemoToast] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
-  const [chromeH, setChromeH] = useState(0);
+  const [keyboardInset, setKeyboardInset] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
   const historyRef = useRef<OpenAIMessage[]>([]);
@@ -95,9 +86,18 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
 
   const sparse = pack.todayLogCount === 0 || pack.weekLogCount < 3;
 
-  // Restore OpenAI turn history from persisted chat after hydrate
+  // Restore OpenAI turn history after the active baby's chat has hydrated.
   useEffect(() => {
-    if (!storageReady || historySeeded.current) return;
+    historySeeded.current = false;
+    historyRef.current = [];
+    requestInFlightRef.current = false;
+    setIsTyping(false);
+    setAiError(null);
+    setFailedQuestion(null);
+  }, [activeBabyId]);
+
+  useEffect(() => {
+    if (!storageReady || !chatHydrated || historySeeded.current) return;
     historySeeded.current = true;
     historyRef.current = chatHistory
       .filter((m) => m.id !== "greet-1")
@@ -105,7 +105,7 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
         role: m.role === "user" ? ("user" as const) : ("assistant" as const),
         content: m.text,
       }));
-  }, [storageReady, chatHistory]);
+  }, [storageReady, chatHydrated, chatHistory, activeBabyId]);
 
   const send = async (text: string, retry = false) => {
     const trimmed = text.trim();
@@ -184,6 +184,30 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
     };
   }, [storageReady, route.params?.initialQuestion, route.params?.focusInput, navigation]);
 
+  useEffect(() => {
+    const animate = (duration?: number) => {
+      LayoutAnimation.configureNext({
+        duration: duration && duration > 0 ? duration : 250,
+        update: {
+          type: Platform.OS === "ios" ? LayoutAnimation.Types.keyboard : LayoutAnimation.Types.easeInEaseOut,
+        },
+      });
+    };
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", (event) => {
+      animate(event.duration);
+      setKeyboardInset(Platform.OS === "ios" ? event.endCoordinates.height : 0);
+      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+    });
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", (event) => {
+      animate(event.duration);
+      setKeyboardInset(0);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
   const lastAiText = useMemo(() => {
     const last = [...chatHistory].reverse().find((m) => m.role === "ai" && m.id !== "greet-1" && m.text.trim());
     return last?.text.trim() ?? "";
@@ -250,10 +274,10 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
     }
   };
 
-  if (!storageReady) {
+  if (!storageReady || !chatHydrated) {
     return (
       <View style={styles.root}>
-        <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} onOpenShared={onOpenShared} />
+        <NavigationHeader title="AI 상담" onBack={() => navigation.goBack()} />
         <View style={styles.loadingBox}>
           <LoadingState label="상담 기록을 불러오는 중…" />
         </View>
@@ -263,34 +287,28 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
 
   return (
     <View style={styles.root}>
-      <View onLayout={(e) => setChromeH(e.nativeEvent.layout.height)}>
-        <AppHeader onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} onOpenShared={onOpenShared} />
-        <Pressable
-          style={styles.banner}
-          onPress={() => setBannerOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel="참고 정보 보기"
-          accessibilityHint={sparse ? "오늘 요약과 안전 안내를 볼 수 있어요" : "오늘 수유·수면·배변 요약을 볼 수 있어요"}
-        >
-          <Text style={styles.bannerLine} numberOfLines={1}>
-            {sparse
-              ? `AI 참고 중 · 오늘 ${pack.todayLogCount}개 · 기록 적음`
-              : `AI 참고 중 · 오늘 ${pack.todayLogCount}개 · 7일 ${pack.weekLogCount}개`}
-          </Text>
-          <Text style={styles.bannerChevron}>›</Text>
-        </Pressable>
-        {!HAS_AI_SERVER ? (
-          <View style={styles.warnBanner}>
-            <Text style={styles.warnText}>상담을 잠시 쓸 수 없어요. 잠시 후 다시 시도해 주세요.</Text>
-          </View>
-        ) : null}
-      </View>
-
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={chromeH}
+      <NavigationHeader title="AI 상담" onBack={() => navigation.goBack()} />
+      <Pressable
+        style={styles.banner}
+        onPress={() => setBannerOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="참고 정보 보기"
+        accessibilityHint={sparse ? "오늘 요약과 안전 안내를 볼 수 있어요" : "오늘 수유·수면·배변 요약을 볼 수 있어요"}
       >
+        <Text style={styles.bannerLine} numberOfLines={1}>
+          {sparse
+            ? `AI 참고 중 · 오늘 ${pack.todayLogCount}개 · 기록 적음`
+            : `AI 참고 중 · 오늘 ${pack.todayLogCount}개 · 7일 ${pack.weekLogCount}개`}
+        </Text>
+        <Text style={styles.bannerChevron}>›</Text>
+      </Pressable>
+      {!HAS_AI_SERVER ? (
+        <View style={styles.warnBanner}>
+          <Text style={styles.warnText}>상담을 잠시 쓸 수 없어요. 잠시 후 다시 시도해 주세요.</Text>
+        </View>
+      ) : null}
+
+      <View style={[styles.flex, { paddingBottom: keyboardInset }]}>
         <ScrollView
           ref={scrollRef}
           style={styles.messages}
@@ -405,7 +423,7 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
             <BabyLogIcon kind="send" size={18} color={colors.amberDark} />
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       <ConsultMemoSheet
         visible={memoOpen}
@@ -451,7 +469,7 @@ export function ConsultScreen({ onOpenProfile, onOpenSettings, onOpenNotificatio
         onDismiss={() => setMemoToast(null)}
         onPress={() => {
           setMemoToast(null);
-          onOpenRecord?.();
+          navigation.navigate("MainTabs", { screen: "Record" });
         }}
       />
     </View>

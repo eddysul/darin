@@ -25,6 +25,8 @@ export type MemoryMediaType = "image" | "video";
 export type MemoryTagType = "baby" | "family_member" | "friend_baby" | "manual_guest";
 export type MemoryTagStatus = "approved" | "pending" | "rejected";
 export type DiaryMediaType = "image";
+export type MediaUploadStatus = "uploading" | "ready" | "failed";
+export type MemoryPostStatus = "posting" | "published" | "failed";
 export type GrowthBookStatus = "draft" | "ready" | "exported";
 export type GrowthBookPageType = "cover" | "diary" | "letter" | "rolling_paper" | "custom";
 export type GrowthBookCommentType = "page_comment" | "rolling_paper" | "letter";
@@ -249,6 +251,7 @@ export type DiaryMediaRow = {
   baby_id: string;
   storage_path: string;
   media_type: DiaryMediaType;
+  upload_status: MediaUploadStatus;
   width: number | null;
   height: number | null;
   created_at: string;
@@ -315,6 +318,7 @@ export type MemoryPostRow = {
   caption: string | null;
   privacy_type: MemoryPrivacyType;
   is_family_moment: boolean;
+  status: MemoryPostStatus;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -326,6 +330,7 @@ export type MemoryMediaRow = {
   baby_id: string;
   storage_path: string;
   media_type: MemoryMediaType;
+  upload_status: MediaUploadStatus;
   width: number | null;
   height: number | null;
   created_at: string;
@@ -712,6 +717,10 @@ export type Database = {
       soft_delete_memory_post: {
         Args: { p_memory_post_id: string };
         Returns: undefined;
+      };
+      cleanup_orphan_temp_media: {
+        Args: Record<string, never>;
+        Returns: number;
       };
       create_baby_with_owner: {
         Args: {

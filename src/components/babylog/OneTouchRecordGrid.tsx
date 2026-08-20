@@ -2,8 +2,10 @@ import { Fragment, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getCategory } from "../../constants/babyLogCategories";
 import {
+  PREGNANCY_QUICK_RECORD_ACTIONS,
   QUICK_RECORD_ACTIONS,
   type OneTouchAction,
+  type QuickRecordActionDefinition,
 } from "../../constants/quickRecordActions";
 import type { CustomCategory } from "../../types/logCategory";
 import { colors, radius, type } from "../../theme";
@@ -55,11 +57,14 @@ export function OneTouchRecordGrid({
 }: Props) {
   const compact = useCompactLayout();
   const [expanded, setExpanded] = useState(false);
-  const orderedVisible = visibleActions ?? QUICK_RECORD_ACTIONS.map((action) => action.id);
+  const catalog = visibleActions?.some((id) => PREGNANCY_QUICK_RECORD_ACTIONS.some((action) => action.id === id))
+    ? PREGNANCY_QUICK_RECORD_ACTIONS
+    : QUICK_RECORD_ACTIONS;
+  const orderedVisible = visibleActions ?? catalog.map((action) => action.id);
   void coreActions;
-  const allVisible = QUICK_RECORD_ACTIONS.filter((action) => orderedVisible.includes(action.id));
+  const allVisible = catalog.filter((action) => orderedVisible.includes(action.id));
   const topIds = useMemo(() => rankQuickActions(logs, orderedVisible), [babyScopeKey, logs, orderedVisible.join("|")]);
-  const collapsedVisible = QUICK_RECORD_ACTIONS
+  const collapsedVisible = catalog
     .filter((action) => topIds.includes(action.id))
     .sort((a, b) => topIds.indexOf(a.id) - topIds.indexOf(b.id));
   const visible = expanded ? allVisible : collapsedVisible;
@@ -69,8 +74,12 @@ export function OneTouchRecordGrid({
     <View style={styles.section}>
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
-          <Text style={styles.title}>기록하기</Text>
-          <Text style={styles.subtitle}>탭해서 자세히 기록 · 길게 눌러 타이머 시작</Text>
+          <Text style={styles.title}>{catalog === PREGNANCY_QUICK_RECORD_ACTIONS ? "임신 기록하기" : "기록하기"}</Text>
+          <Text style={styles.subtitle}>{
+            catalog === PREGNANCY_QUICK_RECORD_ACTIONS
+              ? "탭하면 상세 입력이 열려요"
+              : "탭하면 상세 입력이 열려요 · 길게 눌러 타이머 시작"
+          }</Text>
         </View>
         {onAdd ? (
           <Pressable
@@ -257,7 +266,7 @@ function ActionTile({
   onOpenActiveTimer,
   onInteractionChange,
 }: {
-  action: (typeof QUICK_RECORD_ACTIONS)[number];
+  action: QuickRecordActionDefinition;
   sleepActive: boolean;
   timerActive: boolean;
   disabled?: boolean;
@@ -295,8 +304,12 @@ function ActionTile({
           longPressedRef.current = false;
           return;
         }
-        // An in-progress timer must never open a second quick-record flow.
-        // Open its sheet so the user can pause or finish the same timer.
+        // Open sleep logs: the tile says "수면 종료" and should actually end
+        // the session. Other in-progress timers still open the timer sheet.
+        if (activeSleep) {
+          onSelect(action.id);
+          return;
+        }
         if (inProgress && onOpenActiveTimer) {
           onOpenActiveTimer(action.id);
           return;
@@ -312,9 +325,21 @@ function ActionTile({
         onLongPress?.(action.id);
       }}
       delayLongPress={380}
-      accessibilityLabel={`${
-        activeSleep ? "수면 종료" : inProgress ? `${action.label} 진행 중` : action.label
-      } 기록 작성`}
+      accessibilityRole="button"
+      accessibilityLabel={
+        activeSleep
+          ? "수면 종료"
+          : inProgress
+            ? `${action.label} 진행 중`
+            : `${action.label} 상세 기록`
+      }
+      accessibilityHint={
+        activeSleep
+          ? "탭하면 수면을 종료하고 기록해요. 길게 누르면 타이머에서 조정할 수 있어요."
+          : inProgress
+            ? undefined
+            : "탭하면 상세 입력이 열려요. 바로 저장하려면 자주 쓰는 기록을 사용하세요."
+      }
     >
       {inProgress ? (
         <View style={styles.progressBadge}>
