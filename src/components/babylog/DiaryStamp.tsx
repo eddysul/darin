@@ -10,11 +10,24 @@ import {
   type DiarySkyId,
   type DiaryStampOption,
 } from "../../constants/diaryCompose";
+import { useLanguage } from "../../LanguageContext";
+import type { MessageKey } from "../../i18n";
 import { colors } from "../../theme";
 
 type Size = "sm" | "md" | "lg";
 
 const SIZE_PX: Record<Size, number> = { sm: 28, md: 48, lg: 56 };
+
+const SKY_LABEL_KEYS: Record<DiarySkyId, MessageKey> = {
+  sun: "diary.weather.sun", cloud: "diary.weather.cloud", rain: "diary.weather.rain",
+  snow: "diary.weather.snow", night: "diary.weather.night",
+};
+
+const MOOD_LABEL_KEYS: Record<DiaryMoodId, MessageKey> = {
+  love: "diary.mood.love", proud: "diary.mood.proud", calm: "diary.mood.calm",
+  tired: "diary.mood.tired", moved: "diary.mood.moved", worry: "diary.mood.worry",
+  grateful: "diary.mood.grateful", funny: "diary.mood.funny",
+};
 
 function StampFace({
   option,
@@ -303,6 +316,7 @@ export function DiarySkyPicker({
   value: string | null;
   onChange: (id: DiarySkyId | null) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <View style={styles.pickerRow}>
       {DIARY_SKY_OPTIONS.map((o) => {
@@ -314,7 +328,7 @@ export function DiarySkyPicker({
             onPress={() => onChange(active ? null : o.id)}
           >
             <DiarySkyStamp id={o.id} selected={active} size="lg" />
-            <Text style={[styles.pickerLabel, active && styles.pickerLabelActive]}>{o.label}</Text>
+            <Text style={[styles.pickerLabel, active && styles.pickerLabelActive]}>{t(SKY_LABEL_KEYS[o.id])}</Text>
           </Pressable>
         );
       })}
@@ -329,6 +343,7 @@ export function DiaryMoodPicker({
   value: string | null;
   onChange: (id: DiaryMoodId | null) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <View style={styles.moodGrid}>
       {DIARY_MOOD_OPTIONS.map((o) => {
@@ -340,7 +355,7 @@ export function DiaryMoodPicker({
             onPress={() => onChange(active ? null : o.id)}
           >
             <DiaryMoodStamp id={o.id} selected={active} size="md" />
-            <Text style={[styles.pickerLabel, active && styles.pickerLabelActive]}>{o.label}</Text>
+            <Text style={[styles.pickerLabel, active && styles.pickerLabelActive]}>{t(MOOD_LABEL_KEYS[o.id])}</Text>
           </Pressable>
         );
       })}

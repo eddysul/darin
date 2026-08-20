@@ -1,5 +1,7 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useAppSettings } from "./context/AppSettingsContext";
 import { createT, type Locale } from "./i18n";
+import { resolveAppLocale } from "./types/profilePreferences";
 
 type LanguageContextValue = {
   locale: Locale;
@@ -10,7 +12,20 @@ type LanguageContextValue = {
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<Locale>("en");
+  const { settings, ready, setSettings } = useAppSettings();
+  const [locale, setLocaleState] = useState<Locale>("ko");
+
+  useEffect(() => {
+    if (!ready) return;
+    setLocaleState(resolveAppLocale(settings.account.language));
+  }, [ready, settings.account.language]);
+
+  const setLocale = useCallback((next: Locale) => {
+    setLocaleState(next);
+    setSettings((current) => current.account.language === next
+      ? current
+      : { ...current, account: { ...current.account, language: next } });
+  }, [setSettings]);
   const t = useMemo(() => createT(locale), [locale]);
 
   return (

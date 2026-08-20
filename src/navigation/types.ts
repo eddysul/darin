@@ -1,7 +1,7 @@
 import type { NavigatorScreenParams } from "@react-navigation/native";
 import type { SettingsPage } from "../components/settings/AppSettingsModal";
 
-export type SettingsDetailPage = Exclude<SettingsPage, "account">;
+export type SettingsDetailPage = SettingsPage;
 
 export type MainTabParamList = {
   Record: { logId?: string } | undefined;

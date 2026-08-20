@@ -9,9 +9,12 @@ type LanguagePickerProps = {
   onClose: () => void;
 };
 
-const OPTIONS: { locale: Locale; labelKey: "langPicker.english" | "langPicker.korean" }[] = [
-  { locale: "en", labelKey: "langPicker.english" },
-  { locale: "ko", labelKey: "langPicker.korean" },
+const OPTIONS: { locale: Locale; label: string }[] = [
+  { locale: "ko", label: "한국어" },
+  { locale: "en", label: "English" },
+  { locale: "ja", label: "日本語" },
+  { locale: "es", label: "Español" },
+  { locale: "zh-CN", label: "简体中文" },
 ];
 
 export function LanguagePicker({ open, onClose }: LanguagePickerProps) {
@@ -22,7 +25,7 @@ export function LanguagePicker({ open, onClose }: LanguagePickerProps) {
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>{t("langPicker.title")}</Text>
-          {OPTIONS.map(({ locale: opt, labelKey }) => (
+          {OPTIONS.map(({ locale: opt, label }) => (
             <Pressable
               key={opt}
               style={[styles.option, locale === opt && styles.optionActive]}
@@ -31,7 +34,7 @@ export function LanguagePicker({ open, onClose }: LanguagePickerProps) {
                 onClose();
               }}
             >
-              <Text style={[styles.optionText, locale === opt && styles.optionTextActive]}>{t(labelKey)}</Text>
+              <Text style={[styles.optionText, locale === opt && styles.optionTextActive]}>{label}</Text>
               {locale === opt && <Check size={16} color={colors.yellow} strokeWidth={2.5} />}
             </Pressable>
           ))}

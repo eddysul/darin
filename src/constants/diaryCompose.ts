@@ -1,5 +1,9 @@
 /** Diary sky (weather) & mood stamp options — ink-stamp style, not emoji. */
 
+import type { DiaryCoverTemplateId } from "./diaryCoverTemplates";
+import type { DiaryPageTemplateId } from "./diaryPageTemplates";
+import type { DiaryCoverPhotoTransform } from "../types/babyLog";
+
 export type DiarySkyId = "sun" | "cloud" | "rain" | "snow" | "night";
 export type DiaryMoodId =
   | "love"
@@ -124,6 +128,11 @@ export const DIARY_GROWTH_MOMENTS = [
 export type DiaryComposeDraft = {
   comment: string;
   photos: string[];
+  coverStyleId: DiaryCoverTemplateId;
+  pageStyleId: DiaryPageTemplateId;
+  coverPhotoUri: string | null;
+  coverPhotoTransform: DiaryCoverPhotoTransform;
+  coverTitle: string;
   stickerIds: string[];
   weatherStamp: DiarySkyId | null;
   moodStamp: DiaryMoodId | null;

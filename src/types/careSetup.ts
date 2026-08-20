@@ -2,7 +2,7 @@ import type { RelationshipLabel } from "./growthBook";
 
 export type RelationshipToChild = "mom" | "dad" | "guardian" | "family" | "sitter";
 export type PostpartumStatus = "pregnant" | "expecting" | "postpartum" | "not_applicable";
-export type PreferredLanguage = "ko" | "en";
+export type PreferredLanguage = "ko" | "en" | "ja" | "es" | "zh-CN";
 export type ChildStatus = "unborn" | "newborn" | "infant";
 export type ChildGender = "girl" | "boy" | "unknown";
 export type DefaultFeedingMethod =

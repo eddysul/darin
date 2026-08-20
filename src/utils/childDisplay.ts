@@ -2,6 +2,23 @@ import type { ChildProfile, ParentProfile, PostpartumStatus } from "../types/car
 import type { DiaryEntry } from "../types/babyLog";
 import type { Locale } from "../i18n";
 import type { BabyAgeFormat } from "../types/appSettings";
+import { formatLocalizedDate } from "./localeFormat";
+
+const ageCopy: Record<Locale, {
+  pregnant: (weeks: number, days: number) => string;
+  dueMinus: (days: number) => string;
+  duePlus: (days: number) => string;
+  days: (days: number) => string;
+  weeksDays: (weeks: number, days: number) => string;
+  monthsDays: (months: number, days: number) => string;
+  yearsMonths: (years: number, months: number) => string;
+}> = {
+  ko: { pregnant: (w, d) => `임신 중 ${w}주 ${d}일`, dueMinus: (d) => `출산 예정일까지 D-${d}`, duePlus: (d) => `출산 예정일까지 D+${d}`, days: (d) => `생후 ${d}일`, weeksDays: (w, d) => `${w}주 ${d}일`, monthsDays: (m, d) => `${m}개월 ${d}일`, yearsMonths: (y, m) => `만 ${y}세 ${m}개월` },
+  en: { pregnant: (w, d) => `${w} weeks ${d} days pregnant`, dueMinus: (d) => `D-${d} until due date`, duePlus: (d) => `D+${d} past due date`, days: (d) => `${d} days old`, weeksDays: (w, d) => `${w} weeks ${d} days`, monthsDays: (m, d) => `${m} months ${d} days`, yearsMonths: (y, m) => `${y} years ${m} months` },
+  ja: { pregnant: (w, d) => `妊娠${w}週${d}日`, dueMinus: (d) => `出産予定日までD-${d}`, duePlus: (d) => `出産予定日からD+${d}`, days: (d) => `生後${d}日`, weeksDays: (w, d) => `${w}週${d}日`, monthsDays: (m, d) => `生後${m}か月${d}日`, yearsMonths: (y, m) => `${y}歳${m}か月` },
+  es: { pregnant: (w, d) => `${w} semanas y ${d} días de embarazo`, dueMinus: (d) => `D-${d} para la fecha prevista`, duePlus: (d) => `D+${d} desde la fecha prevista`, days: (d) => `${d} días de vida`, weeksDays: (w, d) => `${w} semanas y ${d} días`, monthsDays: (m, d) => `${m} meses y ${d} días`, yearsMonths: (y, m) => `${y} años y ${m} meses` },
+  "zh-CN": { pregnant: (w, d) => `孕${w}周${d}天`, dueMinus: (d) => `距预产期D-${d}`, duePlus: (d) => `超过预产期D+${d}`, days: (d) => `出生${d}天`, weeksDays: (w, d) => `${w}周${d}天`, monthsDays: (m, d) => `出生${m}个月${d}天`, yearsMonths: (y, m) => `${y}岁${m}个月` },
+};
 
 function parseFlexibleDate(value?: string): Date | null {
   if (!value?.trim()) return null;
@@ -43,16 +60,16 @@ export function formatDottedDate(value?: string): string | null {
   return `${parsed.getFullYear()}.${month}.${day}`;
 }
 
-export function formatGestationalAge(dueDate?: string, onDate: Date | string = new Date()): string | null {
+export function formatGestationalAge(dueDate?: string, onDate: Date | string = new Date(), locale: Locale = "ko"): string | null {
   const due = parseCalendarDate(dueDate);
   const on = typeof onDate === "string" ? parseCalendarDate(onDate) : onDate;
   if (!due || !on) return null;
   const remainingDays = calendarDayDifference(startOfLocalDay(due), startOfLocalDay(on));
   const gestationalDays = PREGNANCY_TERM_DAYS - remainingDays;
-  if (gestationalDays < 0) return "임신 중 0주 0일";
+  if (gestationalDays < 0) return ageCopy[locale].pregnant(0, 0);
   const weeks = Math.floor(gestationalDays / 7);
   const days = gestationalDays % 7;
-  return `임신 중 ${weeks}주 ${days}일`;
+  return ageCopy[locale].pregnant(weeks, days);
 }
 
 const BIRTH_CTA_WINDOW_DAYS = 7;
@@ -66,24 +83,24 @@ export function shouldShowBirthCta(child: Pick<ChildProfile, "childStatus" | "bi
   return remainingDays <= BIRTH_CTA_WINDOW_DAYS;
 }
 
-export function formatDueCountdown(dueDate?: string, onDate: Date | string = new Date()): string | null {
+export function formatDueCountdown(dueDate?: string, onDate: Date | string = new Date(), locale: Locale = "ko"): string | null {
   const due = parseCalendarDate(dueDate);
   const on = typeof onDate === "string" ? parseCalendarDate(onDate) : onDate;
   if (!due || !on) return null;
   const remainingDays = calendarDayDifference(startOfLocalDay(due), startOfLocalDay(on));
   return remainingDays >= 0
-    ? `출산 예정일까지 D-${remainingDays}`
-    : `출산 예정일까지 D+${Math.abs(remainingDays)}`;
+    ? ageCopy[locale].dueMinus(remainingDays)
+    : ageCopy[locale].duePlus(Math.abs(remainingDays));
 }
 
-export function formatPostnatalAge(birthDate?: string, onDate: Date | string = new Date()): string | null {
+export function formatPostnatalAge(birthDate?: string, onDate: Date | string = new Date(), locale: Locale = "ko"): string | null {
   const birthDateValue = parseCalendarDate(birthDate);
   const on = typeof onDate === "string" ? parseCalendarDate(onDate) : onDate;
   if (!birthDateValue || !on) return null;
   const birth = startOfLocalDay(birthDateValue);
   const today = startOfLocalDay(on);
   const ageDays = Math.max(0, calendarDayDifference(today, birth));
-  if (ageDays <= 30) return `생후 ${ageDays}일`;
+  if (ageDays <= 30) return ageCopy[locale].days(ageDays);
 
   let completedMonths = (today.getFullYear() - birth.getFullYear()) * 12 + today.getMonth() - birth.getMonth();
   if (today.getDate() < birth.getDate()) completedMonths -= 1;
@@ -94,9 +111,9 @@ export function formatPostnatalAge(birthDate?: string, onDate: Date | string = n
   const lastAnchorDay = new Date(anchorYear, anchorMonth + 1, 0).getDate();
   const monthAnchor = new Date(anchorYear, anchorMonth, Math.min(birth.getDate(), lastAnchorDay));
   const remainingDays = Math.max(0, calendarDayDifference(today, monthAnchor));
-  if (completedMonths < 24) return `${completedMonths}개월 ${remainingDays}일`;
+  if (completedMonths < 24) return ageCopy[locale].monthsDays(completedMonths, remainingDays);
 
-  return `만 ${Math.floor(completedMonths / 12)}세 ${completedMonths % 12}개월`;
+  return ageCopy[locale].yearsMonths(Math.floor(completedMonths / 12), completedMonths % 12);
 }
 
 /**
@@ -106,11 +123,12 @@ export function formatPostnatalAge(birthDate?: string, onDate: Date | string = n
 export function formatDiaryStageLabel(
   child: Pick<ChildProfile, "birthDate" | "dueDate">,
   onDateKey: string,
+  locale: Locale = "ko",
 ): string | null {
   if (child.birthDate && onDateKey >= child.birthDate) {
-    return formatPostnatalAge(child.birthDate, onDateKey);
+    return formatPostnatalAge(child.birthDate, onDateKey, locale);
   }
-  if (child.dueDate) return formatGestationalAge(child.dueDate, onDateKey);
+  if (child.dueDate) return formatGestationalAge(child.dueDate, onDateKey, locale);
   return null;
 }
 
@@ -125,22 +143,22 @@ export function diaryStageLabel(
 }
 
 /** Compact, non-abbreviated age label used in the record header. */
-export function formatRecordHeaderAge(child: ChildProfile, now = new Date()): string | null {
+export function formatRecordHeaderAge(child: ChildProfile, now = new Date(), locale: Locale = "ko"): string | null {
   if (isPregnancyStage(child)) {
-    const gestational = formatGestationalAge(child.dueDate, now);
-    const countdown = formatDueCountdown(child.dueDate, now);
+    const gestational = formatGestationalAge(child.dueDate, now, locale);
+    const countdown = formatDueCountdown(child.dueDate, now, locale);
     if (gestational && countdown) return `${gestational}\n${countdown}`;
     return gestational ?? countdown;
   }
-  return formatPostnatalAge(child.birthDate, now);
+  return formatPostnatalAge(child.birthDate, now, locale);
 }
 
 function formatDateLabel(value: string, locale: Locale): string {
   const d = parseFlexibleDate(value);
   if (!d) return value;
-  return d.toLocaleDateString(locale === "ko" ? "ko-KR" : "en-US", {
+  return formatLocalizedDate(d, locale, {
     year: "numeric",
-    month: locale === "ko" ? "long" : "short",
+    month: locale === "en" || locale === "es" ? "short" : "long",
     day: "numeric",
   });
 }
@@ -151,14 +169,14 @@ export function computeChildAgeDays(child: ChildProfile): number | null {
   return Math.max(0, Math.floor((Date.now() - birth.getTime()) / 86_400_000));
 }
 
-export function formatBabyAge(child: ChildProfile, format: BabyAgeFormat): string | null {
-  if (isPregnancyStage(child)) return formatGestationalAge(child.dueDate);
+export function formatBabyAge(child: ChildProfile, format: BabyAgeFormat, locale: Locale = "ko"): string | null {
+  if (isPregnancyStage(child)) return formatGestationalAge(child.dueDate, new Date(), locale);
   const days = computeChildAgeDays(child);
   if (days == null) return null;
-  if (format === "weeks") return `${Math.floor(days / 7)}주 ${days % 7}일`;
+  if (format === "weeks") return ageCopy[locale].weeksDays(Math.floor(days / 7), days % 7);
   if (format === "monthsDays") {
     const months = Math.floor(days / 30);
-    return `${months}개월 ${days % 30}일`;
+    return ageCopy[locale].monthsDays(months, days % 30);
   }
   return `D+${days}`;
 }
@@ -168,8 +186,8 @@ export function buildBabyDisplay(child: ChildProfile, locale: Locale = "ko") {
   const emoji = isPregnancyStage(child) ? "🤰" : child.childStatus === "newborn" ? "👶" : "🧒";
 
   if (isPregnancyStage(child) && child.dueDate) {
-    const gestational = formatGestationalAge(child.dueDate);
-    const countdown = formatDueCountdown(child.dueDate);
+    const gestational = formatGestationalAge(child.dueDate, new Date(), locale);
+    const countdown = formatDueCountdown(child.dueDate, new Date(), locale);
     const dueLabel = formatDateLabel(child.dueDate, locale);
     const badge = gestational ?? (locale === "ko" ? `출산 예정 · ${dueLabel}` : `Due · ${dueLabel}`);
     const birthMeta = [gestational, countdown].filter(Boolean).join(" · ") || (locale === "ko" ? `예정일 ${dueLabel}` : `Due date ${dueLabel}`);
@@ -178,7 +196,7 @@ export function buildBabyDisplay(child: ChildProfile, locale: Locale = "ko") {
 
   const ageDays = computeChildAgeDays(child);
   if (ageDays != null) {
-    const postnatal = formatPostnatalAge(child.birthDate);
+    const postnatal = formatPostnatalAge(child.birthDate, new Date(), locale);
     const badge = postnatal ?? (locale === "ko" ? `생후 ${ageDays}일 · D+${ageDays}` : `Day ${ageDays} · D+${ageDays}`);
     const birthMeta =
       locale === "ko"

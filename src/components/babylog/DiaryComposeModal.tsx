@@ -37,6 +37,8 @@ import {
   type EagerPhoto,
 } from "../../utils/eagerMediaUpload";
 import type { DiaryEntry } from "../../types/babyLog";
+import type { DiaryCoverTemplateId } from "../../constants/diaryCoverTemplates";
+import type { DiaryPageTemplateId } from "../../constants/diaryPageTemplates";
 import { formatDateKey } from "../../utils/dateKey";
 import { formatDiaryStageLabel, formatDottedDate } from "../../utils/childDisplay";
 import { entryToComposeDraft } from "../../utils/diaryToday";
@@ -52,6 +54,14 @@ import { BabyLogIcon } from "./BabyLogIcon";
 import { DiaryMoodPicker, DiaryMoodStamp, DiarySkyPicker } from "./DiaryStamp";
 import { BabyStickerFromModel } from "./BabyStickerView";
 import { BabyStickerVaultModal } from "./BabyStickerVaultModal";
+import { DiaryCoverPhotoAdjustModal } from "./DiaryCoverPhotoAdjustModal";
+import { DiaryCoverPicker } from "./DiaryCoverPicker";
+import { DiaryCoverTemplate } from "./DiaryCoverTemplate";
+import { DiaryPageStylePicker } from "./DiaryPageStylePicker";
+import { DiaryPageTemplate } from "./DiaryPageTemplate";
+import { useLanguage } from "../../LanguageContext";
+import type { Locale } from "../../i18n";
+import { formatLocalizedDate } from "../../utils/localeFormat";
 
 type Props = {
   visible: boolean;
@@ -68,8 +78,9 @@ type Props = {
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 const MAX_DIARY_PHOTOS = 5;
 
-function formatTodayLabel(d = new Date()): string {
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`;
+function formatTodayLabel(locale: Locale, d = new Date()): string {
+  if (locale === "ko") return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`;
+  return formatLocalizedDate(d, locale, { month: "long", day: "numeric", weekday: "short" });
 }
 
 export function DiaryComposeModal({
@@ -84,23 +95,32 @@ export function DiaryComposeModal({
   onDelete,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { locale, t } = useLanguage();
   const { logs, babyName, babyStickers, addBabySticker, deleteBabySticker, logAuthor, activeBabyId, careSetup } = useBabyLog();
   const isEdit = !!editingEntry;
   const stageLabel = editingEntry?.stageLabelSnapshot
     ?? formatDiaryStageLabel(
       careSetup.child,
       editingEntry?.dateKey ?? formatDateKey(),
+      locale,
     );
   const stageDate = formatDottedDate(editingEntry?.dateKey ?? formatDateKey());
 
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [coverStyleId, setCoverStyleId] = useState<DiaryCoverTemplateId>("cloud_sky");
+  const [pageStyleId, setPageStyleId] = useState<DiaryPageTemplateId>("basic_line");
+  const [coverPhotoUri, setCoverPhotoUri] = useState<string | null>(null);
+  const [coverPhotoTransform, setCoverPhotoTransform] = useState({ scale: 1, translateX: 0, translateY: 0 });
+  const [coverTitle, setCoverTitle] = useState("");
+  const [coverPhotoAdjustOpen, setCoverPhotoAdjustOpen] = useState(false);
   const [eagerPhotos, setEagerPhotos] = useState<EagerPhoto[]>([]);
   const [photoError, setPhotoError] = useState("");
   const sessionIdRef = useRef(createUploadSessionId());
   const handedOffRef = useRef(false);
   const savingRef = useRef(false);
   const baselineRef = useRef<string | null>(null);
+  const [touchNonce, setTouchNonce] = useState(0);
   const [stickerIds, setStickerIds] = useState<string[]>([]);
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
   const [weather, setWeather] = useState<DiarySkyId | null>(DEFAULT_DIARY_SKY);
@@ -110,7 +130,7 @@ export function DiaryComposeModal({
   const [customMode, setCustomMode] = useState(false);
   const [inBook, setInBook] = useState(false);
   const [usedSuggestions, setUsedSuggestions] = useState<string[]>([]);
-  const [dateLabel, setDateLabel] = useState(formatTodayLabel());
+  const [dateLabel, setDateLabel] = useState(() => formatTodayLabel(locale));
   const [frozenSnapshot, setFrozenSnapshot] = useState<string | undefined>();
   const [ready, setReady] = useState(false);
 
@@ -135,11 +155,16 @@ export function DiaryComposeModal({
   const canSave = notes.trim().length > 0 || photos.length > 0 || stickerIds.length > 0;
   const pendingUploads = eagerPhotos.filter((photo) => photo.status !== "uploaded" && photo.status !== "failed").length;
   const failedUploads = eagerPhotos.filter((photo) => photo.status === "failed").length;
-  const canSubmit = canSave && pendingUploads === 0 && failedUploads === 0;
+  const canSubmit = canSave;
 
   const buildDraft = (): DiaryComposeDraft => ({
     comment: notes.trim() || (photos.length || stickerIds.length ? DIARY_PHOTO_ONLY_COMMENT : notes),
     photos,
+    coverStyleId,
+    pageStyleId,
+    coverPhotoUri: coverPhotoUri && photos.includes(coverPhotoUri) ? coverPhotoUri : photos[0] ?? null,
+    coverPhotoTransform,
+    coverTitle: coverTitle.trim(),
     stickerIds,
     weatherStamp: weather,
     moodStamp: mood,
@@ -156,6 +181,11 @@ export function DiaryComposeModal({
     JSON.stringify({
       comment: notes.trim(),
       photos,
+      coverStyleId,
+      pageStyleId,
+      coverPhotoUri,
+      coverPhotoTransform,
+      coverTitle: coverTitle.trim(),
       stickerIds,
       weather,
       mood,
@@ -173,6 +203,11 @@ export function DiaryComposeModal({
       const d = entryToComposeDraft(editingEntry);
       setNotes(d.comment);
       setPhotos(d.photos);
+      setCoverStyleId(d.coverStyleId);
+      setPageStyleId(d.pageStyleId);
+      setCoverPhotoUri(d.coverPhotoUri);
+      setCoverPhotoTransform(d.coverPhotoTransform);
+      setCoverTitle(d.coverTitle);
       setStickerIds(d.stickerIds ?? []);
       setWeather(d.weatherStamp);
       setMood(d.moodStamp);
@@ -186,6 +221,11 @@ export function DiaryComposeModal({
     } else if (initialDraft) {
       setNotes(initialDraft.comment === DIARY_PHOTO_ONLY_COMMENT ? "" : initialDraft.comment);
       setPhotos(initialDraft.photos);
+      setCoverStyleId(initialDraft.coverStyleId ?? "cloud_sky");
+      setPageStyleId(initialDraft.pageStyleId ?? "basic_line");
+      setCoverPhotoUri(initialDraft.coverPhotoUri ?? initialDraft.photos[0] ?? null);
+      setCoverPhotoTransform(initialDraft.coverPhotoTransform ?? { scale: 1, translateX: 0, translateY: 0 });
+      setCoverTitle(initialDraft.coverTitle ?? "");
       setStickerIds(initialDraft.stickerIds ?? []);
       setWeather(initialDraft.weatherStamp);
       setMood(initialDraft.moodStamp);
@@ -194,11 +234,16 @@ export function DiaryComposeModal({
       setCustomMode(!!initialDraft.customMilestoneTag && !initialDraft.milestoneTag);
       setInBook(initialDraft.includedInGrowthBook);
       setUsedSuggestions(initialDraft.momentSuggestionsUsed);
-      setDateLabel(formatTodayLabel());
+      setDateLabel(formatTodayLabel(locale));
       setFrozenSnapshot(undefined);
     } else {
       setNotes("");
       setPhotos([]);
+      setCoverStyleId("cloud_sky");
+      setPageStyleId("basic_line");
+      setCoverPhotoUri(null);
+      setCoverPhotoTransform({ scale: 1, translateX: 0, translateY: 0 });
+      setCoverTitle("");
       setStickerIds([]);
       setWeather(DEFAULT_DIARY_SKY);
       setMood(DEFAULT_DIARY_MOOD);
@@ -207,12 +252,23 @@ export function DiaryComposeModal({
       setCustomMode(false);
       setInBook(false);
       setUsedSuggestions([]);
-      setDateLabel(formatTodayLabel());
+      setDateLabel(formatTodayLabel(locale));
       setFrozenSnapshot(undefined);
     }
     setReady(true);
     setPhotoError("");
   }, [visible, editingEntry, initialDraft]);
+
+  useEffect(() => {
+    if (photos.length === 0) {
+      if (coverPhotoUri !== null) setCoverPhotoUri(null);
+      return;
+    }
+    if (!coverPhotoUri || !photos.includes(coverPhotoUri)) {
+      setCoverPhotoUri(photos[0]);
+      setCoverPhotoTransform({ scale: 1, translateX: 0, translateY: 0 });
+    }
+  }, [photos, coverPhotoUri]);
 
   useEffect(() => {
     if (!visible || !ready) {
@@ -229,6 +285,7 @@ export function DiaryComposeModal({
   useEffect(() => {
     if (!visible) return;
     handedOffRef.current = false;
+    savingRef.current = false;
     const sessionId = sessionIdRef.current;
     const refresh = () => setEagerPhotos(listEagerPhotos(sessionId));
     refresh();
@@ -256,6 +313,11 @@ export function DiaryComposeModal({
     onDraftChange,
     notes,
     photos,
+    coverStyleId,
+    pageStyleId,
+    coverPhotoUri,
+    coverPhotoTransform,
+    coverTitle,
     stickerIds,
     weather,
     mood,
@@ -313,6 +375,7 @@ export function DiaryComposeModal({
           }
           return next;
         });
+        setTouchNonce((value) => value + 1);
       }
     } catch (error) {
       if (__DEV__) console.warn("[diary-photo-picker] open failed", error instanceof Error ? error.name : "unknown");
@@ -362,27 +425,28 @@ export function DiaryComposeModal({
   };
 
   const title = readOnly
-    ? "일기 보기"
+    ? t("diary.compose.viewTitle")
     : isEdit
       ? fromPush
         ? "오늘 일기 이어쓰기"
-        : "일기 수정"
+        : t("diary.compose.editTitle")
       : fromPush
         ? "알림에서 쓰기"
-        : "새 일기 쓰기";
+        : t("diary.compose.newTitle");
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
       <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.header}>
           <Pressable onPress={handleClose} hitSlop={10} style={styles.headerBtn}>
-            <Text style={styles.headerBtnText}>닫기</Text>
+            <Text style={styles.headerBtnText}>{t("diary.compose.close")}</Text>
           </Pressable>
           <Text style={styles.headerTitle}>{title}</Text>
           {readOnly ? (
             <View style={styles.headerBtn} />
           ) : (
             <Pressable
+              key={`save-header-${touchNonce}`}
               onPress={handleSave}
               hitSlop={10}
               style={[styles.headerBtn, !canSubmit && styles.headerBtnDisabled]}
@@ -391,13 +455,13 @@ export function DiaryComposeModal({
               accessibilityState={{ disabled: !canSubmit }}
               accessibilityHint={
                 pendingUploads > 0
-                  ? "사진 업로드가 끝나면 저장할 수 있어요"
+                  ? "사진이 올라가는 중이어도 저장할 수 있어요"
                   : failedUploads > 0
-                    ? "올리지 못한 사진을 다시 시도하거나 삭제해 주세요"
+                    ? "올리지 못한 사진은 다시 시도하거나 삭제해 주세요"
                     : undefined
               }
             >
-              <Text style={[styles.saveHeaderText, !canSubmit && styles.saveHeaderTextDisabled]}>저장</Text>
+              <Text style={[styles.saveHeaderText, !canSubmit && styles.saveHeaderTextDisabled]}>{t("diary.compose.save")}</Text>
             </Pressable>
           )}
         </View>
@@ -463,23 +527,23 @@ export function DiaryComposeModal({
               </>
             ) : null}
 
-            <Text style={styles.fieldLabel}>사진</Text>
+            <Text style={styles.fieldLabel}>{t("diary.compose.photo")}</Text>
             {readOnly ? null : (
               <>
                 <View style={styles.mediaActions}>
                   <Pressable style={[styles.mediaBtn, photos.length >= MAX_DIARY_PHOTOS && styles.mediaBtnDisabled]} onPress={() => void pickPhoto()}>
-                    <Text style={styles.mediaBtnText}>사진 추가</Text>
+                    <Text style={styles.mediaBtnText}>{t("diary.compose.addPhoto")}</Text>
                   </Pressable>
                   <Pressable style={styles.mediaBtnSecondary} onPress={() => setStickerPickerOpen(true)}>
-                    <Text style={styles.mediaBtnSecondaryText}>스티커 추가</Text>
+                    <Text style={styles.mediaBtnSecondaryText}>{t("diary.compose.addSticker")}</Text>
                   </Pressable>
                 </View>
                 <Text style={styles.photoLimit}>
                   {pendingUploads > 0
-                    ? `사진 ${pendingUploads}장을 올리는 중이에요. 업로드가 끝나면 저장할 수 있어요.`
+                    ? `사진 ${pendingUploads}장을 올리는 중이에요. 지금 저장해도 일기에 남아요.`
                     : failedUploads > 0
                       ? "올리지 못한 사진이 있어요. 다시 시도하거나 삭제해 주세요."
-                      : `선택한 사진 ${photos.length}장 · 최대 5장까지 추가할 수 있어요.`}
+                      : t("diary.compose.photoCount", { count: photos.length })}
                 </Text>
                 {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
               </>
@@ -491,7 +555,11 @@ export function DiaryComposeModal({
                   return (
                   <View key={`${uri}-${index}`} style={styles.photoThumbWrap}>
                     <Image source={{ uri }} style={styles.photoThumb} contentFit="cover" />
-                    {index === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>대표</Text></View> : null}
+                    {coverPhotoUri === uri ? (
+                      <View pointerEvents="none" style={styles.coverPhotoBadge}>
+                        <Text style={styles.coverPhotoBadgeText}>{t("diary.compose.coverBadge")}</Text>
+                      </View>
+                    ) : null}
                     {job?.status === "failed" ? (
                       <Pressable
                         style={styles.photoFail}
@@ -508,22 +576,36 @@ export function DiaryComposeModal({
                       </View>
                     ) : null}
                     {readOnly ? null : (
-                      <Pressable
-                        style={styles.photoRemove}
-                        onPress={() => {
-                          const removed = photos[index];
-                          const removedJob = removed ? findJobByLocalUri(removed) : undefined;
-                          if (removedJob) removeEagerPhoto(removedJob.id);
-                          setEagerPhotos(listEagerPhotos(sessionIdRef.current));
-                          setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index));
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`사진 ${index + 1} 삭제`}
-                      >
-                        <View style={styles.photoRemoveGlyph}>
-                          <Text style={styles.photoRemoveText}>×</Text>
-                        </View>
-                      </Pressable>
+                      <>
+                        <Pressable
+                          style={styles.photoCoverSelect}
+                          onPress={() => {
+                            setCoverPhotoUri(uri);
+                            setCoverPhotoTransform({ scale: 1, translateX: 0, translateY: 0 });
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`사진 ${index + 1}을 표지로 설정`}
+                          accessibilityState={{ selected: coverPhotoUri === uri }}
+                        >
+                          <Text style={styles.photoCoverSelectText}>{coverPhotoUri === uri ? t("diary.compose.coverSelected") : t("diary.compose.coverSet")}</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.photoRemove}
+                          onPress={() => {
+                            const removed = photos[index];
+                            const removedJob = removed ? findJobByLocalUri(removed) : undefined;
+                            if (removedJob) removeEagerPhoto(removedJob.id);
+                            setEagerPhotos(listEagerPhotos(sessionIdRef.current));
+                            setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index));
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`사진 ${index + 1} 삭제`}
+                        >
+                          <View style={styles.photoRemoveGlyph}>
+                            <Text style={styles.photoRemoveText}>×</Text>
+                          </View>
+                        </Pressable>
+                      </>
                     )}
                   </View>
                   );
@@ -531,7 +613,7 @@ export function DiaryComposeModal({
                 {!readOnly && photos.length < MAX_DIARY_PHOTOS ? (
                   <Pressable style={styles.photoAddTile} onPress={() => void pickPhoto()}>
                     <Text style={styles.photoAddPlus}>＋</Text>
-                    <Text style={styles.photoAddText}>사진 추가</Text>
+                    <Text style={styles.photoAddText}>{t("diary.compose.addPhoto")}</Text>
                   </Pressable>
                 ) : null}
               </ScrollView>
@@ -539,12 +621,76 @@ export function DiaryComposeModal({
               <Pressable style={styles.photoBox} onPress={readOnly ? undefined : () => void pickPhoto()} disabled={readOnly}>
                 <View style={styles.photoHintWrap}>
                   {mood ? <DiaryMoodStamp id={mood} selected size="lg" /> : null}
-                  <Text style={styles.photoHint}>{readOnly ? "사진 없음" : "사진 추가하기"}</Text>
+                  <Text style={styles.photoHint}>{readOnly ? t("diary.compose.noPhoto") : t("diary.compose.addPhoto")}</Text>
                   {readOnly ? null : (
-                    <Text style={styles.photoHintSub}>사진만 있어도 저장할 수 있어요</Text>
+                    <Text style={styles.photoHintSub}>{t("diary.compose.photoOnly")}</Text>
                   )}
                 </View>
               </Pressable>
+            )}
+
+            <Text style={styles.fieldLabel}>{t("diary.compose.cover")}</Text>
+            <Text style={styles.sectionHint}>{t("diary.compose.coverHint")}</Text>
+            <View style={styles.diaryTemplatePreviewWrap}>
+              <DiaryCoverTemplate
+                styleId={coverStyleId}
+                photoUri={coverPhotoUri}
+                photoTransform={coverPhotoTransform}
+                title={coverTitle || notes}
+                style={styles.diaryCoverPreview}
+              />
+            </View>
+            {readOnly ? null : (
+              <>
+                <DiaryCoverPicker
+                  value={coverStyleId}
+                  photoUri={coverPhotoUri}
+                  title={coverTitle || notes}
+                  onChange={setCoverStyleId}
+                />
+                <TextInput
+                  style={styles.coverTitleInput}
+                  value={coverTitle}
+                  onChangeText={setCoverTitle}
+                  maxLength={60}
+                  placeholder={t("diary.compose.coverTitlePlaceholder")}
+                  placeholderTextColor={colors.faint}
+                />
+                {coverPhotoUri ? (
+                  <Pressable
+                    style={styles.coverAdjustButton}
+                    onPress={() => setCoverPhotoAdjustOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("diary.compose.coverAdjust")}
+                  >
+                    <Text style={styles.coverAdjustButtonText}>{t("diary.compose.coverAdjust")}</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            )}
+
+            <Text style={styles.fieldLabel}>{t("diary.compose.pageStyle")}</Text>
+            <Text style={styles.sectionHint}>{t("diary.compose.pageStyleHint")}</Text>
+            {readOnly ? (
+              <View style={styles.diaryTemplatePreviewWrap}>
+                <DiaryPageTemplate
+                  styleId={pageStyleId}
+                  dateLabel={dateLabel}
+                  weatherStamp={weather}
+                  title={coverTitle || notes}
+                  body={notes}
+                  style={styles.diaryPagePreview}
+                />
+              </View>
+            ) : (
+              <DiaryPageStylePicker
+                value={pageStyleId}
+                dateLabel={dateLabel}
+                weatherStamp={weather}
+                title={coverTitle || notes}
+                body={notes}
+                onChange={setPageStyleId}
+              />
             )}
 
             {stickerIds.length > 0 ? (
@@ -568,18 +714,18 @@ export function DiaryComposeModal({
               </>
             ) : null}
 
-            <Text style={styles.fieldLabel}>코멘트</Text>
+            <Text style={styles.fieldLabel}>{t("diary.compose.comment")}</Text>
             <TextInput
               style={styles.notes}
               value={notes}
               onChangeText={setNotes}
               multiline
               editable={!readOnly}
-              placeholder={`${babyName}와 있었던 일을 적어보세요`}
+              placeholder={t("diary.compose.commentPlaceholder", { babyName })}
               placeholderTextColor={colors.faint}
             />
 
-            <Text style={styles.fieldLabel}>오늘의 하늘</Text>
+            <Text style={styles.fieldLabel}>{t("diary.compose.weather")}</Text>
             {readOnly ? null : (
               <Text style={styles.sectionHint}>다시 누르면 선택을 해제할 수 있어요</Text>
             )}
@@ -587,12 +733,12 @@ export function DiaryComposeModal({
               <DiarySkyPicker value={weather} onChange={setWeather} />
             </View>
 
-            <Text style={styles.fieldLabel}>오늘의 마음</Text>
+            <Text style={styles.fieldLabel}>{t("diary.compose.mood")}</Text>
             <View pointerEvents={readOnly ? "none" : "auto"}>
               <DiaryMoodPicker value={mood} onChange={setMood} />
             </View>
 
-            <Text style={styles.fieldLabel}>성장 순간 태그</Text>
+            <Text style={styles.fieldLabel}>{t("diary.compose.milestone")}</Text>
             <View style={styles.optionRow} pointerEvents={readOnly ? "none" : "auto"}>
               <Pressable
                 style={[styles.tagChip, !customMode && milestoneTag === null && styles.tagChipActive]}
@@ -608,7 +754,7 @@ export function DiaryComposeModal({
                     !customMode && milestoneTag === null && styles.tagChipTextActive,
                   ]}
                 >
-                  없음
+                  {t("diary.compose.none")}
                 </Text>
               </Pressable>
               {DIARY_GROWTH_MOMENTS.map((m) => {
@@ -634,7 +780,7 @@ export function DiaryComposeModal({
                   setMilestoneTag(null);
                 }}
               >
-                <Text style={[styles.tagChipText, customMode && styles.tagChipTextActive]}>직접 입력</Text>
+                <Text style={[styles.tagChipText, customMode && styles.tagChipTextActive]}>{t("diary.compose.custom")}</Text>
               </Pressable>
             </View>
             {customMode ? (
@@ -650,8 +796,8 @@ export function DiaryComposeModal({
 
             <View style={styles.toggleRow}>
               <View style={styles.toggleCopy}>
-                <Text style={styles.toggleTitle}>성장책에 담기</Text>
-                <Text style={styles.toggleSub}>저장 후 성장책에서도 볼 수 있어요</Text>
+                <Text style={styles.toggleTitle}>{t("diary.compose.addToBook")}</Text>
+                <Text style={styles.toggleSub}>{t("diary.compose.addToBookHint")}</Text>
               </View>
               <Switch
                 value={inBook}
@@ -665,25 +811,26 @@ export function DiaryComposeModal({
             {readOnly ? null : (
               <View>
                 <Pressable
+                  key={`save-btn-${touchNonce}`}
                   style={[styles.saveBtn, !canSubmit && styles.saveBtnDisabled]}
                   onPress={handleSave}
                   disabled={!canSubmit}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: !canSubmit }}
                 >
-                  <Text style={styles.saveBtnText}>{isEdit ? "수정 저장" : "일기 저장"}</Text>
+                  <Text style={styles.saveBtnText}>{isEdit ? t("diary.compose.saveEdit") : t("diary.compose.saveEntry")}</Text>
                 </Pressable>
                 {!canSave ? (
-                  <Text style={styles.saveHint}>사진 또는 코멘트 중 하나는 필요해요</Text>
+                  <Text style={styles.saveHint}>{t("diary.compose.needContent")}</Text>
                 ) : pendingUploads > 0 ? (
-                  <Text style={styles.saveHint}>사진 업로드가 끝나면 저장할 수 있어요</Text>
+                  <Text style={styles.saveHint}>사진은 백그라운드에서 올라가요. 지금 저장해도 돼요.</Text>
                 ) : failedUploads > 0 ? (
                   <Text style={styles.saveHint}>올리지 못한 사진을 다시 시도하거나 삭제해 주세요</Text>
                 ) : null}
 
                 {isEdit && onDelete ? (
                   <Pressable style={styles.deleteBtn} onPress={handleDelete}>
-                    <Text style={styles.deleteBtnText}>일기 삭제</Text>
+                    <Text style={styles.deleteBtnText}>{t("diary.compose.delete")}</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -705,6 +852,17 @@ export function DiaryComposeModal({
         onPickSticker={(sticker) => {
           setStickerIds((prev) => (prev.includes(sticker.id) ? prev : [...prev, sticker.id]));
           setStickerPickerOpen(false);
+        }}
+      />
+      <DiaryCoverPhotoAdjustModal
+        visible={!readOnly && coverPhotoAdjustOpen}
+        photoUri={coverPhotoUri}
+        styleId={coverStyleId}
+        value={coverPhotoTransform}
+        onCancel={() => setCoverPhotoAdjustOpen(false)}
+        onSave={(next) => {
+          setCoverPhotoTransform(next);
+          setCoverPhotoAdjustOpen(false);
         }}
       />
     </Modal>
@@ -824,8 +982,10 @@ const styles = StyleSheet.create({
   photoRow: { gap: 10, paddingRight: 4 },
   photoThumbWrap: { width: 112, height: 112, borderRadius: 16, overflow: "hidden", backgroundColor: colors.cardHi },
   photoThumb: { width: "100%", height: "100%" },
-  coverBadge: { position: "absolute", left: 7, bottom: 7, borderRadius: 999, backgroundColor: "rgba(46,42,38,0.72)", paddingHorizontal: 7, paddingVertical: 3 },
-  coverBadgeText: { color: colors.onDark, fontSize: 9.5, fontWeight: "800" },
+  coverPhotoBadge: { position: "absolute", left: 6, top: 6, borderRadius: 9, backgroundColor: colors.amber, paddingHorizontal: 7, paddingVertical: 3 },
+  coverPhotoBadgeText: { color: colors.amberDark, fontSize: 10, fontWeight: "800" },
+  photoCoverSelect: { position: "absolute", left: 5, bottom: 5, minHeight: 28, borderRadius: 9, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 7, alignItems: "center", justifyContent: "center" },
+  photoCoverSelectText: { color: colors.amberText, fontSize: 10, fontWeight: "800" },
   photoFail: { position: "absolute", left: 7, right: 7, bottom: 7, minHeight: 36, borderRadius: 999, backgroundColor: "rgba(46,42,38,0.82)", alignItems: "center", justifyContent: "center" },
   photoFailText: { color: colors.onDark, fontSize: 11.5, fontWeight: "800" },
   photoUploading: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, gap: 6, backgroundColor: "rgba(46,42,38,0.44)", alignItems: "center", justifyContent: "center" },
@@ -851,6 +1011,12 @@ const styles = StyleSheet.create({
   photoAddTile: { width: 96, height: 112, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center", gap: 4 },
   photoAddPlus: { color: colors.amberText, fontSize: 26, lineHeight: 28 },
   photoAddText: { color: colors.amberText, fontSize: 11.5, fontWeight: "800" },
+  diaryTemplatePreviewWrap: { alignItems: "center", marginBottom: 10 },
+  diaryCoverPreview: { width: 210, height: 280 },
+  diaryPagePreview: { width: 210, height: 280 },
+  coverTitleInput: { minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 13, fontSize: 14, color: colors.text, marginTop: 10 },
+  coverAdjustButton: { minHeight: 44, marginTop: 8, marginBottom: 4, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  coverAdjustButtonText: { color: colors.text, fontSize: 13, fontWeight: "800" },
   stickerRow: { gap: 10, paddingVertical: 4 },
   notes: {
     backgroundColor: colors.card,

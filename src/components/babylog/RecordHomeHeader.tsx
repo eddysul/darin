@@ -12,6 +12,7 @@ import { formatRecordHeaderAge, shouldShowBirthCta } from "../../utils/childDisp
 import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { BabySwitcher } from "./BabySwitcher";
 import { NotificationBellButton } from "../NotificationBellButton";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   onOpenProfile: (opts?: { convertBirth?: boolean }) => void;
@@ -23,11 +24,12 @@ type Props = {
 export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifications, embedded = false }: Props) {
   const insets = useSafeAreaInsets();
   const { careSetup, setCareSetup } = useApp();
+  const { locale } = useLanguage();
   const careSetupRef = useRef(careSetup);
   careSetupRef.current = careSetup;
   const { babyName, babyBirthMeta, activeBabyId, familyMembers } = useBabyLog();
   const compact = useCompactLayout();
-  const ageLabel = formatRecordHeaderAge(careSetup.child) ?? babyBirthMeta;
+  const ageLabel = formatRecordHeaderAge(careSetup.child, new Date(), locale) ?? babyBirthMeta;
   const showBirthCta = shouldShowBirthCta(careSetup.child);
   const isShared = familyMembers.filter((member) => member.status === "active").length > 1;
   const [babyPhoto, setBabyPhoto] = useState(careSetup.child.photoUri);

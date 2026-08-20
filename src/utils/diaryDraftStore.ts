@@ -1,5 +1,7 @@
 import type { DiaryComposeDraft } from "../constants/diaryCompose";
 import { normalizeDiaryMoodOptional, normalizeDiarySkyOptional } from "../constants/diaryCompose";
+import { isDiaryCoverTemplateId } from "../constants/diaryCoverTemplates";
+import { isDiaryPageTemplateId } from "../constants/diaryPageTemplates";
 import type { DiaryDraft } from "../types/diaryReminder";
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
@@ -34,6 +36,15 @@ function migrateDraft(raw: unknown): DiaryDraft | null {
   const draft: DiaryComposeDraft = {
     comment,
     photos,
+    coverStyleId: isDiaryCoverTemplateId(d.coverStyleId) ? d.coverStyleId : "cloud_sky",
+    pageStyleId: isDiaryPageTemplateId(d.pageStyleId) ? d.pageStyleId : "basic_line",
+    coverPhotoUri: typeof d.coverPhotoUri === "string" && photos.includes(d.coverPhotoUri) ? d.coverPhotoUri : photos[0] ?? null,
+    coverPhotoTransform: {
+      scale: Math.max(1, Math.min(3, typeof (d.coverPhotoTransform as { scale?: unknown } | undefined)?.scale === "number" ? (d.coverPhotoTransform as { scale: number }).scale : 1)),
+      translateX: Math.max(-1, Math.min(1, typeof (d.coverPhotoTransform as { translateX?: unknown } | undefined)?.translateX === "number" ? (d.coverPhotoTransform as { translateX: number }).translateX : 0)),
+      translateY: Math.max(-1, Math.min(1, typeof (d.coverPhotoTransform as { translateY?: unknown } | undefined)?.translateY === "number" ? (d.coverPhotoTransform as { translateY: number }).translateY : 0)),
+    },
+    coverTitle: typeof d.coverTitle === "string" ? d.coverTitle : "",
     stickerIds: Array.isArray(d.stickerIds)
       ? (d.stickerIds as unknown[]).filter((x): x is string => typeof x === "string")
       : [],

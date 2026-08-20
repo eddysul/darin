@@ -3,14 +3,26 @@ import {
   normalizeDiaryMoodOptional,
   normalizeDiarySkyOptional,
 } from "../constants/diaryCompose";
+import { DEFAULT_DIARY_COVER_TEMPLATE_ID, isDiaryCoverTemplateId } from "../constants/diaryCoverTemplates";
+import { DEFAULT_DIARY_PAGE_TEMPLATE_ID, isDiaryPageTemplateId } from "../constants/diaryPageTemplates";
 import type { DiaryDraftStatus, DiaryEntry, DiarySource } from "../types/babyLog";
 import { formatDateKey } from "./dateKey";
 
 /** Stored when user saves photos without a written comment. */
 export const DIARY_PHOTO_ONLY_COMMENT = "(사진만 남긴 하루)";
 
-export function diaryPrimaryPhoto(entry: Pick<DiaryEntry, "photos">): string | null {
+export function diaryPrimaryPhoto(entry: Pick<DiaryEntry, "photos" | "coverPhotoUri">): string | null {
+  if (entry.coverPhotoUri && entry.photos.includes(entry.coverPhotoUri)) return entry.coverPhotoUri;
   return entry.photos[0] ?? null;
+}
+
+export function diaryCoverTitle(entry: Pick<DiaryEntry, "coverTitle" | "milestoneTag" | "customMilestoneTag" | "comment">): string {
+  const explicit = entry.coverTitle?.trim();
+  if (explicit) return explicit;
+  const milestone = entry.milestoneTag || entry.customMilestoneTag;
+  if (milestone) return milestone;
+  const firstLine = entry.comment.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+  return firstLine && firstLine !== DIARY_PHOTO_ONLY_COMMENT ? firstLine : "우리 아기의 하루";
 }
 
 /** Soft copy for list/vault cards (never show the raw placeholder). */
@@ -107,6 +119,15 @@ export function migrateDiaryEntry(raw: unknown, fallbackBabyId = "baby-1"): Diar
     date: date || "날짜 없음",
     dateKey: typeof d.dateKey === "string" && d.dateKey ? d.dateKey : formatDateKey(),
     photos,
+    coverStyleId: isDiaryCoverTemplateId(d.coverStyleId) ? d.coverStyleId : DEFAULT_DIARY_COVER_TEMPLATE_ID,
+    pageStyleId: isDiaryPageTemplateId(d.pageStyleId) ? d.pageStyleId : DEFAULT_DIARY_PAGE_TEMPLATE_ID,
+    coverPhotoUri: typeof d.coverPhotoUri === "string" && photos.includes(d.coverPhotoUri) ? d.coverPhotoUri : photos[0] ?? null,
+    coverPhotoTransform: {
+      scale: Math.max(1, Math.min(3, typeof (d.coverPhotoTransform as { scale?: unknown } | undefined)?.scale === "number" ? (d.coverPhotoTransform as { scale: number }).scale : 1)),
+      translateX: Math.max(-1, Math.min(1, typeof (d.coverPhotoTransform as { translateX?: unknown } | undefined)?.translateX === "number" ? (d.coverPhotoTransform as { translateX: number }).translateX : 0)),
+      translateY: Math.max(-1, Math.min(1, typeof (d.coverPhotoTransform as { translateY?: unknown } | undefined)?.translateY === "number" ? (d.coverPhotoTransform as { translateY: number }).translateY : 0)),
+    },
+    coverTitle: typeof d.coverTitle === "string" ? d.coverTitle : "",
     comment,
     weatherStamp: normalizeDiarySkyOptional(weatherRaw),
     moodStamp: normalizeDiaryMoodOptional(moodRaw),
@@ -133,4 +154,3 @@ export function migrateDiaryEntry(raw: unknown, fallbackBabyId = "baby-1"): Diar
     draftStatus,
   };
 }
-

@@ -12,21 +12,11 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLanguage } from "../../LanguageContext";
 import { QUICK_RECORD_ACTIONS, type OneTouchAction } from "../../constants/quickRecordActions";
 import { useApp } from "../../context/AppContext";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { colors, type } from "../../theme";
-import {
-  RELATIONSHIP_OPTIONS,
-  type RelationshipToChild,
-} from "../../types/careSetup";
-import {
-  APP_LANGUAGE_OPTIONS,
-  resolveAppLocale,
-  type AppLanguagePreference,
-} from "../../types/profilePreferences";
 import { AddCustomCategorySheet } from "../babylog/AddCustomCategorySheet";
 import { DraggableCategoryList } from "./DraggableCategoryList";
 import { NavigationHeader } from "../navigation/NavigationHeader";
@@ -171,27 +161,22 @@ export function AppSettingsModal({
   page,
   onClose,
   embedded = false,
+  onOpenMyProfile,
 }: {
   page: SettingsPage | null;
   onClose: () => void;
   embedded?: boolean;
+  onOpenMyProfile?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { settings, setSettings } = useAppSettings();
-  const { careSetup, profile, setCareSetup, setProfile } = useApp();
+  const { careSetup } = useApp();
   const {
-    applyOwnerFromSetup,
     localDataScope,
     customCategories,
     upsertCustomCategory,
     removeCustomCategory,
   } = useBabyLog();
-  const { setLocale } = useLanguage();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [language, setLanguage] = useState<AppLanguagePreference>("ko");
-  const [relationship, setRelationship] = useState<RelationshipToChild>("mom");
-  const [accountReady, setAccountReady] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
   const [contactCategory, setContactCategory] = useState<ContactRequestCategory>("feedback");
@@ -212,13 +197,6 @@ export function AppSettingsModal({
   const pregnancy = isPregnancyStage(careSetup.child);
   const stageCustomCategories = customCategoriesForStage(customCategories, pregnancy);
 
-  const accountDirty = page === "account" && accountReady && (
-    name !== (careSetup.parent.parentName || profile.name) ||
-    email !== settings.account.email ||
-    language !== settings.account.language ||
-    relationship !== settings.account.relationship
-  );
-
   useEffect(() => {
     if (page !== "legal") setOpenLegalSection(null);
     if (page !== "categories") setAddCategoryOpen(false);
@@ -227,16 +205,10 @@ export function AppSettingsModal({
 
   useEffect(() => {
     if (page !== "account") {
-      setAccountReady(false);
       setGoogleLinkReady(false);
       setKakaoLinkReady(false);
       return;
     }
-    setName(careSetup.parent.parentName || profile.name);
-    setEmail(settings.account.email);
-    setLanguage(settings.account.language);
-    setRelationship(settings.account.relationship);
-    setAccountReady(true);
     let active = true;
     void AuthRepository.getUser()
       .then((user) => {
@@ -255,14 +227,7 @@ export function AppSettingsModal({
     return () => {
       active = false;
     };
-  }, [
-    careSetup.parent.parentName,
-    page,
-    profile.name,
-    settings.account.email,
-    settings.account.language,
-    settings.account.relationship,
-  ]);
+  }, [page]);
 
   useEffect(() => {
     if (page !== "contact") return;
@@ -277,36 +242,10 @@ export function AppSettingsModal({
 
   if (!page) return null;
 
-  const requestClose = () => {
-    if (accountDirty) {
-      Alert.alert("변경사항을 취소할까요?", "저장하지 않은 계정 설정은 사라져요.", [
-        { text: "계속 편집", style: "cancel" },
-        { text: "변경사항 취소", style: "destructive", onPress: onClose },
-      ]);
-      return;
-    }
-    onClose();
-  };
+  const showGoogleLogin = authProviderFlags.google.visible && googleLinkReady;
+  const showKakaoLogin = authProviderFlags.kakao.enabled && kakaoLinkReady;
 
-  const saveAccount = () => {
-    const resolvedLanguage = resolveAppLocale(language);
-    const nextSetup = {
-      ...careSetup,
-      parent: {
-        ...careSetup.parent,
-        parentName: name.trim() || careSetup.parent.parentName,
-        preferredLanguage: resolvedLanguage,
-        relationshipToChild: relationship,
-      },
-    };
-    setCareSetup(nextSetup);
-    setProfile({ ...profile, name: nextSetup.parent.parentName });
-    setLocale(resolvedLanguage);
-    applyOwnerFromSetup(nextSetup);
-    setSettings((current) => ({
-      ...current,
-      account: { ...current.account, email: email.trim(), language, relationship },
-    }));
+  const requestClose = () => {
     onClose();
   };
 
@@ -385,10 +324,7 @@ export function AppSettingsModal({
     <View style={styles.root}>
         {!embedded ? <NavigationHeader
           title={SETTINGS_PAGE_TITLES[page]}
-          onBack={page === "account" ? requestClose : onClose}
-          leftLabel={page === "account" ? "취소" : undefined}
-          rightLabel={page === "account" ? "저장" : undefined}
-          onRightPress={page === "account" ? saveAccount : undefined}
+          onBack={requestClose}
         /> : null}
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 24, 36) }]}
@@ -400,78 +336,88 @@ export function AppSettingsModal({
               <SettingsSection title="로그인">
                 <InfoRow label="로그인 방식" value={loginMethodLabel(settings.account.loginMethod)} />
                 <InfoRow
-                  label="연결된 계정"
-                  value={email.trim() || loginMethodLabel(settings.account.loginMethod)}
+                  label="이메일"
+                  value={settings.account.email.trim() || "연결되지 않음"}
+                  last={!showGoogleLogin && !showKakaoLogin}
                 />
-                {authProviderFlags.google.visible && googleLinkReady ? (
+                {showGoogleLogin ? (
                   googleLinked ? (
-                    <InfoRow label="Google 계정" value="연결됨" />
+                    <InfoRow
+                      label="Google"
+                      value="연결됨"
+                      last={!showKakaoLogin}
+                    />
                   ) : (
-                    <SecondaryButton
-                      label={googleLinkBusy ? "Google 연결 중…" : "Google 계정 연결"}
+                    <ActionRow
+                      label="Google 계정 연결"
+                      meta={googleLinkBusy ? "연결 중…" : "같은 로그인에 Google을 추가해요"}
+                      action={googleLinkBusy ? "연결 중" : "연결"}
                       disabled={googleLinkBusy}
+                      last={!showKakaoLogin}
                       onPress={() => void connectGoogle()}
                     />
                   )
                 ) : null}
-                {authProviderFlags.kakao.enabled && kakaoLinkReady ? (
+                {showKakaoLogin ? (
                   kakaoLinked ? (
-                    <InfoRow label="카카오 계정" value="연결됨" />
+                    <InfoRow label="카카오" value="연결됨" last />
                   ) : (
-                    <SecondaryButton
-                      label={kakaoLinkBusy ? "카카오 연결 중…" : "카카오 계정 연결"}
+                    <ActionRow
+                      label="카카오 계정 연결"
+                      meta={kakaoLinkBusy ? "연결 중…" : "같은 로그인에 카카오를 추가해요"}
+                      action={kakaoLinkBusy ? "연결 중" : "연결"}
                       disabled={kakaoLinkBusy}
+                      last
                       onPress={() => void connectKakao()}
                     />
                   )
                 ) : null}
               </SettingsSection>
-              <SettingsSection title="기본 정보">
-                <Field label="이름" value={name} onChangeText={setName} placeholder="이름" />
-                <Field
-                  label="이메일"
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="name@example.com"
-                  keyboardType="email-address"
-                  editable={settings.account.loginMethod !== "email"}
-                />
-                {settings.account.loginMethod === "email" ? (
-                  <Text style={[styles.help, styles.accountEmailHelp]}>로그인 이메일 변경은 별도 인증 절차가 필요해 현재 화면에서는 수정할 수 없어요.</Text>
-                ) : null}
-                <ChoiceRow
-                  label="언어"
-                  value={language}
-                  options={APP_LANGUAGE_OPTIONS}
-                  onChange={(value) => setLanguage(value as AppLanguagePreference)}
-                />
-                <ChoiceRow
-                  label="아이와의 관계"
-                  value={relationship}
-                  options={RELATIONSHIP_OPTIONS}
-                  onChange={(value) => setRelationship(value as RelationshipToChild)}
-                />
-              </SettingsSection>
+              {onOpenMyProfile ? (
+                <SettingsSection title="프로필">
+                  <ActionRow
+                    label="내 프로필"
+                    meta="이름, 관계, 언어, 사진을 바꿔요"
+                    action="보기"
+                    last
+                    onPress={onOpenMyProfile}
+                  />
+                </SettingsSection>
+              ) : null}
               <SettingsSection title="데이터 관리">
-                <Text style={styles.help}>현재 아기 기록을 JSON으로 내보낼 수 있어요. 사진 원본은 포함되지 않습니다.</Text>
-                {exportMessage ? <Text style={styles.help}>{exportMessage}</Text> : null}
-                <SecondaryButton
-                  label={exporting ? "파일 만드는 중…" : "데이터 내보내기"}
-                  onPress={() => {
-                    if (exporting) return;
-                    const babyId = localDataScope?.babyId;
-                    if (!babyId) {
-                      setExportMessage("현재 선택된 아기가 없어요.");
-                      return;
-                    }
-                    setExporting(true);
-                    setExportMessage("");
-                    void DataExportRepository.exportAndShare(babyId)
-                      .then(() => setExportMessage("내보내기 파일을 만들었어요."))
-                      .catch((error) => setExportMessage(error instanceof Error ? error.message : "내보내지 못했어요."))
-                      .finally(() => setExporting(false));
-                  }}
-                />
+                <View style={styles.actionBlock}>
+                  <Text style={styles.actionTitle}>기록 내보내기</Text>
+                  <Text style={styles.actionBody}>
+                    지금 보고 있는 아기의 기록을 JSON 파일로 저장해요. 사진 원본은 들어가지 않아요.
+                  </Text>
+                  {exportMessage ? (
+                    <Text style={exportMessage.includes("못") || exportMessage.includes("없어요") ? styles.actionError : styles.actionStatus}>
+                      {exportMessage}
+                    </Text>
+                  ) : null}
+                  <Pressable
+                    style={[styles.primaryButton, exporting && styles.secondaryButtonDisabled]}
+                    onPress={() => {
+                      if (exporting) return;
+                      const babyId = localDataScope?.babyId;
+                      if (!babyId) {
+                        setExportMessage("현재 선택된 아기가 없어요.");
+                        return;
+                      }
+                      setExporting(true);
+                      setExportMessage("");
+                      void DataExportRepository.exportAndShare(babyId)
+                        .then(() => setExportMessage("내보내기 파일을 만들었어요."))
+                        .catch((error) => setExportMessage(error instanceof Error ? error.message : "내보내지 못했어요."))
+                        .finally(() => setExporting(false));
+                    }}
+                    disabled={exporting}
+                    accessibilityRole="button"
+                    accessibilityLabel="데이터 내보내기"
+                  >
+                    <Text style={styles.primaryButtonText}>{exporting ? "파일 만드는 중…" : "내보내기"}</Text>
+                  </Pressable>
+                </View>
               </SettingsSection>
             </>
           ) : null}
@@ -912,12 +858,44 @@ function ChoiceRow({
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, last = false }: { label: string; value: string; last?: boolean }) {
   return (
-    <View style={styles.settingRow}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
+    <View style={[styles.settingRow, last && styles.rowLast]}>
+      <Text style={[styles.rowLabel, styles.infoLabel]}>{label}</Text>
+      <Text style={styles.infoValue} numberOfLines={2}>{value}</Text>
     </View>
+  );
+}
+
+function ActionRow({
+  label,
+  meta,
+  action,
+  onPress,
+  disabled = false,
+  last = false,
+}: {
+  label: string;
+  meta?: string;
+  action: string;
+  onPress: () => void;
+  disabled?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <Pressable
+      style={[styles.settingRow, styles.actionRow, last && styles.rowLast, disabled && styles.secondaryButtonDisabled]}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}, ${action}`}
+    >
+      <View style={styles.actionRowCopy}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {meta ? <Text style={styles.rowMeta}>{meta}</Text> : null}
+      </View>
+      <Text style={styles.linkAction}>{action}</Text>
+    </Pressable>
   );
 }
 
@@ -1019,10 +997,20 @@ const styles = StyleSheet.create({
   fieldLabel: { color: colors.muted, fontSize: 11, fontWeight: "700", marginBottom: 7 },
   input: { minHeight: 42, borderRadius: 12, backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 14 },
   messageInput: { minHeight: 140, paddingTop: 12, paddingBottom: 12 },
-  settingRow: { minHeight: 62, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  rowLabel: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "700" },
-  rowMeta: { marginTop: 3, color: colors.faint, fontSize: type.xs },
-  infoValue: { color: colors.muted, fontSize: 13, fontWeight: "700" },
+  settingRow: { minHeight: 62, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  rowLast: { borderBottomWidth: 0 },
+  rowLabel: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  infoLabel: { flex: 1, minWidth: 88 },
+  rowMeta: { marginTop: 3, color: colors.faint, fontSize: type.xs, lineHeight: 18 },
+  infoValue: { flexShrink: 1, maxWidth: "58%", color: colors.muted, fontSize: 13, fontWeight: "700", textAlign: "right" },
+  actionRow: { minHeight: 68, paddingVertical: 12, alignItems: "center" },
+  actionRowCopy: { flex: 1, minWidth: 0 },
+  linkAction: { color: colors.amberText, fontSize: 13, fontWeight: "800" },
+  actionBlock: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18, gap: 14 },
+  actionTitle: { color: colors.text, fontSize: 15, fontWeight: "800" },
+  actionBody: { color: colors.muted, fontSize: 13.5, lineHeight: 21 },
+  actionStatus: { color: colors.amberText, fontSize: 12.5, fontWeight: "700", lineHeight: 18 },
+  actionError: { color: colors.dangerText, fontSize: 12.5, fontWeight: "700", lineHeight: 18 },
   choiceBlock: { paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 9 },
   choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   choice: { minHeight: 44, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, backgroundColor: colors.backgroundSecondary },
@@ -1054,8 +1042,7 @@ const styles = StyleSheet.create({
   coreButtonOn: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
   stateButtonText: { color: colors.faint, fontSize: 10, fontWeight: "800" },
   stateButtonTextOn: { color: colors.text },
-  help: { color: colors.muted, fontSize: 12.5, lineHeight: 19 },
-  legalSectionTitle: { marginTop: 18, marginBottom: 8, color: colors.text, fontSize: 16, fontWeight: "800" },
+  help: { color: colors.muted, fontSize: 12.5, lineHeight: 19, paddingHorizontal: 2 },
   legalIntro: { gap: 7, marginBottom: 2 },
   legalUpdated: { color: colors.faint, fontSize: 11.5, lineHeight: 18, fontWeight: "700" },
   accordionCard: { borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
@@ -1064,7 +1051,6 @@ const styles = StyleSheet.create({
   accordionChevron: { color: colors.muted, fontSize: 15, fontWeight: "800" },
   accordionBody: { padding: 15, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 17, backgroundColor: colors.backgroundSecondary },
   accordionParagraph: { gap: 6 },
-  accountEmailHelp: { paddingHorizontal: 14, paddingVertical: 10 },
   primaryButton: { minHeight: 50, borderRadius: 15, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
   primaryButtonText: { color: colors.amberDark, fontSize: 14, fontWeight: "800" },
   secondaryButton: { minHeight: 48, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },

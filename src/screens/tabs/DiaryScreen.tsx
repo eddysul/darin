@@ -10,7 +10,7 @@ import { DiaryComposeModal } from "../../components/babylog/DiaryComposeModal";
 import { DiaryReminderSettingsModal } from "../../components/babylog/DiaryReminderSettingsModal";
 import { GrowthBookVaultModal } from "../../components/babylog/GrowthBookVaultModal";
 import { GrowthBookEditorModal } from "../../components/babylog/GrowthBookEditorModal";
-import { DiaryMoodStamp, DiaryStampPair } from "../../components/babylog/DiaryStamp";
+import { DiaryMoodStamp } from "../../components/babylog/DiaryStamp";
 import { PushToast } from "../../components/babylog/PushToast";
 import { ConsultFab } from "../../components/babylog/ConsultFab";
 import { ConsultPromptSheet } from "../../components/babylog/ConsultPromptSheet";
@@ -348,6 +348,11 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
       if (editingEntry) {
         updateDiary(editingEntry.id, {
           photos: draft.photos,
+          coverStyleId: draft.coverStyleId,
+          pageStyleId: draft.pageStyleId,
+          coverPhotoUri: draft.coverPhotoUri,
+          coverPhotoTransform: draft.coverPhotoTransform,
+          coverTitle: draft.coverTitle,
           stickerIds: draft.stickerIds ?? [],
           comment: draft.comment,
           weatherStamp: draft.weatherStamp,
@@ -367,6 +372,11 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
       if (existingToday) {
         updateDiary(existingToday.id, {
           photos: draft.photos,
+          coverStyleId: draft.coverStyleId,
+          pageStyleId: draft.pageStyleId,
+          coverPhotoUri: draft.coverPhotoUri,
+          coverPhotoTransform: draft.coverPhotoTransform,
+          coverTitle: draft.coverTitle,
           stickerIds: draft.stickerIds ?? [],
           comment: draft.comment,
           weatherStamp: draft.weatherStamp,
@@ -386,6 +396,11 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
         date: dateLabel,
         dateKey: todayKey,
         photos: draft.photos,
+        coverStyleId: draft.coverStyleId,
+        pageStyleId: draft.pageStyleId,
+        coverPhotoUri: draft.coverPhotoUri,
+        coverPhotoTransform: draft.coverPhotoTransform,
+        coverTitle: draft.coverTitle,
         stickerIds: draft.stickerIds ?? [],
         comment: draft.comment,
         weatherStamp: draft.weatherStamp,
@@ -696,7 +711,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   );
 }
 
-const THUMB_SIZE = 64;
+const THUMB_SIZE = 88;
 const CARD_PAD = 12;
 const BOOKMARK_CHIP = 24;
 const BOOKMARK_HIT = Platform.OS === "android" ? 48 : 44;
@@ -719,8 +734,14 @@ function DiaryCard({
   onToggleBook: () => void;
 }) {
   const inBook = entry.includedInGrowthBook;
-  const photo = diaryPrimaryPhoto(entry);
+  const photo = diaryPrimaryPhoto(entry) ?? entry.photos[0] ?? null;
   const milestone = diaryMilestoneLabel(entry);
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const showPhoto = !!photo && !photoFailed;
+  const moodStamp = entry.moodStamp;
+  useEffect(() => {
+    setPhotoFailed(false);
+  }, [photo]);
 
   return (
     <View style={styles.card}>
@@ -733,14 +754,19 @@ function DiaryCard({
         }
       >
         <View style={styles.thumbWrap}>
-          {photo ? (
-            <Image source={{ uri: photo }} style={styles.thumb} contentFit="cover" />
+          {showPhoto ? (
+            <Image
+              source={{ uri: photo }}
+              style={styles.thumb}
+              contentFit="cover"
+              onError={() => setPhotoFailed(true)}
+            />
           ) : (
-            <View style={styles.thumbPlaceholder}>
-              {entry.moodStamp ? (
-                <DiaryMoodStamp id={entry.moodStamp} selected size="sm" />
+            <View style={styles.thumbFallback}>
+              {moodStamp ? (
+                <DiaryMoodStamp id={moodStamp} selected size="md" />
               ) : (
-                <BabyLogIcon kind="tab" tab="diary" size={22} color={colors.muted} />
+                <BabyLogIcon kind="image" size={22} color={colors.faint} />
               )}
             </View>
           )}
@@ -755,7 +781,9 @@ function DiaryCard({
             <Text style={styles.date} numberOfLines={1}>
               {ageLabel ? `${ageLabel} · ${dateLabel}` : entry.date}
             </Text>
-            <DiaryStampPair skyId={entry.weatherStamp} moodId={entry.moodStamp} size="sm" />
+            {showPhoto && moodStamp ? (
+              <DiaryMoodStamp id={moodStamp} selected size="sm" />
+            ) : null}
           </View>
           <Text style={styles.comment} numberOfLines={2}>
             {diaryDisplayComment(entry)}
@@ -934,6 +962,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardHi,
   },
   thumb: { width: "100%", height: "100%" },
+  thumbFallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.cardHi },
   photoCountBadge: {
     position: "absolute",
     left: 4,

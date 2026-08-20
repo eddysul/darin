@@ -1,5 +1,7 @@
 import type { FamilyRole } from "./family";
 import type { DiaryMoodId, DiarySkyId } from "../constants/diaryCompose";
+import type { DiaryCoverTemplateId } from "../constants/diaryCoverTemplates";
+import type { DiaryPageTemplateId } from "../constants/diaryPageTemplates";
 
 export type BabyLogFlag = "spit_up" | "burp" | "fever" | "fussy" | "low_confidence" | "time_ambiguous";
 
@@ -91,6 +93,12 @@ export type DiarySource = "manual" | "notification";
 
 export type DiaryDraftStatus = "draft" | "saved";
 
+export type DiaryCoverPhotoTransform = {
+  scale: number;
+  translateX: number;
+  translateY: number;
+};
+
 /**
  * Canonical Diary model (육아일기).
  * careLogSummarySnapshot is frozen at save time and must not change when Care Logs are edited later.
@@ -103,6 +111,12 @@ export type DiaryEntry = {
   /** YYYY-MM-DD local */
   dateKey: string;
   photos: string[];
+  /** Individual diary-entry cover; separate from the growth-book cover. */
+  coverStyleId?: DiaryCoverTemplateId;
+  pageStyleId?: DiaryPageTemplateId;
+  coverPhotoUri?: string | null;
+  coverPhotoTransform?: DiaryCoverPhotoTransform;
+  coverTitle?: string;
   comment: string;
   weatherStamp: DiarySkyId | null;
   moodStamp: DiaryMoodId | null;

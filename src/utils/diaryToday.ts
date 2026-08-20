@@ -73,6 +73,11 @@ export function entryToComposeDraft(entry: DiaryEntry): DiaryComposeDraft {
   return {
     comment: entry.comment === DIARY_PHOTO_ONLY_COMMENT ? "" : entry.comment,
     photos: [...entry.photos],
+    coverStyleId: entry.coverStyleId ?? "cloud_sky",
+    pageStyleId: entry.pageStyleId ?? "basic_line",
+    coverPhotoUri: entry.coverPhotoUri && entry.photos.includes(entry.coverPhotoUri) ? entry.coverPhotoUri : entry.photos[0] ?? null,
+    coverPhotoTransform: entry.coverPhotoTransform ?? { scale: 1, translateX: 0, translateY: 0 },
+    coverTitle: entry.coverTitle ?? "",
     stickerIds: [...(entry.stickerIds ?? [])],
     weatherStamp: entry.weatherStamp,
     moodStamp: entry.moodStamp,

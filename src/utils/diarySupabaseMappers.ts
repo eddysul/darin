@@ -2,6 +2,8 @@ import type { BabyLogActor, DiaryEntry } from "../types/babyLog";
 import type { DiaryMedia } from "../types/diary";
 import type { DiaryEntryRow, DiaryMediaRow, Json } from "../types/database";
 import type { FamilyRole } from "../types/family";
+import { isDiaryCoverTemplateId } from "../constants/diaryCoverTemplates";
+import { isDiaryPageTemplateId } from "../constants/diaryPageTemplates";
 import { migrateDiaryEntry } from "./diaryModel";
 
 type DiaryMetadata = {
@@ -16,6 +18,11 @@ type DiaryMetadata = {
   draftStatus?: DiaryEntry["draftStatus"];
   authorName?: string;
   authorRole?: FamilyRole;
+  coverStyleId?: string;
+  pageStyleId?: string;
+  coverPhotoIndex?: number;
+  coverPhotoTransform?: { scale?: number; translateX?: number; translateY?: number };
+  coverTitle?: string;
 };
 
 function metadataObject(value: Json): DiaryMetadata {
@@ -38,6 +45,11 @@ function entryMetadata(entry: DiaryEntry): Json {
     stickerIds: entry.stickerIds ?? [],
     source: entry.source,
     draftStatus: "saved",
+    coverStyleId: entry.coverStyleId ?? "cloud_sky",
+    pageStyleId: entry.pageStyleId ?? "basic_line",
+    coverPhotoIndex: Math.max(0, entry.coverPhotoUri ? entry.photos.indexOf(entry.coverPhotoUri) : 0),
+    coverPhotoTransform: entry.coverPhotoTransform ?? { scale: 1, translateX: 0, translateY: 0 },
+    coverTitle: entry.coverTitle ?? "",
   };
   if (entry.createdBy) {
     metadata.authorName = entry.createdBy.name;
@@ -69,6 +81,7 @@ function fallbackDateLabel(dateKey: string): string {
 
 export function diaryEntryRowToModel(row: DiaryEntryRow, photos: string[] = []): DiaryEntry {
   const metadata = metadataObject(row.metadata);
+  const transform = metadata.coverPhotoTransform;
   const createdBy: BabyLogActor = {
     userId: row.author_id ?? "deleted-user",
     name: row.author_id === null
@@ -82,6 +95,15 @@ export function diaryEntryRowToModel(row: DiaryEntryRow, photos: string[] = []):
     date: typeof metadata.dateLabel === "string" ? metadata.dateLabel : fallbackDateLabel(row.entry_date),
     dateKey: row.entry_date,
     photos,
+    coverStyleId: isDiaryCoverTemplateId(metadata.coverStyleId) ? metadata.coverStyleId : "cloud_sky",
+    pageStyleId: isDiaryPageTemplateId(metadata.pageStyleId) ? metadata.pageStyleId : "basic_line",
+    coverPhotoUri: photos[Math.max(0, Math.min(photos.length - 1, typeof metadata.coverPhotoIndex === "number" ? metadata.coverPhotoIndex : 0))] ?? null,
+    coverPhotoTransform: {
+      scale: Math.max(1, Math.min(3, typeof transform?.scale === "number" ? transform.scale : 1)),
+      translateX: Math.max(-1, Math.min(1, typeof transform?.translateX === "number" ? transform.translateX : 0)),
+      translateY: Math.max(-1, Math.min(1, typeof transform?.translateY === "number" ? transform.translateY : 0)),
+    },
+    coverTitle: typeof metadata.coverTitle === "string" ? metadata.coverTitle : "",
     comment: row.body ?? "",
     weatherStamp: row.weather,
     moodStamp: row.mood,

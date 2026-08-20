@@ -1,4 +1,6 @@
-export type Locale = "en" | "ko";
+import { coreMessages, type CoreMessageKey } from "./i18nCoreMessages";
+
+export type Locale = "ko" | "en" | "ja" | "es" | "zh-CN";
 
 const messages = {
   en: {
@@ -1365,10 +1367,84 @@ const messages = {
   },
 } as const;
 
-export type MessageKey = keyof typeof messages.en;
+export type MessageKey = keyof typeof messages.en | CoreMessageKey;
+
+const localeOverrides: Record<Exclude<Locale, "ko" | "en">, Partial<Record<keyof typeof messages.en, string>>> = {
+  ja: {
+    "langPicker.title": "言語を選択",
+    "langPicker.english": "English",
+    "langPicker.korean": "한국어",
+    "tabs.record": "記録",
+    "tabs.diary": "日記",
+    "tabs.voice": "音声",
+    "tabs.overview": "一覧",
+    "tabs.memories": "思い出",
+    "login.title": "おかえりなさい",
+    "login.subtitle": "ログインしてケアチームとつながりましょう",
+    "login.email": "メールアドレス",
+    "login.password": "パスワード",
+    "login.forgotPassword": "パスワードをお忘れですか？",
+    "login.submit": "ログイン",
+    "login.or": "または",
+    "signup.title": "アカウントを作成",
+    "signup.name": "名前",
+    "signup.submit": "登録",
+  },
+  es: {
+    "langPicker.title": "Seleccionar idioma",
+    "langPicker.english": "English",
+    "langPicker.korean": "한국어",
+    "tabs.record": "Registro",
+    "tabs.diary": "Diario",
+    "tabs.voice": "Voz",
+    "tabs.overview": "Resumen",
+    "tabs.memories": "Recuerdos",
+    "login.title": "Te damos la bienvenida",
+    "login.subtitle": "Inicia sesión para conectar con tu equipo de cuidado",
+    "login.email": "Correo electrónico",
+    "login.password": "Contraseña",
+    "login.forgotPassword": "¿Olvidaste tu contraseña?",
+    "login.submit": "Iniciar sesión",
+    "login.or": "o",
+    "signup.title": "Crear una cuenta",
+    "signup.name": "Nombre",
+    "signup.submit": "Registrarse",
+  },
+  "zh-CN": {
+    "langPicker.title": "选择语言",
+    "langPicker.english": "English",
+    "langPicker.korean": "한국어",
+    "tabs.record": "记录",
+    "tabs.diary": "日记",
+    "tabs.voice": "语音",
+    "tabs.overview": "概览",
+    "tabs.memories": "回忆",
+    "login.title": "欢迎回来",
+    "login.subtitle": "登录并与照护成员保持联系",
+    "login.email": "电子邮箱",
+    "login.password": "密码",
+    "login.forgotPassword": "忘记密码？",
+    "login.submit": "登录",
+    "login.or": "或",
+    "signup.title": "创建账号",
+    "signup.name": "姓名",
+    "signup.submit": "注册",
+  },
+};
 
 export function createT(locale: Locale) {
-  return (key: MessageKey) => messages[locale][key];
+  return (key: MessageKey, params?: Record<string, string | number>) => {
+    const core = coreMessages[locale][key as CoreMessageKey];
+    const legacyKey = key as keyof typeof messages.en;
+    const translated = core ?? (locale === "ko" || locale === "en"
+      ? messages[locale][legacyKey]
+      : localeOverrides[locale][legacyKey] ?? messages.en[legacyKey]);
+    if (!params) return translated;
+    return Object.entries(params).reduce(
+      (copy, [name, value]) => copy.replaceAll(`{${name}}`, String(value)),
+      translated as string,
+    );
+  };
 }
 
 export function getReportContent(locale: Locale) {
@@ -1433,5 +1509,5 @@ export function getCaregiverRole(locale: Locale, role: string) {
     "Bilingual Babysitter": { en: "Bilingual Babysitter", ko: "이중언어 베이비시터" },
     "Daycare Teacher": { en: "Daycare Teacher", ko: "어린이집 교사" },
   };
-  return map[role]?.[locale] ?? role;
+  return map[role]?.[locale === "ko" ? "ko" : "en"] ?? role;
 }

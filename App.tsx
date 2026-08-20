@@ -135,8 +135,8 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <WebAppShell>
-        <LanguageProvider>
-          <AppSettingsProvider>
+        <AppSettingsProvider>
+          <LanguageProvider>
             <AppProvider>
               <BabyLogProvider>
                 <VoiceRecordingProvider>
@@ -144,8 +144,8 @@ export default function App() {
                 </VoiceRecordingProvider>
               </BabyLogProvider>
             </AppProvider>
-          </AppSettingsProvider>
-        </LanguageProvider>
+          </LanguageProvider>
+        </AppSettingsProvider>
       </WebAppShell>
     </SafeAreaProvider>
   );
@@ -288,6 +288,7 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
               page={route.params.page}
               embedded
               onClose={() => navigation.goBack()}
+              onOpenMyProfile={() => navigation.navigate("MyProfile")}
             />
           )}
         </RootStack.Screen>
