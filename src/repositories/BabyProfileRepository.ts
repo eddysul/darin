@@ -7,6 +7,22 @@ import { AuthRepository } from "./AuthRepository";
 const BUCKET = "profile-media";
 const SIGNED_URL_TTL_SECONDS = 180;
 
+export type BabyProfileErrorCode =
+  | "name_required"
+  | "birth_date_invalid"
+  | "permission_denied"
+  | "save_failed"
+  | "photo_too_large"
+  | "photo_upload_failed"
+  | "photo_load_failed";
+
+export class BabyProfileError extends Error {
+  constructor(readonly code: BabyProfileErrorCode) {
+    super(code);
+    this.name = "BabyProfileError";
+  }
+}
+
 function extensionForMime(mimeType?: string): string {
   if (mimeType === "image/png") return "png";
   if (mimeType === "image/webp") return "webp";
@@ -45,11 +61,11 @@ export const BabyProfileRepository = {
 
   async updateBabyProfile(input: UpdateBabyProfileInput): Promise<BabyProfile> {
     const name = input.name.trim();
-    if (!name) throw new Error("아기 이름을 입력해 주세요.");
+    if (!name) throw new BabyProfileError("name_required");
     if (input.birthDate) {
       const parsed = new Date(`${input.birthDate}T00:00:00`);
       if (!Number.isFinite(parsed.getTime()) || parsed.getTime() > Date.now() + 86_400_000 * 280) {
-        throw new Error("생년월일을 다시 확인해 주세요.");
+        throw new BabyProfileError("birth_date_invalid");
       }
     }
     const sb = requireSupabase();
@@ -83,9 +99,9 @@ export const BabyProfileRepository = {
       .single();
     if (error) {
       if (error.code === "42501" || /permission|policy/i.test(error.message)) {
-        throw new Error("이 정보를 수정할 권한이 없어요.");
+        throw new BabyProfileError("permission_denied");
       }
-      throw new Error("프로필을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      throw new BabyProfileError("save_failed");
     }
     const avatarUrl = data.avatar_storage_path
       ? await this.createBabyAvatarSignedUrl(data.avatar_storage_path).catch(() => undefined)
@@ -95,7 +111,7 @@ export const BabyProfileRepository = {
 
   async uploadBabyAvatar(babyId: string, input: UploadAvatarInput): Promise<BabyProfile> {
     if (input.fileSize !== undefined && input.fileSize > MAX_PROFILE_AVATAR_BYTES) {
-      throw new Error("사진은 5MB 이하만 올릴 수 있어요.");
+      throw new BabyProfileError("photo_too_large");
     }
     const sb = requireSupabase();
     await AuthRepository.ensureSession();
@@ -103,9 +119,9 @@ export const BabyProfileRepository = {
     const storagePath = `babies/${babyId}/avatar.${ext}`;
     const response = await fetch(input.uri);
     const bytes = await response.arrayBuffer();
-    if (!bytes.byteLength) throw new Error("사진을 올리지 못했어요. 다른 사진으로 다시 시도해 주세요.");
+    if (!bytes.byteLength) throw new BabyProfileError("photo_upload_failed");
     if (bytes.byteLength > MAX_PROFILE_AVATAR_BYTES) {
-      throw new Error("사진은 5MB 이하만 올릴 수 있어요.");
+      throw new BabyProfileError("photo_too_large");
     }
     const { error: uploadError } = await sb.storage.from(BUCKET).upload(storagePath, bytes, {
       contentType: input.mimeType ?? "image/jpeg",
@@ -113,9 +129,9 @@ export const BabyProfileRepository = {
     });
     if (uploadError) {
       if (/policy|permission|row-level/i.test(uploadError.message)) {
-        throw new Error("이 정보를 수정할 권한이 없어요.");
+        throw new BabyProfileError("permission_denied");
       }
-      throw new Error("사진을 올리지 못했어요. 다른 사진으로 다시 시도해 주세요.");
+      throw new BabyProfileError("photo_upload_failed");
     }
     const { data, error } = await sb
       .from("babies")
@@ -129,9 +145,9 @@ export const BabyProfileRepository = {
     if (error) {
       await sb.storage.from(BUCKET).remove([storagePath]);
       if (error.code === "42501" || /permission|policy/i.test(error.message)) {
-        throw new Error("이 정보를 수정할 권한이 없어요.");
+        throw new BabyProfileError("permission_denied");
       }
-      throw new Error("프로필을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      throw new BabyProfileError("save_failed");
     }
     const avatarUrl = await this.createBabyAvatarSignedUrl(storagePath);
     return rowToBabyProfile(data, avatarUrl);
@@ -140,7 +156,7 @@ export const BabyProfileRepository = {
   async createBabyAvatarSignedUrl(storagePath: string, expiresInSeconds = SIGNED_URL_TTL_SECONDS): Promise<string> {
     const sb = requireSupabase();
     const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(storagePath, expiresInSeconds);
-    if (error || !data?.signedUrl) throw error ?? new Error("사진을 불러오지 못했어요.");
+    if (error || !data?.signedUrl) throw error ?? new BabyProfileError("photo_load_failed");
     return data.signedUrl;
   },
 };

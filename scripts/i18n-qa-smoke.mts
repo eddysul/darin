@@ -3,6 +3,7 @@ import { DIARY_COVER_TEMPLATE_IDS } from "../src/constants/diaryCoverTemplates";
 import { DIARY_PAGE_TEMPLATE_IDS } from "../src/constants/diaryPageTemplates";
 import { DIARY_MOOD_OPTIONS, DIARY_SKY_OPTIONS } from "../src/constants/diaryCompose";
 import { createT, type Locale, type MessageKey } from "../src/i18n";
+import { coreMessages } from "../src/i18nCoreMessages";
 import { formatDurationMinutes, formatLocalizedDate, formatLocalizedNumber } from "../src/utils/localeFormat";
 
 const locales: Locale[] = ["ko", "en", "ja", "es", "zh-CN"];
@@ -22,6 +23,11 @@ const requiredKeys: MessageKey[] = [
 
 for (const locale of locales) {
   const t = createT(locale);
+  for (const key of Object.keys(coreMessages.en) as MessageKey[]) {
+    const value = t(key);
+    assert.ok(value.trim().length > 0, `${locale}: missing ${key}`);
+    assert.notEqual(value, key, `${locale}: leaked key ${key}`);
+  }
   for (const key of requiredKeys) {
     const value = t(key);
     assert.ok(value.trim().length > 0, `${locale}: missing ${key}`);

@@ -6,10 +6,6 @@ import {
   ALL_LOG_CATEGORY_GROUPS,
   CATEGORY_OPTIONS,
   DEFAULT_CARE_SETUP,
-  FEEDING_OPTIONS,
-  RELATIONSHIP_OPTIONS,
-  formatAuthorByline,
-  relationshipToLabel,
   type CareSetup,
   type ChildGender,
   type DefaultFeedingMethod,
@@ -19,6 +15,9 @@ import {
   type RelationshipToChild,
 } from "../../types/careSetup";
 import type { RelationshipLabel } from "../../types/growthBook";
+import { PROFILE_RELATION_OPTIONS } from "../../types/profileSettings";
+import { useLanguage } from "../../LanguageContext";
+import type { MessageKey } from "../../i18n";
 import type { InviteType } from "../../types/database";
 import { FamilyRepository, type DarinInviteRequestView } from "../../repositories/FamilyRepository";
 import { ProfileRepository } from "../../repositories/ProfileRepository";
@@ -72,10 +71,11 @@ type Step =
 type InvitePreview = { code: string; babyName: string; ownerName: string; inviteType: InviteType };
 
 function relationshipFromLabel(label?: RelationshipLabel): RelationshipToChild {
-  if (label === "엄마") return "mom";
-  if (label === "아빠") return "dad";
-  if (label === "시터") return "sitter";
-  if (label === "가족" || label === "할머니" || label === "할아버지" || label === "이모" || label === "삼촌") return "family";
+  const index = label ? PROFILE_RELATION_OPTIONS.indexOf(label) : -1;
+  if (index === 0) return "mom";
+  if (index === 1) return "dad";
+  if (index === 7) return "sitter";
+  if ([3, 4, 5, 6, 9].includes(index)) return "family";
   return "guardian";
 }
 
@@ -88,6 +88,7 @@ export function OnboardingFlow({
   initialChild,
   onComplete,
 }: Props) {
+  const { t } = useLanguage();
   const [step, setStep] = useState<Step>(
     initialInviteCode ? "invite" : startAtBabySetup ? "born" : skipProfileStep ? "connect" : "about",
   );
@@ -160,19 +161,25 @@ export function OnboardingFlow({
     return undefined;
   }, [step]);
 
-  const feedingLabel =
-    FEEDING_OPTIONS.find((o) => o.value === setup.preferences.defaultFeedingMethod)?.label ??
-    "아직 모름";
-  const relationshipLabel = initialRelation ?? relationshipToLabel(setup.parent.relationshipToChild);
+  const labelFor = (group: string, value: string) => t(`onboardingFlow.${group}.${value}` as MessageKey);
+  const feedingLabel = labelFor("feeding", setup.preferences.defaultFeedingMethod);
+  const relationshipLabel = initialRelation ?? PROFILE_RELATION_OPTIONS[
+    ({ mom: 0, dad: 1, guardian: 2, family: 9, sitter: 7 } as const)[setup.parent.relationshipToChild]
+  ];
+  const localizedRelationship = labelFor("relationship", setup.parent.relationshipToChild);
+  const authorByline = t("onboardingFlow.authorByline", {
+    relationship: localizedRelationship,
+    name: setup.parent.parentName.trim() || t("onboardingFlow.nameFallback"),
+  });
 
   const previewInvite = useCallback(async () => {
     try {
       const row = await FamilyRepository.previewInviteCode(inviteCode);
       if (!row || !row.is_valid) {
-        throw new Error(row?.invalid_reason === "expired" ? "만료된 초대코드예요." : "유효하지 않은 초대코드예요.");
+        throw new Error(t(row?.invalid_reason === "expired" ? "onboardingFlow.error.inviteExpired" : "onboardingFlow.error.inviteInvalid"));
       }
       if (row.invite_type === "darin_friend") {
-        throw new Error("이전 버전 초대코드예요. 새로운 친구 초대코드를 요청해 주세요.");
+        throw new Error(t("onboardingFlow.error.inviteLegacy"));
       }
       setInvitePreview({
         code: inviteCode.trim().toUpperCase(),
@@ -183,9 +190,9 @@ export function OnboardingFlow({
       setInviteError("");
       setStep("invite-confirm");
     } catch (cause) {
-      setInviteError(cause instanceof Error ? cause.message : "초대 정보를 확인하지 못했어요.");
+      setInviteError(cause instanceof Error ? cause.message : t("onboardingFlow.error.invitePreview"));
     }
-  }, [inviteCode]);
+  }, [inviteCode, t]);
 
   useEffect(() => {
     if (!initialInviteCode) return;
@@ -204,11 +211,11 @@ export function OnboardingFlow({
       setMyDarinId(profile?.darin_id?.trim() ?? "");
     } catch (cause) {
       setIncomingRequests([]);
-      setRequestError(cause instanceof Error ? cause.message : "받은 요청을 불러오지 못했어요.");
+      setRequestError(cause instanceof Error ? cause.message : t("onboardingFlow.error.requestsLoad"));
     } finally {
       setRequestsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (step !== "connect" && step !== "requests") return;
@@ -222,14 +229,14 @@ export function OnboardingFlow({
     try {
       const accepted = await FamilyRepository.respondToDarinIdInviteRequest(item.id, true);
       const babyId = accepted?.baby_id ?? item.babyId;
-      if (!babyId) throw new Error("연결된 아기 정보를 찾지 못했어요.");
+      if (!babyId) throw new Error(t("onboardingFlow.error.babyMissing"));
       onComplete({
         mode: "join-request",
         babyId,
         myName: setup.parent.parentName.trim(),
       });
     } catch (cause) {
-      setRequestError(cause instanceof Error ? cause.message : "요청을 수락하지 못했어요.");
+      setRequestError(cause instanceof Error ? cause.message : t("onboardingFlow.error.requestAccept"));
     } finally {
       setRespondingId(null);
     }
@@ -243,7 +250,7 @@ export function OnboardingFlow({
       await FamilyRepository.respondToDarinIdInviteRequest(item.id, false);
       await loadIncomingRequests();
     } catch (cause) {
-      setRequestError(cause instanceof Error ? cause.message : "요청을 거절하지 못했어요.");
+      setRequestError(cause instanceof Error ? cause.message : t("onboardingFlow.error.requestDecline"));
     } finally {
       setRespondingId(null);
     }
@@ -259,11 +266,11 @@ export function OnboardingFlow({
       }
       if (!granted) {
         Alert.alert(
-          "사진 접근 권한",
-          "아기 사진을 선택하려면 사진 라이브러리 권한이 필요해요.",
+          t("onboardingFlow.photo.permissionTitle"),
+          t("onboardingFlow.photo.permissionBody"),
           [
-            { text: "취소", style: "cancel" },
-            { text: "설정 열기", onPress: () => void Linking.openSettings() },
+            { text: t("common.cancel"), style: "cancel" },
+            { text: t("onboardingFlow.photo.openSettings"), onPress: () => void Linking.openSettings() },
           ],
         );
         return;
@@ -279,8 +286,8 @@ export function OnboardingFlow({
       setChild("photoUri", result.assets[0].uri);
     } catch (error) {
       Alert.alert(
-        "사진을 열 수 없어요",
-        error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+        t("onboardingFlow.photo.errorTitle"),
+        error instanceof Error ? error.message : t("onboardingFlow.error.retry"),
       );
     }
   };
@@ -289,45 +296,45 @@ export function OnboardingFlow({
     return (
       <OnboardingShell
         progressStep={progressStep}
-        title="나에 대해"
-        subtitle="기록에 표시될 기본 정보만 알려주세요."
-        primaryLabel="다음"
+        title={t("onboardingFlow.about.title")}
+        subtitle={t("onboardingFlow.about.subtitle")}
+        primaryLabel={t("onboardingFlow.next")}
         primaryDisabled={!setup.parent.parentName.trim()}
         onPrimary={() => setStep("connect")}
       >
-        <OnboardingField label="이름" required>
+        <OnboardingField label={t("onboardingFlow.name")} required>
           <TextInput
             style={onboardingInputStyle}
             value={setup.parent.parentName}
             onChangeText={(v) => setParent("parentName", v)}
-            placeholder="예: 민지"
+            placeholder={t("onboardingFlow.namePlaceholder")}
             placeholderTextColor={colors.faint}
             autoFocus
           />
         </OnboardingField>
-        <OnboardingField label="아이와의 관계">
+        <OnboardingField label={t("onboardingFlow.relationshipLabel")}>
           <OnboardingOptionRow
-            options={RELATIONSHIP_OPTIONS}
+            options={(["mom", "dad", "guardian", "family", "sitter"] as RelationshipToChild[]).map((value) => ({ value, label: labelFor("relationship", value) }))}
             value={setup.parent.relationshipToChild}
             onChange={(v) => setParent("relationshipToChild", v)}
           />
         </OnboardingField>
-        <OnboardingField label="임신/산후 상태">
+        <OnboardingField label={t("onboardingFlow.postpartumLabel")}>
           <OnboardingOptionRow
             options={[
-              { value: "pregnant", label: "임신 중" },
-              { value: "expecting", label: "출산 예정" },
-              { value: "postpartum", label: "산후" },
-              { value: "not_applicable", label: "해당 없음" },
+              { value: "pregnant", label: labelFor("postpartum", "pregnant") },
+              { value: "expecting", label: labelFor("postpartum", "expecting") },
+              { value: "postpartum", label: labelFor("postpartum", "postpartum") },
+              { value: "not_applicable", label: labelFor("postpartum", "not_applicable") },
             ]}
             value={setup.parent.postpartumStatus}
             onChange={(v) => setParent("postpartumStatus", v as PostpartumStatus)}
           />
         </OnboardingField>
-        <OnboardingField label="선호 언어">
+        <OnboardingField label={t("onboardingFlow.languageLabel")}>
           <OnboardingOptionRow
             options={[
-              { value: "ko", label: "한국어" },
+              { value: "ko", label: t("onboardingFlow.language.ko") },
               { value: "en", label: "English" },
             ]}
             value={setup.parent.preferredLanguage}
@@ -335,8 +342,7 @@ export function OnboardingFlow({
           />
         </OnboardingField>
         <Text style={styles.hint}>
-          성장책에는 {formatAuthorByline(setup.parent.parentName || "이름", setup.parent.relationshipToChild)}{" "}
-          처럼 표시돼요.
+          {t("onboardingFlow.authorPreview", { byline: authorByline })}
         </Text>
       </OnboardingShell>
     );
@@ -345,20 +351,20 @@ export function OnboardingFlow({
   if (step === "connect") {
     return (
       <OnboardingShell
-        title="아기 정보를 어떻게 연결할까요?"
-        subtitle="새로 만들거나, 가족이 ID로 보낸 요청을 수락해 참여할 수 있어요."
+        title={t("onboardingFlow.connect.title")}
+        subtitle={t("onboardingFlow.connect.subtitle")}
       >
         <ChoiceCard
-          title="새 아기 등록하기"
-          body="내가 아기 정보를 새로 만들어요."
+          title={t("onboardingFlow.connect.createTitle")}
+          body={t("onboardingFlow.connect.createBody")}
           onPress={() => setStep("born")}
         />
         <ChoiceCard
-          title="받은 요청으로 참여하기"
+          title={t("onboardingFlow.connect.requestTitle")}
           body={
             incomingRequests.length
-              ? `대기 중인 요청 ${incomingRequests.length}건이 있어요.`
-              : "가족이 Darin ID로 보낸 요청을 수락해요."
+              ? t("onboardingFlow.connect.pendingCount", { count: incomingRequests.length })
+              : t("onboardingFlow.connect.requestBody")
           }
           onPress={() => {
             setRequestError("");
@@ -372,9 +378,9 @@ export function OnboardingFlow({
             setStep("invite");
           }}
           accessibilityRole="button"
-          accessibilityLabel="초대코드가 있으면 입력"
+          accessibilityLabel={t("onboardingFlow.invite.enterLink")}
         >
-          <Text style={styles.linkButtonText}>초대코드가 있으면 입력</Text>
+          <Text style={styles.linkButtonText}>{t("onboardingFlow.invite.enterLink")}</Text>
         </Pressable>
       </OnboardingShell>
     );
@@ -383,43 +389,43 @@ export function OnboardingFlow({
   if (step === "requests") {
     return (
       <OnboardingShell
-        title="받은 요청으로 참여"
-        subtitle="가족이 Darin ID로 보낸 요청을 수락하면 그 아기 기록에 연결돼요."
-        secondaryLabel="뒤로"
+        title={t("onboardingFlow.requests.title")}
+        subtitle={t("onboardingFlow.requests.subtitle")}
+        secondaryLabel={t("onboardingFlow.back")}
         onSecondary={() => setStep("connect")}
       >
         {requestsLoading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator color={colors.amberText} />
-            <Text style={styles.hint}>받은 요청을 확인하는 중이에요.</Text>
+            <Text style={styles.hint}>{t("onboardingFlow.requests.loading")}</Text>
           </View>
         ) : incomingRequests.length ? (
           incomingRequests.map((item) => (
             <View key={item.id} style={styles.requestCard}>
-              <Text style={styles.requestTitle}>{item.title}</Text>
-              <Text style={styles.requestBody}>{item.body}</Text>
-              <Text style={styles.hint}>{item.relation} · {item.roleLabel}</Text>
+              <Text style={styles.requestTitle}>{t(`onboardingFlow.requests.${item.requestType}Title` as MessageKey)}</Text>
+              <Text style={styles.requestBody}>{t("onboardingFlow.requests.received")}</Text>
+              <Text style={styles.hint}>{t("onboardingFlow.requests.meta", { relation: item.relation, role: item.roleLabel })}</Text>
               <View style={styles.requestActions}>
                 <Pressable
                   style={styles.declineButton}
                   disabled={respondingId === item.id}
                   onPress={() => void declineIncomingRequest(item)}
                   accessibilityRole="button"
-                  accessibilityLabel="거절"
+                  accessibilityLabel={t("onboardingFlow.requests.decline")}
                 >
-                  <Text style={styles.declineText}>거절</Text>
+                  <Text style={styles.declineText}>{t("onboardingFlow.requests.decline")}</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.acceptButton, respondingId === item.id && styles.disabled]}
                   disabled={Boolean(respondingId)}
                   onPress={() => void acceptIncomingRequest(item)}
                   accessibilityRole="button"
-                  accessibilityLabel="수락하고 참여"
+                  accessibilityLabel={t("onboardingFlow.requests.accept")}
                 >
                   {respondingId === item.id ? (
                     <ActivityIndicator color={colors.amberDark} />
                   ) : (
-                    <Text style={styles.acceptText}>수락하고 참여</Text>
+                    <Text style={styles.acceptText}>{t("onboardingFlow.requests.accept")}</Text>
                   )}
                 </Pressable>
               </View>
@@ -427,11 +433,11 @@ export function OnboardingFlow({
           ))
         ) : (
           <View style={styles.summaryCard}>
-            <Text style={styles.choiceTitle}>아직 받은 요청이 없어요</Text>
+            <Text style={styles.choiceTitle}>{t("onboardingFlow.requests.emptyTitle")}</Text>
             <Text style={styles.choiceBody}>
               {myDarinId
-                ? `내 Darin ID는 ${myDarinId}예요. 가족에게 이 ID를 알려 주면 요청이 여기로 와요.`
-                : "가족에게 내 Darin ID를 알려 주면, 요청이 여기로 와요."}
+                ? t("onboardingFlow.requests.emptyWithId", { darinId: myDarinId })
+                : t("onboardingFlow.requests.emptyBody")}
             </Text>
             <Pressable
               style={styles.linkButton}
@@ -440,9 +446,9 @@ export function OnboardingFlow({
                 setStep("invite");
               }}
               accessibilityRole="button"
-              accessibilityLabel="초대코드가 있으면 입력"
+              accessibilityLabel={t("onboardingFlow.invite.enterLink")}
             >
-              <Text style={styles.linkButtonText}>초대코드가 있으면 입력</Text>
+              <Text style={styles.linkButtonText}>{t("onboardingFlow.invite.enterLink")}</Text>
             </Pressable>
           </View>
         )}
@@ -454,20 +460,20 @@ export function OnboardingFlow({
   if (step === "invite") {
     return (
       <OnboardingShell
-        title="초대코드 입력"
-        subtitle="카카오톡이나 문자로 공유받은 유효한 초대코드를 입력해 주세요."
-        primaryLabel="코드 확인"
+        title={t("onboardingFlow.invite.title")}
+        subtitle={t("onboardingFlow.invite.subtitle")}
+        primaryLabel={t("onboardingFlow.invite.check")}
         primaryDisabled={!inviteCode.trim()}
         onPrimary={() => void previewInvite()}
-        secondaryLabel="뒤로"
+        secondaryLabel={t("onboardingFlow.back")}
         onSecondary={() => setStep("connect")}
       >
-        <OnboardingField label="초대코드" required>
+        <OnboardingField label={t("onboardingFlow.invite.code")} required>
           <TextInput
             style={[onboardingInputStyle, styles.codeInput]}
             value={inviteCode}
             onChangeText={(v) => setInviteCode(v.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 16))}
-            placeholder="예: DARIN-8F3K2Q"
+            placeholder={t("onboardingFlow.invite.placeholder")}
             placeholderTextColor={colors.faint}
             autoCapitalize="characters"
             autoCorrect={false}
@@ -475,7 +481,7 @@ export function OnboardingFlow({
           />
         </OnboardingField>
         {inviteError ? <Text style={styles.error}>{inviteError}</Text> : null}
-        <Text style={styles.hint}>Darin ID 요청과 초대코드·링크는 상황에 맞게 선택하는 서로 다른 초대 방식이에요.</Text>
+        <Text style={styles.hint}>{t("onboardingFlow.invite.hint")}</Text>
       </OnboardingShell>
     );
   }
@@ -483,13 +489,13 @@ export function OnboardingFlow({
   if (step === "invite-confirm" && invitePreview) {
     return (
       <OnboardingShell
-        title={invitePreview.inviteType === "family" ? "가족 초대 확인" : "친구 초대 확인"}
+        title={t(invitePreview.inviteType === "family" ? "onboardingFlow.invite.familyConfirm" : "onboardingFlow.invite.friendConfirm")}
         subtitle={
           invitePreview.inviteType === "family"
-            ? "이 아기 기록에 가족으로 참여할까요?"
-            : "친구 공개 순간을 함께 볼 수 있도록 연결할까요?"
+            ? t("onboardingFlow.invite.familyConfirmBody")
+            : t("onboardingFlow.invite.friendConfirmBody")
         }
-        primaryLabel="초대 수락"
+        primaryLabel={t("onboardingFlow.invite.accept")}
         onPrimary={() =>
           onComplete({
             mode: "join",
@@ -503,15 +509,15 @@ export function OnboardingFlow({
             inviteType: invitePreview.inviteType,
           })
         }
-        secondaryLabel="코드 다시 입력"
+        secondaryLabel={t("onboardingFlow.invite.reenter")}
         onSecondary={() => setStep("invite")}
       >
         <View style={styles.summaryCard}>
-          {invitePreview.babyName ? <SummaryRow label="아기" value={invitePreview.babyName} /> : null}
-          <SummaryRow label="초대한 사람" value={invitePreview.ownerName} />
-          <SummaryRow label="초대코드" value={invitePreview.code} />
-          {invitePreview.inviteType === "family" ? <SummaryRow label="나의 관계" value={relationshipLabel} /> : null}
-          <SummaryRow label="내 이름" value={setup.parent.parentName.trim()} />
+          {invitePreview.babyName ? <SummaryRow label={t("onboardingFlow.summary.baby")} value={invitePreview.babyName} /> : null}
+          <SummaryRow label={t("onboardingFlow.summary.inviter")} value={invitePreview.ownerName} />
+          <SummaryRow label={t("onboardingFlow.invite.code")} value={invitePreview.code} />
+          {invitePreview.inviteType === "family" ? <SummaryRow label={t("onboardingFlow.summary.relationship")} value={localizedRelationship} /> : null}
+          <SummaryRow label={t("onboardingFlow.summary.myName")} value={setup.parent.parentName.trim()} />
         </View>
       </OnboardingShell>
     );
@@ -521,14 +527,14 @@ export function OnboardingFlow({
     return (
       <OnboardingShell
         progressStep={progressStep}
-        title="아기는 지금 어떤 상태인가요?"
-        subtitle="상태에 맞게 입력 항목이 달라져요."
-        secondaryLabel="뒤로"
+        title={t("onboardingFlow.stage.title")}
+        subtitle={t("onboardingFlow.stage.subtitle")}
+        secondaryLabel={t("onboardingFlow.back")}
         onSecondary={() => setStep("connect")}
       >
         <ChoiceCard
-          title="이미 태어났어요"
-          body="이름과 생년월일로 바로 시작해요."
+          title={t("onboardingFlow.stage.bornTitle")}
+          body={t("onboardingFlow.stage.bornBody")}
           onPress={() => {
             setSetup((s) => ({
               ...s,
@@ -539,8 +545,8 @@ export function OnboardingFlow({
           }}
         />
         <ChoiceCard
-          title="아직 뱃속에 있어요"
-          body="태명과 예정일로 준비해요."
+          title={t("onboardingFlow.stage.unbornTitle")}
+          body={t("onboardingFlow.stage.unbornBody")}
           onPress={() => {
             setSetup((s) => ({
               ...s,
@@ -563,48 +569,50 @@ export function OnboardingFlow({
     return (
       <OnboardingShell
         progressStep={progressStep}
-        title="아기 정보"
-        subtitle={born ? "필수만 채우고 나중에 더 적을 수 있어요." : "태명과 예정일만 있으면 충분해요."}
-        primaryLabel="다음"
+        title={t("onboardingFlow.baby.title")}
+        subtitle={t(born ? "onboardingFlow.baby.bornSubtitle" : "onboardingFlow.baby.unbornSubtitle")}
+        primaryLabel={t("onboardingFlow.next")}
         primaryDisabled={!canNext}
         onPrimary={() => setStep(born ? "care" : "complete")}
-        secondaryLabel="뒤로"
+        secondaryLabel={t("onboardingFlow.back")}
         onSecondary={() => setStep("born")}
       >
-        <OnboardingField label={born ? "아기 이름/별명" : "태명/별명"} required>
+        <OnboardingField label={t(born ? "onboardingFlow.baby.name" : "onboardingFlow.baby.prenatalName")} required>
           <TextInput
             style={onboardingInputStyle}
             value={setup.child.childName}
             onChangeText={(v) => setChild("childName", v)}
-            placeholder={born ? "예: 콩이" : "예: 콩이"}
+            placeholder={t("onboardingFlow.baby.namePlaceholder")}
             placeholderTextColor={colors.faint}
           />
         </OnboardingField>
 
         {born ? (
-          <OnboardingField label="생년월일" required>
+          <OnboardingField label={t("onboardingFlow.baby.birthDate")} required>
             <DatePickerField
               value={setup.child.birthDate}
-              label="생년월일 선택"
+              label={t("onboardingFlow.baby.selectBirthDate")}
+              placeholder={t("onboardingFlow.baby.selectDate")}
               onPress={() => setDatePickerTarget("birthDate")}
             />
           </OnboardingField>
         ) : (
-          <OnboardingField label="예정일" required>
+          <OnboardingField label={t("onboardingFlow.baby.dueDate")} required>
             <DatePickerField
               value={setup.child.dueDate}
-              label="예정일 선택"
+              label={t("onboardingFlow.baby.selectDueDate")}
+              placeholder={t("onboardingFlow.baby.selectDate")}
               onPress={() => setDatePickerTarget("dueDate")}
             />
           </OnboardingField>
         )}
 
-        <OnboardingField label="성별" optional>
+        <OnboardingField label={t("onboardingFlow.baby.gender")} optional>
           <OnboardingOptionRow
             options={[
-              { value: "girl", label: "여아" },
-              { value: "boy", label: "남아" },
-              { value: "unknown", label: "모름/나중에" },
+              { value: "girl", label: labelFor("gender", "girl") },
+              { value: "boy", label: labelFor("gender", "boy") },
+              { value: "unknown", label: labelFor("gender", "unknown") },
             ]}
             value={(setup.child.gender ?? "unknown") as ChildGender}
             onChange={(v) => setChild("gender", v)}
@@ -613,38 +621,39 @@ export function OnboardingFlow({
 
         {born ? (
           <>
-            <OnboardingField label="출생 몸무게" optional>
+            <OnboardingField label={t("onboardingFlow.baby.birthWeight")} optional>
               <TextInput
                 style={onboardingInputStyle}
                 value={setup.child.birthWeight ?? ""}
                 onChangeText={(v) => setChild("birthWeight", v || undefined)}
-                placeholder="예: 3.2kg"
+                placeholder={t("onboardingFlow.baby.birthWeightPlaceholder")}
                 placeholderTextColor={colors.faint}
               />
             </OnboardingField>
-            <OnboardingField label="예정일" optional>
+            <OnboardingField label={t("onboardingFlow.baby.dueDate")} optional>
               <DatePickerField
                 value={setup.child.dueDate}
-                label="예정일 선택"
+                label={t("onboardingFlow.baby.selectDueDate")}
+                placeholder={t("onboardingFlow.baby.selectDate")}
                 onPress={() => setDatePickerTarget("dueDate")}
               />
             </OnboardingField>
           </>
         ) : null}
 
-        <OnboardingField label="사진" optional>
+        <OnboardingField label={t("onboardingFlow.photo.label")} optional>
           <View style={styles.photoRow}>
             <Pressable
               style={styles.photoHit}
               onPress={() => void pickPhoto()}
               accessibilityRole="button"
-              accessibilityLabel="아기 사진 선택"
+              accessibilityLabel={t("onboardingFlow.photo.selectBaby")}
             >
               {setup.child.photoUri ? (
                 <Image source={{ uri: setup.child.photoUri }} style={styles.photo} contentFit="cover" />
               ) : (
                 <View style={[styles.photo, styles.photoEmpty]}>
-                  <Text style={styles.photoEmptyText}>사진</Text>
+                  <Text style={styles.photoEmptyText}>{t("onboardingFlow.photo.label")}</Text>
                 </View>
               )}
             </Pressable>
@@ -652,15 +661,15 @@ export function OnboardingFlow({
               style={styles.photoBtn}
               onPress={() => void pickPhoto()}
               accessibilityRole="button"
-              accessibilityLabel={setup.child.photoUri ? "사진 바꾸기" : "사진 선택"}
+              accessibilityLabel={t(setup.child.photoUri ? "onboardingFlow.photo.change" : "onboardingFlow.photo.select")}
             >
               <Text style={styles.photoBtnText}>
-                {setup.child.photoUri ? "사진 바꾸기" : "사진 선택"}
+                {t(setup.child.photoUri ? "onboardingFlow.photo.change" : "onboardingFlow.photo.select")}
               </Text>
             </Pressable>
             {setup.child.photoUri ? (
               <Pressable onPress={() => setChild("photoUri", undefined)} hitSlop={8}>
-                <Text style={styles.skip}>나중에</Text>
+                <Text style={styles.skip}>{t("onboardingFlow.photo.later")}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -674,7 +683,7 @@ export function OnboardingFlow({
           }
           minDateKey={formatDateKey(new Date(new Date().getFullYear() - 18, 0, 1), "midnight")}
           maxDateKey={datePickerTarget === "birthDate" ? formatDateKey() : offsetDateKey(formatDateKey(), 365)}
-          title={datePickerTarget === "birthDate" ? "생년월일 선택" : "예정일 선택"}
+          title={t(datePickerTarget === "birthDate" ? "onboardingFlow.baby.selectBirthDate" : "onboardingFlow.baby.selectDueDate")}
           onSelect={(dateKey) => {
             if (datePickerTarget === "birthDate") setChild("birthDate", dateKey);
             if (datePickerTarget === "dueDate") setChild("dueDate", dateKey);
@@ -689,32 +698,32 @@ export function OnboardingFlow({
     return (
       <OnboardingShell
         progressStep={progressStep}
-        title="돌봄 설정"
-        subtitle="자주 쓰는 기록만 켜 두면 더 편해요."
-        primaryLabel="다음"
+        title={t("onboardingFlow.care.title")}
+        subtitle={t("onboardingFlow.care.subtitle")}
+        primaryLabel={t("onboardingFlow.next")}
         onPrimary={() => setStep("complete")}
-        secondaryLabel="뒤로"
+        secondaryLabel={t("onboardingFlow.back")}
         onSecondary={() => setStep("baby")}
       >
-        <OnboardingField label="기본 수유 방식">
+        <OnboardingField label={t("onboardingFlow.care.feedingLabel")}>
           <OnboardingOptionRow
-            options={FEEDING_OPTIONS}
+            options={(["breastfeeding", "formula", "mixed", "pumped_milk", "not_sure"] as DefaultFeedingMethod[]).map((value) => ({ value, label: labelFor("feeding", value) }))}
             value={setup.preferences.defaultFeedingMethod}
             onChange={(v) => setPref("defaultFeedingMethod", v as DefaultFeedingMethod)}
           />
         </OnboardingField>
 
-        <OnboardingField label="표시할 기록 카테고리">
+        <OnboardingField label={t("onboardingFlow.care.categoriesLabel")}>
           <View style={styles.chipWrap}>
-            {CATEGORY_OPTIONS.map((opt) => {
-              const active = setup.preferences.enabledLogCategories.includes(opt.value);
+            {ALL_LOG_CATEGORY_GROUPS.map((value) => {
+              const active = setup.preferences.enabledLogCategories.includes(value);
               return (
                 <Pressable
-                  key={opt.value}
+                  key={value}
                   style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => toggleCategory(opt.value)}
+                  onPress={() => toggleCategory(value)}
                 >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{labelFor("category", value)}</Text>
                 </Pressable>
               );
             })}
@@ -723,8 +732,8 @@ export function OnboardingFlow({
 
         <View style={styles.switchRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.switchLabel}>가족 공유</Text>
-            <Text style={styles.switchHint}>가족이 기록을 보고 함께 추가할 수 있어요.</Text>
+            <Text style={styles.switchLabel}>{t("onboardingFlow.care.familySharing")}</Text>
+            <Text style={styles.switchHint}>{t("onboardingFlow.care.familySharingHint")}</Text>
           </View>
           <Switch
             value={setup.preferences.familySharingEnabled}
@@ -737,30 +746,28 @@ export function OnboardingFlow({
   }
 
   // complete
-  const dateLine = setup.child.childStatus === "unborn"
-    ? `예정일: ${(setup.child.dueDate ?? "").replace(/-/g, ".")}`
-    : `생년월일: ${(setup.child.birthDate ?? "").replace(/-/g, ".")}`;
+  const dateValue = (setup.child.childStatus === "unborn" ? setup.child.dueDate : setup.child.birthDate)?.replace(/-/g, ".") ?? "-";
 
   return (
     <OnboardingShell
-      title={`${setup.child.childName.trim() || "아기"}의 기록을 시작할까요?`}
-      subtitle="확인 후 바로 메인으로 이동해요."
-      primaryLabel={submittingSetup ? "저장 중…" : "시작하기"}
+      title={t("onboardingFlow.complete.title", { babyName: setup.child.childName.trim() || t("onboardingFlow.babyFallback") })}
+      subtitle={t("onboardingFlow.complete.subtitle")}
+      primaryLabel={t(submittingSetup ? "onboardingFlow.complete.saving" : "onboardingFlow.complete.start")}
       primaryDisabled={submittingSetup}
       onPrimary={() => void completeSetup()}
-      secondaryLabel="뒤로"
+      secondaryLabel={t("onboardingFlow.back")}
       onSecondary={() => setStep(setup.child.childStatus === "unborn" ? "baby" : "care")}
     >
       <View style={styles.summaryCard}>
-        <SummaryRow label="아기 이름" value={setup.child.childName.trim()} />
-        <SummaryRow label={setup.child.childStatus === "unborn" ? "예정일" : "생년월일"} value={dateLine.split(": ")[1] ?? "-"} />
-        <SummaryRow label="나의 관계" value={relationshipLabel} />
+        <SummaryRow label={t("onboardingFlow.summary.babyName")} value={setup.child.childName.trim()} />
+        <SummaryRow label={t(setup.child.childStatus === "unborn" ? "onboardingFlow.baby.dueDate" : "onboardingFlow.baby.birthDate")} value={dateValue} />
+        <SummaryRow label={t("onboardingFlow.summary.relationship")} value={localizedRelationship} />
         {setup.child.childStatus === "unborn" ? null : (
-          <SummaryRow label="기본 수유" value={feedingLabel} />
+          <SummaryRow label={t("onboardingFlow.summary.feeding")} value={feedingLabel} />
         )}
         <SummaryRow
-          label="작성자 표시"
-          value={formatAuthorByline(setup.parent.parentName, setup.parent.relationshipToChild)}
+          label={t("onboardingFlow.summary.author")}
+          value={authorByline}
         />
       </View>
     </OnboardingShell>
@@ -770,10 +777,12 @@ export function OnboardingFlow({
 function DatePickerField({
   value,
   label,
+  placeholder,
   onPress,
 }: {
   value?: string;
   label: string;
+  placeholder: string;
   onPress: () => void;
 }) {
   return (
@@ -784,7 +793,7 @@ function DatePickerField({
       accessibilityLabel={label}
     >
       <Text style={[styles.dateFieldText, !value && styles.datePlaceholder]}>
-        {value || "날짜를 선택해 주세요"}
+        {value || placeholder}
       </Text>
       <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
     </Pressable>

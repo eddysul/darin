@@ -23,13 +23,14 @@ import {
   createDarinIdentity,
   DarinIdentityRepository,
   generateDarinTag,
-  validateDarinNickname,
+  validateDarinNicknameCode,
 } from "../../repositories/DarinIdentityRepository";
 import { AuthRepository } from "../../repositories/AuthRepository";
 import { useApp } from "../../context/AppContext";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { useLanguage } from "../../LanguageContext";
+import type { MessageKey } from "../../i18n";
 import type { RelationshipToChild } from "../../types/careSetup";
 import { colors, radius } from "../../theme";
 import { canSubmitUserProfile } from "../../utils/profileCompletion";
@@ -57,10 +58,11 @@ export type ProfileSetupInitial = {
 };
 
 function relationshipToCareValue(relation: RelationshipLabel): RelationshipToChild {
-  if (relation === "엄마") return "mom";
-  if (relation === "아빠") return "dad";
-  if (relation === "시터") return "sitter";
-  if (relation === "가족" || relation === "할머니" || relation === "할아버지" || relation === "이모" || relation === "삼촌") return "family";
+  const index = PROFILE_RELATION_OPTIONS.indexOf(relation);
+  if (index === 0) return "mom";
+  if (index === 1) return "dad";
+  if (index === 8) return "sitter";
+  if ([2, 3, 4, 5, 7].includes(index)) return "family";
   return "guardian";
 }
 
@@ -75,7 +77,7 @@ export function ProfileSetupScreen({
   const { careSetup, setCareSetup } = useApp();
   const { applyOwnerFromSetup } = useBabyLog();
   const { setSettings } = useAppSettings();
-  const { setLocale } = useLanguage();
+  const { setLocale, t } = useLanguage();
   const [nickname, setNickname] = useState(initial.nickname ?? initial.displayName ?? "");
   const [realNameFromProvider] = useState(initial.realNameFromProvider ?? initial.realName ?? "");
   const [darinTag, setDarinTag] = useState(initial.darinTag ?? generateDarinTag());
@@ -93,7 +95,8 @@ export function ProfileSetupScreen({
   const [clearAvatar, setClearAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const nicknameError = validateDarinNickname(nickname);
+  const nicknameErrorCode = validateDarinNicknameCode(nickname);
+  const nicknameError = nicknameErrorCode ? t(`profileSetup.nicknameError.${nicknameErrorCode}` as MessageKey) : null;
 
   const canContinue = canSubmitUserProfile({
     displayName: nickname,
@@ -106,13 +109,21 @@ export function ProfileSetupScreen({
 
   const missingFields = useMemo(() => {
     const missing: string[] = [];
-    if (!nickname.trim() || nicknameError) missing.push("닉네임");
-    if (!relation) missing.push("아기와의 관계");
-    if (!residenceCountry) missing.push("거주 국가");
-    if (!preferredLanguage) missing.push("앱 언어");
-    if (!guardianBirthDate.trim()) missing.push("보호자 생년월일");
+    if (!nickname.trim() || nicknameError) missing.push(t("profileSetup.field.nickname"));
+    if (!relation) missing.push(t("profileSetup.field.relationship"));
+    if (!residenceCountry) missing.push(t("profileSetup.field.country"));
+    if (!preferredLanguage) missing.push(t("profileSetup.field.language"));
+    if (!guardianBirthDate.trim()) missing.push(t("profileSetup.field.birthDate"));
     return missing;
-  }, [nickname, nicknameError, relation, residenceCountry, preferredLanguage, guardianBirthDate]);
+  }, [nickname, nicknameError, relation, residenceCountry, preferredLanguage, guardianBirthDate, t]);
+
+  const relationLabel = (value: RelationshipLabel) => {
+    const suffixes = ["mom", "dad", "grandmother", "grandfather", "aunt", "uncle", "guardian", "family", "sitter", "friend", "other"] as const;
+    const suffix = suffixes[PROFILE_RELATION_OPTIONS.indexOf(value)] ?? "other";
+    return t(`profileSetup.relation.${suffix}` as MessageKey);
+  };
+  const countryLabel = (value: ResidenceCountry) => t(`profileSetup.country.${value.toLowerCase()}` as MessageKey);
+  const languageLabel = (value: AppLanguagePreference) => t(`profileSetup.language.${value}` as MessageKey);
 
   const pickAvatar = () => {
     presentAvatarPicker({
@@ -191,7 +202,7 @@ export function ProfileSetupScreen({
       setError(
         cause instanceof Error
           ? cause.message
-          : "프로필을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.",
+          : t("profileSetup.saveError"),
       );
     } finally {
       setSaving(false);
@@ -213,8 +224,8 @@ export function ProfileSetupScreen({
         automaticallyAdjustKeyboardInsets
       >
         <View style={styles.heading}>
-          <Text style={styles.title}>내 프로필을 설정해 주세요</Text>
-          <Text style={styles.subtitle}>가져온 이름을 확인하고 Darin에서 사용할 닉네임을 정해 주세요.</Text>
+          <Text style={styles.title}>{t("profileSetup.title")}</Text>
+          <Text style={styles.subtitle}>{t("profileSetup.subtitle")}</Text>
         </View>
 
         <ProfileAvatar
@@ -222,17 +233,17 @@ export function ProfileSetupScreen({
           size={104}
           editable
           onPress={pickAvatar}
-          label={avatarUrl ? "내 사진 변경" : "내 사진 추가"}
+          label={avatarUrl ? t("profileSetup.photoChange") : t("profileSetup.photoAdd")}
         />
 
         <View style={styles.card}>
-          <Text style={styles.label}>닉네임 *</Text>
-          <Text style={styles.help}>Darin에서 보이는 이름이에요. 2~12자, #과 /는 사용할 수 없어요.</Text>
+          <Text style={styles.label}>{t("profileSetup.nickname")} *</Text>
+          <Text style={styles.help}>{t("profileSetup.nicknameHelp")}</Text>
           <TextInput
             style={styles.input}
             value={nickname}
             onChangeText={setNickname}
-            placeholder="예: 콩이맘, 준이아빠"
+            placeholder={t("profileSetup.nicknamePlaceholder")}
             placeholderTextColor={colors.faint}
             maxLength={12}
             autoFocus={!nickname.trim()}
@@ -242,18 +253,18 @@ export function ProfileSetupScreen({
             <Text style={styles.fieldError}>{nicknameError}</Text>
           ) : null}
 
-          <Text style={styles.label}>가져온 이름</Text>
-          <Text style={styles.help}>Google, Apple 또는 카카오에서 가져온 이름이에요.</Text>
-          <View style={styles.readonlyField}><Text style={[styles.readonlyText, !realNameFromProvider && styles.placeholder]}>{realNameFromProvider || "가져온 이름이 없어요"}</Text></View>
+          <Text style={styles.label}>{t("profileSetup.importedName")}</Text>
+          <Text style={styles.help}>{t("profileSetup.importedNameHelp")}</Text>
+          <View style={styles.readonlyField}><Text style={[styles.readonlyText, !realNameFromProvider && styles.placeholder]}>{realNameFromProvider || t("profileSetup.noImportedName")}</Text></View>
 
           <Text style={styles.label}>Darin ID</Text>
-          <Text style={styles.help}>가족·공유 멤버 검색과 요청에 사용할 고유 ID예요.</Text>
+          <Text style={styles.help}>{t("profileSetup.darinIdHelp")}</Text>
           <View style={styles.darinIdRow}>
-            <View style={styles.darinIdField}><Text style={styles.darinIdText}>{nickname.trim() ? `${nickname.trim()}#${darinTag}` : "닉네임#코드"}</Text></View>
-            <Pressable style={styles.regenerateButton} onPress={() => setDarinTag(generateDarinTag())} accessibilityRole="button" accessibilityLabel="Darin ID 새 코드 만들기"><Text style={styles.regenerateText}>새 코드</Text></Pressable>
+            <View style={styles.darinIdField}><Text style={styles.darinIdText}>{nickname.trim() ? `${nickname.trim()}#${darinTag}` : t("profileSetup.idPlaceholder")}</Text></View>
+            <Pressable style={styles.regenerateButton} onPress={() => setDarinTag(generateDarinTag())} accessibilityRole="button" accessibilityLabel={t("profileSetup.newCodeA11y")}><Text style={styles.regenerateText}>{t("profileSetup.newCode")}</Text></Pressable>
           </View>
 
-          <Text style={styles.label}>아기와의 관계 *</Text>
+          <Text style={styles.label}>{t("profileSetup.relationship")} *</Text>
           <View style={styles.chips}>
             {PROFILE_RELATION_OPTIONS.map((option) => (
               <Pressable
@@ -262,14 +273,14 @@ export function ProfileSetupScreen({
                 onPress={() => setRelation(option)}
               >
                 <Text style={[styles.chipText, relation === option && styles.chipTextActive]}>
-                  {option}
+                  {relationLabel(option)}
                 </Text>
               </Pressable>
             ))}
           </View>
 
-          <Text style={styles.label}>거주 국가 *</Text>
-          <Text style={styles.help}>단위와 기본 설정을 맞추는 데 사용돼요.</Text>
+          <Text style={styles.label}>{t("profileSetup.country")} *</Text>
+          <Text style={styles.help}>{t("profileSetup.countryHelp")}</Text>
           <View style={styles.chips}>
             {RESIDENCE_COUNTRY_OPTIONS.map((option) => (
               <Pressable
@@ -278,14 +289,14 @@ export function ProfileSetupScreen({
                 onPress={() => setResidenceCountry(option.value)}
               >
                 <Text style={[styles.chipText, residenceCountry === option.value && styles.chipTextActive]}>
-                  {option.label}
+                  {countryLabel(option.value)}
                 </Text>
               </Pressable>
             ))}
           </View>
 
-          <Text style={styles.label}>앱 언어 *</Text>
-          <Text style={styles.help}>앱에서 사용할 언어를 선택해 주세요.</Text>
+          <Text style={styles.label}>{t("profileSetup.language")} *</Text>
+          <Text style={styles.help}>{t("profileSetup.languageHelp")}</Text>
           <View style={styles.chips}>
             {APP_LANGUAGE_OPTIONS.map((option) => (
               <Pressable
@@ -296,19 +307,19 @@ export function ProfileSetupScreen({
                 accessibilityState={{ disabled: option.disabled, selected: preferredLanguage === option.value }}
               >
                 <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>
-                  {option.label}
+                  {languageLabel(option.value)}
                 </Text>
               </Pressable>
             ))}
           </View>
 
-          <Text style={styles.label}>보호자 생년월일 *</Text>
-          <Text style={styles.help}>맞춤 안내를 위해 사용해요.</Text>
+          <Text style={styles.label}>{t("profileSetup.birthDate")} *</Text>
+          <Text style={styles.help}>{t("profileSetup.birthDateHelp")}</Text>
           <Pressable
             style={[styles.input, styles.dateInput]}
             onPress={() => setBirthDatePickerOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel="보호자 생년월일 선택"
+            accessibilityLabel={t("profileSetup.birthDateSelect")}
           >
             <Text style={[styles.dateInputText, !guardianBirthDate && styles.datePlaceholder]}>
               {guardianBirthDate || "YYYY-MM-DD"}
@@ -321,7 +332,7 @@ export function ProfileSetupScreen({
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {missingFields.length > 0 && !saving ? (
             <Text style={styles.missingHint}>
-              {`${missingFields.join(", ")}을(를) 입력하면 다음으로 넘어갈 수 있어요.`}
+              {t("profileSetup.missing", { fields: missingFields.join(", ") })}
             </Text>
           ) : null}
           <Pressable
@@ -331,10 +342,10 @@ export function ProfileSetupScreen({
             accessibilityRole="button"
             accessibilityState={{ disabled: !canContinue }}
             accessibilityHint={
-              missingFields.length > 0 ? `남은 필수 항목: ${missingFields.join(", ")}` : undefined
+              missingFields.length > 0 ? t("profileSetup.missingA11y", { fields: missingFields.join(", ") }) : undefined
             }
           >
-            {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.nextText}>다음</Text>}
+            {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.nextText}>{t("profileSetup.next")}</Text>}
           </Pressable>
         </View>
         <RecordDatePickerModal
@@ -345,7 +356,7 @@ export function ProfileSetupScreen({
           }
           minDateKey={formatDateKey(new Date(new Date().getFullYear() - 120, 0, 1), "midnight")}
           maxDateKey={formatDateKey()}
-          title="보호자 생년월일 선택"
+          title={t("profileSetup.birthDateSelect")}
           onSelect={setGuardianBirthDate}
           onClose={() => setBirthDatePickerOpen(false)}
         />

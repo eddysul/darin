@@ -17,6 +17,17 @@ export function validateDarinNickname(value: string): string | null {
   return null;
 }
 
+export type DarinNicknameValidationCode = "required" | "length" | "hash" | "slash";
+
+export function validateDarinNicknameCode(value: string): DarinNicknameValidationCode | null {
+  const nickname = value.trim();
+  if (!nickname) return "required";
+  if (Array.from(nickname).length < 2 || Array.from(nickname).length > 12) return "length";
+  if (nickname.includes("#")) return "hash";
+  if (nickname.includes("/")) return "slash";
+  return null;
+}
+
 export function parseDarinId(value: string): { darinId: string; nickname: string; tag: string } | null {
   const darinId = value.trim();
   if (validateDarinId(darinId)) return null;

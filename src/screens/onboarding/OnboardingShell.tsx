@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenBackground } from "../../components/ScreenBackground";
+import { useLanguage } from "../../LanguageContext";
 import { colors, radius } from "../../theme";
 
 type Props = {
@@ -49,6 +50,7 @@ export function OnboardingShell({
   scrollEnabled = true,
   centerContent = compact && !scrollEnabled,
 }: Props) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const topPad = compact ? 4 : Math.max(insets.top, 20) + 16;
@@ -93,7 +95,7 @@ export function OnboardingShell({
                 contentFit="contain"
               />
               {progressStep ? (
-                <Text style={styles.stepPill}>{progressStep} / 3 단계</Text>
+                <Text style={styles.stepPill}>{t("onboarding.stepOfThree", { step: progressStep })}</Text>
               ) : compact ? null : (
                 <View style={styles.stepSpacer} />
               )}
@@ -142,12 +144,13 @@ export function OnboardingField({
   optional?: boolean;
   children: ReactNode;
 }) {
+  const { t } = useLanguage();
   return (
     <View style={styles.field}>
       <Text style={styles.label}>
         {label}
         {required ? <Text style={styles.required}> *</Text> : null}
-        {optional ? <Text style={styles.optional}> (선택)</Text> : null}
+        {optional ? <Text style={styles.optional}>{t("common.optional")}</Text> : null}
       </Text>
       {children}
     </View>

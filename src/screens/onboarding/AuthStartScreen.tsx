@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { User } from "@supabase/supabase-js";
+import { useLanguage } from "../../LanguageContext";
 import {
   EmailAuthForm,
   type EmailAuthMode,
@@ -25,6 +26,7 @@ type Props = {
 };
 
 export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props) {
+  const { t } = useLanguage();
   const [policyPage, setPolicyPage] = useState<SettingsPage | null>(null);
   const [authMode, setAuthMode] = useState<EmailAuthMode>(
     recoveryMode ? "reset-password" : "login",
@@ -50,13 +52,13 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
         name: result.name,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "카카오 로그인에 실패했어요.";
+      const message = error instanceof Error ? error.message : t("auth.social.failed", { provider: "Kakao" });
       setSocialError(
         /provider is not enabled|unsupported provider/i.test(message)
-          ? "Supabase에서 카카오 로그인을 먼저 활성화해주세요."
+          ? t("auth.social.providerDisabled", { provider: "Kakao" })
           : /manual linking/i.test(message)
-            ? "Supabase의 Allow manual linking 설정을 활성화해주세요."
-            : "카카오 로그인에 실패했어요. 잠시 후 다시 시도해주세요.",
+            ? t("auth.social.manualLinking")
+            : t("auth.social.failed", { provider: "Kakao" }),
       );
     } finally {
       setSocialBusy(null);
@@ -77,10 +79,10 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
         name: result.name,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Apple 로그인에 실패했어요.";
+      const message = error instanceof Error ? error.message : t("auth.social.failed", { provider: "Apple" });
       setSocialError(
         /provider is not enabled|unsupported provider/i.test(message)
-          ? "Supabase에서 Apple 로그인을 먼저 활성화해주세요."
+          ? t("auth.social.providerDisabled", { provider: "Apple" })
           : message,
       );
     } finally {
@@ -102,7 +104,7 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
         name: result.name,
       });
     } catch {
-      setSocialError("Google 로그인을 완료하지 못했어요. 다시 시도해 주세요.");
+      setSocialError(t("auth.social.failed", { provider: "Google" }));
     } finally {
       setSocialBusy(null);
     }
@@ -114,11 +116,11 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
         compact
         scrollEnabled
         centerContent={authMode === "login"}
-        title={recoveryMode ? "비밀번호 재설정" : "우리 아기의 기록을 시작해요"}
+        title={recoveryMode ? t("auth.email.title.forgot") : t("auth.start.title")}
         subtitle={
           recoveryMode
-            ? "새 비밀번호를 입력해주세요."
-            : "수유, 수면, 성장 기록과 일기를\n가족과 함께 소중히 남겨보세요."
+            ? t("auth.reset.subtitle")
+            : t("auth.start.subtitle")
         }
       >
         <EmailAuthForm
@@ -135,14 +137,14 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
               <>
                 <View style={styles.dividerRow}>
                   <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>또는</Text>
+                  <Text style={styles.dividerText}>{t("auth.social.or")}</Text>
                   <View style={styles.dividerLine} />
                 </View>
 
                 <View style={styles.socialGroup}>
                   {authProviderFlags.apple.visible ? (
                     <SocialLoginButton
-                      label="Apple로 계속하기"
+                      label={t("auth.social.apple")}
                       symbol=""
                       enabled={authProviderFlags.apple.enabled && Platform.OS === "ios"}
                       busy={socialBusy === "apple"}
@@ -151,7 +153,7 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
                   ) : null}
                   {authProviderFlags.google.visible ? (
                     <SocialLoginButton
-                      label="Google로 계속하기"
+                      label={t("auth.social.google")}
                       symbol="G"
                       enabled={authProviderFlags.google.enabled}
                       busy={socialBusy === "google"}
@@ -160,7 +162,7 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
                   ) : null}
                   {authProviderFlags.kakao.visible ? (
                     <SocialLoginButton
-                      label="카카오로 계속하기"
+                      label={t("auth.social.kakao")}
                       symbol="K"
                       tone="kakao"
                       enabled={authProviderFlags.kakao.enabled}
@@ -174,15 +176,15 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
             ) : null}
 
             <View style={styles.legalRow}>
-              <Text style={styles.legalText}>계속하면 </Text>
+              <Text style={styles.legalText}>{t("auth.legal.prefix")}</Text>
               <Pressable onPress={() => setPolicyPage("terms")} hitSlop={10}>
-                <Text style={styles.legalLink}>이용약관</Text>
+                <Text style={styles.legalLink}>{t("auth.legal.terms")}</Text>
               </Pressable>
-              <Text style={styles.legalText}> 및 </Text>
+              <Text style={styles.legalText}>{t("auth.legal.and")}</Text>
               <Pressable onPress={() => setPolicyPage("privacy")} hitSlop={10}>
-                <Text style={styles.legalLink}>개인정보처리방침</Text>
+                <Text style={styles.legalLink}>{t("auth.legal.privacy")}</Text>
               </Pressable>
-              <Text style={styles.legalText}>에 동의하게 됩니다.</Text>
+              <Text style={styles.legalText}>{t("auth.legal.suffix")}</Text>
             </View>
           </>
         ) : null}

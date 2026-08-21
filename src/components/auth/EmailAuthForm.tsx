@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import type { User } from "@supabase/supabase-js";
+import { useLanguage } from "../../LanguageContext";
 import { AuthRepository } from "../../repositories/AuthRepository";
 import { colors } from "../../theme";
 
@@ -21,28 +22,8 @@ type Props = {
 
 const PASSWORD_MIN = 8;
 
-function friendlyAuthError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  const lower = message.toLowerCase();
-  if (lower.includes("invalid login credentials")) return "이메일 또는 비밀번호가 맞지 않아요.";
-  if (lower.includes("email not confirmed")) return "이메일 인증을 먼저 완료해주세요.";
-  if (lower.includes("auth session missing")) {
-    return "앱에서 인증 세션을 찾지 못했어요. 메일 인증을 마쳤다면 로그인으로 돌아가 비밀번호로 로그인해주세요.";
-  }
-  if (lower.includes("already confirmed") || lower.includes("email confirmed")) {
-    return "이미 이메일 인증이 완료된 계정이에요. 로그인해주세요.";
-  }
-  if (lower.includes("already registered") || lower.includes("already been registered") || lower.includes("email exists")) {
-    return "이미 가입된 이메일이에요. 로그인해주세요.";
-  }
-  if (lower.includes("weak_password") || lower.includes("password should") || lower.includes("password is too weak")) {
-    return "더 강한 비밀번호를 사용해주세요. 영문·숫자를 섞어 8자 이상을 권장해요.";
-  }
-  if (lower.includes("rate limit")) return "요청이 너무 많아요. 잠시 후 다시 시도해주세요.";
-  return message;
-}
-
 export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeChange }: Props) {
+  const { t } = useLanguage();
   const [mode, setMode] = useState<EmailAuthMode>(recoveryMode ? "reset-password" : "login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -81,6 +62,19 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
   const validPassword = password.length >= PASSWORD_MIN;
   const passwordsMatch = password === passwordConfirm;
 
+  const friendlyAuthError = (caught: unknown): string => {
+    const message = caught instanceof Error ? caught.message : String(caught);
+    const lower = message.toLowerCase();
+    if (lower.includes("invalid login credentials")) return t("auth.email.error.credentials");
+    if (lower.includes("email not confirmed")) return t("auth.email.error.notConfirmed");
+    if (lower.includes("auth session missing")) return t("auth.email.error.sessionMissing");
+    if (lower.includes("already confirmed") || lower.includes("email confirmed")) return t("auth.email.error.alreadyConfirmed");
+    if (lower.includes("already registered") || lower.includes("already been registered") || lower.includes("email exists")) return t("auth.email.error.alreadyRegistered");
+    if (lower.includes("weak_password") || lower.includes("password should") || lower.includes("password is too weak")) return t("auth.email.error.weakPassword");
+    if (lower.includes("rate limit")) return t("auth.email.error.rateLimit");
+    return message;
+  };
+
   const finish = async (user: User, fallbackEmail = email) => {
     await onAuthenticated({
       user,
@@ -96,26 +90,26 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
     setBusy(true);
     try {
       if (mode === "login") {
-        if (!validEmail || !password) throw new Error("이메일과 비밀번호를 입력해주세요.");
+        if (!validEmail || !password) throw new Error(t("auth.email.error.required"));
         const session = await AuthRepository.signInWithPassword(email, password);
         await finish(session.user);
       } else if (mode === "signup") {
-        if (!validEmail) throw new Error("올바른 이메일을 입력해주세요.");
-        if (!validPassword) throw new Error(`비밀번호는 ${PASSWORD_MIN}자 이상 입력해주세요.`);
-        if (!passwordsMatch) throw new Error("비밀번호 확인이 일치하지 않아요.");
+        if (!validEmail) throw new Error(t("auth.email.error.invalid"));
+        if (!validPassword) throw new Error(t("auth.email.error.passwordMin", { count: PASSWORD_MIN }));
+        if (!passwordsMatch) throw new Error(t("auth.email.error.passwordMismatch"));
         const result = await AuthRepository.signUpWithPassword({ email, password, displayName: name });
         if (result.status === "confirmation_required") {
           setPassword("");
           setPasswordConfirm("");
           setMode("confirm");
-          setNotice(`${result.email}로 인증 메일을 보냈어요.`);
+          setNotice(t("auth.email.notice.sent", { email: result.email }));
         } else if (result.user) {
           await finish(result.user, result.email);
         }
       } else if (mode === "forgot") {
-        if (!validEmail) throw new Error("재설정 메일을 받을 이메일을 입력해주세요.");
+        if (!validEmail) throw new Error(t("auth.email.error.invalid"));
         await AuthRepository.sendPasswordReset(email);
-        setNotice("비밀번호 재설정 메일을 보냈어요. 메일의 링크를 열어주세요.");
+        setNotice(t("auth.email.notice.resetSent"));
       } else if (mode === "confirm") {
         try {
           const user = await AuthRepository.completePendingEmailAuth();
@@ -126,16 +120,16 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
           // In that normal case, password login is the safe completion step.
           if (/auth session missing/i.test(String(confirmError))) {
             selectMode("login");
-            setNotice("메일 인증을 마쳤다면 가입한 이메일과 비밀번호로 로그인해주세요.");
+            setNotice(t("auth.email.notice.confirmThenLogin"));
             return;
           }
           throw confirmError;
         }
       } else {
-        if (!validPassword) throw new Error(`비밀번호는 ${PASSWORD_MIN}자 이상 입력해주세요.`);
-        if (!passwordsMatch) throw new Error("비밀번호 확인이 일치하지 않아요.");
+        if (!validPassword) throw new Error(t("auth.email.error.passwordMin", { count: PASSWORD_MIN }));
+        if (!passwordsMatch) throw new Error(t("auth.email.error.passwordMismatch"));
         const user = await AuthRepository.updatePassword(password);
-        setNotice("새 비밀번호를 저장했어요.");
+        setNotice(t("auth.email.notice.passwordSaved"));
         await finish(user);
       }
     } catch (caught) {
@@ -154,9 +148,9 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
       const result = await AuthRepository.resendPendingEmailAuth();
       if (result === "already_confirmed") {
         selectMode("login");
-        setNotice("이미 이메일 인증이 완료됐어요. 비밀번호로 로그인해주세요.");
+        setNotice(t("auth.email.notice.alreadyConfirmed"));
       } else {
-        setNotice(`${email}로 새 인증 메일을 보냈어요. 가장 최근 메일의 링크를 열어주세요.`);
+        setNotice(t("auth.email.notice.resent", { email }));
       }
     } catch (caught) {
       setError(friendlyAuthError(caught));
@@ -166,31 +160,31 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
   };
 
   const title = {
-    login: "이메일 로그인",
-    signup: "이메일 회원가입",
-    forgot: "비밀번호 재설정",
-    confirm: "이메일 인증",
-    "reset-password": "새 비밀번호 설정",
+    login: t("auth.email.title.login"),
+    signup: t("auth.email.title.signup"),
+    forgot: t("auth.email.title.forgot"),
+    confirm: t("auth.email.title.confirm"),
+    "reset-password": t("auth.email.title.reset"),
   }[mode];
 
   const buttonLabel = {
-    login: "로그인",
-    signup: "계정 만들기",
-    forgot: "재설정 메일 보내기",
-    confirm: "로그인으로 계속하기",
-    "reset-password": "새 비밀번호 저장",
+    login: t("auth.email.action.login"),
+    signup: t("auth.email.action.signup"),
+    forgot: t("auth.email.action.forgot"),
+    confirm: t("auth.email.action.confirm"),
+    "reset-password": t("auth.email.action.reset"),
   }[mode];
 
   return (
     <View style={styles.root}>
       <Text style={styles.title}>{title}</Text>
       {mode === "signup" ? (
-        <Field label="이름 (선택)">
-          <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="예: 민지" placeholderTextColor={colors.faint} />
+        <Field label={t("auth.email.nameOptional")}>
+          <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={t("auth.email.nameExample")} placeholderTextColor={colors.faint} />
         </Field>
       ) : null}
       {mode !== "confirm" && mode !== "reset-password" ? (
-        <Field label="이메일">
+        <Field label={t("auth.email.email")}>
           <TextInput
             style={styles.input}
             value={email}
@@ -206,11 +200,11 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
       ) : null}
       {mode === "confirm" ? (
         <Text style={styles.body}>
-          {email}로 보낸 인증 링크를 열어주세요. 인증 후 앱으로 자동 복귀하지 않으면 로그인으로 계속해주세요.
+          {t("auth.email.confirmHint", { email })}
         </Text>
       ) : null}
       {mode === "login" || mode === "signup" || mode === "reset-password" ? (
-        <Field label={mode === "reset-password" ? "새 비밀번호" : "비밀번호"}>
+        <Field label={mode === "reset-password" ? t("auth.email.newPassword") : t("auth.email.password")}>
           <View style={styles.passwordRow}>
             <TextInput
               style={styles.passwordInput}
@@ -219,17 +213,17 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
               secureTextEntry={!passwordVisible}
               textContentType={mode === "login" ? "password" : "newPassword"}
               autoCapitalize="none"
-              placeholder={`${PASSWORD_MIN}자 이상`}
+              placeholder={t("auth.email.passwordMin", { count: PASSWORD_MIN })}
               placeholderTextColor={colors.faint}
             />
             <Pressable onPress={() => setPasswordVisible((value) => !value)} hitSlop={12} style={styles.visibilityBtn}>
-              <Text style={styles.visibility}>{passwordVisible ? "숨기기" : "보기"}</Text>
+              <Text style={styles.visibility}>{passwordVisible ? t("auth.email.hide") : t("auth.email.show")}</Text>
             </Pressable>
           </View>
         </Field>
       ) : null}
       {mode === "signup" || mode === "reset-password" ? (
-        <Field label="비밀번호 확인">
+        <Field label={t("auth.email.passwordConfirm")}>
           <TextInput
             style={styles.input}
             value={passwordConfirm}
@@ -237,7 +231,7 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
             secureTextEntry={!passwordVisible}
             textContentType="newPassword"
             autoCapitalize="none"
-            placeholder="비밀번호를 한 번 더 입력"
+            placeholder={t("auth.email.passwordAgain")}
             placeholderTextColor={colors.faint}
           />
         </Field>
@@ -257,14 +251,14 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
             onPress={() => void resendConfirmation()}
             disabled={busy}
           >
-            <Text style={styles.confirmActionText}>인증 메일 다시 보내기</Text>
+            <Text style={styles.confirmActionText}>{t("auth.email.resend")}</Text>
           </Pressable>
           <Pressable
             style={styles.confirmAction}
             onPress={() => selectMode("login")}
             disabled={busy}
           >
-            <Text style={styles.confirmBackText}>로그인으로 돌아가기</Text>
+            <Text style={styles.confirmBackText}>{t("auth.email.backToLogin")}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -272,20 +266,20 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
       {mode === "login" ? (
         <>
           <Pressable style={styles.linkButton} onPress={() => selectMode("forgot")}>
-            <Text style={styles.linkText}>비밀번호를 잊으셨나요?</Text>
+            <Text style={styles.linkText}>{t("auth.email.forgotLink")}</Text>
           </Pressable>
           {/* 회원가입은 로그인 버튼과 경쟁하지 않도록 텍스트 링크로 유지 */}
           <View style={styles.signupRow}>
-            <Text style={styles.signupHint}>아직 계정이 없나요? </Text>
+            <Text style={styles.signupHint}>{t("auth.email.noAccount")}</Text>
             <Pressable onPress={() => selectMode("signup")} hitSlop={8}>
-              <Text style={styles.signupLink}>이메일 계정 만들기</Text>
+              <Text style={styles.signupLink}>{t("auth.email.create")}</Text>
             </Pressable>
           </View>
         </>
       ) : null}
       {mode === "signup" || mode === "forgot" ? (
         <Pressable style={styles.secondary} onPress={() => selectMode("login")}>
-          <Text style={styles.secondaryText}>로그인으로 돌아가기</Text>
+          <Text style={styles.secondaryText}>{t("auth.email.backToLogin")}</Text>
         </Pressable>
       ) : null}
     </View>

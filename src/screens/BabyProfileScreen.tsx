@@ -16,6 +16,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ChevronLeft } from "lucide-react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLanguage } from "../LanguageContext";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
 import { BabySwitcher } from "../components/babylog/BabySwitcher";
 import { RecordDatePickerModal } from "../components/babylog/RecordDatePickerModal";
@@ -25,13 +26,11 @@ import { useApp } from "../context/AppContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { useBabyLog } from "../context/BabyLogContext";
 import type { RootStackParamList } from "../navigation/types";
-import { BabyProfileRepository } from "../repositories/BabyProfileRepository";
+import { BabyProfileError, BabyProfileRepository, type BabyProfileErrorCode } from "../repositories/BabyProfileRepository";
 import { FamilyRepository } from "../repositories/FamilyRepository";
 import {
   canInvite,
   canManageMembers,
-  FAMILY_ROLE_LABELS,
-  FAMILY_STATUS_LABELS,
   type FamilyRole,
 } from "../types/family";
 import type { FamilyMemberDisplay, UploadAvatarInput } from "../types/profileSettings";
@@ -49,7 +48,18 @@ const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 
 const MEMBER_COLORS = [colors.amber, "#7c83fd", "#5CB87A", "#c98a54"];
 
+const BABY_PROFILE_ERROR_KEYS: Record<BabyProfileErrorCode, Parameters<ReturnType<typeof useLanguage>["t"]>[0]> = {
+  name_required: "babyProfile.error.nameRequired",
+  birth_date_invalid: "babyProfile.error.birthDateInvalid",
+  permission_denied: "babyProfile.error.permission",
+  save_failed: "babyProfile.error.save",
+  photo_too_large: "babyProfile.error.photoTooLarge",
+  photo_upload_failed: "babyProfile.error.photoUpload",
+  photo_load_failed: "babyProfile.error.photoLoad",
+};
+
 export function BabyProfileScreen() {
+  const { locale, t } = useLanguage();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, "BabyProfile">>();
   const isCreating = route.params?.mode === "create";
@@ -97,6 +107,17 @@ export function BabyProfileScreen() {
   const [customCautionFood, setCustomCautionFood] = useState("");
   const [pendingAvatar, setPendingAvatar] = useState<UploadAvatarInput | null>(null);
 
+  const localizedError = useCallback((cause: unknown, fallback: Parameters<typeof t>[0]) =>
+    cause instanceof BabyProfileError ? t(BABY_PROFILE_ERROR_KEYS[cause.code]) : t(fallback), [t]);
+  const genderLabel = useCallback((value: typeof gender) => t(value === "girl" ? "babyProfile.gender.girl" : value === "boy" ? "babyProfile.gender.boy" : "babyProfile.gender.none"), [t]);
+  const roleLabel = useCallback((role: FamilyRole) => t(`babyProfile.role.${role}` as Parameters<typeof t>[0]), [t]);
+  const statusLabel = useCallback((status: FamilyMemberDisplay["status"]) => t(`babyProfile.status.${status}` as Parameters<typeof t>[0]), [t]);
+  const relationLabel = useCallback((relation: string) => {
+    const index = PROFILE_RELATION_OPTIONS.indexOf(relation as (typeof PROFILE_RELATION_OPTIONS)[number]);
+    const keys = ["mom", "dad", "grandmother", "grandfather", "aunt", "uncle", "guardian", "family", "sitter", "friend", "other"] as const;
+    return index >= 0 ? t(`profileSetup.relation.${keys[index]}` as Parameters<typeof t>[0]) : relation;
+  }, [t]);
+
   useLayoutEffect(() => {
     const goHome = () => {
       if (convertBirth) navigation.setParams({ mode: undefined });
@@ -104,30 +125,31 @@ export function BabyProfileScreen() {
       else navigation.navigate("MainTabs");
     };
     navigation.setOptions({
-      title: isCreating ? "아기 추가" : convertBirth ? "출생 등록" : "아기 프로필",
+      title: isCreating ? t("babyProfile.title.add") : convertBirth ? t("babyProfile.title.birth") : t("babyProfile.title.profile"),
       headerLeft: () => (
         <Pressable
           onPress={goHome}
           hitSlop={8}
           style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
           accessibilityRole="button"
-          accessibilityLabel="홈으로 돌아가기"
+          accessibilityLabel={t("babyProfile.backHome")}
         >
           <ChevronLeft size={26} color={colors.text} strokeWidth={2.2} />
         </Pressable>
       ),
     });
-  }, [convertBirth, isCreating, navigation]);
+  }, [convertBirth, isCreating, navigation, t]);
 
   const pregnancy = isCreating ? createStage === "pregnancy" : isPregnancyStage({
     childStatus: careSetup.child.childStatus,
     birthDate: birthDate || careSetup.child.birthDate,
   }) && !converting;
   const configuredAge = pregnancy
-    ? [formatGestationalAge(dueDate || careSetup.child.dueDate), formatDueCountdown(dueDate || careSetup.child.dueDate)].filter(Boolean).join(" · ")
+    ? [formatGestationalAge(dueDate || careSetup.child.dueDate, new Date(), locale), formatDueCountdown(dueDate || careSetup.child.dueDate, new Date(), locale)].filter(Boolean).join(" · ")
     : formatBabyAge(
         { ...careSetup.child, childName: name, birthDate: birthDate || undefined },
         settings.time.babyAge,
+        locale,
       );
 
   const load = useCallback(async (opts?: { skipBirthConvert?: boolean }) => {
@@ -195,11 +217,11 @@ export function BabyProfileScreen() {
         applyBirthConvert(careSetup.child.birthDate, careSetup.child.childStatus);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "아기 프로필을 불러오지 못했어요.");
+      setError(localizedError(cause, "babyProfile.error.load"));
     } finally {
       setLoading(false);
     }
-  }, [babyId, careSetup.child, convertBirth, isCreating]);
+  }, [babyId, careSetup.child, convertBirth, isCreating, localizedError]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
@@ -236,32 +258,32 @@ export function BabyProfileScreen() {
   const save = async () => {
     if (!canEditBaby || saving) return;
     if (isCreating && !createStage) {
-      setError("아기가 뱃속에 있는지, 이미 태어났는지 먼저 선택해 주세요.");
+      setError(t("babyProfile.error.stageRequired"));
       return;
     }
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("아기 이름을 입력해 주세요.");
+      setError(t("babyProfile.error.nameRequired"));
       return;
     }
     if (createStage === "born" && birthDate.trim() && !isValidBirthDate(birthDate.trim())) {
-      setError("생년월일을 YYYY-MM-DD 형식의 올바른 날짜로 입력해 주세요.");
+      setError(t("babyProfile.error.birthDateInvalid"));
       return;
     }
     if ((isCreating ? createStage === "pregnancy" : pregnancy || converting) && dueDate.trim() && !isValidCalendarDate(dueDate.trim())) {
-      setError("출산 예정일을 YYYY-MM-DD 형식의 올바른 날짜로 입력해 주세요.");
+      setError(t("babyProfile.error.dueDateInvalid"));
       return;
     }
     if (!isCreating && converting && !isValidBirthDate(birthDate.trim())) {
-      setError("실제 출생일을 입력해 주세요.");
+      setError(t("babyProfile.error.actualBirthRequired"));
       return;
     }
     if ((isCreating ? createStage === "pregnancy" : pregnancy) && !dueDate.trim()) {
-      setError("출산 예정일을 입력해 주세요.");
+      setError(t("babyProfile.error.dueDateRequired"));
       return;
     }
     if (isCreating && createStage === "born" && !birthDate.trim()) {
-      setError("생년월일을 입력해 주세요.");
+      setError(t("babyProfile.error.birthDateRequired"));
       return;
     }
     setSaving(true);
@@ -299,11 +321,14 @@ export function BabyProfileScreen() {
           routes: [{ name: "MainTabs", params: { screen: "Record" } }],
         });
         if (profileFollowupFailed) {
-          Alert.alert("아기는 추가했어요", "사진 또는 별명은 저장하지 못했어요. 아기 프로필에서 다시 입력해 주세요.");
+          Alert.alert(t("babyProfile.addedTitle"), t("babyProfile.error.followup"));
         }
         return;
       }
-      if (!babyId) throw new Error("현재 아기 정보를 서버에서 찾지 못했어요. 다시 로그인해 주세요.");
+      if (!babyId) {
+        setError(t("babyProfile.error.noBaby"));
+        return;
+      }
       const becomingBorn = converting || Boolean(birthDate.trim() && careSetup.child.childStatus === "unborn");
       const next = await BabyProfileRepository.updateBabyProfile({
         babyId,
@@ -348,7 +373,7 @@ export function BabyProfileScreen() {
       if (convertBirth) navigation.setParams({ mode: undefined });
       await rehydrateFromServer().catch(() => undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "프로필을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      setError(localizedError(cause, "babyProfile.error.save"));
     } finally {
       setSaving(false);
     }
@@ -356,7 +381,7 @@ export function BabyProfileScreen() {
 
   const pickAvatar = () => {
     if (!canEditBaby || (!babyId && !isCreating)) {
-      setError("이 정보를 수정할 권한이 없어요.");
+      setError(t("babyProfile.error.permission"));
       return;
     }
     presentAvatarPicker({
@@ -382,7 +407,7 @@ export function BabyProfileScreen() {
               photoUri: next.avatarUrl,
             });
           })
-          .catch((cause) => setError(cause instanceof Error ? cause.message : "사진을 올리지 못했어요. 다른 사진으로 다시 시도해 주세요."))
+          .catch((cause) => setError(localizedError(cause, "babyProfile.error.photoUpload")))
           .finally(() => setSaving(false));
       },
       onClear: () => {
@@ -413,7 +438,7 @@ export function BabyProfileScreen() {
               photoUri: undefined,
             });
           })
-          .catch((cause) => setError(cause instanceof Error ? cause.message : "프로필을 저장하지 못했어요. 잠시 후 다시 시도해 주세요."))
+          .catch((cause) => setError(localizedError(cause, "babyProfile.error.save")))
           .finally(() => setSaving(false));
       },
     });
@@ -425,7 +450,7 @@ export function BabyProfileScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.amberText} />
-        <Text style={styles.muted}>아기 프로필을 불러오는 중…</Text>
+        <Text style={styles.muted}>{t("babyProfile.loading")}</Text>
       </View>
     );
   }
@@ -435,8 +460,8 @@ export function BabyProfileScreen() {
       <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? undefined : "padding"} keyboardVerticalOffset={0}>
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 24, 36) }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <View style={styles.card}>
-            <Text style={styles.label}>아기는 지금 어떤 상태인가요? *</Text>
-            <Text style={styles.inputHint}>상태에 따라 이름·날짜 입력이 달라져요.</Text>
+            <Text style={styles.label}>{t("babyProfile.stageLabel")}</Text>
+            <Text style={styles.inputHint}>{t("babyProfile.stageHint")}</Text>
             <Pressable
               style={[styles.choice, createStage === "pregnancy" && styles.choiceActive]}
               onPress={() => {
@@ -446,8 +471,8 @@ export function BabyProfileScreen() {
               accessibilityRole="button"
               accessibilityState={{ selected: createStage === "pregnancy" }}
             >
-              <Text style={[styles.choiceTitle, createStage === "pregnancy" && styles.choiceTitleActive]}>아직 뱃속에 있어요</Text>
-              <Text style={styles.choiceBody}>태명과 출산 예정일로 시작해요.</Text>
+              <Text style={[styles.choiceTitle, createStage === "pregnancy" && styles.choiceTitleActive]}>{t("babyProfile.stagePregnancy")}</Text>
+              <Text style={styles.choiceBody}>{t("babyProfile.stagePregnancyHint")}</Text>
             </Pressable>
             <Pressable
               style={[styles.choice, createStage === "born" && styles.choiceActive]}
@@ -458,8 +483,8 @@ export function BabyProfileScreen() {
               accessibilityRole="button"
               accessibilityState={{ selected: createStage === "born" }}
             >
-              <Text style={[styles.choiceTitle, createStage === "born" && styles.choiceTitleActive]}>이미 태어났어요</Text>
-              <Text style={styles.choiceBody}>이름과 생년월일로 시작해요.</Text>
+              <Text style={[styles.choiceTitle, createStage === "born" && styles.choiceTitleActive]}>{t("babyProfile.stageBorn")}</Text>
+              <Text style={styles.choiceBody}>{t("babyProfile.stageBornHint")}</Text>
             </Pressable>
           </View>
 
@@ -471,14 +496,14 @@ export function BabyProfileScreen() {
               fallback="baby"
               editable
               onPress={pickAvatar}
-              label="아기 사진 추가"
+              label={t("babyProfile.photoAdd")}
               imageFit="contain"
             />
             <View style={styles.babyCopy}>
-              <Text style={styles.label}>{createStage === "pregnancy" ? "태명/이름 *" : "아기 이름 *"}</Text>
-              <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={createStage === "pregnancy" ? "예: 콩콩이" : "아기 이름"} placeholderTextColor={colors.faint} maxLength={40} />
-              <Text style={styles.label}>별명</Text>
-              <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder="선택 사항" placeholderTextColor={colors.faint} maxLength={40} />
+              <Text style={styles.label}>{createStage === "pregnancy" ? t("babyProfile.prenatalName") : t("babyProfile.nameRequired")}</Text>
+              <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={createStage === "pregnancy" ? t("babyProfile.prenatalNameExample") : t("babyProfile.name")} placeholderTextColor={colors.faint} maxLength={40} />
+              <Text style={styles.label}>{t("babyProfile.nickname")}</Text>
+              <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder={t("babyProfile.optional")} placeholderTextColor={colors.faint} maxLength={40} />
             </View>
           </View>
           ) : null}
@@ -487,47 +512,45 @@ export function BabyProfileScreen() {
           <View style={styles.card}>
             {createStage === "pregnancy" ? (
               <>
-                <Text style={styles.label}>출산 예정일 *</Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="출산 예정일 선택" style={styles.dateInput} onPress={() => setDuePickerOpen(true)}>
-                  <Text style={[styles.dateInputText, !dueDate && styles.datePlaceholder]}>{dueDate || "날짜를 선택해 주세요"}</Text>
+                <Text style={styles.label}>{t("babyProfile.dueDateRequired")}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("babyProfile.selectDueDate")} style={styles.dateInput} onPress={() => setDuePickerOpen(true)}>
+                  <Text style={[styles.dateInputText, !dueDate && styles.datePlaceholder]}>{dueDate || t("babyProfile.selectDate")}</Text>
                   <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
                 </Pressable>
               </>
             ) : (
               <>
-                <Text style={styles.label}>생년월일 *</Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="생년월일 선택" style={styles.dateInput} onPress={() => setBirthPickerOpen(true)}>
-                  <Text style={[styles.dateInputText, !birthDate && styles.datePlaceholder]}>{birthDate || "날짜를 선택해 주세요"}</Text>
+                <Text style={styles.label}>{t("babyProfile.birthDateRequired")}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("babyProfile.selectBirthDate")} style={styles.dateInput} onPress={() => setBirthPickerOpen(true)}>
+                  <Text style={[styles.dateInputText, !birthDate && styles.datePlaceholder]}>{birthDate || t("babyProfile.selectDate")}</Text>
                   <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
                 </Pressable>
               </>
             )}
-            <Text style={styles.label}>성별</Text>
+            <Text style={styles.label}>{t("babyProfile.gender")}</Text>
             <View style={styles.chips}>
-              {([[
-                "unknown", "선택 안 함",
-              ], ["girl", "여아"], ["boy", "남아"]] as const).map(([value, label]) => (
+              {(["unknown", "girl", "boy"] as const).map((value) => (
                 <Pressable key={value} style={[styles.chip, gender === value && styles.chipActive]} onPress={() => setGender(value)}>
-                  <Text style={[styles.chipText, gender === value && styles.chipTextActive]}>{label}</Text>
+                  <Text style={[styles.chipText, gender === value && styles.chipTextActive]}>{genderLabel(value)}</Text>
                 </Pressable>
               ))}
             </View>
-            <Text style={styles.label}>메모</Text>
-            <TextInput style={[styles.input, styles.note]} value={note} onChangeText={setNote} placeholder="가족에게만 보이는 메모" placeholderTextColor={colors.faint} multiline maxLength={400} />
+            <Text style={styles.label}>{t("babyProfile.note")}</Text>
+            <TextInput style={[styles.input, styles.note]} value={note} onChangeText={setNote} placeholder={t("babyProfile.notePlaceholder")} placeholderTextColor={colors.faint} multiline maxLength={400} />
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Pressable style={[styles.save, saving && styles.disabled]} onPress={() => void save()} disabled={saving}>
-              {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.saveText}>추가하고 선택</Text>}
+              {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.saveText}>{t("babyProfile.addAndSelect")}</Text>}
             </Pressable>
           </View>
           ) : null}
         </ScrollView>
-        <RecordDatePickerModal visible={birthPickerOpen} selectedDateKey={birthDate || formatDateKey()} maxDateKey={formatDateKey()} title="생년월일 선택" onSelect={setBirthDate} onClose={() => setBirthPickerOpen(false)} />
+        <RecordDatePickerModal visible={birthPickerOpen} selectedDateKey={birthDate || formatDateKey()} maxDateKey={formatDateKey()} title={t("babyProfile.selectBirthDate")} onSelect={setBirthDate} onClose={() => setBirthPickerOpen(false)} />
         <RecordDatePickerModal
           visible={duePickerOpen}
           selectedDateKey={dueDate || formatDateKey()}
           minDateKey={formatDateKey(new Date(new Date().getFullYear() - 1, 0, 1), "midnight")}
           maxDateKey={offsetDateKey(formatDateKey(), 365)}
-          title="출산 예정일 선택"
+          title={t("babyProfile.selectDueDate")}
           onSelect={setDueDate}
           onClose={() => setDuePickerOpen(false)}
         />
@@ -548,16 +571,16 @@ export function BabyProfileScreen() {
             fallback="baby"
             editable={canEditBaby}
             onPress={canEditBaby ? pickAvatar : undefined}
-            label="아기 사진 추가"
+            label={t("babyProfile.photoAdd")}
             imageFit="contain"
           />
           <View style={styles.babyCopy}>
             {editing ? (
               <>
-                <Text style={styles.label}>아기 이름</Text>
-                <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="아기 이름" placeholderTextColor={colors.faint} maxLength={40} />
-                <Text style={styles.label}>별명</Text>
-                <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder="선택 사항" placeholderTextColor={colors.faint} maxLength={40} />
+                <Text style={styles.label}>{t("babyProfile.name")}</Text>
+                <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={t("babyProfile.name")} placeholderTextColor={colors.faint} maxLength={40} />
+                <Text style={styles.label}>{t("babyProfile.nickname")}</Text>
+                <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder={t("babyProfile.optional")} placeholderTextColor={colors.faint} maxLength={40} />
               </>
             ) : (
               <>
@@ -579,7 +602,7 @@ export function BabyProfileScreen() {
                 } else setEditing(true);
               }}
             >
-              <Text style={styles.editBtnText}>{editing ? "취소" : "편집"}</Text>
+              <Text style={styles.editBtnText}>{editing ? t("babyProfile.cancel") : t("babyProfile.edit")}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -593,9 +616,9 @@ export function BabyProfileScreen() {
               setBirthDate("");
             }}
             accessibilityRole="button"
-            accessibilityLabel="아기가 태어났어요"
+            accessibilityLabel={t("babyProfile.bornCta")}
           >
-            <Text style={styles.saveText}>아기가 태어났어요 🎉</Text>
+            <Text style={styles.saveText}>{t("babyProfile.bornCta")}</Text>
           </Pressable>
         ) : null}
 
@@ -603,95 +626,91 @@ export function BabyProfileScreen() {
           <View style={styles.card}>
             {pregnancy ? (
               <>
-                <Text style={styles.label}>출산 예정일</Text>
+                <Text style={styles.label}>{t("babyProfile.dueDate")}</Text>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="출산 예정일 선택"
+                  accessibilityLabel={t("babyProfile.selectDueDate")}
                   style={styles.dateInput}
                   onPress={() => setDuePickerOpen(true)}
                 >
                   <Text style={[styles.dateInputText, !dueDate && styles.datePlaceholder]}>
-                    {dueDate || "날짜를 선택해 주세요"}
+                    {dueDate || t("babyProfile.selectDate")}
                   </Text>
                   <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
                 </Pressable>
-                <Text style={styles.inputHint}>병원에서 예정일이 바뀌면 여기서 수정해 주세요.</Text>
+                <Text style={styles.inputHint}>{t("babyProfile.dueDateHint")}</Text>
               </>
             ) : (
               <>
-                <Text style={styles.label}>{converting ? "실제 출생일" : "생년월일"}</Text>
+                <Text style={styles.label}>{converting ? t("babyProfile.actualBirthDate") : t("babyProfile.birthDate")}</Text>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={converting ? "실제 출생일 선택" : "생년월일 선택"}
+                  accessibilityLabel={converting ? t("babyProfile.selectActualBirthDate") : t("babyProfile.selectBirthDate")}
                   style={styles.dateInput}
                   onPress={() => setBirthPickerOpen(true)}
                 >
                   <Text style={[styles.dateInputText, !birthDate && styles.datePlaceholder]}>
-                    {birthDate || "날짜를 선택해 주세요"}
+                    {birthDate || t("babyProfile.selectDate")}
                   </Text>
                   <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
                 </Pressable>
                 {converting ? (
                   <>
-                    <Text style={styles.inputHint}>예정일과 별도로 실제 태어난 날을 입력해요.</Text>
-                    <Text style={styles.label}>출산 예정일</Text>
-                    <Text style={styles.metaValue}>{dueDate || "미입력"}</Text>
-                    <Text style={styles.label}>출생 몸무게</Text>
-                    <TextInput style={styles.input} value={birthWeight} onChangeText={setBirthWeight} placeholder="예: 3.2kg" placeholderTextColor={colors.faint} />
+                    <Text style={styles.inputHint}>{t("babyProfile.actualBirthHint")}</Text>
+                    <Text style={styles.label}>{t("babyProfile.dueDate")}</Text>
+                    <Text style={styles.metaValue}>{dueDate || t("babyProfile.notEntered")}</Text>
+                    <Text style={styles.label}>{t("babyProfile.birthWeight")}</Text>
+                    <TextInput style={styles.input} value={birthWeight} onChangeText={setBirthWeight} placeholder={t("babyProfile.birthWeightExample")} placeholderTextColor={colors.faint} />
                   </>
                 ) : null}
               </>
             )}
-            <Text style={styles.label}>성별</Text>
+            <Text style={styles.label}>{t("babyProfile.gender")}</Text>
             <View style={styles.chips}>
-              {([
-                ["unknown", "선택 안 함"],
-                ["girl", "여아"],
-                ["boy", "남아"],
-              ] as const).map(([value, label]) => (
+              {(["unknown", "girl", "boy"] as const).map((value) => (
                 <Pressable key={value} style={[styles.chip, gender === value && styles.chipActive]} onPress={() => setGender(value)}>
-                  <Text style={[styles.chipText, gender === value && styles.chipTextActive]}>{label}</Text>
+                  <Text style={[styles.chipText, gender === value && styles.chipTextActive]}>{genderLabel(value)}</Text>
                 </Pressable>
               ))}
             </View>
-            <Text style={styles.label}>메모</Text>
+            <Text style={styles.label}>{t("babyProfile.note")}</Text>
             <TextInput
               style={[styles.input, styles.note]}
               value={note}
               onChangeText={setNote}
-              placeholder="가족에게만 보이는 메모"
+              placeholder={t("babyProfile.notePlaceholder")}
               placeholderTextColor={colors.faint}
               multiline
               maxLength={400}
             />
             <Pressable style={[styles.save, saving && styles.disabled]} onPress={() => void save()} disabled={saving}>
-              {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.saveText}>{converting ? "출생 등록" : "저장"}</Text>}
+              {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.saveText}>{converting ? t("babyProfile.registerBirth") : t("babyProfile.save")}</Text>}
             </Pressable>
           </View>
         ) : (
           <View style={styles.card}>
             {isPregnancyStage(careSetup.child) ? (
               <>
-                <Text style={styles.metaLabel}>출산 예정일</Text>
-                <Text style={styles.metaValue}>{dueDate || "미입력"}</Text>
+                <Text style={styles.metaLabel}>{t("babyProfile.dueDate")}</Text>
+                <Text style={styles.metaValue}>{dueDate || t("babyProfile.notEntered")}</Text>
               </>
             ) : (
               <>
-                <Text style={styles.metaLabel}>생년월일</Text>
-                <Text style={styles.metaValue}>{birthDate || "미입력"}</Text>
+                <Text style={styles.metaLabel}>{t("babyProfile.birthDate")}</Text>
+                <Text style={styles.metaValue}>{birthDate || t("babyProfile.notEntered")}</Text>
                 {dueDate ? (
                   <>
-                    <Text style={styles.metaLabel}>출산 예정일</Text>
+                    <Text style={styles.metaLabel}>{t("babyProfile.dueDate")}</Text>
                     <Text style={styles.metaValue}>{dueDate}</Text>
                   </>
                 ) : null}
               </>
             )}
-            <Text style={styles.metaLabel}>성별</Text>
-            <Text style={styles.metaValue}>{gender === "girl" ? "여아" : gender === "boy" ? "남아" : "미입력"}</Text>
+            <Text style={styles.metaLabel}>{t("babyProfile.gender")}</Text>
+            <Text style={styles.metaValue}>{gender === "unknown" ? t("babyProfile.notEntered") : genderLabel(gender)}</Text>
             {note ? (
               <>
-                <Text style={styles.metaLabel}>메모</Text>
+                <Text style={styles.metaLabel}>{t("babyProfile.note")}</Text>
                 <Text style={styles.metaValue}>{note}</Text>
               </>
             ) : null}
@@ -699,50 +718,50 @@ export function BabyProfileScreen() {
         )}
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>주의 식품</Text>
-          <Text style={styles.cautionHelp}>보호자가 입력한 주의 식품이에요. 의학적 진단이나 권장 사항은 아니에요. 필요하면 담당 의료진과 확인해 주세요.</Text>
+          <Text style={styles.sectionTitle}>{t("babyProfile.caution.title")}</Text>
+          <Text style={styles.cautionHelp}>{t("babyProfile.caution.help")}</Text>
           <View style={styles.chips}>
-            {CAUTION_FOOD_PRESETS.filter((food) => food !== "기타").map((food) => {
+            {CAUTION_FOOD_PRESETS.slice(0, -1).map((food, foodIndex) => {
               const selected = cautionFoods.find((item) => item.foodName === food);
               return (
                 <Pressable
                   key={food}
                   style={[styles.chip, selected && styles.chipActive]}
-                  onPress={() => void (selected ? removeCautionFood(selected.id) : addCautionFood(food, "preset")).catch((cause) => setError(cause instanceof Error ? cause.message : "주의 식품을 저장하지 못했어요."))}
+                  onPress={() => void (selected ? removeCautionFood(selected.id) : addCautionFood(food, "preset")).catch(() => setError(t("babyProfile.error.cautionFood")))}
                 >
-                  <Text style={[styles.chipText, selected && styles.chipTextActive]}>{selected ? "✓ " : ""}{food}</Text>
+                  <Text style={[styles.chipText, selected && styles.chipTextActive]}>{selected ? "✓ " : ""}{t(`babyProfile.food.${["milk", "egg", "peanut", "wheat", "soy", "sesame", "nuts", "fish", "shellfish"][foodIndex]}` as Parameters<typeof t>[0])}</Text>
                 </Pressable>
               );
             })}
           </View>
           <View style={styles.customFoodRow}>
-            <TextInput style={[styles.input, styles.customFoodInput]} value={customCautionFood} onChangeText={setCustomCautionFood} placeholder="직접 추가" placeholderTextColor={colors.faint} maxLength={40} />
+            <TextInput style={[styles.input, styles.customFoodInput]} value={customCautionFood} onChangeText={setCustomCautionFood} placeholder={t("babyProfile.caution.custom")} placeholderTextColor={colors.faint} maxLength={40} />
             <Pressable style={styles.customFoodButton} onPress={() => {
               void addCautionFood(customCautionFood, "custom")
                 .then(() => setCustomCautionFood(""))
-                .catch((cause) => setError(cause instanceof Error ? cause.message : "주의 식품을 저장하지 못했어요."));
-            }}><Text style={styles.customFoodButtonText}>추가</Text></Pressable>
+                .catch(() => setError(t("babyProfile.error.cautionFood")));
+            }}><Text style={styles.customFoodButtonText}>{t("babyProfile.add")}</Text></Pressable>
           </View>
           {cautionFoods.filter((food) => food.source === "custom").map((food) => (
             <View key={food.id} style={styles.customFoodItem}>
               <Text style={styles.customFoodName}>{food.foodName}</Text>
-              <Pressable onPress={() => void removeCautionFood(food.id)}><Text style={styles.customFoodRemove}>삭제</Text></Pressable>
+              <Pressable onPress={() => void removeCautionFood(food.id)}><Text style={styles.customFoodRemove}>{t("babyProfile.delete")}</Text></Pressable>
             </View>
           ))}
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>함께 보는 가족</Text>
+          <Text style={styles.sectionTitle}>{t("babyProfile.family.title")}</Text>
           <Pressable onPress={() => navigation.navigate("MyProfile")}>
-            <Text style={styles.link}>내 프로필</Text>
+            <Text style={styles.link}>{t("babyProfile.myProfile")}</Text>
           </Pressable>
         </View>
 
         {members.length === 0 ? (
           <EmptyState
-            title="아직 공유 멤버가 없어요."
-            body="Darin ID로 요청하거나 연결된 사람을 관리해 보세요."
-            ctaLabel="가족·친구 초대"
+            title={t("babyProfile.family.emptyTitle")}
+            body={t("babyProfile.family.emptyBody")}
+            ctaLabel={t("babyProfile.family.invite")}
             onPressCta={() => navigation.navigate("FamilyShare")}
           />
         ) : (
@@ -758,11 +777,11 @@ export function BabyProfileScreen() {
               <View style={styles.memberInfo}>
                 <Text style={styles.memberName}>
                   {m.displayName}
-                  {m.isMe ? " (나)" : ""}
+                  {m.isMe ? t("babyProfile.meSuffix") : ""}
                 </Text>
                 <Text style={styles.memberRole}>
-                  {m.realName ? `${m.realName} · ` : ""}{m.relation} · {FAMILY_ROLE_LABELS[permissionToFamilyRole(m.role)]}
-                  <Text style={styles.badge}> · 가족</Text>
+                  {m.realName ? `${m.realName} · ` : ""}{relationLabel(m.relation)} · {roleLabel(permissionToFamilyRole(m.role))}
+                  <Text style={styles.badge}>{t("babyProfile.familyBadge")}</Text>
                 </Text>
                 {!m.isMe && allowManage && m.status !== "inactive" ? (
                   <View style={styles.miniRoles}>
@@ -778,11 +797,11 @@ export function BabyProfileScreen() {
                               updateFamilyMemberRole(m.userId, r);
                               return load();
                             })
-                            .catch((cause) => setError(cause instanceof Error ? cause.message : "권한을 바꾸지 못했어요."));
+                            .catch(() => setError(t("babyProfile.error.role")));
                         }}
                       >
                         <Text style={[styles.miniChipText, active && styles.miniChipTextActive]}>
-                          {FAMILY_ROLE_LABELS[r]}
+                          {roleLabel(r)}
                         </Text>
                       </Pressable>
                       );
@@ -794,10 +813,10 @@ export function BabyProfileScreen() {
                     <Pressable
                       style={styles.actionBtn}
                       onPress={() => {
-                        Alert.alert("관계를 바꿀까요?", undefined, [
-                          { text: "취소", style: "cancel" },
+                        Alert.alert(t("babyProfile.changeRelationTitle"), undefined, [
+                          { text: t("babyProfile.cancel"), style: "cancel" },
                           ...PROFILE_RELATION_OPTIONS.slice(0, 6).map((relation) => ({
-                            text: relation,
+                            text: relationLabel(relation),
                             onPress: () => {
                               void FamilyRepository.updateMemberRelation({
                                 babyId: babyId!,
@@ -805,30 +824,30 @@ export function BabyProfileScreen() {
                                 relation,
                               })
                                 .then(() => load())
-                                .catch((cause) => setError(cause instanceof Error ? cause.message : "관계를 바꾸지 못했어요."));
+                                .catch(() => setError(t("babyProfile.error.relation")));
                             },
                           })),
                         ]);
                       }}
                     >
-                      <Text style={styles.actionText}>관계 수정</Text>
+                      <Text style={styles.actionText}>{t("babyProfile.changeRelation")}</Text>
                     </Pressable>
                     {m.status !== "inactive" ? (
                       <Pressable style={styles.actionBtn} onPress={() => setFamilyMemberStatus(m.userId, "inactive")}>
-                        <Text style={styles.actionText}>비활성화</Text>
+                        <Text style={styles.actionText}>{t("babyProfile.deactivate")}</Text>
                       </Pressable>
                     ) : (
                       <Pressable style={styles.actionBtn} onPress={() => setFamilyMemberStatus(m.userId, "active")}>
-                        <Text style={styles.actionText}>다시 활성화</Text>
+                        <Text style={styles.actionText}>{t("babyProfile.reactivate")}</Text>
                       </Pressable>
                     )}
                     <Pressable
                       style={styles.actionBtn}
                       onPress={() => {
-                        Alert.alert("구성원을 제거할까요?", "다시 초대하기 전까지 이 아기의 기록에 접근할 수 없어요.", [
-                          { text: "취소", style: "cancel" },
+                        Alert.alert(t("babyProfile.removeTitle"), t("babyProfile.removeBody"), [
+                          { text: t("babyProfile.cancel"), style: "cancel" },
                           {
-                            text: "제거",
+                            text: t("babyProfile.remove"),
                             style: "destructive",
                             onPress: () => {
                               void FamilyRepository.removeMember({ babyId: babyId!, userId: m.userId })
@@ -836,28 +855,28 @@ export function BabyProfileScreen() {
                                   removeFamilyMember(m.userId);
                                   return load();
                                 })
-                                .catch((cause) => setError(cause instanceof Error ? cause.message : "구성원을 제거하지 못했어요."));
+                                .catch(() => setError(t("babyProfile.error.removeMember")));
                             },
                           },
                         ]);
                       }}
                     >
-                      <Text style={[styles.actionText, styles.danger]}>삭제</Text>
+                      <Text style={[styles.actionText, styles.danger]}>{t("babyProfile.delete")}</Text>
                     </Pressable>
                   </View>
                 ) : null}
               </View>
-              <Text style={styles.memberStatus}>{m.isMe ? "나" : FAMILY_STATUS_LABELS[m.status]}</Text>
+              <Text style={styles.memberStatus}>{m.isMe ? t("babyProfile.me") : statusLabel(m.status)}</Text>
             </View>
           ))
         )}
 
         {allowInvite ? (
           <Pressable style={styles.invite} onPress={() => navigation.navigate("FamilyShare")}>
-            <Text style={styles.inviteText}>가족·친구 공유</Text>
+            <Text style={styles.inviteText}>{t("babyProfile.share")}</Text>
           </Pressable>
         ) : (
-          <Text style={styles.viewerHint}>초대 권한이 없어요. 관리자에게 요청해 주세요.</Text>
+          <Text style={styles.viewerHint}>{t("babyProfile.noInvitePermission")}</Text>
         )}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -868,7 +887,7 @@ export function BabyProfileScreen() {
         selectedDateKey={birthDate || formatDateKey()}
         minDateKey={formatDateKey(new Date(new Date().getFullYear() - 18, 0, 1), "midnight")}
         maxDateKey={formatDateKey()}
-        title={converting ? "실제 출생일 선택" : "생년월일 선택"}
+        title={converting ? t("babyProfile.selectActualBirthDate") : t("babyProfile.selectBirthDate")}
         onSelect={setBirthDate}
         onClose={() => setBirthPickerOpen(false)}
       />
@@ -877,7 +896,7 @@ export function BabyProfileScreen() {
         selectedDateKey={dueDate || formatDateKey()}
         minDateKey={formatDateKey(new Date(new Date().getFullYear() - 1, 0, 1), "midnight")}
         maxDateKey={offsetDateKey(formatDateKey(), 365)}
-        title="출산 예정일 선택"
+        title={t("babyProfile.selectDueDate")}
         onSelect={setDueDate}
         onClose={() => setDuePickerOpen(false)}
       />

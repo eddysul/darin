@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useLanguage } from "../../LanguageContext";
 import {
   AppSettingsModal,
   type SettingsPage,
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function TermsConsentScreen({ onAccept }: Props) {
+  const { t } = useLanguage();
   const [ageOk, setAgeOk] = useState(false);
   const [termsOk, setTermsOk] = useState(false);
   const [privacyOk, setPrivacyOk] = useState(false);
@@ -23,41 +25,53 @@ export function TermsConsentScreen({ onAccept }: Props) {
   return (
     <>
       <OnboardingShell
-        title="시작하기 전에"
-        subtitle="서비스 이용을 위한 필수 동의만 확인해주세요."
-        primaryLabel="동의하고 시작하기"
+        title={t("terms.title")}
+        subtitle={t("terms.subtitle")}
+        primaryLabel={t("terms.accept")}
         primaryDisabled={!requiredOk}
         onPrimary={() => onAccept(marketingOk)}
       >
         <CheckRow
           required
-          label="만 14세 이상입니다."
+          label={t("terms.age")}
+          requiredLabel={t("terms.required")}
+          optionalLabel={t("terms.optional")}
+          viewText={t("terms.view")}
           checked={ageOk}
           onToggle={() => setAgeOk((v) => !v)}
         />
         <CheckRow
           required
-          label="이용약관에 동의합니다."
+          label={t("terms.service")}
+          requiredLabel={t("terms.required")}
+          optionalLabel={t("terms.optional")}
+          viewText={t("terms.view")}
           checked={termsOk}
           onToggle={() => setTermsOk((v) => !v)}
           onView={() => setPolicyPage("terms")}
-          viewLabel="이용약관 전문 보기"
+          viewLabel={t("terms.serviceView")}
         />
         <CheckRow
           required
-          label="개인정보 수집 및 이용에 동의합니다."
+          label={t("terms.privacy")}
+          requiredLabel={t("terms.required")}
+          optionalLabel={t("terms.optional")}
+          viewText={t("terms.view")}
           checked={privacyOk}
           onToggle={() => setPrivacyOk((v) => !v)}
           onView={() => setPolicyPage("privacy")}
-          viewLabel="개인정보처리방침 전문 보기"
+          viewLabel={t("terms.privacyView")}
         />
         <CheckRow
-          label="마케팅 알림 수신에 동의합니다. (선택)"
+          label={t("terms.marketing")}
+          requiredLabel={t("terms.required")}
+          optionalLabel={t("terms.optional")}
+          viewText={t("terms.view")}
           checked={marketingOk}
           onToggle={() => setMarketingOk((v) => !v)}
         />
         <Text style={styles.note}>
-          약관과 개인정보 안내는 각 항목의 ‘보기’에서 바로 확인할 수 있어요. 로그인 후에도 메뉴 › 이용약관 및 개인정보 안내에서 다시 볼 수 있어요.
+          {t("terms.note")}
         </Text>
       </OnboardingShell>
 
@@ -73,6 +87,9 @@ function CheckRow({
   required,
   onView,
   viewLabel,
+  requiredLabel,
+  optionalLabel,
+  viewText,
 }: {
   label: string;
   checked: boolean;
@@ -80,6 +97,9 @@ function CheckRow({
   required?: boolean;
   onView?: () => void;
   viewLabel?: string;
+  requiredLabel: string;
+  optionalLabel: string;
+  viewText: string;
 }) {
   return (
     <View style={styles.row}>
@@ -93,7 +113,7 @@ function CheckRow({
           {checked ? <Text style={styles.check}>✓</Text> : null}
         </View>
         <Text style={styles.label}>
-          {required ? <Text style={styles.req}>[필수] </Text> : <Text style={styles.opt}>[선택] </Text>}
+          {required ? <Text style={styles.req}>{requiredLabel}</Text> : <Text style={styles.opt}>{optionalLabel}</Text>}
           {label}
         </Text>
       </Pressable>
@@ -102,9 +122,9 @@ function CheckRow({
           style={styles.viewBtn}
           onPress={onView}
           accessibilityRole="link"
-          accessibilityLabel={viewLabel ?? "전문 보기"}
+          accessibilityLabel={viewLabel ?? viewText}
         >
-          <Text style={styles.viewText}>보기</Text>
+          <Text style={styles.viewText}>{viewText}</Text>
         </Pressable>
       ) : null}
     </View>
