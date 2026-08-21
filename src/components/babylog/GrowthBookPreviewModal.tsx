@@ -7,6 +7,7 @@ import type { GrowthBookEdit } from "../../types/growthBook";
 import { buildGrowthBookPages } from "../../utils/growthBookPages";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { GrowthBookReader } from "./GrowthBookReader";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   visible: boolean;
@@ -34,6 +35,7 @@ export function GrowthBookPreviewModal({
   onPdfCreate,
   initialPageIndex = 0,
 }: Props) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { babyStickers } = useBabyLog();
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
@@ -63,9 +65,9 @@ export function GrowthBookPreviewModal({
 
       <View style={styles.topBar}>
         <Pressable onPress={onClose} hitSlop={10} style={styles.topBtn}>
-          <Text style={styles.topBtnText}>닫기</Text>
+          <Text style={styles.topBtnText}>{t("growth.critical.008")}</Text>
         </Pressable>
-        <Text style={styles.topTitle}>책 읽기</Text>
+        <Text style={styles.topTitle}>{t("growth.critical.069")}</Text>
         <View style={styles.topBtn} />
       </View>
 

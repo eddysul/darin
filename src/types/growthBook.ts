@@ -1,5 +1,8 @@
 /** Growth book edit models — separate from Diary (원본 일기). */
 
+import type { DiaryCoverTemplateId } from "../constants/diaryCoverTemplates";
+import type { DiaryPageTemplateId } from "../constants/diaryPageTemplates";
+
 export type LegacyPhotoLayout = 1 | 2 | 3 | 4;
 
 export type PhotoLayout =
@@ -131,6 +134,7 @@ export type GrowthBookPageEdit = {
   rollingComments: GrowthBookComment[];
   /** @deprecated legacy footer sticker ids; normalized to pageStickers when read. */
   stickerIds?: string[];
+  pageTemplateId?: DiaryPageTemplateId;
 };
 
 export type GrowthBookEdit = {
@@ -140,6 +144,9 @@ export type GrowthBookEdit = {
   coverSubtitle?: string;
   coverDateRange?: string;
   coverPhotoUri: string | null;
+  coverTemplateId?: DiaryCoverTemplateId;
+  pageTemplateId?: DiaryPageTemplateId;
+  letterTemplateId?: DiaryPageTemplateId;
   /** diaryId → page edit */
   pages: Record<string, GrowthBookPageEdit>;
   letters: GrowthBookLetter[];
@@ -207,6 +214,8 @@ export function createEmptyGrowthBookEdit(input: {
     babyId: input.babyId,
     coverTitle: `${input.babyName}의 성장책`,
     coverPhotoUri: null,
+    coverTemplateId: "cloud_sky",
+    pageTemplateId: "basic_line",
     pages: {},
     letters: [],
     updatedAt: now,

@@ -5,6 +5,7 @@ import type { GrowthRecord } from "../../types/growthRecord";
 import { colors, radius } from "../../theme";
 import { formatWeight, lengthFromCm } from "../../utils/measurementFormat";
 import { BabyLogIcon } from "./BabyLogIcon";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   visible?: boolean;
@@ -41,16 +42,17 @@ export function GrowthRecordsManagerModal({
   onEdit,
   onDelete,
 }: Props) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const sorted = [...records].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt));
 
   const confirmDelete = (record: GrowthRecord) => {
     Alert.alert(
-      "성장 기록을 삭제할까요?",
-      "이 성장 기록만 삭제돼요. 돌봄 기록과 일기 원본에는 영향을 주지 않아요.",
+      t("growth.critical.114"),
+      t("growth.critical.115"),
       [
-        { text: "취소", style: "cancel" },
-        { text: "삭제", style: "destructive", onPress: () => onDelete(record.id) },
+        { text: t("growth.critical.066"), style: "cancel" },
+        { text: t("growth.critical.036"), style: "destructive", onPress: () => onDelete(record.id) },
       ],
     );
   };
@@ -58,8 +60,8 @@ export function GrowthRecordsManagerModal({
   const content = (
     <View style={styles.root}>
         {!embedded ? <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
-          <Pressable style={styles.headerSide} onPress={onClose}><Text style={styles.closeText}>닫기</Text></Pressable>
-          <Text style={styles.headerTitle}>성장 기록 관리</Text>
+          <Pressable style={styles.headerSide} onPress={onClose}><Text style={styles.closeText}>{t("growth.critical.008")}</Text></Pressable>
+          <Text style={styles.headerTitle}>{t("growth.critical.116")}</Text>
           <View style={styles.headerSide} />
         </View> : null}
 
@@ -67,41 +69,41 @@ export function GrowthRecordsManagerModal({
           <View style={styles.intro}>
             <View style={styles.introIcon}><BabyLogIcon kind="tab" tab="report" size={23} color="#69AFA0" /></View>
             <View style={styles.introCopy}>
-              <Text style={styles.introTitle}>검진 때의 성장을 차곡차곡</Text>
-              <Text style={styles.introBody}>병원이나 집에서 측정한 값만 기록하며 의료 판단은 제공하지 않아요.</Text>
+              <Text style={styles.introTitle}>{t("growth.critical.117")}</Text>
+              <Text style={styles.introBody}>{t("growth.critical.118")}</Text>
             </View>
           </View>
 
-          <Pressable style={styles.addButton} onPress={onAdd} accessibilityRole="button" accessibilityLabel="성장 기록 추가">
-            <Text style={styles.addButtonText}>+ 성장 기록 추가</Text>
+          <Pressable style={styles.addButton} onPress={onAdd} accessibilityRole="button" accessibilityLabel={t("growth.critical.095")}>
+            <Text style={styles.addButtonText}>{t("growth.critical.119")}</Text>
           </Pressable>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>최근 성장 기록</Text>
-            <Text style={styles.sectionCount}>{sorted.length}개</Text>
+            <Text style={styles.sectionTitle}>{t("growth.critical.120")}</Text>
+            <Text style={styles.sectionCount}>{t("growth.critical.121", { count: sorted.length })}</Text>
           </View>
 
           {sorted.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>아직 성장 기록이 없어요.</Text>
-              <Text style={styles.emptyBody}>키·몸무게·머리둘레를 입력하면 최근 흐름을 한눈에 볼 수 있어요.</Text>
+              <Text style={styles.emptyTitle}>{t("growth.critical.122")}</Text>
+              <Text style={styles.emptyBody}>{t("growth.critical.123")}</Text>
             </View>
           ) : sorted.map((record) => (
             <View key={record.id} style={styles.card}>
               <View style={styles.cardTop}>
                 <View>
                   <Text style={styles.date}>{displayDate(record.measuredAt)}</Text>
-                  <Text style={styles.source}>{record.source === "hospital" ? "병원 측정" : "집에서 측정"}</Text>
+                  <Text style={styles.source}>{record.source === "hospital" ? t("growth.critical.124") : t("growth.critical.125")}</Text>
                 </View>
                 <View style={styles.cardActions}>
-                  <Pressable style={styles.smallButton} onPress={() => onEdit(record)}><Text style={styles.smallButtonText}>수정</Text></Pressable>
-                  <Pressable style={[styles.smallButton, styles.deleteButton]} onPress={() => confirmDelete(record)}><Text style={styles.deleteText}>삭제</Text></Pressable>
+                  <Pressable style={styles.smallButton} onPress={() => onEdit(record)}><Text style={styles.smallButtonText}>{t("growth.critical.046")}</Text></Pressable>
+                  <Pressable style={[styles.smallButton, styles.deleteButton]} onPress={() => confirmDelete(record)}><Text style={styles.deleteText}>{t("growth.critical.036")}</Text></Pressable>
                 </View>
               </View>
               <View style={styles.metrics}>
-                <Metric label="몸무게" value={record.weightKg === undefined ? "-" : formatWeight(record.weightKg, weightUnit)} />
-                <Metric label="키" value={displayLength(record.heightCm, heightUnit)} />
-                <Metric label="머리둘레" value={displayLength(record.headCircumferenceCm, heightUnit)} last />
+                <Metric label={t("growth.critical.101")} value={record.weightKg === undefined ? "-" : formatWeight(record.weightKg, weightUnit)} />
+                <Metric label={t("growth.critical.126")} value={displayLength(record.heightCm, heightUnit)} />
+                <Metric label={t("growth.critical.104")} value={displayLength(record.headCircumferenceCm, heightUnit)} last />
               </View>
               {record.note ? <Text style={styles.note} numberOfLines={2}>{record.note}</Text> : null}
             </View>

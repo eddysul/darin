@@ -17,6 +17,10 @@ export const STORAGE_KEYS = {
   growthRecords: "darin:growth-records",
   growthRecordsMigration: "darin:growth-records-migration",
   activeTimers: "darin:active-timers",
+  /** Cached weekly report copy. Regenerated about once a week. */
+  weeklyNarrative: "darin:weekly-narrative",
+  /** Cached insight sentences after local correlation. */
+  insightPhrases: "darin:insight-phrases",
   appSettings: "darin:app-settings",
   termsAccepted: "darin:terms-accepted",
   /** Optional marketing consent captured on the terms screen, with the decision time. */

@@ -12,6 +12,7 @@ import { colors } from "../../theme";
 import { lengthFromCm, lengthToCm, weightFromKg, weightToKg } from "../../utils/measurementFormat";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { DatePickerField, DatePickerSheet } from "../inputs/TimePickerFields";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   visible: boolean;
@@ -42,6 +43,7 @@ function UnitToggle<T extends string>({ value, options, onChange }: { value: T; 
 }
 
 export function GrowthRecordModal({ visible, record, initialSource = "hospital", initialMeasuredAt, onClose, onDismiss, onSave }: Props) {
+  const { t } = useLanguage();
   const { settings } = useAppSettings();
   const preferredWeightUnit: GrowthWeightUnit = settings.units.weight;
   const preferredLengthUnit: GrowthLengthUnit = settings.units.height === "inch" ? "in" : "cm";
@@ -107,9 +109,9 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
       onClose();
       return;
     }
-    Alert.alert("변경사항을 취소할까요?", "저장하지 않은 성장 기록은 사라져요.", [
-      { text: "계속 편집", style: "cancel" },
-      { text: "변경사항 취소", style: "destructive", onPress: onClose },
+    Alert.alert(t("growth.critical.086"), t("growth.critical.087"), [
+      { text: t("growth.critical.088"), style: "cancel" },
+      { text: t("growth.critical.089"), style: "destructive", onPress: onClose },
     ]);
   };
 
@@ -134,14 +136,14 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
 
   const save = () => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(measuredAt)) {
-      Alert.alert("측정일을 확인해주세요", "YYYY-MM-DD 형식으로 입력해주세요.");
+      Alert.alert(t("growth.critical.090"), t("growth.critical.091"));
       return;
     }
     const weightKg = weightToKg(weight, weightUnit);
     const heightCm = lengthToCm(height, heightUnit);
     const headCircumferenceCm = lengthToCm(head, headUnit);
     if (weightKg === undefined && heightCm === undefined && headCircumferenceCm === undefined) {
-      Alert.alert("측정값을 입력해주세요", "몸무게, 키, 머리둘레 중 하나 이상 입력해주세요.");
+      Alert.alert(t("growth.critical.092"), t("growth.critical.093"));
       return;
     }
     onSave({
@@ -171,39 +173,39 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
           <View style={styles.titleRow}>
             <View style={styles.titleIcon}><BabyLogIcon kind="tab" tab="report" size={20} color={colors.amberText} /></View>
             <View style={styles.titleCopy}>
-              <Text style={styles.title}>{record ? "성장 기록 수정" : "성장 기록 추가"}</Text>
-              <Text style={styles.subtitle}>입력값은 kg·cm로 안전하게 변환해 저장해요.</Text>
+              <Text style={styles.title}>{record ? t("growth.critical.094") : t("growth.critical.095")}</Text>
+              <Text style={styles.subtitle}>{t("growth.critical.096")}</Text>
             </View>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <DatePickerField label="측정일" valueDateKey={measuredAt} onPress={() => setDatePickerOpen(true)} />
+            <DatePickerField label={t("growth.critical.097")} valueDateKey={measuredAt} onPress={() => setDatePickerOpen(true)} />
 
-            <MeasurementField label="키 / 신장" value={height} onChangeText={setHeight} unit={<UnitToggle value={heightUnit} options={["cm", "in"] as const} onChange={(next) => changeLengthUnit("height", next)} />} placeholder={heightUnit === "cm" ? "예: 66.0" : "예: 26.0"} />
-            <MeasurementField label="몸무게" value={weight} onChangeText={setWeight} unit={<UnitToggle value={weightUnit} options={["kg", "lb"] as const} onChange={changeWeightUnit} />} placeholder={weightUnit === "kg" ? "예: 7.2" : "예: 15.9"} />
-            <MeasurementField label="머리둘레" value={head} onChangeText={setHead} unit={<UnitToggle value={headUnit} options={["cm", "in"] as const} onChange={(next) => changeLengthUnit("head", next)} />} placeholder={headUnit === "cm" ? "예: 43.2" : "예: 17.0"} />
+            <MeasurementField label={t("growth.critical.098")} value={height} onChangeText={setHeight} unit={<UnitToggle value={heightUnit} options={["cm", "in"] as const} onChange={(next) => changeLengthUnit("height", next)} />} placeholder={heightUnit === "cm" ? t("growth.critical.099") : t("growth.critical.100")} />
+            <MeasurementField label={t("growth.critical.101")} value={weight} onChangeText={setWeight} unit={<UnitToggle value={weightUnit} options={["kg", "lb"] as const} onChange={changeWeightUnit} />} placeholder={weightUnit === "kg" ? t("growth.critical.102") : t("growth.critical.103")} />
+            <MeasurementField label={t("growth.critical.104")} value={head} onChangeText={setHead} unit={<UnitToggle value={headUnit} options={["cm", "in"] as const} onChange={(next) => changeLengthUnit("head", next)} />} placeholder={headUnit === "cm" ? t("growth.critical.105") : t("growth.critical.106")} />
 
-            <Text style={styles.label}>측정 장소</Text>
+            <Text style={styles.label}>{t("growth.critical.107")}</Text>
             <View style={styles.sourceRow}>
               {(["hospital", "home"] as const).map((option) => (
                 <Pressable key={option} style={[styles.sourceBtn, source === option && styles.sourceBtnActive]} onPress={() => setSource(option)}>
-                  <Text style={[styles.sourceText, source === option && styles.sourceTextActive]}>{option === "hospital" ? "병원" : "집"}</Text>
+                  <Text style={[styles.sourceText, source === option && styles.sourceTextActive]}>{option === "hospital" ? t("growth.critical.108") : t("growth.critical.109")}</Text>
                 </Pressable>
               ))}
             </View>
 
-            <Text style={styles.label}>메모</Text>
-            <TextInput style={[styles.input, styles.noteInput]} value={note} onChangeText={setNote} multiline placeholder="검진 내용이나 측정 상황을 남겨보세요" placeholderTextColor={colors.faint} />
+            <Text style={styles.label}>{t("growth.critical.110")}</Text>
+            <TextInput style={[styles.input, styles.noteInput]} value={note} onChangeText={setNote} multiline placeholder={t("growth.critical.111")} placeholderTextColor={colors.faint} />
 
             <View style={styles.actions}>
-              <Pressable style={[styles.actionBtn, styles.cancelBtn]} onPress={requestClose}><Text style={styles.cancelText}>취소</Text></Pressable>
-              <Pressable style={[styles.actionBtn, styles.saveBtn]} onPress={save}><Text style={styles.saveText}>저장</Text></Pressable>
+              <Pressable style={[styles.actionBtn, styles.cancelBtn]} onPress={requestClose}><Text style={styles.cancelText}>{t("growth.critical.066")}</Text></Pressable>
+              <Pressable style={[styles.actionBtn, styles.saveBtn]} onPress={save}><Text style={styles.saveText}>{t("growth.critical.112")}</Text></Pressable>
             </View>
           </ScrollView>
           <DatePickerSheet
             visible={datePickerOpen}
             valueDateKey={measuredAt}
-            title="측정일 선택"
+            title={t("growth.critical.113")}
             minYear={1900}
             maxYear={new Date().getFullYear()}
             onCancel={() => setDatePickerOpen(false)}

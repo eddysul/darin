@@ -21,9 +21,11 @@ import { createGrowthBookPdf } from "../../utils/growthBookPdf";
 import { colors, radius } from "../../theme";
 import { EmptyState } from "../states/FeedbackStates";
 import { BabyLogIcon } from "./BabyLogIcon";
+import { DiaryCoverTemplate } from "./DiaryCoverTemplate";
 import { DiaryMoodStamp, DiaryStampPair } from "./DiaryStamp";
 import { GrowthBookPreviewModal } from "./GrowthBookPreviewModal";
 import { useBabyLog } from "../../context/BabyLogContext";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   visible: boolean;
@@ -48,6 +50,7 @@ export function GrowthBookVaultModal({
   onOpenEditor,
   onGoToDiary,
 }: Props) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { babyStickers } = useBabyLog();
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -59,7 +62,7 @@ export function GrowthBookVaultModal({
   const photoCount = useMemo(() => growthBookPhotoCount(sorted, edit), [edit, sorted]);
   const pageEstimate = estimateGrowthBookPageCount(sorted.length);
   const canRead = sorted.length > 0;
-  const coverTitle = edit?.coverTitle?.trim() || `${babyName}의 성장책`;
+  const coverTitle = edit?.coverTitle?.trim() || t("growth.critical.139", { babyName });
   const coverRange = edit?.coverDateRange?.trim() ?? "";
   const coverPhoto = resolveGrowthBookCoverPhoto(sorted, edit);
   const letterCount = edit?.letters?.length ?? 0;
@@ -84,11 +87,11 @@ export function GrowthBookVaultModal({
 
   const confirmRemove = (entry: DiaryEntry) => {
     Alert.alert(
-      "성장책에서 제거할까요?",
-      "성장책에서만 제거돼요. 원본 일기는 그대로 남아 있어요.",
+      t("growth.critical.064"),
+      t("growth.critical.065"),
       [
-        { text: "취소", style: "cancel" },
-        { text: "제거", style: "destructive", onPress: () => onRemove(entry.id) },
+        { text: t("growth.critical.066"), style: "cancel" },
+        { text: t("growth.critical.067"), style: "destructive", onPress: () => onRemove(entry.id) },
       ],
     );
   };
@@ -103,8 +106,8 @@ export function GrowthBookVaultModal({
     >
       <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.header}>
-          <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="닫기">
-            <Text style={styles.headerBtn}>닫기</Text>
+          <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel={t("growth.critical.008")}>
+            <Text style={styles.headerBtn}>{t("growth.critical.008")}</Text>
           </Pressable>
           <Text style={styles.headerTitle} numberOfLines={1}>{coverTitle}</Text>
           <View style={styles.headerSpacer} />
@@ -116,19 +119,20 @@ export function GrowthBookVaultModal({
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.hero}>
-            {coverPhoto ? (
-              <Image source={{ uri: coverPhoto }} style={styles.heroCover} contentFit="cover" />
-            ) : (
-              <View style={styles.heroCoverFallback}>
-                <BabyLogIcon kind="tab" tab="diary" size={22} color={colors.amberText} />
-              </View>
-            )}
+            <View style={styles.heroCover}>
+              <DiaryCoverTemplate
+                fill
+                styleId={edit?.coverTemplateId}
+                photoUri={coverPhoto}
+                title={coverTitle}
+                subtitle={edit?.coverSubtitle}
+                caption={coverRange}
+              />
+            </View>
             <View style={styles.heroCopy}>
               <Text style={styles.heroTitle}>{coverTitle}</Text>
               {coverRange ? <Text style={styles.heroRange}>{coverRange}</Text> : null}
-              <Text style={styles.heroStats}>
-                담은 기록 {sorted.length}개 · 사진 {photoCount}장 · 예상 {pageEstimate}쪽
-              </Text>
+              <Text style={styles.heroStats}>{t("growth.critical.068", { entries: sorted.length, photos: photoCount, pages: pageEstimate })}</Text>
             </View>
           </View>
 
@@ -136,37 +140,37 @@ export function GrowthBookVaultModal({
             style={[styles.readBtn, !canRead && styles.btnDisabled]}
             disabled={!canRead}
             accessibilityRole="button"
-            accessibilityLabel="책 읽기"
+            accessibilityLabel={t("growth.critical.069")}
             onPress={() => openPreviewAt(0)}
           >
             <BabyLogIcon kind="tab" tab="diary" size={15} color={colors.amberDark} />
-            <Text style={styles.readBtnText}>책 읽기</Text>
+            <Text style={styles.readBtnText}>{t("growth.critical.069")}</Text>
           </Pressable>
 
           <Pressable
             style={[styles.decorateBtn, !canRead && styles.btnDisabled]}
             disabled={!canRead}
             accessibilityRole="button"
-            accessibilityLabel="꾸미기"
+            accessibilityLabel={t("growth.critical.070")}
             onPress={() => {
               if (!canRead) return;
               onOpenEditor?.();
             }}
           >
             <BabyLogIcon kind="edit" size={15} color={colors.amberText} />
-            <Text style={styles.decorateBtnText}>꾸미기</Text>
+            <Text style={styles.decorateBtnText}>{t("growth.critical.070")}</Text>
           </Pressable>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>목차</Text>
-            <Text style={styles.sectionHint}>페이지를 누르면 그 장부터 읽어요.</Text>
+            <Text style={styles.sectionTitle}>{t("growth.critical.071")}</Text>
+            <Text style={styles.sectionHint}>{t("growth.critical.072")}</Text>
           </View>
 
           {sorted.length === 0 ? (
             <EmptyState
-              title="아직 성장책에 담긴 일기가 없어요."
-              body="일기에서 기억하고 싶은 순간을 골라 성장책에 담아보세요."
-              ctaLabel="일기 보러가기"
+              title={t("growth.critical.073")}
+              body={t("growth.critical.074")}
+              ctaLabel={t("growth.critical.075")}
               onPressCta={onGoToDiary}
             />
           ) : (
@@ -175,7 +179,7 @@ export function GrowthBookVaultModal({
                 style={styles.card}
                 onPress={() => openPreviewAt(0)}
                 accessibilityRole="button"
-                accessibilityLabel="표지부터 읽기"
+                accessibilityLabel={t("growth.critical.076")}
               >
                 <View style={styles.cardContent}>
                   <Text style={styles.index}>1</Text>
@@ -187,7 +191,7 @@ export function GrowthBookVaultModal({
                     </View>
                   )}
                   <View style={styles.body}>
-                    <Text style={styles.kind}>표지</Text>
+                    <Text style={styles.kind}>{t("growth.critical.077")}</Text>
                     <Text style={styles.comment} numberOfLines={2}>{coverTitle}</Text>
                   </View>
                 </View>
@@ -207,7 +211,7 @@ export function GrowthBookVaultModal({
                     style={styles.card}
                     onPress={() => openPreviewAt(index + 1)}
                     accessibilityRole="button"
-                    accessibilityLabel={`${entry.date}부터 읽기`}
+                    accessibilityLabel={t("growth.critical.140", { date: entry.date })}
                   >
                     <View style={styles.cardContent}>
                       <Text style={styles.index}>{pageNumber}</Text>
@@ -232,8 +236,8 @@ export function GrowthBookVaultModal({
                         </Text>
                         {milestone ? <Text style={styles.tag}>{milestone}</Text> : null}
                         <View style={styles.metaRow}>
-                          <Text style={styles.metaChip}>사진 {entryPhotoCount}장</Text>
-                          <Text style={styles.metaChip}>코멘트 {hasComment ? "있음" : "없음"}</Text>
+                          <Text style={styles.metaChip}>{t("growth.critical.078", { count: entryPhotoCount })}</Text>
+                          <Text style={styles.metaChip}>{t("growth.critical.025")} {hasComment ? t("growth.critical.079") : t("growth.critical.080")}</Text>
                         </View>
                       </View>
                     </View>
@@ -245,10 +249,10 @@ export function GrowthBookVaultModal({
                           confirmRemove(entry);
                         }}
                         accessibilityRole="button"
-                        accessibilityLabel="성장책에서 제거"
+                        accessibilityLabel={t("growth.critical.081")}
                       >
                         <BabyLogIcon kind="trash" size={13} color={colors.dangerText} />
-                        <Text style={styles.removeText}>제거</Text>
+                        <Text style={styles.removeText}>{t("growth.critical.067")}</Text>
                       </Pressable>
                     </View>
                   </Pressable>
@@ -259,7 +263,7 @@ export function GrowthBookVaultModal({
                 style={styles.card}
                 onPress={() => openPreviewAt(letterIndex)}
                 accessibilityRole="button"
-                accessibilityLabel="편지부터 읽기"
+                accessibilityLabel={t("growth.critical.082")}
               >
                 <View style={styles.cardContent}>
                   <Text style={styles.index}>{letterIndex + 1}</Text>
@@ -267,9 +271,9 @@ export function GrowthBookVaultModal({
                     <BabyLogIcon kind="chat" size={20} color={colors.muted} />
                   </View>
                   <View style={styles.body}>
-                    <Text style={styles.kind}>편지</Text>
+                    <Text style={styles.kind}>{t("growth.critical.083")}</Text>
                     <Text style={styles.comment} numberOfLines={2}>
-                      {letterCount > 0 ? `${letterCount}통의 편지` : "사랑하는 너에게"}
+                      {letterCount > 0 ? t("growth.critical.084", { count: letterCount }) : t("growth.critical.085")}
                     </Text>
                   </View>
                 </View>
@@ -319,7 +323,7 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
-  heroCover: { width: 64, height: 80, borderRadius: 10 },
+  heroCover: { width: 64, height: 80, borderRadius: 10, overflow: "hidden" },
   heroCoverFallback: {
     width: 64,
     height: 80,

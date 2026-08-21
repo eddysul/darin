@@ -39,7 +39,6 @@ import {
   buildGrowthBookPageMeta,
   buildGrowthBookPaginationItems,
   buildGrowthBookPages,
-  collectGrowthBookPhotoPool,
   resolvePageBody,
   resolvePageEdit,
   resolvePagePhotos,
@@ -53,7 +52,6 @@ import {
   SECONDARY_RATIO_LAYOUTS,
   getPhotoLayoutCount,
   getPhotoLayoutSlots,
-  photoLayoutLabel,
   swapPhotoOrder,
 } from "../../utils/growthBookPhotoLayouts";
 import { diaryMilestoneLabel, sortGrowthBookEntries } from "../../utils/diaryModel";
@@ -67,6 +65,11 @@ import {
   type GrowthBookCanvasMode,
 } from "./GrowthBookPageCanvas";
 import { GrowthBookReader } from "./GrowthBookReader";
+import { DiaryCoverPicker } from "./DiaryCoverPicker";
+import { DiaryCoverTemplate } from "./DiaryCoverTemplate";
+import { DiaryPageStylePicker } from "./DiaryPageStylePicker";
+import { useLanguage } from "../../LanguageContext";
+import type { GrowthCriticalKey } from "../../i18nGrowthCriticalMessages";
 
 type Props = {
   visible: boolean;
@@ -80,6 +83,22 @@ type Props = {
   onClose: () => void;
   onDismiss?: () => void;
   initialDiaryId?: string | null;
+};
+
+const PHOTO_LAYOUT_MESSAGE_KEYS: Record<PhotoLayout, GrowthCriticalKey> = {
+  single_large: "growth.critical.142",
+  two_vertical: "growth.critical.143",
+  two_horizontal: "growth.critical.144",
+  two_left_large: "growth.critical.145",
+  two_top_large: "growth.critical.146",
+  three_top_large_bottom_two: "growth.critical.147",
+  three_left_large_right_two: "growth.critical.148",
+  three_right_large_left_two: "growth.critical.149",
+  three_equal: "growth.critical.150",
+  three_left_large_right_top_medium_bottom_small: "growth.critical.151",
+  four_grid: "growth.critical.152",
+  four_top_large_bottom_three: "growth.critical.153",
+  four_left_large_right_three: "growth.critical.154",
 };
 
 function newId(prefix: string) {
@@ -109,6 +128,7 @@ export function GrowthBookEditorModal({
   onDismiss,
   initialDiaryId,
 }: Props) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
   const { babyStickers } = useBabyLog();
@@ -217,20 +237,20 @@ export function GrowthBookEditorModal({
               onPress={onClose}
               hitSlop={10}
               accessibilityRole="button"
-              accessibilityLabel="목차로"
+              accessibilityLabel={t("growth.critical.001")}
               style={styles.headerBtnHit}
             >
-              <Text style={styles.headerBtn}>목차로</Text>
+              <Text style={styles.headerBtn}>{t("growth.critical.001")}</Text>
             </Pressable>
-            <Text style={styles.headerTitle}>성장책 편집</Text>
+            <Text style={styles.headerTitle}>{t("growth.critical.002")}</Text>
             <Pressable
               onPress={() => setPageMode((current) => current === "edit" ? "preview" : "edit")}
               hitSlop={10}
               style={styles.headerModeBtn}
               accessibilityRole="button"
-              accessibilityLabel={pageMode === "edit" ? "미리보기" : "편집"}
+              accessibilityLabel={pageMode === "edit" ? t("growth.critical.003") : t("growth.critical.004")}
             >
-              <Text style={styles.headerBtn}>{pageMode === "edit" ? "미리보기" : "편집"}</Text>
+              <Text style={styles.headerBtn}>{pageMode === "edit" ? t("growth.critical.003") : t("growth.critical.004")}</Text>
             </Pressable>
           </View>
         )}
@@ -317,6 +337,7 @@ function BookPageNavigation({
   onPrevious,
   onNext,
 }: BookPageNavigationProps) {
+  const { t } = useLanguage();
   const paginationItems = buildGrowthBookPaginationItems(pages.length, activeIndex);
   const atStart = activeIndex <= 0;
   const atEnd = activeIndex >= pages.length - 1;
@@ -328,7 +349,7 @@ function BookPageNavigation({
           onPress={onPrevious}
           style={styles.pageArrow}
           accessibilityRole="button"
-          accessibilityLabel="이전 페이지"
+          accessibilityLabel={t("growth.critical.005")}
         >
           <View style={styles.pageArrowPrev}>
             <BabyLogIcon kind="chevron" size={18} color={atStart ? colors.faint : colors.text} />
@@ -340,7 +361,7 @@ function BookPageNavigation({
           onPress={onNext}
           style={styles.pageArrow}
           accessibilityRole="button"
-          accessibilityLabel="다음 페이지"
+          accessibilityLabel={t("growth.critical.006")}
         >
           <BabyLogIcon kind="chevron" size={18} color={atEnd ? colors.faint : colors.text} />
         </Pressable>
@@ -356,7 +377,7 @@ function BookPageNavigation({
               onPress={() => onSelect(item.index)}
               style={[styles.pageChip, activeIndex === item.index && styles.pageChipActive]}
               accessibilityRole="button"
-              accessibilityLabel={`${page.title} 페이지`}
+              accessibilityLabel={t("growth.critical.141", { title: page.title })}
               accessibilityState={{ selected: activeIndex === item.index }}
             >
               <Text style={[styles.pageChipText, activeIndex === item.index && styles.pageChipTextActive]}>
@@ -425,7 +446,6 @@ function CoverBookPageEditor({
   page,
   mode,
   edit,
-  entries,
   bottomPad,
   navigation,
   onPatch,
@@ -439,6 +459,7 @@ function CoverBookPageEditor({
   navigation: BookPageNavigationProps;
   onPatch: (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => void;
 }) {
+  const { t } = useLanguage();
   const [sheetOpen, setSheetOpen] = useState(false);
   const { babyStickers } = useBabyLog();
   useEffect(() => {
@@ -452,7 +473,7 @@ function CoverBookPageEditor({
       <BookPageNavigation {...navigation} />
       {mode === "edit" ? (
         <View style={styles.editorToolbarCompact}>
-          <EditorTool label="표지 편집" icon="edit" onPress={() => setSheetOpen(true)} />
+          <EditorTool label={t("growth.critical.007")} icon="edit" onPress={() => setSheetOpen(true)} />
         </View>
       ) : null}
       {sheetOpen ? (
@@ -461,10 +482,10 @@ function CoverBookPageEditor({
           <View style={[styles.editorSheet, { paddingBottom: bottomPad + 14 }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>표지 편집</Text>
-              <Pressable onPress={() => setSheetOpen(false)}><Text style={styles.sheetClose}>닫기</Text></Pressable>
+              <Text style={styles.sheetTitle}>{t("growth.critical.007")}</Text>
+              <Pressable onPress={() => setSheetOpen(false)}><Text style={styles.sheetClose}>{t("growth.critical.008")}</Text></Pressable>
             </View>
-            <CoverEditor babyName={babyName} edit={edit} entries={entries} bottomPad={0} onPatch={onPatch} />
+            <CoverEditor babyName={babyName} edit={edit} bottomPad={0} onPatch={onPatch} />
           </View>
         </View>
       ) : null}
@@ -493,11 +514,13 @@ function FinalLetterBookPageEditor({
   navigation: BookPageNavigationProps;
   onPatch: (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => void;
 }) {
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const { t } = useLanguage();
+  const [sheet, setSheet] = useState<"letter" | "template" | null>(null);
   const { babyStickers } = useBabyLog();
   useEffect(() => {
-    if (mode !== "edit") setSheetOpen(false);
+    if (mode !== "edit") setSheet(null);
   }, [mode]);
+  const letterTemplateId = edit.letterTemplateId ?? edit.pageTemplateId ?? "basic_line";
   return (
     <View style={[styles.pageWorkspace, { paddingBottom: mode === "edit" ? bottomPad : Math.max(bottomPad, 10) }]}>
       <SwipeableCanvasStage navigation={navigation}>
@@ -505,20 +528,36 @@ function FinalLetterBookPageEditor({
       </SwipeableCanvasStage>
       <BookPageNavigation {...navigation} />
       {mode === "edit" ? (
-        <View style={styles.editorToolbarCompact}>
-          <EditorTool label="가족 편지" icon="chat" onPress={() => setSheetOpen(true)} />
+        <View style={styles.editorToolbar}>
+          <EditorTool label={t("growth.critical.159")} icon="bookmark" onPress={() => setSheet("template")} />
+          <EditorTool label={t("growth.critical.009")} icon="chat" onPress={() => setSheet("letter")} />
         </View>
       ) : null}
-      {sheetOpen ? (
+      {sheet ? (
         <View style={styles.sheetOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSheetOpen(false)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSheet(null)} />
           <View style={[styles.editorSheet, { paddingBottom: bottomPad + 14 }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>마지막 편지</Text>
-              <Pressable onPress={() => setSheetOpen(false)}><Text style={styles.sheetClose}>닫기</Text></Pressable>
+              <Text style={styles.sheetTitle}>
+                {sheet === "template" ? t("growth.critical.163") : t("growth.critical.010")}
+              </Text>
+              <Pressable onPress={() => setSheet(null)}><Text style={styles.sheetClose}>{t("growth.critical.008")}</Text></Pressable>
             </View>
-            <LetterEditor babyName={babyName} edit={edit} me={me} myRole={myRole} bottomPad={0} onPatch={onPatch} />
+            {sheet === "template" ? (
+              <View>
+                <Text style={styles.sheetHint}>{t("growth.critical.164")}</Text>
+                <DiaryPageStylePicker
+                  value={letterTemplateId}
+                  dateLabel={t("growth.critical.010")}
+                  title={page.title}
+                  body={page.body}
+                  onChange={(id) => onPatch((prev) => ({ ...prev, letterTemplateId: id }))}
+                />
+              </View>
+            ) : (
+              <LetterEditor babyName={babyName} edit={edit} me={me} myRole={myRole} bottomPad={0} onPatch={onPatch} />
+            )}
           </View>
         </View>
       ) : null}
@@ -551,60 +590,69 @@ function SectionCard({
 function CoverEditor({
   babyName,
   edit,
-  entries,
   bottomPad,
   onPatch,
 }: {
   babyName: string;
   edit: GrowthBookEdit;
-  entries: DiaryEntry[];
   bottomPad: number;
   onPatch: (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => void;
 }) {
-  const pool = useMemo(() => collectGrowthBookPhotoPool(entries, edit), [entries, edit]);
-  const title = edit.coverTitle || `${babyName}의 성장책`;
+  const { t } = useLanguage();
+  const title = edit.coverTitle || t("growth.critical.139", { babyName });
 
   return (
     <ScrollView
       contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 28 }]}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.label}>표지 제목</Text>
+      <Text style={styles.label}>{t("growth.critical.155")}</Text>
+      <Text style={styles.sheetHint}>{t("growth.critical.156")}</Text>
+      <View style={styles.coverTemplatePreview}>
+        <DiaryCoverTemplate
+          fill
+          styleId={edit.coverTemplateId}
+          photoUri={edit.coverPhotoUri}
+          title={title}
+          subtitle={edit.coverSubtitle}
+          caption={edit.coverDateRange}
+        />
+      </View>
+      <DiaryCoverPicker
+        value={edit.coverTemplateId ?? "cloud_sky"}
+        photoUri={edit.coverPhotoUri}
+        title={title}
+        onChange={(id) => onPatch((prev) => ({ ...prev, coverTemplateId: id }))}
+      />
+
+      <Text style={[styles.label, { marginTop: 14 }]}>{t("growth.critical.011")}</Text>
       <TextInput
         style={styles.input}
         value={title}
         onChangeText={(text) => onPatch((prev) => ({ ...prev, coverTitle: text }))}
-        placeholder={`${babyName}의 성장책`}
+        placeholder={t("growth.critical.139", { babyName })}
         placeholderTextColor={colors.faint}
       />
 
-      <Text style={[styles.label, { marginTop: 14 }]}>표지 부제</Text>
+      <Text style={[styles.label, { marginTop: 14 }]}>{t("growth.critical.012")}</Text>
       <TextInput
         style={styles.input}
         value={edit.coverSubtitle ?? ""}
         onChangeText={(text) => onPatch((prev) => ({ ...prev, coverSubtitle: text }))}
-        placeholder="성장책"
+        placeholder={t("growth.critical.013")}
         placeholderTextColor={colors.faint}
       />
 
-      <Text style={[styles.label, { marginTop: 14 }]}>표지 기간</Text>
+      <Text style={[styles.label, { marginTop: 14 }]}>{t("growth.critical.014")}</Text>
       <TextInput
         style={styles.input}
         value={edit.coverDateRange ?? ""}
         onChangeText={(text) => onPatch((prev) => ({ ...prev, coverDateRange: text }))}
-        placeholder="예: 2026.07 ~ 2026.12"
+        placeholder={t("growth.critical.015")}
         placeholderTextColor={colors.faint}
       />
 
-      <Text style={[styles.label, { marginTop: 18 }]}>표지 사진</Text>
-      {edit.coverPhotoUri ? (
-        <Image source={{ uri: edit.coverPhotoUri }} style={styles.coverPreview} contentFit="cover" />
-      ) : (
-        <View style={styles.coverPlaceholder}>
-          <Text style={styles.coverPlaceholderText}>사진을 선택해 주세요</Text>
-        </View>
-      )}
-
+      <Text style={[styles.label, { marginTop: 18 }]}>{t("growth.critical.016")}</Text>
       <Pressable
         style={styles.primaryBtn}
         onPress={async () => {
@@ -612,28 +660,8 @@ function CoverEditor({
           if (uri) onPatch((prev) => ({ ...prev, coverPhotoUri: uri }));
         }}
       >
-        <Text style={styles.primaryBtnText}>새 사진 업로드</Text>
+        <Text style={styles.primaryBtnText}>{t("growth.critical.018")}</Text>
       </Pressable>
-
-      {pool.length > 0 ? (
-        <>
-          <Text style={[styles.label, { marginTop: 18 }]}>성장책 사진에서 고르기</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.poolRow}>
-            {pool.map((uri) => (
-              <Pressable
-                key={uri}
-                onPress={() => onPatch((prev) => ({ ...prev, coverPhotoUri: uri }))}
-                style={[
-                  styles.poolThumbWrap,
-                  edit.coverPhotoUri === uri && styles.poolThumbSelected,
-                ]}
-              >
-                <Image source={{ uri }} style={styles.poolThumb} contentFit="cover" />
-              </Pressable>
-            ))}
-          </ScrollView>
-        </>
-      ) : null}
     </ScrollView>
   );
 }
@@ -649,10 +677,11 @@ function PageList({
   bottomPad: number;
   onOpen: (id: string) => void;
 }) {
+  const { t } = useLanguage();
   if (entries.length === 0) {
     return (
       <View style={[styles.content, { paddingBottom: bottomPad + 28 }]}>
-        <Text style={styles.hint}>성장책에 담긴 일기가 없어요. 일기에서 담기를 눌러 주세요.</Text>
+        <Text style={styles.hint}>{t("growth.critical.020")}</Text>
       </View>
     );
   }
@@ -678,8 +707,7 @@ function PageList({
                 {milestone ?? entry.date}
               </Text>
               <Text style={styles.cardBody} numberOfLines={2}>
-                사진 {photos.length}장 · {photoLayoutLabel(pageEdit.photoLayout)} · 롤링{" "}
-                {pageEdit.rollingComments.length}
+                {t("growth.critical.022", { count: photos.length })} · {t(PHOTO_LAYOUT_MESSAGE_KEYS[pageEdit.photoLayout])} · {t("growth.critical.023", { count: pageEdit.rollingComments.length })}
               </Text>
             </View>
             <BabyLogIcon kind="chevron" size={16} color={colors.faint} />
@@ -715,13 +743,14 @@ function PageEditor({
   onPatch: (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => void;
   onStickerPickerOpenChange?: (open: boolean) => void;
 }) {
+  const { t } = useLanguage();
   const pageEdit = resolvePageEdit(entry.id, entry, edit);
   const photos = resolvePagePhotos(entry, pageEdit);
   const page = useMemo(
     () => buildGrowthBookPages({ babyName, entries: [entry], edit }).find((item) => item.diaryId === entry.id),
     [babyName, edit, entry],
   );
-  const [sheet, setSheet] = useState<"photo" | "layout" | "comment" | "rolling" | null>(null);
+  const [sheet, setSheet] = useState<"photo" | "layout" | "comment" | "rolling" | "template" | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [photoSwapSourceIndex, setPhotoSwapSourceIndex] = useState<number | null>(null);
   const photoLongPressAtRef = useRef(0);
@@ -908,11 +937,12 @@ function PageEditor({
 
       {mode === "edit" ? (
         <View style={styles.editorToolbar}>
-          <EditorTool label="사진" icon="image" onPress={() => { setSelectedPhotoIndex(Math.min(photos.length, getPhotoLayoutCount(pageEdit.photoLayout) - 1)); setSheet("photo"); }} />
-          <EditorTool label="레이아웃" icon="layout" onPress={() => setSheet("layout")} />
-          <EditorTool label="코멘트" icon="edit" onPress={() => setSheet("comment")} />
-          <EditorTool label="스티커" icon="baby" onPress={() => openStickerPicker("page")} />
-          <EditorTool label="롤링페이퍼" icon="chat" onPress={() => setSheet("rolling")} />
+          <EditorTool label={t("growth.critical.159")} icon="bookmark" onPress={() => setSheet("template")} />
+          <EditorTool label={t("growth.critical.021")} icon="image" onPress={() => { setSelectedPhotoIndex(Math.min(photos.length, getPhotoLayoutCount(pageEdit.photoLayout) - 1)); setSheet("photo"); }} />
+          <EditorTool label={t("growth.critical.024")} icon="layout" onPress={() => setSheet("layout")} />
+          <EditorTool label={t("growth.critical.025")} icon="edit" onPress={() => setSheet("comment")} />
+          <EditorTool label={t("growth.critical.026")} icon="baby" onPress={() => openStickerPicker("page")} />
+          <EditorTool label={t("growth.critical.027")} icon="chat" onPress={() => setSheet("rolling")} />
         </View>
       ) : null}
 
@@ -923,25 +953,50 @@ function PageEditor({
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>
-                {sheet === "photo" ? "사진 편집" : sheet === "layout" ? "사진 레이아웃" : sheet === "comment" ? "페이지 코멘트" : "가족 롤링페이퍼"}
+                {sheet === "photo"
+                  ? t("growth.critical.028")
+                  : sheet === "layout"
+                    ? t("growth.critical.029")
+                    : sheet === "comment"
+                      ? t("growth.critical.030")
+                      : sheet === "template"
+                        ? t("growth.critical.157")
+                        : t("growth.critical.031")}
               </Text>
-              <Pressable onPress={() => setSheet(null)} hitSlop={10}><Text style={styles.sheetClose}>닫기</Text></Pressable>
+              <Pressable onPress={() => setSheet(null)} hitSlop={10}><Text style={styles.sheetClose}>{t("growth.critical.008")}</Text></Pressable>
             </View>
+
+            {sheet === "template" ? (
+              <View>
+                <Text style={styles.sheetHint}>{t("growth.critical.158")}</Text>
+                <DiaryPageStylePicker
+                  value={pageEdit.pageTemplateId ?? "basic_line"}
+                  dateLabel={entry.date}
+                  weatherStamp={entry.weatherStamp}
+                  title={page?.title}
+                  body={pageEdit.pageComment ?? page?.body}
+                  onChange={(id) => {
+                    upsertPage({ ...pageEdit, pageTemplateId: id });
+                    onPatch((prev) => ({ ...prev, pageTemplateId: id }));
+                  }}
+                />
+              </View>
+            ) : null}
 
             {sheet === "photo" ? (
               <ScrollView style={styles.sheetScroll} keyboardShouldPersistTaps="handled">
-                <Text style={styles.sheetHint}>캔버스의 사진 칸을 탭해도 같은 메뉴가 열려요.</Text>
-                <Text style={styles.sheetHint}>사진을 길게 누른 뒤 다른 사진 슬롯을 탭하면 두 사진의 위치가 바뀝니다.</Text>
+                <Text style={styles.sheetHint}>{t("growth.critical.032")}</Text>
+                <Text style={styles.sheetHint}>{t("growth.critical.033")}</Text>
                 {Array.from({ length: Math.max(getPhotoLayoutCount(pageEdit.photoLayout), photos.length) }, (_, index) => {
                   const uri = photos[index];
                   return (
                     <View key={index} style={[styles.photoSheetRow, selectedPhotoIndex === index && styles.photoSheetRowSelected]}>
                       {uri ? <Image source={{ uri }} style={styles.photoSheetThumb} contentFit="cover" /> : <View style={styles.photoSheetEmpty}><Text>＋</Text></View>}
-                      <Text style={styles.photoSheetLabel}>사진 {index + 1}</Text>
-                      <Pressable onPress={() => void pickForSlot(index)}><Text style={styles.sheetAction}>{uri ? "교체" : "추가"}</Text></Pressable>
+                      <Text style={styles.photoSheetLabel}>{t("growth.critical.021")} {index + 1}</Text>
+                      <Pressable onPress={() => void pickForSlot(index)}><Text style={styles.sheetAction}>{uri ? t("growth.critical.034") : t("growth.critical.035")}</Text></Pressable>
                       {uri ? (
                         <Pressable onPress={() => setPhotos(photos.filter((_, photoIndex) => photoIndex !== index))}>
-                          <Text style={[styles.sheetAction, styles.sheetDanger]}>삭제</Text>
+                          <Text style={[styles.sheetAction, styles.sheetDanger]}>{t("growth.critical.036")}</Text>
                         </Pressable>
                       ) : null}
                     </View>
@@ -966,12 +1021,12 @@ function PageEditor({
                       selected={pageEdit.photoLayout === option.value}
                       tuning={pageEdit.photoLayout === option.value ? pageEdit.photoLayoutTuning : undefined}
                     />
-                    <Text style={[styles.sheetOptionText, pageEdit.photoLayout === option.value && styles.sheetOptionTextSelected]}>{option.label}</Text>
+                    <Text style={[styles.sheetOptionText, pageEdit.photoLayout === option.value && styles.sheetOptionTextSelected]}>{t(PHOTO_LAYOUT_MESSAGE_KEYS[option.value])}</Text>
                   </Pressable>
                 ))}
                 {PRIMARY_RATIO_LAYOUTS.has(pageEdit.photoLayout) ? (
                   <RatioOptionRow
-                    title={pageEdit.photoLayout.includes("top_large") ? "큰 사진 높이" : "큰 사진 너비"}
+                    title={pageEdit.photoLayout.includes("top_large") ? t("growth.critical.037") : t("growth.critical.038")}
                     values={[0.55, 0.6, 0.65, 0.7]}
                     value={pageEdit.photoLayoutTuning?.primaryRatio}
                     onChange={(primaryRatio) => upsertPage({
@@ -985,7 +1040,7 @@ function PageEditor({
                 ) : null}
                 {SECONDARY_RATIO_LAYOUTS.has(pageEdit.photoLayout) ? (
                   <RatioOptionRow
-                    title="오른쪽 위 사진 높이"
+                    title={t("growth.critical.039")}
                     values={[0.55, 0.6, 0.65]}
                     value={pageEdit.photoLayoutTuning?.secondaryTopRatio}
                     onChange={(secondaryTopRatio) => upsertPage({
@@ -1002,19 +1057,19 @@ function PageEditor({
 
             {sheet === "comment" ? (
               <>
-                <Text style={styles.sheetHint}>원본 일기와 별개인 성장책 편집본에만 저장됩니다.</Text>
+                <Text style={styles.sheetHint}>{t("growth.critical.040")}</Text>
                 <TextInput
                   style={[styles.input, styles.sheetTextArea]}
                   multiline
                   value={commentDraft}
                   onChangeText={setCommentDraft}
-                  placeholder="성장책에 남길 코멘트"
+                  placeholder={t("growth.critical.041")}
                   placeholderTextColor={colors.faint}
                 />
                 <View style={styles.commentStickerHeader}>
-                  <Text style={styles.commentStickerTitle}>코멘트 스티커</Text>
+                  <Text style={styles.commentStickerTitle}>{t("growth.critical.042")}</Text>
                   <Pressable onPress={() => openStickerPicker("comment")} style={styles.commentStickerAdd}>
-                    <Text style={styles.commentStickerAddText}>＋ 스티커 추가</Text>
+                    <Text style={styles.commentStickerAddText}>{t("growth.critical.043")}</Text>
                   </Pressable>
                 </View>
                 {commentStickerDrafts.length > 0 ? (
@@ -1035,9 +1090,9 @@ function PageEditor({
                       );
                     })}
                   </ScrollView>
-                ) : <Text style={styles.commentStickerEmpty}>코멘트 아래에 카카오톡 임티처럼 표시됩니다.</Text>}
+                ) : <Text style={styles.commentStickerEmpty}>{t("growth.critical.044")}</Text>}
                 <Pressable style={styles.sheetPrimary} onPress={() => { upsertPage({ ...pageEdit, pageComment: commentDraft, commentStickers: commentStickerDrafts }); setSheet(null); }}>
-                  <Text style={styles.sheetPrimaryText}>적용</Text>
+                  <Text style={styles.sheetPrimaryText}>{t("growth.critical.045")}</Text>
                 </Pressable>
               </>
             ) : null}
@@ -1058,22 +1113,22 @@ function PageEditor({
                     ) : null}
                     <View style={styles.commentActions}>
                       {canEditOwnGrowthBookNote(myRole, comment.authorId, me) ? (
-                        <Pressable onPress={() => { setEditingCommentId(comment.id); setRollingDraft(comment.text); setRollingStickerDraftIds(comment.stickerIds ?? []); }}><Text style={styles.commentAction}>수정</Text></Pressable>
+                        <Pressable onPress={() => { setEditingCommentId(comment.id); setRollingDraft(comment.text); setRollingStickerDraftIds(comment.stickerIds ?? []); }}><Text style={styles.commentAction}>{t("growth.critical.046")}</Text></Pressable>
                       ) : null}
                       {canDeleteGrowthBookNote(myRole, comment.authorId, me) ? (
-                        <Pressable onPress={() => upsertPage({ ...pageEdit, rollingComments: pageEdit.rollingComments.filter((item) => item.id !== comment.id) })}><Text style={[styles.commentAction, styles.commentDanger]}>삭제</Text></Pressable>
+                        <Pressable onPress={() => upsertPage({ ...pageEdit, rollingComments: pageEdit.rollingComments.filter((item) => item.id !== comment.id) })}><Text style={[styles.commentAction, styles.commentDanger]}>{t("growth.critical.036")}</Text></Pressable>
                       ) : null}
                     </View>
                   </View>
                 ))}
                 {canWrite && me ? (
                   <>
-                    <Text style={styles.autoAuthor}>{formatGrowthAuthorLabel(memberRelationshipLabel(me), me.name)}으로 남기기</Text>
-                    <TextInput style={[styles.input, styles.sheetTextArea]} multiline value={rollingDraft} onChangeText={setRollingDraft} placeholder="가족에게 남길 한마디" placeholderTextColor={colors.faint} />
+                    <Text style={styles.autoAuthor}>{t("growth.critical.047", { author: formatGrowthAuthorLabel(memberRelationshipLabel(me), me.name) })}</Text>
+                    <TextInput style={[styles.input, styles.sheetTextArea]} multiline value={rollingDraft} onChangeText={setRollingDraft} placeholder={t("growth.critical.048")} placeholderTextColor={colors.faint} />
                     <View style={styles.commentStickerHeader}>
-                      <Text style={styles.commentStickerTitle}>가족 코멘트 스티커</Text>
+                      <Text style={styles.commentStickerTitle}>{t("growth.critical.049")}</Text>
                       <Pressable onPress={() => openStickerPicker("rolling")} style={styles.commentStickerAdd}>
-                        <Text style={styles.commentStickerAddText}>＋ 스티커 추가</Text>
+                        <Text style={styles.commentStickerAddText}>{t("growth.critical.043")}</Text>
                       </Pressable>
                     </View>
                     {rollingStickerDraftIds.length > 0 ? (
@@ -1094,10 +1149,10 @@ function PageEditor({
                           );
                         })}
                       </ScrollView>
-                    ) : <Text style={styles.commentStickerEmpty}>관계 라벨과 함께 작은 임티로 표시됩니다.</Text>}
-                    <Pressable style={styles.sheetPrimary} onPress={saveRollingComment}><Text style={styles.sheetPrimaryText}>{editingCommentId ? "수정 적용" : "롤링페이퍼 추가"}</Text></Pressable>
+                    ) : <Text style={styles.commentStickerEmpty}>{t("growth.critical.050")}</Text>}
+                    <Pressable style={styles.sheetPrimary} onPress={saveRollingComment}><Text style={styles.sheetPrimaryText}>{editingCommentId ? t("growth.critical.051") : t("growth.critical.052")}</Text></Pressable>
                   </>
-                ) : <Text style={styles.sheetHint}>보기만 가능 계정은 작성할 수 없어요.</Text>}
+                ) : <Text style={styles.sheetHint}>{t("growth.critical.053")}</Text>}
               </ScrollView>
             ) : null}
           </View>
@@ -1210,18 +1265,19 @@ function RatioOptionRow({
   value?: number;
   onChange: (value?: number) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <View style={styles.ratioOptionSection}>
       <View style={styles.ratioOptionHeader}>
         <Text style={styles.ratioOptionTitle}>{title}</Text>
-        <Text style={styles.ratioOptionValue}>{value ? `${Math.round(value * 100)}%` : "기본"}</Text>
+        <Text style={styles.ratioOptionValue}>{value ? `${Math.round(value * 100)}%` : t("growth.critical.054")}</Text>
       </View>
       <View style={styles.ratioOptionRow}>
         <Pressable
           onPress={() => onChange(undefined)}
           style={[styles.ratioChip, value === undefined && styles.ratioChipSelected]}
         >
-          <Text style={[styles.ratioChipText, value === undefined && styles.ratioChipTextSelected]}>기본</Text>
+          <Text style={[styles.ratioChipText, value === undefined && styles.ratioChipTextSelected]}>{t("growth.critical.054")}</Text>
         </Pressable>
         {values.map((ratio) => (
           <Pressable
@@ -1235,7 +1291,7 @@ function RatioOptionRow({
           </Pressable>
         ))}
       </View>
-      <Text style={styles.ratioOptionHint}>프리셋 안에서만 조절되며 사진 박스는 자유 이동하지 않아요.</Text>
+      <Text style={styles.ratioOptionHint}>{t("growth.critical.055")}</Text>
     </View>
   );
 }
@@ -1255,6 +1311,7 @@ function LetterEditor({
   bottomPad: number;
   onPatch: (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => void;
 }) {
+  const { t } = useLanguage();
   const myLetter = edit.letters.find((letter) => letter.authorId === me?.id);
   const [draft, setDraft] = useState(myLetter?.text ?? "");
   const canWrite = canWriteGrowthBookNote(myRole);
@@ -1269,13 +1326,13 @@ function LetterEditor({
       keyboardShouldPersistTaps="handled"
     >
       <Text style={styles.hint}>
-        성장책 마지막 페이지에 실리는 편지예요. 작성자 이름과 관계는 자동으로 표시됩니다.
+        {t("growth.critical.056")}
       </Text>
 
       {edit.letters.map((letter) => (
         <CommentRow
           key={letter.id}
-          authorLabel={`${formatGrowthAuthorLabel(letter.authorRelationshipLabel, letter.authorName)}가 ${babyName}에게`}
+          authorLabel={t("growth.critical.057", { author: formatGrowthAuthorLabel(letter.authorRelationshipLabel, letter.authorName), babyName })}
           text={letter.text}
           canEdit={canEditOwnGrowthBookNote(myRole, letter.authorId, me)}
           canDelete={canDeleteGrowthBookNote(myRole, letter.authorId, me)}
@@ -1294,14 +1351,14 @@ function LetterEditor({
       {canWrite && me ? (
         <>
           <Text style={styles.autoAuthor}>
-            {formatGrowthAuthorLabel(memberRelationshipLabel(me), me.name)}가 {babyName}에게
+            {t("growth.critical.057", { author: formatGrowthAuthorLabel(memberRelationshipLabel(me), me.name), babyName })}
           </Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             multiline
             value={draft}
             onChangeText={setDraft}
-            placeholder="사랑하는 마음을 편지로 남겨 보세요"
+            placeholder={t("growth.critical.058")}
             placeholderTextColor={colors.faint}
           />
           <Pressable
@@ -1332,14 +1389,14 @@ function LetterEditor({
                 };
                 return { ...prev, letters: [...prev.letters, next] };
               });
-              Alert.alert("저장됨", "마지막 편지가 저장되었어요.");
+              Alert.alert(t("growth.critical.059"), t("growth.critical.060"));
             }}
           >
-            <Text style={styles.primaryBtnText}>{myLetter ? "내 편지 수정" : "편지 작성"}</Text>
+            <Text style={styles.primaryBtnText}>{myLetter ? t("growth.critical.061") : t("growth.critical.062")}</Text>
           </Pressable>
         </>
       ) : (
-        <Text style={styles.hint}>보기만 가능 계정은 편지를 작성할 수 없어요.</Text>
+        <Text style={styles.hint}>{t("growth.critical.063")}</Text>
       )}
     </ScrollView>
   );
@@ -1360,6 +1417,7 @@ function CommentRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <View style={styles.commentCard}>
       <Text style={styles.commentAuthor}>{authorLabel}</Text>
@@ -1367,12 +1425,12 @@ function CommentRow({
       <View style={styles.commentActions}>
         {canEdit ? (
           <Pressable onPress={onEdit} hitSlop={8}>
-            <Text style={styles.commentAction}>수정</Text>
+            <Text style={styles.commentAction}>{t("growth.critical.046")}</Text>
           </Pressable>
         ) : null}
         {canDelete ? (
           <Pressable onPress={onDelete} hitSlop={8}>
-            <Text style={[styles.commentAction, styles.commentDanger]}>삭제</Text>
+            <Text style={[styles.commentAction, styles.commentDanger]}>{t("growth.critical.036")}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -1429,6 +1487,14 @@ const styles = StyleSheet.create({
   },
   textArea: { minHeight: 110, textAlignVertical: "top" },
   coverPreview: { width: "100%", height: 220, borderRadius: 16, marginBottom: 12 },
+  coverTemplatePreview: {
+    width: "100%",
+    aspectRatio: 210 / 297,
+    maxHeight: 280,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 12,
+  },
   coverPlaceholder: {
     height: 160,
     borderRadius: 16,

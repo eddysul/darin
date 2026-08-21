@@ -233,8 +233,8 @@ export const GrowthBookRepository = {
     const storagePath = `${input.babyId}/${input.growthBookId}/${input.pageId}/${id}.${extension(type)}`;
     const response = await fetch(input.uri);
     const bytes = await response.arrayBuffer();
-    if (!bytes.byteLength) throw new Error("선택한 성장책 사진을 읽지 못했어요.");
-    if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("성장책 사진은 25MB 이하만 올릴 수 있어요.");
+    if (!bytes.byteLength) throw new Error("growth_book_media_empty");
+    if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("growth_book_media_too_large");
     const sb = requireSupabase();
     const { error: uploadError } = await sb.storage.from(BUCKET).upload(storagePath, bytes, { contentType: type, upsert: false });
     if (uploadError) throw uploadError;
@@ -414,7 +414,7 @@ export const GrowthBookRepository = {
     const existingLetter = existing.find((page) => page.page_type === "letter");
     const letterPage = await this.upsertPage({
       id: existingLetter?.id, growthBookId: book.id, babyId: input.babyId, pageType: "letter",
-      pageOrder: orderedDiaryIds.length + 1, content: letterPageContent(input.edit.letters),
+      pageOrder: orderedDiaryIds.length + 1, content: letterPageContent(input.edit.letters, input.edit.letterTemplateId),
     });
     retainedPageIds.add(letterPage.id);
     for (const page of existing) if (!retainedPageIds.has(page.id)) await this.softDeletePage(page.id);

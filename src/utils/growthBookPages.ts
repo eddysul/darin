@@ -16,6 +16,13 @@ import {
   diaryPrimaryPhoto,
   sortGrowthBookEntries,
 } from "./diaryModel";
+import {
+  resolveGrowthBookCoverTemplateId,
+  resolveGrowthBookLetterTemplateId,
+  resolveGrowthBookPageTemplateId,
+} from "./growthBookTemplates";
+import type { DiaryCoverTemplateId } from "../constants/diaryCoverTemplates";
+import type { DiaryPageTemplateId } from "../constants/diaryPageTemplates";
 
 export type GrowthBookPageKind = "cover" | "moment" | "photo" | "letter";
 export type GrowthBookPageType = "cover" | "diary" | "final_letter";
@@ -53,6 +60,8 @@ export type GrowthBookPage = {
   pageStickers?: GrowthBookPageSticker[];
   commentStickers?: GrowthBookCommentSticker[];
   stickerIds?: string[];
+  coverTemplateId?: DiaryCoverTemplateId;
+  pageTemplateId?: DiaryPageTemplateId;
 };
 
 function legacyPageStickers(pageId: string, stickerIds: string[]): GrowthBookPageSticker[] {
@@ -107,6 +116,9 @@ export function resolvePageEdit(
     commentStickers: Array.isArray(existing?.commentStickers) ? existing.commentStickers : [],
     rollingComments: existing?.rollingComments ?? [],
     stickerIds: legacyStickerIds,
+    pageTemplateId: resolveGrowthBookPageTemplateId(
+      existing?.pageTemplateId ?? diary.pageStyleId ?? edit?.pageTemplateId,
+    ),
   };
 }
 
@@ -173,6 +185,7 @@ export function buildGrowthBookPages(input: {
     photoUri: defaultCoverPhoto,
     photoUris: defaultCoverPhoto ? [defaultCoverPhoto] : [],
     dateLabel: edit?.coverDateRange?.trim() || formatRange(sorted) || `${new Date().getFullYear()}`,
+    coverTemplateId: resolveGrowthBookCoverTemplateId(edit?.coverTemplateId),
   });
 
   for (const entry of sorted) {
@@ -203,6 +216,7 @@ export function buildGrowthBookPages(input: {
       pageStickers: pageEdit.pageStickers ?? [],
       commentStickers: pageEdit.commentStickers ?? [],
       stickerIds: (pageEdit.pageStickers ?? []).map((item) => item.stickerId),
+      pageTemplateId: pageEdit.pageTemplateId,
     });
   }
 
@@ -227,6 +241,7 @@ export function buildGrowthBookPages(input: {
     subtitle: "마지막 편지",
     body: letterBody,
     letters,
+    pageTemplateId: resolveGrowthBookLetterTemplateId(edit?.letterTemplateId, edit?.pageTemplateId),
   });
 
   return pages;

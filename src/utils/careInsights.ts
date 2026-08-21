@@ -39,10 +39,33 @@ export type DailyFeatures = {
   /** 가장 긴 수면 한 번의 길이 (분). */
   longestSleepMinutes: number | null;
   diaperCount: number | null;
+  /** 대변(둘다 포함) 횟수. */
+  stoolCount: number | null;
   bathMinutes: number | null;
-  /** 터미타임 + 놀이 총 시간 (분). */
-  activeMinutes: number | null;
+  tummyMinutes: number | null;
+  playMinutes: number | null;
+  /** 물 섭취량 (ml). */
+  waterVolume: number | null;
+  /** 이유식 양 (g). */
+  foodAmount: number | null;
+  /** 우유 섭취량 (ml). */
+  milkVolume: number | null;
+  /** 밤(20~08시)에 잔 시간 (분). 밤잠과 낮잠을 갈라야 "밤잠이 모인다"를 말할 수 있다. */
+  nightSleepMinutes: number | null;
+  /** 수유 사이 평균 간격 (분). 규칙성 판단에 쓴다. */
+  feedIntervalAvg: number | null;
 };
+
+/** 자정을 넘길 수 있으므로 구간을 펼쳐 겹치는 만큼만 더한다. */
+function nightOverlapMinutes(start: number, duration: number): number {
+  const end = start + Math.max(0, duration);
+  // 새벽(0~8시) · 밤(20~24시) · 다음날 새벽
+  const nightWindows: [number, number][] = [[0, 480], [1200, 1440], [1440, 1920]];
+  return nightWindows.reduce((total, [from, to]) => {
+    const overlap = Math.min(end, to) - Math.max(start, from);
+    return total + Math.max(0, overlap);
+  }, 0);
+}
 
 function sumDuration(entries: BabyLogEntry[]): number {
   return entries.reduce((total, entry) => total + (Number.parseInt(entry.duration ?? "0", 10) || 0), 0);
@@ -67,7 +90,16 @@ export function extractDailyFeatures(
       const sleeps = entries.filter((entry) => entry.cat === "sleep");
       const diapers = entries.filter((entry) => entry.cat === "diaper");
       const baths = entries.filter((entry) => entry.cat === "bath");
-      const active = entries.filter((entry) => entry.cat === "tummy" || entry.cat === "play");
+      const tummy = entries.filter((entry) => entry.cat === "tummy");
+      const play = entries.filter((entry) => entry.cat === "play");
+
+      const sumAmount = (cat: string): number | null => {
+        const values = entries
+          .filter((entry) => entry.cat === cat)
+          .map((entry) => Number.parseFloat(entry.amount ?? ""))
+          .filter((value) => Number.isFinite(value) && value > 0);
+        return values.length ? values.reduce((a, b) => a + b, 0) : null;
+      };
 
       const volumes = feeds
         .map((entry) => Number.parseFloat(entry.amount ?? ""))
@@ -86,8 +118,27 @@ export function extractDailyFeatures(
         sleepCount: sleeps.length || null,
         longestSleepMinutes: sleepDurations.length ? Math.max(...sleepDurations) : null,
         diaperCount: diapers.length || null,
+        stoolCount:
+          diapers.filter((entry) => entry.chip === "대변" || entry.chip === "둘다").length || null,
         bathMinutes: baths.length ? toMinutes(baths[baths.length - 1].time) : null,
-        activeMinutes: active.length ? sumDuration(active) || null : null,
+        tummyMinutes: tummy.length ? sumDuration(tummy) || null : null,
+        playMinutes: play.length ? sumDuration(play) || null : null,
+        nightSleepMinutes: sleeps.length
+          ? sleeps.reduce(
+              (total, entry) =>
+                total + nightOverlapMinutes(toMinutes(entry.time), Number.parseInt(entry.duration ?? "0", 10) || 0),
+              0,
+            ) || null
+          : null,
+        feedIntervalAvg: (() => {
+          if (feeds.length < 2) return null;
+          const times = feeds.map((entry) => toMinutes(entry.time));
+          const gaps = times.slice(1).map((t, i) => t - times[i]).filter((g) => g > 0);
+          return gaps.length ? Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length) : null;
+        })(),
+        waterVolume: sumAmount("water"),
+        foodAmount: sumAmount("food"),
+        milkVolume: sumAmount("milk"),
       };
     });
 }
@@ -110,6 +161,8 @@ export type Distribution = {
   valueLabel: string;
   buckets: DistributionBucket[];
   totalDays: number;
+  /** 결과값 표기. 지표마다 단위가 달라 분포가 직접 들고 있는다. */
+  formatValue: (value: number) => string;
 };
 
 /** 분포를 보여주려면 각 구간에 최소 이만큼은 있어야 한다. */
@@ -129,7 +182,14 @@ function formatClock(minutes: number): string {
  */
 export function buildDistribution(
   points: { input: number; output: number }[],
-  labels: { bucketLabel: string; valueLabel: string; formatInput?: (minutes: number) => string },
+  labels: {
+    bucketLabel: string;
+    valueLabel: string;
+    formatInput?: (value: number) => string;
+    /** 구간 이름 (작은 값 → 큰 값). 시각이면 "이른 편", 횟수면 "적은 편" 등. */
+    bucketNames?: [string, string, string];
+    formatValue?: (value: number) => string;
+  },
 ): Distribution | null {
   const sorted = [...points].sort((a, b) => a.input - b.input);
   if (sorted.length < MIN_DAYS_PER_BUCKET * 3) return null;
@@ -143,11 +203,12 @@ export function buildDistribution(
   if (groups.some((group) => group.length < MIN_DAYS_PER_BUCKET)) return null;
 
   const format = labels.formatInput ?? ((value: number) => String(Math.round(value)));
-  const names = ["이른 편", "보통", "늦은 편"];
+  const names = labels.bucketNames ?? ["이른 편", "보통", "늦은 편"];
 
   return {
     bucketLabel: labels.bucketLabel,
     valueLabel: labels.valueLabel,
+    formatValue: labels.formatValue ?? ((value: number) => String(Math.round(value))),
     totalDays: sorted.length,
     buckets: groups.map((group, index) => ({
       name: names[index],
@@ -163,12 +224,18 @@ export function buildDistribution(
   };
 }
 
-/** 마지막 수유 시각 → 그날 총 수면. 현재 UI가 쓰는 유일한 분포. */
+/**
+ * 마지막 수유 시각 → 그날 총 수면. 현재 UI가 쓰는 유일한 분포.
+ *
+ * 오늘은 제외한다. 아직 끝나지 않은 날을 완전한 하루처럼 넣으면
+ * 그 날이 속한 구간의 평균만 끌어내려 없는 차이를 만들어낸다.
+ */
 export function buildLastFeedSleepDistribution(
   logs: BabyLogEntry[],
   todayKey = formatDateKey(),
 ): Distribution | null {
   const points = extractDailyFeatures(logs, todayKey)
+    .filter((day) => day.dateKey !== todayKey)
     .filter((day) => day.lastFeedMinutes !== null && day.sleepMinutes !== null)
     .map((day) => ({ input: day.lastFeedMinutes!, output: day.sleepMinutes! }));
   return buildDistribution(points, {
@@ -251,51 +318,168 @@ export function benjaminiHochberg(pValues: number[]): number[] {
   return q;
 }
 
+
+// ── 발견 ────────────────────────────────────────────────────────────────
+
 export type FeatureKey = keyof Omit<DailyFeatures, "dateKey">;
 
+type FeatureFamily = "feed" | "sleep" | "diaper" | "water" | "food" | "activity" | "bath";
+
+type FeatureMeta = {
+  /** 같은 영역끼리는 짝짓지 않는다. 정의가 겹쳐 당연한 결과만 나온다. */
+  family: FeatureFamily;
+  /** 분포 축에 쓰는 이름 */
+  axis: string;
+  format: (value: number) => string;
+  /** 구간 이름 3개 (작은 값 → 큰 값) */
+  buckets: [string, string, string];
+  /** "~한 날" 앞부분. low = 값이 작을 때, high = 값이 클 때 */
+  low: string;
+  high: string;
+  /** 결과 쪽에 올 때 쓰는 표현 */
+  more: string;
+  less: string;
+};
+
+function formatMinutes(mins: number): string {
+  if (mins < 60) return `${mins}분`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}시간 ${m}분` : `${h}시간`;
+}
+
+const CLOCK = { format: formatClock, buckets: ["이른 편", "보통", "늦은 편"] as [string, string, string] };
+const COUNT = { format: (v: number) => `${Math.round(v)}회`, buckets: ["적은 편", "보통", "많은 편"] as [string, string, string] };
+const MINUTES = { format: (v: number) => formatMinutes(Math.round(v)), buckets: ["짧은 편", "보통", "긴 편"] as [string, string, string] };
+const ML = { format: (v: number) => `${Math.round(v)}ml`, buckets: ["적은 편", "보통", "많은 편"] as [string, string, string] };
+const GRAM = { format: (v: number) => `${Math.round(v)}g`, buckets: ["적은 편", "보통", "많은 편"] as [string, string, string] };
+
+const FEATURES: Record<FeatureKey, FeatureMeta> = {
+  lastFeedMinutes: { family: "feed", axis: "마지막 수유 시각", low: "마지막 수유가 이른", high: "마지막 수유가 늦은", more: "마지막 수유가 늦어졌어요", less: "마지막 수유가 빨라졌어요", ...CLOCK },
+  firstFeedMinutes: { family: "feed", axis: "첫 수유 시각", low: "첫 수유가 이른", high: "첫 수유가 늦은", more: "첫 수유가 늦어졌어요", less: "첫 수유가 빨라졌어요", ...CLOCK },
+  feedCount: { family: "feed", axis: "수유 횟수", low: "수유가 적은", high: "수유가 잦은", more: "더 자주 먹었어요", less: "덜 자주 먹었어요", ...COUNT },
+  feedVolume: { family: "feed", axis: "총 수유량", low: "적게 먹은", high: "많이 먹은", more: "더 많이 먹었어요", less: "덜 먹었어요", ...ML },
+  nightSleepMinutes: { family: "sleep", axis: "밤잠", low: "밤에 덜 잔", high: "밤에 많이 잔", more: "밤에 더 잤어요", less: "밤에 덜 잤어요", ...MINUTES },
+  feedIntervalAvg: { family: "feed", axis: "수유 간격", low: "수유 간격이 짧은", high: "수유 간격이 긴", more: "수유 간격이 길었어요", less: "수유 간격이 짧았어요", ...MINUTES },
+  sleepMinutes: { family: "sleep", axis: "총 수면", low: "적게 잔", high: "많이 잔", more: "더 오래 잤어요", less: "덜 잤어요", ...MINUTES },
+  sleepCount: { family: "sleep", axis: "잠든 횟수", low: "나눠 자지 않은", high: "여러 번 나눠 잔", more: "잠을 더 여러 번 나눠 잤어요", less: "잠을 덜 나눠 잤어요", ...COUNT },
+  longestSleepMinutes: { family: "sleep", axis: "가장 긴 잠", low: "길게 이어 자지 못한", high: "길게 이어 잔", more: "한 번에 더 길게 잤어요", less: "한 번에 짧게 잤어요", ...MINUTES },
+  diaperCount: { family: "diaper", axis: "기저귀 횟수", low: "기저귀가 적은", high: "기저귀가 잦은", more: "기저귀를 더 자주 갈았어요", less: "기저귀를 덜 갈았어요", ...COUNT },
+  stoolCount: { family: "diaper", axis: "대변 횟수", low: "대변이 적은", high: "대변이 잦은", more: "대변을 더 자주 봤어요", less: "대변을 덜 봤어요", ...COUNT },
+  bathMinutes: { family: "bath", axis: "목욕 시각", low: "목욕이 이른", high: "목욕이 늦은", more: "목욕이 늦어졌어요", less: "목욕이 빨라졌어요", ...CLOCK },
+  tummyMinutes: { family: "activity", axis: "터미타임", low: "터미타임이 짧은", high: "터미타임이 긴", more: "터미타임을 더 오래 했어요", less: "터미타임이 짧았어요", ...MINUTES },
+  playMinutes: { family: "activity", axis: "놀이 시간", low: "덜 논", high: "많이 논", more: "더 오래 놀았어요", less: "덜 놀았어요", ...MINUTES },
+  waterVolume: { family: "water", axis: "물 섭취량", low: "물을 적게 마신", high: "물을 많이 마신", more: "물을 더 많이 마셨어요", less: "물을 덜 마셨어요", ...ML },
+  foodAmount: { family: "food", axis: "이유식 양", low: "이유식을 적게 먹은", high: "이유식을 많이 먹은", more: "이유식을 더 많이 먹었어요", less: "이유식을 덜 먹었어요", ...GRAM },
+  milkVolume: { family: "food", axis: "우유 섭취량", low: "우유를 적게 마신", high: "우유를 많이 마신", more: "우유를 더 많이 마셨어요", less: "우유를 덜 마셨어요", ...ML },
+};
+
 /**
- * 검정할 쌍은 미리 고정한다. 가능한 조합을 전부 돌리면 그 자체가 p-hacking이다.
- * 육아 상식으로 그럴듯한 것만 남겼다.
+ * 후보 쌍은 손으로 나열하지 않고 서로 다른 영역끼리 자동으로 만든다.
+ *
+ * 같은 영역끼리 빼는 이유: 총 수면과 가장 긴 잠처럼 정의가 겹치면
+ * "많이 잔 날 길게 잤어요" 같은 당연한 문장만 나온다.
+ *
+ * 쌍이 늘어도 안전한 이유: 실제로 두 지표를 함께 기록한 날이 MIN_SAMPLES 이상인
+ * 쌍만 검정하고, BH 보정도 그 부분집합에만 건다. 물을 안 적는 가정에서는
+ * 물 관련 쌍이 아예 검정되지 않으므로 보정이 필요 이상으로 엄격해지지 않는다.
  */
-export const CORRELATION_CANDIDATES: {
-  input: FeatureKey;
-  output: FeatureKey;
-  inputLabel: string;
-  outputLabel: string;
-}[] = [
-  { input: "lastFeedMinutes", output: "longestSleepMinutes", inputLabel: "마지막 수유가 이른", outputLabel: "가장 긴 잠이 길었어요" },
-  { input: "feedVolume", output: "sleepMinutes", inputLabel: "수유량이 많은", outputLabel: "총 수면이 길었어요" },
-  { input: "bathMinutes", output: "longestSleepMinutes", inputLabel: "목욕이 이른", outputLabel: "가장 긴 잠이 길었어요" },
-  { input: "sleepCount", output: "longestSleepMinutes", inputLabel: "낮잠 횟수가 적은", outputLabel: "가장 긴 잠이 길었어요" },
-  { input: "activeMinutes", output: "sleepMinutes", inputLabel: "활동 시간이 많은", outputLabel: "총 수면이 길었어요" },
-];
+export const CORRELATION_CANDIDATES: { input: FeatureKey; output: FeatureKey }[] = (() => {
+  const keys = Object.keys(FEATURES) as FeatureKey[];
+  const pairs: { input: FeatureKey; output: FeatureKey }[] = [];
+  for (let i = 0; i < keys.length; i += 1) {
+    for (let j = i + 1; j < keys.length; j += 1) {
+      if (FEATURES[keys[i]].family === FEATURES[keys[j]].family) continue;
+      pairs.push({ input: keys[i], output: keys[j] });
+    }
+  }
+  return pairs;
+})();
+
+/** 문장에서 앞에 올 영역 순서. 작을수록 원인처럼 읽힌다. */
+const FAMILY_ORDER: Record<FeatureFamily, number> = {
+  bath: 0, activity: 1, water: 2, food: 3, feed: 4, sleep: 5, diaper: 6,
+};
+
+/** 헤드라인에서 차이값 뒤에 붙는 말. "1시간 40분 __" */
+const GAP_TAIL: Record<FeatureKey, string> = {
+  sleepMinutes: "더 잤어요",
+  longestSleepMinutes: "더 길게 잤어요",
+  sleepCount: "더 나눠 잤어요",
+  diaperCount: "더 갈았어요",
+  stoolCount: "더 봤어요",
+  feedCount: "더 먹었어요",
+  feedVolume: "더 먹었어요",
+  foodAmount: "더 먹었어요",
+  milkVolume: "더 마셨어요",
+  waterVolume: "더 마셨어요",
+  nightSleepMinutes: "밤에 더 잤어요",
+  feedIntervalAvg: "간격이 길었어요",
+  tummyMinutes: "더 했어요",
+  playMinutes: "더 놀았어요",
+  lastFeedMinutes: "늦게 먹었어요",
+  firstFeedMinutes: "늦게 먹었어요",
+  bathMinutes: "늦게 씻었어요",
+};
 
 /** UI 노출 임계. 실데이터 확보 후 튜닝할 것. */
 export const MIN_SAMPLES = 14;
 export const MIN_RHO = 0.4;
 export const MAX_Q = 0.05;
 
-export type Correlation = {
-  inputLabel: string;
-  outputLabel: string;
+export type Insight = {
+  input: FeatureKey;
+  output: FeatureKey;
   rho: number;
   n: number;
   q: number;
+  /** 한 줄로 이은 문장. */
+  headline: string;
+  /** 카드에서 이름·차이값을 끼워 넣기 위해 나눠둔 조각. */
+  lead: string;
+  gapText: string;
+  tail: string;
+  distribution: Distribution;
 };
 
-/** 임계를 통과한 상관을 강한 순으로. 없으면 빈 배열이 정답이다. */
-export function findCorrelations(
+/** 한 화면에 올릴 발견 수. 영역 쌍이 7개라 스물한 가지가 가능하지만 다섯을 넘기면 목록이 된다. */
+export const MAX_INSIGHTS = 5;
+
+/**
+ * 발견을 찾을 때 거슬러 올라가는 날 수.
+ *
+ * 주간 리포트에 실리므로 한 주(6일)로 하고 싶지만 6일로는 어떤 상관도 검정할 수 없다.
+ * MIN_SAMPLES 가 14일이라 표본이 애초에 모자라고, 6점으로 상관을 주장하는 것 자체가
+ * 통계적으로 성립하지 않는다. 그래서 "최근"의 범위를 4주로 잡는다.
+ * 예전에는 기록 전체를 썼다. 반년 전 습관이 이번 달 발견으로 나오는 게 이상해서 창을 뒀다.
+ */
+export const INSIGHT_WINDOW_DAYS = 28;
+
+/**
+ * 최근 창 안의 후보 쌍을 검정해 통과한 것을 강한 순으로 돌려준다.
+ * 통과한 게 없으면 빈 배열 — 없는 패턴을 만들어내지 않기 위해 아예 띄우지 않는다.
+ *
+ * 같은 영역 쌍에서는 하나만 남긴다. 마지막 수유와 총 수면, 마지막 수유와 가장 긴 잠이
+ * 둘 다 통과하면 사실상 같은 얘기라 두 줄을 쓸 이유가 없다.
+ */
+export function findInsights(
   logs: BabyLogEntry[],
   todayKey = formatDateKey(),
-): Correlation[] {
-  const days = extractDailyFeatures(logs, todayKey);
+  limit = MAX_INSIGHTS,
+  windowDays = INSIGHT_WINDOW_DAYS,
+): Insight[] {
+  // 오늘은 아직 끝나지 않은 날이라 뺀다. 그다음 최근 windowDays 일만 남긴다.
+  const days = extractDailyFeatures(logs, todayKey)
+    .filter((day) => day.dateKey !== todayKey)
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+    .slice(-windowDays);
 
   const measured = CORRELATION_CANDIDATES.map((candidate) => {
     const pairs = days
       .map((day) => ({ x: day[candidate.input], y: day[candidate.output] }))
       .filter((pair): pair is { x: number; y: number } => pair.x !== null && pair.y !== null);
     const rho = pairs.length >= MIN_SAMPLES ? spearman(pairs.map((p) => p.x), pairs.map((p) => p.y)) : null;
-    return { candidate, rho, n: pairs.length };
+    return { candidate, rho, n: pairs.length, pairs };
   });
 
   const testable = measured.filter((item): item is typeof item & { rho: number } => item.rho !== null);
@@ -303,26 +487,63 @@ export function findCorrelations(
 
   const qs = benjaminiHochberg(testable.map((item) => pValueFromRho(item.rho, item.n)));
 
-  return testable
-    .map((item, index) => ({
-      inputLabel: item.candidate.inputLabel,
-      outputLabel: item.candidate.outputLabel,
-      rho: item.rho,
-      n: item.n,
-      q: qs[index],
-    }))
+  const passed = testable
+    .map((item, index) => ({ ...item, q: qs[index] }))
     .filter((item) => Math.abs(item.rho) >= MIN_RHO && item.q < MAX_Q)
     .sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho));
-}
 
-/**
- * 상관을 문장으로. 과거 서술형만 쓴다.
- * "~하면 ~해요"(인과)나 "~해보세요"(권유)는 쓰지 않는다 — 부모는 이걸 보고 실제로 행동을 바꾸는데,
- * 관측된 상관의 원인이 교란변수(성장 급증기, 주말 등)일 수 있다.
- */
-export function describeCorrelation(correlation: Correlation): string {
-  const direction = correlation.rho < 0 ? correlation.inputLabel : correlation.inputLabel.replace(/이른|많은|적은/, (m) =>
-    m === "이른" ? "늦은" : m === "많은" ? "적은" : "많은",
-  );
-  return `최근 기록에서 ${direction} 날에 ${correlation.outputLabel} (${correlation.n}일 기준)`;
+  const out: Insight[] = [];
+  const usedFamilyPairs = new Set<string>();
+
+  for (const top of passed) {
+    if (out.length >= limit) break;
+    // 상관은 방향이 없으므로 문장이 자연스러운 쪽을 입력으로 삼는다.
+    const a = top.candidate.input;
+    const b = top.candidate.output;
+    const swap = FAMILY_ORDER[FEATURES[a].family] > FAMILY_ORDER[FEATURES[b].family];
+    const inputKey = swap ? b : a;
+    const outputKey = swap ? a : b;
+    const inputMeta = FEATURES[inputKey];
+    const outputMeta = FEATURES[outputKey];
+
+    // 같은 영역 쌍은 한 번만. 사실상 같은 얘기를 두 줄 쓰지 않는다.
+    const familyPair = [inputMeta.family, outputMeta.family].sort().join("-");
+    if (usedFamilyPairs.has(familyPair)) continue;
+
+    const distribution = buildDistribution(
+      top.pairs.map((pair) => ({ input: swap ? pair.y : pair.x, output: swap ? pair.x : pair.y })),
+      {
+        bucketLabel: inputMeta.axis,
+        valueLabel: outputMeta.axis,
+        formatInput: inputMeta.format,
+        bucketNames: inputMeta.buckets,
+        formatValue: outputMeta.format,
+      },
+    );
+    if (!distribution) continue;
+
+    // rho 가 음수면 "입력이 작을 때 결과가 크다".
+    const lead = `${top.rho < 0 ? inputMeta.low : inputMeta.high} 날, `;
+    const tail = GAP_TAIL[outputKey];
+    // 양 끝 구간의 차이가 부모가 기억할 유일한 숫자다.
+    const first = distribution.buckets[0].value;
+    const last = distribution.buckets[distribution.buckets.length - 1].value;
+    const gapText = outputMeta.format(Math.abs(last - first));
+
+    usedFamilyPairs.add(familyPair);
+    out.push({
+      input: inputKey,
+      output: outputKey,
+      rho: top.rho,
+      n: top.n,
+      q: top.q,
+      headline: `${lead}${gapText} ${tail}`,
+      lead,
+      gapText,
+      tail,
+      distribution,
+    });
+  }
+
+  return out;
 }

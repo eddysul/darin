@@ -1,6 +1,8 @@
 import { recordDetailEn, recordDetailEs, recordDetailJa, recordDetailKo, recordDetailZhCN } from "./i18nRecordDetailMessages";
 import { diaryCriticalEn, diaryCriticalEs, diaryCriticalJa, diaryCriticalKo, diaryCriticalZhCN } from "./i18nDiaryCriticalMessages";
 import { settingsCriticalEn, settingsCriticalEs, settingsCriticalJa, settingsCriticalKo, settingsCriticalZhCN } from "./i18nSettingsCriticalMessages";
+import { growthCriticalEn, growthCriticalEs, growthCriticalJa, growthCriticalKo, growthCriticalZhCN } from "./i18nGrowthCriticalMessages";
+import { reportCriticalEn, reportCriticalEs, reportCriticalJa, reportCriticalKo, reportCriticalZhCN } from "./i18nReportCriticalMessages";
 
 const onboardingEn = {
   "onboardingFlow.next": "Next", "onboardingFlow.back": "Back", "onboardingFlow.name": "Name", "onboardingFlow.namePlaceholder": "e.g. Minji", "onboardingFlow.nameFallback": "Name", "onboardingFlow.babyFallback": "Baby",
@@ -1504,6 +1506,8 @@ const recordZhCN: { [K in keyof typeof recordEn]: string } = {
 };
 
 const en = {
+  ...growthCriticalEn,
+  ...reportCriticalEn,
   ...onboardingEn,
   ...homeEn,
   ...recordEn,
@@ -1685,6 +1689,8 @@ const ko: CoreResource = {
   ...recordKo,
   ...diaryCriticalKo,
   ...settingsCriticalKo,
+  ...growthCriticalKo,
+  ...reportCriticalKo,
   "diary.compose.close": "닫기", "diary.compose.save": "저장", "diary.compose.viewTitle": "일기 보기", "diary.compose.editTitle": "일기 수정", "diary.compose.newTitle": "새 일기 쓰기",
   "diary.compose.photo": "사진", "diary.compose.addPhoto": "사진 추가", "diary.compose.addSticker": "스티커 추가", "diary.compose.photoCount": "선택한 사진 {count}장 · 최대 5장", "diary.compose.noPhoto": "사진 없음", "diary.compose.photoOnly": "사진만 있어도 저장할 수 있어요",
   "diary.compose.cover": "일기 표지", "diary.compose.coverHint": "대표 사진과 제목이 일기 목록과 상세 표지에 보여요.", "diary.compose.coverBadge": "표지", "diary.compose.coverSet": "표지로", "diary.compose.coverSelected": "선택됨", "diary.compose.coverTitlePlaceholder": "표지 제목 (비워두면 일기 첫 줄 사용)", "diary.compose.coverAdjust": "표지 사진 위치 다시 맞추기",
@@ -1713,6 +1719,8 @@ const ja: CoreResource = {
   ...recordJa,
   ...diaryCriticalJa,
   ...settingsCriticalJa,
+  ...growthCriticalJa,
+  ...reportCriticalJa,
   "diary.compose.close": "閉じる", "diary.compose.save": "保存", "diary.compose.viewTitle": "日記を見る", "diary.compose.editTitle": "日記を編集", "diary.compose.newTitle": "新しい日記",
   "diary.compose.photo": "写真", "diary.compose.addPhoto": "写真を追加", "diary.compose.addSticker": "ステッカーを追加", "diary.compose.photoCount": "写真{count}枚を選択 · 最大5枚", "diary.compose.noPhoto": "写真なし", "diary.compose.photoOnly": "写真だけでも保存できます",
   "diary.compose.cover": "日記の表紙", "diary.compose.coverHint": "代表写真とタイトルが日記一覧と詳細に表示されます。", "diary.compose.coverBadge": "表紙", "diary.compose.coverSet": "表紙にする", "diary.compose.coverSelected": "選択中", "diary.compose.coverTitlePlaceholder": "表紙タイトル（空欄なら本文の1行目）", "diary.compose.coverAdjust": "表紙写真の位置を調整",
@@ -1741,6 +1749,8 @@ const es: CoreResource = {
   ...recordEs,
   ...diaryCriticalEs,
   ...settingsCriticalEs,
+  ...growthCriticalEs,
+  ...reportCriticalEs,
   "diary.compose.close": "Cerrar", "diary.compose.save": "Guardar", "diary.compose.viewTitle": "Ver diario", "diary.compose.editTitle": "Editar diario", "diary.compose.newTitle": "Nuevo diario",
   "diary.compose.photo": "Fotos", "diary.compose.addPhoto": "Añadir fotos", "diary.compose.addSticker": "Añadir sticker", "diary.compose.photoCount": "{count} seleccionadas · Máximo 5", "diary.compose.noPhoto": "Sin foto", "diary.compose.photoOnly": "Puedes guardar solo con una foto",
   "diary.compose.cover": "Portada del diario", "diary.compose.coverHint": "La foto y el título aparecen en la lista y el detalle.", "diary.compose.coverBadge": "Portada", "diary.compose.coverSet": "Usar portada", "diary.compose.coverSelected": "Seleccionada", "diary.compose.coverTitlePlaceholder": "Título de portada (usa la primera línea si está vacío)", "diary.compose.coverAdjust": "Ajustar foto de portada",
@@ -1769,6 +1779,8 @@ const zhCN: CoreResource = {
   ...recordZhCN,
   ...diaryCriticalZhCN,
   ...settingsCriticalZhCN,
+  ...growthCriticalZhCN,
+  ...reportCriticalZhCN,
   "diary.compose.close": "关闭", "diary.compose.save": "保存", "diary.compose.viewTitle": "查看日记", "diary.compose.editTitle": "编辑日记", "diary.compose.newTitle": "新日记",
   "diary.compose.photo": "照片", "diary.compose.addPhoto": "添加照片", "diary.compose.addSticker": "添加贴纸", "diary.compose.photoCount": "已选{count}张 · 最多5张", "diary.compose.noPhoto": "无照片", "diary.compose.photoOnly": "只有照片也可以保存",
   "diary.compose.cover": "日记封面", "diary.compose.coverHint": "代表照片和标题会显示在日记列表与详情中。", "diary.compose.coverBadge": "封面", "diary.compose.coverSet": "设为封面", "diary.compose.coverSelected": "已选择", "diary.compose.coverTitlePlaceholder": "封面标题（留空时使用正文首行）", "diary.compose.coverAdjust": "调整封面照片位置",

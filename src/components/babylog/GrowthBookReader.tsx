@@ -18,6 +18,7 @@ import type { GrowthBookPage } from "../../utils/growthBookPages";
 import { useReduceMotion } from "../../hooks/useReduceMotion";
 import { colors } from "../../theme";
 import { GrowthBookPageCanvas } from "./GrowthBookPageCanvas";
+import { useLanguage } from "../../LanguageContext";
 
 // Peel.js 데모와 동일: new TweenLite(p, 1.5, { t: 1, ease: Power2.easeOut })
 const TURN_MS = 1500;
@@ -69,6 +70,7 @@ export function GrowthBookReader({
   style,
   onPdfCreate,
 }: Props) {
+  const { t } = useLanguage();
   const [viewportW, setViewportW] = useState(GROWTH_BOOK_PAPER_W);
   const [transition, setTransition] = useState<TransitionState | null>(null);
   const reduceMotion = useReduceMotion();
@@ -320,7 +322,7 @@ export function GrowthBookReader({
     : null;
 
   return (
-    <View style={[styles.bookFrame, style]} accessibilityLabel="성장책">
+    <View style={[styles.bookFrame, style]} accessibilityLabel={t("growth.critical.013")}>
       {/* PageSection — 고정 뷰포트(overflow hidden). 드래그로 peel position 제어 */}
       <View style={styles.pageSection} onLayout={onSectionLayout} {...panResponder.panHandlers}>
         {!active || !topPage || !bottomPage ? (
@@ -430,7 +432,7 @@ export function GrowthBookReader({
           style={styles.pressOverlay}
           onPress={handlePress}
           accessibilityRole="button"
-          accessibilityLabel="페이지 넘기기"
+          accessibilityLabel={t("growth.critical.135")}
         />
       </View>
 
@@ -441,7 +443,7 @@ export function GrowthBookReader({
           onPress={() => turnTo("prev")}
           disabled={!canPrev}
           accessibilityRole="button"
-          accessibilityLabel="이전 페이지"
+          accessibilityLabel={t("growth.critical.005")}
         >
           <Text style={styles.arrowText}>‹</Text>
         </Pressable>
@@ -455,7 +457,7 @@ export function GrowthBookReader({
           onPress={() => turnTo("next")}
           disabled={!canNext}
           accessibilityRole="button"
-          accessibilityLabel="다음 페이지"
+          accessibilityLabel={t("growth.critical.006")}
         >
           <Text style={styles.arrowText}>›</Text>
         </Pressable>
@@ -464,7 +466,7 @@ export function GrowthBookReader({
       {/* BottomToolbar */}
       {onPdfCreate ? (
         <Pressable style={styles.pdfBtn} onPress={onPdfCreate} disabled={Boolean(transition)}>
-          <Text style={styles.pdfBtnText}>PDF 만들기</Text>
+          <Text style={styles.pdfBtnText}>{t("growth.critical.136")}</Text>
         </Pressable>
       ) : null}
     </View>

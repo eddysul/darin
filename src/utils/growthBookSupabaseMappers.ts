@@ -83,6 +83,9 @@ export function coverPageContent(edit: GrowthBookEdit, coverPhotoRef: string | n
     coverSubtitle: edit.coverSubtitle ?? null,
     coverDateRange: edit.coverDateRange ?? null,
     coverPhotoRef,
+    coverTemplateId: edit.coverTemplateId ?? null,
+    pageTemplateId: edit.pageTemplateId ?? null,
+    letterTemplateId: edit.letterTemplateId ?? null,
   };
 }
 
@@ -99,11 +102,19 @@ export function diaryPageContent(page: GrowthBookPageEdit, photoRefs: string[]):
     commentStickers: (page.commentStickers ?? []) as unknown as Json,
     rollingComments: page.rollingComments as unknown as Json,
     stickerIds: (page.stickerIds ?? []) as Json,
+    pageTemplateId: page.pageTemplateId ?? null,
   };
 }
 
-export function letterPageContent(letters: GrowthBookLetter[]): Record<string, Json> {
-  return { schemaVersion: 1, letters: letters as unknown as Json };
+export function letterPageContent(
+  letters: GrowthBookLetter[],
+  letterTemplateId?: GrowthBookEdit["letterTemplateId"],
+): Record<string, Json> {
+  return {
+    schemaVersion: 1,
+    letters: letters as unknown as Json,
+    letterTemplateId: letterTemplateId ?? null,
+  };
 }
 
 function resolveAuthorName(
@@ -169,6 +180,9 @@ export async function growthBookRowsToEdit(input: {
       : `${input.babyName}의 성장책`;
     edit.coverSubtitle = stringValue(content.coverSubtitle);
     edit.coverDateRange = stringValue(content.coverDateRange);
+    edit.coverTemplateId = stringValue(content.coverTemplateId) as GrowthBookEdit["coverTemplateId"];
+    edit.pageTemplateId = stringValue(content.pageTemplateId) as GrowthBookEdit["pageTemplateId"];
+    edit.letterTemplateId = stringValue(content.letterTemplateId) as GrowthBookEdit["letterTemplateId"];
     const ref = stringValue(content.coverPhotoRef);
     const path = mediaStoragePath(ref);
     edit.coverPhotoUri = path ? await input.signedUrlForPath(path) : ref ?? null;
@@ -199,6 +213,7 @@ export async function growthBookRowsToEdit(input: {
       stickerIds: Array.isArray(content.stickerIds)
         ? content.stickerIds.filter((item): item is string => typeof item === "string")
         : [],
+      pageTemplateId: stringValue(content.pageTemplateId) as GrowthBookPageEdit["pageTemplateId"],
     };
   }
 
@@ -206,6 +221,8 @@ export async function growthBookRowsToEdit(input: {
   if (letterPage) {
     const content = record(letterPage.content_json);
     if (Array.isArray(content.letters)) edit.letters = content.letters as unknown as GrowthBookLetter[];
+    edit.letterTemplateId =
+      (stringValue(content.letterTemplateId) as GrowthBookEdit["letterTemplateId"]) ?? edit.letterTemplateId;
   }
   for (const row of input.comments.filter((comment) => comment.deleted_at === null)) {
     if (row.comment_type === "letter") {

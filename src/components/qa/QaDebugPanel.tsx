@@ -60,7 +60,7 @@ function QaDebugPanelDev({ trigger }: { trigger: "floating" | "menu" }) {
           <View style={styles.menuBadge}><Text style={styles.menuBadgeText}>DEV</Text></View>
           <View style={styles.menuBody}>
             <Text style={styles.menuTitle}>QA Debug 메뉴</Text>
-            <Text style={styles.menuSubtitle}>장애 주입·빈 데이터·백업 복원</Text>
+            <Text style={styles.menuSubtitle}>장애 주입·데모 데이터·백업 복원</Text>
           </View>
           <Text style={styles.menuChevron}>›</Text>
         </Pressable>
@@ -111,6 +111,13 @@ function QaDebugPanelDev({ trigger }: { trigger: "floating" | "menu" }) {
                 label="현재 로컬 데이터 백업"
                 disabled={busy}
                 onPress={() => void run("현재 로컬 데이터를 QA backup key에 저장했습니다.", qaDebug.backupCurrentData)}
+              />
+              <DebugButton
+                label="데모 데이터 채우기 (한눈에)"
+                disabled={busy}
+                onPress={() =>
+                  void run("한눈에 탭 데모 데이터를 채웠습니다.", qaDebug.fillDemoData, true)
+                }
               />
               <DebugButton
                 label="QA용 빈 데이터로 전환"

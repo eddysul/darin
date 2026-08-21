@@ -121,6 +121,7 @@ import {
   restoreQaBackup,
   switchToQaEmptyData,
 } from "../utils/qaDebug";
+import { buildDemoSeed } from "../utils/demoSeed";
 import {
   containsLegacySampleDiary,
   removeLegacySampleDiaries,
@@ -162,6 +163,9 @@ const SEED_DIARY: DiaryEntry[] = [
     date: displayDateDaysAgo(12),
     dateKey: shiftDateKey(12),
     photos: [],
+    coverStyleId: "pink_heart",
+    pageStyleId: "pink_heart",
+    coverTitle: "첫 목욕",
     comment: "오늘 처음으로 욕조 목욕을 했는데 물을 튀기면서 엄청 좋아했어요. 목욕 후에 바로 잠들었네요.",
     weatherStamp: "sun",
     moodStamp: "love",
@@ -169,7 +173,7 @@ const SEED_DIARY: DiaryEntry[] = [
     momentSuggestionsUsed: [],
     milestoneTag: "첫 목욕",
     customMilestoneTag: null,
-    includedInGrowthBook: false,
+    includedInGrowthBook: true,
     createdAt: isoDaysAgo(12),
     updatedAt: isoDaysAgo(12),
     source: "manual",
@@ -182,6 +186,9 @@ const SEED_DIARY: DiaryEntry[] = [
     date: displayDateDaysAgo(14),
     dateKey: shiftDateKey(14),
     photos: [],
+    coverStyleId: "cloud_sky",
+    pageStyleId: "blue_cloud",
+    coverTitle: "옹알이 많은 날",
     comment: '낮에 옹알이가 부쩍 늘었어요. "아부부" 소리를 계속 내면서 웃는 모습이 너무 사랑스러웠던 하루.',
     weatherStamp: "cloud",
     moodStamp: "calm",
@@ -202,6 +209,9 @@ const SEED_DIARY: DiaryEntry[] = [
     date: displayDateDaysAgo(16),
     dateKey: shiftDateKey(16),
     photos: [],
+    coverStyleId: "beige_paper",
+    pageStyleId: "beige_paper",
+    coverTitle: "처음 뒤집은 날",
     comment: "낮잠이 짧아서 저녁에 보챔이 있었어요. 수유 간격은 괜찮은 편이었습니다. 뒤집기를 처음 성공한 날!",
     weatherStamp: "rain",
     moodStamp: "tired",
@@ -363,6 +373,8 @@ type BabyLogContextValue = {
     backupCurrentData: () => Promise<void>;
     useEmptyData: () => Promise<void>;
     restoreSampleData: () => Promise<void>;
+    /** Fills 한눈에 cards with enough days of logs and growth records. */
+    fillDemoData: () => Promise<void>;
     restoreBackupData: () => Promise<void>;
     removeQaChatTurns: () => Promise<void>;
   } | null;
@@ -1503,10 +1515,20 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     const persistSamples = async () => {
       if (!(await hasQaBackup())) await backupQaData();
       const sampleLogs = seedLogs().map((log) => ({ ...log, id: createId() }));
+      const babyId = localDataScope?.babyId ?? "baby-1";
+      const sampleBook = {
+        ...createEmptyGrowthBookEdit({
+          babyId,
+          babyName: careSetup.child.childName || "아기",
+        }),
+        coverTemplateId: "cloud_sky" as const,
+        pageTemplateId: "basic_line" as const,
+      };
       setLogs(sampleLogs);
       setDiaryEntries(SEED_DIARY);
       setChatHistory([DEFAULT_GREETING]);
       setFamilyMembers(SEED_FAMILY);
+      setGrowthBookEditState(sampleBook);
       setLogsHydrated(true);
       setDiaryHydrated(true);
       setChatHydrated(true);
@@ -1516,6 +1538,26 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         saveDiaryEntries(SEED_DIARY, localDataScope),
         saveChatHistory([DEFAULT_GREETING], localDataScope),
         saveFamilyMembers(SEED_FAMILY, localDataScope),
+        saveGrowthBookEdit(sampleBook, localDataScope),
+      ]);
+    };
+
+    const fillDemoData = async () => {
+      if (!(await hasQaBackup())) await backupQaData();
+      const seed = buildDemoSeed({
+        careSetup,
+        actor: logAuthor,
+        babyId: localDataScope?.babyId ?? "baby-1",
+        userId: localDataScope?.userId ?? logAuthor.userId,
+      });
+      const demoLogs = seed.logs.map((log) => ({ ...log, id: createId() }));
+      setLogs(demoLogs);
+      setGrowthRecords(seed.growthRecords);
+      setLogsHydrated(true);
+      setGrowthRecordsHydrated(true);
+      await Promise.all([
+        saveBabyLogs(demoLogs, localDataScope),
+        saveGrowthRecords(seed.growthRecords, localDataScope),
       ]);
     };
 
@@ -1523,6 +1565,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       backupCurrentData: async () => {
         await backupQaData();
       },
+      fillDemoData,
       useEmptyData: async () => {
         await switchToQaEmptyData();
         await hydrateStorageState(true);
@@ -1542,7 +1585,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         await saveChatHistory(next, localDataScope);
       },
     };
-  }, [chatHistory, hydrateStorageState, localDataScope]);
+  }, [careSetup, chatHistory, hydrateStorageState, localDataScope, logAuthor]);
 
   const value = useMemo(
     () => ({

@@ -29,6 +29,9 @@ function normalizeEdit(raw: unknown): GrowthBookEdit | null {
   return {
     ...raw,
     coverPhotoUri: raw.coverPhotoUri ?? null,
+    coverTemplateId: raw.coverTemplateId,
+    pageTemplateId: raw.pageTemplateId,
+    letterTemplateId: raw.letterTemplateId,
     pages: raw.pages && typeof raw.pages === "object" ? raw.pages : {},
     letters: Array.isArray(raw.letters) ? raw.letters : [],
     updatedAt: raw.updatedAt ?? new Date().toISOString(),

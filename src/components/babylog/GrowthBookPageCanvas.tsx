@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import {
   PanResponder,
   Pressable,
@@ -24,9 +23,13 @@ import {
   type GrowthBookPageSticker,
 } from "../../types/growthBook";
 import { colors } from "../../theme";
-import { BabyLogIcon } from "./BabyLogIcon";
 import { BabyStickerFromModel } from "./BabyStickerView";
 import { DiaryStampPair } from "./DiaryStamp";
+import { DiaryCoverTemplate, DiaryTemplateDecoration, DiaryTemplatePattern } from "./DiaryCoverTemplate";
+import { DiaryRuledText } from "./DiaryPageTemplate";
+import { diaryCoverTemplate } from "../../constants/diaryCoverTemplates";
+import { diaryPageTemplate, type DiaryPageTemplateConfig } from "../../constants/diaryPageTemplates";
+import { useLanguage } from "../../LanguageContext";
 
 export type GrowthBookCanvasMode = "edit" | "preview" | "pdf";
 
@@ -75,30 +78,43 @@ export function GrowthBookPageCanvas({
     setCanvasSize({ width, height });
   };
 
-  return (
-    <View style={[styles.paper, style]} onLayout={handleLayout}>
-      <LinearGradient
-        pointerEvents="none"
-        colors={["#FFF9F2", "#F7EFE4", "#F3E8DA"]}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.marginLine} />
-      <View style={styles.dogEar} />
+  const pageTemplate =
+    pageType === "diary" || pageType === "final_letter" ? diaryPageTemplate(page.pageTemplateId) : null;
+  const coverTemplate = pageType === "cover" ? diaryCoverTemplate(page.coverTemplateId) : null;
 
+  return (
+    <View
+      style={[
+        styles.paper,
+        pageTemplate ? { backgroundColor: pageTemplate.backgroundColor, borderColor: pageTemplate.borderColor } : null,
+        coverTemplate ? { backgroundColor: coverTemplate.backgroundColor, borderColor: coverTemplate.borderColor } : null,
+        style,
+      ]}
+      onLayout={handleLayout}
+    >
       {pageType === "cover" ? <CoverContent page={page} /> : null}
-      {pageType === "diary" ? (
-        <MomentContent
-          page={page}
-          mode={mode}
-          stickers={stickers}
-          onPhotoPress={onPhotoPress}
-          onPhotoLongPress={onPhotoLongPress}
-          photoSwapSourceIndex={photoSwapSourceIndex}
-          onCommentPress={onCommentPress}
-          onRollingPress={onRollingPress}
-        />
+      {pageType === "diary" && pageTemplate ? (
+        <>
+          <DiaryTemplatePattern pattern={pageTemplate.pattern ?? "none"} color={pageTemplate.borderColor} />
+          <MomentContent
+            page={page}
+            template={pageTemplate}
+            mode={mode}
+            stickers={stickers}
+            onPhotoPress={onPhotoPress}
+            onPhotoLongPress={onPhotoLongPress}
+            photoSwapSourceIndex={photoSwapSourceIndex}
+            onCommentPress={onCommentPress}
+            onRollingPress={onRollingPress}
+          />
+        </>
       ) : null}
-      {pageType === "final_letter" ? <LetterContent page={page} /> : null}
+      {pageType === "final_letter" && pageTemplate ? (
+        <>
+          <DiaryTemplatePattern pattern={pageTemplate.pattern ?? "none"} color={pageTemplate.borderColor} />
+          <LetterContent page={page} template={pageTemplate} />
+        </>
+      ) : null}
       <PageStickerLayer
         mode={mode}
         pageStickers={page.pageStickers ?? []}
@@ -119,26 +135,21 @@ export function GrowthBookPageCanvas({
 
 function CoverContent({ page }: { page: GrowthBookPage }) {
   return (
-    <View style={styles.coverInner}>
-      <Text style={styles.coverEyebrow}>{page.subtitle}</Text>
-      <Text style={styles.coverTitle}>{page.title}</Text>
-      {page.photoUri ? (
-        <View style={styles.coverPhotoFrame}>
-          <Image source={{ uri: page.photoUri }} style={styles.fill} contentFit="cover" />
-        </View>
-      ) : (
-        <View style={styles.coverPhotoPlaceholder}>
-          <Text style={styles.coverPhotoEmoji}>🌿</Text>
-          <Text style={styles.coverPhotoHint}>소중한 순간들이 여기에 담겨요</Text>
-        </View>
-      )}
-      {page.dateLabel ? <Text style={styles.coverRange}>{page.dateLabel}</Text> : null}
-    </View>
+    <DiaryCoverTemplate
+      fill
+      styleId={page.coverTemplateId}
+      photoUri={page.photoUri}
+      title={page.title}
+      subtitle={page.subtitle}
+      caption={page.dateLabel}
+      style={styles.fill}
+    />
   );
 }
 
 function MomentContent({
   page,
+  template,
   mode,
   stickers,
   onPhotoPress,
@@ -148,6 +159,7 @@ function MomentContent({
   onRollingPress,
 }: {
   page: GrowthBookPage;
+  template: DiaryPageTemplateConfig;
   mode: GrowthBookCanvasMode;
   stickers: BabySticker[];
   onPhotoPress?: (index: number) => void;
@@ -156,6 +168,8 @@ function MomentContent({
   onCommentPress?: () => void;
   onRollingPress?: () => void;
 }) {
+  const { t } = useLanguage();
+  const [innerSize, setInnerSize] = useState({ width: 0, height: 0 });
   const editable = mode === "edit";
   const uris = page.photoUris ?? (page.photoUri ? [page.photoUri] : []);
   const photoLayout = normalizePhotoLayout(page.photoLayout ?? page.layout, uris.length);
@@ -166,108 +180,205 @@ function MomentContent({
     .map((item) => stickers.find((sticker) => sticker.id === item.stickerId))
     .filter((item): item is BabySticker => !!item)
     .slice(0, 6);
+  const rolling = (page.rollingComments ?? []).slice(0, 3);
+  const editOutline = editable
+    ? { borderColor: `${template.accentColor}88`, borderWidth: 1, borderStyle: "dashed" as const }
+    : null;
 
   return (
-    <View style={styles.momentInner}>
-      <View style={styles.momentHeader}>
-        <Text style={styles.momentEyebrow}>{page.subtitle}</Text>
-        <DiaryStampPair skyId={page.weatherStamp} moodId={page.moodStamp} size="sm" />
-      </View>
-      <Text style={styles.momentTitle} numberOfLines={2}>{page.title}</Text>
-      {page.dateLabel ? <Text style={styles.momentDate}>{page.dateLabel}</Text> : null}
-
-      {(editable || uris.length > 0) ? <View style={[styles.photoGrid, commentStickers.length > 0 && styles.photoGridWithCommentSticker]}>
-        {layoutSlots.map((slot, index) => {
-          const uri = uris[index] ?? null;
-          return (
-          <Pressable
-            key={slot.slotId}
-            disabled={!editable}
-            onPress={() => onPhotoPress?.(index)}
-            onLongPress={uri ? () => onPhotoLongPress?.(index) : undefined}
-            delayLongPress={350}
+    <View style={styles.momentPad}>
+      <View
+        style={[styles.momentSurface, { backgroundColor: template.surfaceColor, borderColor: template.borderColor }]}
+        onLayout={(event) => {
+          const { width, height } = event.nativeEvent.layout;
+          setInnerSize({ width, height });
+        }}
+      >
+        <TemplateDecorations
+          decorations={template.decorations}
+          color={template.accentColor}
+          width={innerSize.width}
+          height={innerSize.height}
+        />
+        <View style={styles.momentForeground} pointerEvents="box-none">
+          <View
             style={[
-              styles.photoCell,
+              styles.pageHeader,
+              template.headerStyle !== "line" && styles.roundedHeader,
               {
-                left: `${slot.xRatio * 100}%`,
-                top: `${slot.yRatio * 100}%`,
-                width: `${slot.widthRatio * 100}%`,
-                height: `${slot.heightRatio * 100}%`,
+                borderColor: template.accentColor,
+                backgroundColor: template.headerStyle === "line" ? "transparent" : `${template.accentColor}12`,
               },
-              editable && styles.editableRegion,
-              photoSwapSourceIndex === index && styles.photoSwapSource,
             ]}
           >
-            {uri ? (
-              <Image source={{ uri }} style={styles.fill} contentFit="cover" />
-            ) : editable ? (
-              <View style={styles.emptyPhoto}>
-                <Text style={styles.addPhotoPlus}>＋</Text>
-                <Text style={styles.addPhotoLabel}>사진 추가</Text>
-              </View>
-            ) : null}
-            {editable && uri ? (
-              <View style={[styles.photoEditBadge, photoSwapSourceIndex === index && styles.photoMoveBadge]}>
-                <Text style={styles.photoEditBadgeText}>{photoSwapSourceIndex === index ? "옮길 사진" : "편집"}</Text>
+            <Text style={[styles.pageDate, { color: template.textColor }]} numberOfLines={1}>
+              {page.dateLabel || t("diary.template.datePlaceholder")}
+            </Text>
+            <DiaryStampPair skyId={page.weatherStamp} moodId={page.moodStamp} size="sm" />
+          </View>
+
+          {(editable || uris.length > 0) ? (
+            <View style={[styles.photoGrid, commentStickers.length > 0 && styles.photoGridWithCommentSticker]}>
+              {layoutSlots.map((slot, index) => {
+                const uri = uris[index] ?? null;
+                return (
+                  <Pressable
+                    key={slot.slotId}
+                    disabled={!editable}
+                    onPress={() => onPhotoPress?.(index)}
+                    onLongPress={uri ? () => onPhotoLongPress?.(index) : undefined}
+                    delayLongPress={350}
+                    style={[
+                      styles.photoCell,
+                      {
+                        left: `${slot.xRatio * 100}%`,
+                        top: `${slot.yRatio * 100}%`,
+                        width: `${slot.widthRatio * 100}%`,
+                        height: `${slot.heightRatio * 100}%`,
+                        borderColor: template.borderColor,
+                        backgroundColor: `${template.accentColor}14`,
+                      },
+                      editable && { borderStyle: "dashed", borderColor: template.accentColor },
+                      photoSwapSourceIndex === index && styles.photoSwapSource,
+                    ]}
+                  >
+                    {uri ? (
+                      <Image source={{ uri }} style={styles.fill} contentFit="cover" />
+                    ) : editable ? (
+                      <View style={styles.emptyPhoto}>
+                        <Text style={[styles.addPhotoPlus, { color: template.accentColor }]}>＋</Text>
+                        <Text style={[styles.addPhotoLabel, { color: template.accentColor }]}>{t("growth.critical.128")}</Text>
+                      </View>
+                    ) : null}
+                    {editable && uri ? (
+                      <View style={[styles.photoEditBadge, photoSwapSourceIndex === index && styles.photoMoveBadge]}>
+                        <Text style={styles.photoEditBadgeText}>
+                          {photoSwapSourceIndex === index ? t("growth.critical.129") : t("growth.critical.004")}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
+          <Pressable
+            disabled={!editable}
+            onPress={onCommentPress}
+            style={[styles.commentRegion, editOutline]}
+          >
+            <DiaryRuledText
+              text={page.body}
+              emptyText={editable ? t("diary.template.bodyPlaceholder") : undefined}
+              color={template.textColor}
+              lineColor={`${template.accentColor}55`}
+              lineStyle={template.writingLineStyle}
+              lineHeight={24}
+              minLines={commentStickers.length > 0 ? 2 : 4}
+              maxLines={commentStickers.length > 0 ? 4 : 8}
+              fontSize={14}
+            />
+            {commentStickers.length > 0 ? (
+              <View style={styles.commentStickerRow}>
+                {commentStickers.map((sticker, index) => (
+                  <BabyStickerFromModel key={`${sticker.id}-${index}`} sticker={sticker} size={20} />
+                ))}
               </View>
             ) : null}
           </Pressable>
-          );
-        })}
-      </View> : null}
 
-      <Pressable
-        disabled={!editable}
-        onPress={onCommentPress}
-        style={[styles.commentRegion, editable && styles.editableRegion]}
-      >
-        {page.body ? (
-          <Text style={styles.momentBody} numberOfLines={commentStickers.length > 0 ? 2 : 4}>{page.body}</Text>
-        ) : editable ? (
-          <Text style={styles.emptyCopy}>페이지 코멘트를 입력해 주세요</Text>
-        ) : null}
-        {commentStickers.length > 0 ? (
-          <View style={styles.commentStickerRow}>
-            {commentStickers.map((sticker, index) => (
-              <BabyStickerFromModel key={`${sticker.id}-${index}`} sticker={sticker} size={20} />
-            ))}
+          <View
+            style={[
+              styles.titleSection,
+              template.titleSectionStyle === "box" && {
+                borderWidth: 1,
+                borderColor: `${template.accentColor}66`,
+                borderRadius: 8,
+                backgroundColor: `${template.accentColor}0A`,
+              },
+            ]}
+          >
+            <Text style={[styles.titleLabel, { color: template.accentColor }]}>{t("diary.template.title")}</Text>
+            <Text
+              style={[styles.pageTitle, { color: template.textColor, borderBottomColor: `${template.accentColor}66` }]}
+              numberOfLines={2}
+            >
+              {page.title?.trim() || t("diary.template.titlePlaceholder")}
+            </Text>
           </View>
-        ) : null}
-      </Pressable>
 
-      <Pressable
-        disabled={!editable}
-        onPress={onRollingPress}
-        style={[styles.rollingWrap, editable && styles.editableRegion]}
-      >
-        {(page.rollingComments ?? []).length > 0 ? (
-          (page.rollingComments ?? []).slice(0, 3).map((comment) => (
-            <View key={comment.id} style={styles.rollingItem}>
-              <Text style={styles.rollingAuthor}>
-                {formatGrowthAuthorLabel(comment.authorRelationshipLabel, comment.authorName)}
-              </Text>
-              <View style={styles.rollingContentRow}>
-                <Text style={styles.rollingText} numberOfLines={1}>“{comment.text}”</Text>
-                {(comment.stickerIds ?? []).slice(0, 3).map((stickerId, index) => {
-                  const sticker = stickers.find((item) => item.id === stickerId);
-                  if (!sticker) return null;
-                  return (
-                    <BabyStickerFromModel
-                      key={`${comment.id}-${stickerId}-${index}`}
-                      sticker={sticker}
-                      size={18}
-                      style={styles.rollingStickerImage}
+          <Pressable disabled={!editable} onPress={onRollingPress} style={[styles.rollingWrap, editOutline]}>
+            {rolling.length > 0 ? (
+              rolling.map((comment) => (
+                <View key={comment.id} style={styles.commentRow}>
+                  <Text style={[styles.commentAuthor, { color: template.accentColor }]} numberOfLines={1}>
+                    {formatGrowthAuthorLabel(comment.authorRelationshipLabel, comment.authorName)}
+                  </Text>
+                  <View style={styles.rollingRuled}>
+                    <DiaryRuledText
+                      text={comment.text}
+                      color={template.textColor}
+                      lineColor={`${template.accentColor}44`}
+                      lineStyle={template.writingLineStyle}
+                      lineHeight={20}
+                      minLines={1}
+                      maxLines={2}
+                      fontSize={10}
                     />
-                  );
-                })}
-              </View>
-            </View>
-          ))
-        ) : editable ? (
-          <Text style={styles.emptyRolling}>＋ 가족 롤링페이퍼</Text>
-        ) : null}
-      </Pressable>
+                    {(comment.stickerIds ?? []).length > 0 ? (
+                      <View style={styles.rollingStickerStack}>
+                        {(comment.stickerIds ?? []).slice(0, 3).map((stickerId, index) => {
+                          const sticker = stickers.find((item) => item.id === stickerId);
+                          if (!sticker) return null;
+                          return (
+                            <BabyStickerFromModel
+                              key={`${comment.id}-${stickerId}-${index}`}
+                              sticker={sticker}
+                              size={18}
+                              style={styles.rollingStickerImage}
+                            />
+                          );
+                        })}
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              ))
+            ) : editable ? (
+              <Text style={[styles.emptyRolling, { color: template.accentColor }]}>{t("growth.critical.131")}</Text>
+            ) : null}
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
 
+function TemplateDecorations({
+  decorations,
+  color,
+  width,
+  height,
+}: {
+  decorations: DiaryPageTemplateConfig["decorations"];
+  color: string;
+  width: number;
+  height: number;
+}) {
+  if (!width || !height) return null;
+  return (
+    <View pointerEvents="none" style={styles.watermarkLayer}>
+      {decorations.map((decoration, index) => (
+        <DiaryTemplateDecoration
+          key={`${decoration.type}-${index}`}
+          {...decoration}
+          color={color}
+          width={width}
+          height={height}
+          opacity={0.38}
+        />
+      ))}
     </View>
   );
 }
@@ -299,6 +410,7 @@ function PageStickerLayer({
   onBringForward?: (id: string) => void;
   onSendBackward?: (id: string) => void;
 }) {
+  const { t } = useLanguage();
   if (!canvasWidth || !canvasHeight) return null;
   const editable = mode === "edit";
   const ordered = pageStickers.slice().sort((a, b) => a.zIndex - b.zIndex);
@@ -328,10 +440,10 @@ function PageStickerLayer({
 
       {editable && selected ? (
         <View style={styles.stickerControls}>
-          <StickerControl label="삭제" onPress={() => onDelete?.(selected.id)} danger />
-          <StickerControl label="복제" onPress={() => onDuplicate?.(selected.id)} />
-          <StickerControl label="앞으로" onPress={() => onBringForward?.(selected.id)} />
-          <StickerControl label="뒤로" onPress={() => onSendBackward?.(selected.id)} />
+          <StickerControl label={t("growth.critical.036")} onPress={() => onDelete?.(selected.id)} danger />
+          <StickerControl label={t("growth.critical.132")} onPress={() => onDuplicate?.(selected.id)} />
+          <StickerControl label={t("growth.critical.133")} onPress={() => onBringForward?.(selected.id)} />
+          <StickerControl label={t("growth.critical.134")} onPress={() => onSendBackward?.(selected.id)} />
           <StickerControl
             label="−"
             onPress={() => {
@@ -479,14 +591,108 @@ function FreePageSticker({
   );
 }
 
-function LetterContent({ page }: { page: GrowthBookPage }) {
+function LetterContent({ page, template }: { page: GrowthBookPage; template: DiaryPageTemplateConfig }) {
+  const { t } = useLanguage();
+  const [innerSize, setInnerSize] = useState({ width: 0, height: 0 });
+  const letters = page.letters ?? [];
+
   return (
-    <View style={styles.letterInner}>
-      <BabyLogIcon kind="sparkles" size={18} color={colors.amberText} />
-      <Text style={styles.letterEyebrow}>{page.subtitle}</Text>
-      <Text style={styles.letterTitle}>{page.title}</Text>
-      <Text style={styles.letterBody}>{page.body}</Text>
-      <View style={styles.letterSeal}><Text style={styles.letterSealText}>♥</Text></View>
+    <View style={styles.momentPad}>
+      <View
+        style={[styles.momentSurface, { backgroundColor: template.surfaceColor, borderColor: template.borderColor }]}
+        onLayout={(event) => {
+          const { width, height } = event.nativeEvent.layout;
+          setInnerSize({ width, height });
+        }}
+      >
+        <TemplateDecorations
+          decorations={template.decorations}
+          color={template.accentColor}
+          width={innerSize.width}
+          height={innerSize.height}
+        />
+        <View style={styles.momentForeground} pointerEvents="box-none">
+          <View
+            style={[
+              styles.pageHeader,
+              template.headerStyle !== "line" && styles.roundedHeader,
+              {
+                borderColor: template.accentColor,
+                backgroundColor: template.headerStyle === "line" ? "transparent" : `${template.accentColor}12`,
+              },
+            ]}
+          >
+            <Text style={[styles.pageDate, { color: template.textColor }]} numberOfLines={1}>
+              {page.subtitle || t("growth.critical.010")}
+            </Text>
+            <View style={[styles.letterStamp, { borderColor: `${template.accentColor}77` }]}>
+              <Text style={[styles.letterStampText, { color: template.accentColor }]}>♥</Text>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.titleSection,
+              template.titleSectionStyle === "box" && {
+                borderWidth: 1,
+                borderColor: `${template.accentColor}66`,
+                borderRadius: 8,
+                backgroundColor: `${template.accentColor}0A`,
+              },
+            ]}
+          >
+            <Text style={[styles.titleLabel, { color: template.accentColor }]}>{t("diary.template.title")}</Text>
+            <Text
+              style={[styles.pageTitle, { color: template.textColor, borderBottomColor: `${template.accentColor}66` }]}
+              numberOfLines={2}
+            >
+              {page.title?.trim() || t("growth.critical.085")}
+            </Text>
+          </View>
+
+          {letters.length > 0 ? (
+            <View style={styles.letterList}>
+              {letters.slice(0, 3).map((letter) => (
+                <View key={letter.id} style={styles.commentRow}>
+                  <Text style={[styles.commentAuthor, { color: template.accentColor }]} numberOfLines={2}>
+                    {formatGrowthAuthorLabel(letter.authorRelationshipLabel, letter.authorName)}
+                  </Text>
+                  <View style={styles.rollingRuled}>
+                    <DiaryRuledText
+                      text={letter.text}
+                      color={template.textColor}
+                      lineColor={`${template.accentColor}44`}
+                      lineStyle={template.writingLineStyle}
+                      lineHeight={20}
+                      minLines={letters.length > 1 ? 3 : 8}
+                      maxLines={letters.length > 1 ? 5 : 12}
+                      fontSize={13}
+                    />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.letterBodyWrap}>
+              <DiaryRuledText
+                text={page.body}
+                emptyText={t("growth.critical.058")}
+                color={template.textColor}
+                lineColor={`${template.accentColor}55`}
+                lineStyle={template.writingLineStyle}
+                lineHeight={24}
+                minLines={8}
+                maxLines={12}
+                fontSize={14}
+              />
+            </View>
+          )}
+
+          <View style={[styles.letterSeal, { backgroundColor: `${template.accentColor}28`, borderColor: template.accentColor }]}>
+            <Text style={[styles.letterSealText, { color: template.accentColor }]}>♥</Text>
+          </View>
+        </View>
+      </View>
     </View>
   );
 }
@@ -511,33 +717,44 @@ const styles = StyleSheet.create({
   coverPhotoEmoji: { fontSize: 38 },
   coverPhotoHint: { fontSize: 12, color: "#8A735A", textAlign: "center", fontWeight: "600" },
   coverRange: { marginTop: 14, fontSize: 13, fontWeight: "700", color: "#8A735A", letterSpacing: 1 },
-  momentInner: { flex: 1, paddingLeft: 28, paddingRight: 22, paddingTop: 20, paddingBottom: 16 },
-  momentHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  momentEyebrow: { fontSize: 10, fontWeight: "800", color: colors.amberText, letterSpacing: 1 },
-  momentTitle: { marginTop: 5, fontSize: 20, fontWeight: "800", color: "#3D342C", lineHeight: 25 },
-  momentDate: { marginTop: 2, fontSize: 11, fontWeight: "600", color: "#8A735A" },
-  photoGrid: { position: "relative", marginTop: 9, height: "39%" },
-  photoGridWithCommentSticker: { height: "31%" },
-  photoCell: { position: "absolute", borderRadius: 8, overflow: "hidden", borderWidth: 2.5, borderColor: "#FFF", backgroundColor: "rgba(255,255,255,0.5)" },
+  momentPad: { flex: 1, padding: 10 },
+  momentSurface: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 10, overflow: "hidden" },
+  watermarkLayer: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
+  momentForeground: { flex: 1, zIndex: 1 },
+  pageHeader: {
+    minHeight: 42,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 5,
+    paddingBottom: 5,
+    gap: 8,
+  },
+  roundedHeader: { borderWidth: 1, borderRadius: 10, padding: 5, marginBottom: 5 },
+  pageDate: { flex: 1, fontSize: 12, fontWeight: "700" },
+  titleSection: { minHeight: 52, padding: 7, marginTop: 6 },
+  titleLabel: { fontSize: 11, fontWeight: "800", marginBottom: 3 },
+  pageTitle: { fontSize: 13, lineHeight: 18, fontWeight: "700", paddingBottom: 4, borderBottomWidth: StyleSheet.hairlineWidth },
+  photoGrid: { position: "relative", marginTop: 8, height: "32%" },
+  photoGridWithCommentSticker: { height: "26%" },
+  photoCell: { position: "absolute", borderRadius: 8, overflow: "hidden", borderWidth: 1.5, backgroundColor: "rgba(255,255,255,0.5)" },
   photoSwapSource: { borderWidth: 2, borderStyle: "solid", borderColor: colors.amber, opacity: 0.82 },
-  editableRegion: { borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: "rgba(255,255,255,0.38)" },
   emptyPhoto: { flex: 1, alignItems: "center", justifyContent: "center" },
-  addPhotoPlus: { color: colors.amberText, fontSize: 24, fontWeight: "500" },
-  addPhotoLabel: { color: colors.amberText, fontSize: 10, fontWeight: "700" },
+  addPhotoPlus: { fontSize: 24, fontWeight: "500" },
+  addPhotoLabel: { fontSize: 10, fontWeight: "700" },
   photoEditBadge: { position: "absolute", right: 5, top: 5, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: "rgba(61,52,44,0.7)" },
   photoEditBadgeText: { color: "#FFF", fontSize: 8, fontWeight: "800" },
   photoMoveBadge: { backgroundColor: "rgba(176,58,52,0.92)" },
-  commentRegion: { marginTop: 8, minHeight: 48, borderRadius: 8 },
-  momentBody: { fontSize: 12.5, lineHeight: 18, color: "#4A4038", fontWeight: "500", padding: 7 },
-  commentStickerRow: { height: 54, overflow: "hidden", flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", gap: 2, paddingHorizontal: 6, paddingBottom: 2 },
-  emptyCopy: { padding: 10, color: "#A08C7A", fontSize: 11, textAlign: "center" },
-  rollingWrap: { marginTop: 7, minHeight: 32, borderRadius: 8, padding: 5, gap: 4 },
-  rollingItem: { backgroundColor: "rgba(255,255,255,0.62)", borderRadius: 7, paddingHorizontal: 6, paddingVertical: 4 },
-  rollingAuthor: { fontSize: 9, fontWeight: "800", color: colors.amberText },
-  rollingContentRow: { minHeight: 17, flexDirection: "row", alignItems: "center", gap: 3 },
-  rollingText: { flex: 1, fontSize: 10, color: "#4A4038", marginTop: 1 },
+  commentRegion: { marginTop: 8, minHeight: 48, paddingHorizontal: 2, paddingVertical: 2 },
+  commentStickerRow: { height: 40, overflow: "hidden", flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", gap: 2, paddingHorizontal: 2, paddingBottom: 2 },
+  rollingWrap: { marginTop: 6, minHeight: 32, paddingVertical: 2, gap: 4 },
+  commentRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
+  commentAuthor: { width: 62, fontSize: 10, lineHeight: 20, fontWeight: "800" },
+  rollingRuled: { flex: 1 },
+  rollingStickerStack: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   rollingStickerImage: { width: 28, height: 28 },
-  emptyRolling: { color: colors.amberText, fontSize: 10, fontWeight: "700", textAlign: "center", paddingVertical: 5 },
+  emptyRolling: { fontSize: 10, fontWeight: "700", textAlign: "center", paddingVertical: 5 },
   freeSticker: { position: "absolute", alignItems: "center", justifyContent: "center", borderRadius: 8 },
   freeStickerSelected: { borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: "rgba(255,255,255,0.12)" },
   freeStickerVisual: { alignSelf: "center" },
@@ -546,10 +763,10 @@ const styles = StyleSheet.create({
   stickerControlDanger: { backgroundColor: "rgba(200,75,71,0.94)" },
   stickerControlText: { color: "#FFF", fontSize: 6.8, fontWeight: "800" },
   stickerControlDangerText: { color: "#FFF" },
-  letterInner: { flex: 1, paddingHorizontal: 32, paddingVertical: 36, justifyContent: "center" },
-  letterEyebrow: { marginTop: 10, fontSize: 11, fontWeight: "800", color: colors.amberText, letterSpacing: 1 },
-  letterTitle: { marginTop: 8, fontSize: 24, fontWeight: "800", color: "#3D342C" },
-  letterBody: { marginTop: 18, fontSize: 14, lineHeight: 24, color: "#4A4038", fontWeight: "500" },
-  letterSeal: { marginTop: 28, alignSelf: "flex-end", width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(232,145,138,0.25)", borderWidth: 1.5, borderColor: colors.amber, alignItems: "center", justifyContent: "center", transform: [{ rotate: "-8deg" }] },
-  letterSealText: { color: colors.amberText, fontSize: 18, fontWeight: "800" },
+  letterList: { flex: 1, marginTop: 8, gap: 10 },
+  letterBodyWrap: { flex: 1, marginTop: 8 },
+  letterStamp: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
+  letterStampText: { fontSize: 12, fontWeight: "800" },
+  letterSeal: { marginTop: 10, alignSelf: "flex-end", width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: "center", justifyContent: "center", transform: [{ rotate: "-8deg" }] },
+  letterSealText: { fontSize: 18, fontWeight: "800" },
 });
