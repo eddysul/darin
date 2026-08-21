@@ -65,8 +65,10 @@ import {
 import {
   getBabyStickers,
   hydrateBabyStickers,
+  mergeBabyStickerLists,
   resetBabyStickersMemory,
   saveBabyStickers,
+  withLocalStickerAssets,
 } from "../utils/babyStickersStore";
 import { BabyStickerRepository } from "../repositories/BabyStickerRepository";
 import type { GrowthBookEdit } from "../types/growthBook";
@@ -628,18 +630,21 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setGrowthBookHydrated(!!scope);
     }
     if (stickersOk) {
-      const storedStickers = getBabyStickers();
-      let nextStickers = storedStickers ?? [];
+      const storedStickers = getBabyStickers() ?? [];
+      let nextStickers = storedStickers;
       if (scope) {
         try {
-          nextStickers = await BabyStickerRepository.uploadLocalBabyStickersMigration(scope, nextStickers);
+          nextStickers = await BabyStickerRepository.uploadLocalBabyStickersMigration(scope, storedStickers);
         } catch {
           // Keep the scoped local originals and retry migration on the next hydrate.
         }
       }
       if (hydrationRun !== storageHydrationRunRef.current) return false;
-      setBabyStickers(nextStickers);
-      void saveBabyStickers(nextStickers, scope);
+      setBabyStickers((prev) => {
+        const merged = mergeBabyStickerLists(nextStickers, prev);
+        void saveBabyStickers(merged, scope);
+        return merged;
+      });
       setStickersHydrated(!!scope);
     }
     if (growthRecordsOk) {
@@ -773,16 +778,27 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     if (!scope || sticker.babyId !== scope.babyId) {
       throw new Error("현재 선택된 아기의 스티커만 저장할 수 있어요.");
     }
-    setBabyStickers((prev) => [sticker, ...prev.filter((item) => item.id !== sticker.id)]);
+    setBabyStickers((prev) => {
+      const next = [sticker, ...prev.filter((item) => item.id !== sticker.id)];
+      void saveBabyStickers(next, scope);
+      return next;
+    });
     try {
-      const remote = await BabyStickerRepository.uploadSticker(sticker);
+      const remote = withLocalStickerAssets(
+        await BabyStickerRepository.uploadSticker(sticker),
+        sticker,
+      );
       if (sameLocalDataScope(localDataScopeRef.current, scope)) {
-        setBabyStickers((prev) => [remote, ...prev.filter((item) => item.id !== remote.id)]);
+        setBabyStickers((prev) => {
+          const next = [remote, ...prev.filter((item) => item.id !== remote.id)];
+          void saveBabyStickers(next, scope);
+          return next;
+        });
       }
       return remote;
     } catch (error) {
-      // Local asset remains intact and migration will retry later, but callers
-      // must not treat a local-only sticker as ready for a server comment.
+      // Local file is already in the vault cache. Hydrate must merge, not replace,
+      // so a later server list cannot wipe an unsynced sticker.
       throw error;
     }
   }, []);

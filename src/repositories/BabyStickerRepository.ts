@@ -8,6 +8,7 @@ import {
   normalizeSpeechBubbleType,
   normalizeTemplateId,
 } from "../types/babySticker";
+import { mergeBabyStickerLists, withLocalStickerAssets } from "../utils/babyStickersStore";
 import { qaStorage } from "../utils/qaStorage";
 import { scopedStorageKey, type LocalDataScope } from "../utils/scopedLocalStorage";
 import { STORAGE_KEYS } from "../utils/storageKeys";
@@ -15,7 +16,7 @@ import { AuthRepository } from "./AuthRepository";
 
 const BUCKET = "baby-stickers";
 const MAX_STICKER_BYTES = 10 * 1024 * 1024;
-const SIGNED_URL_TTL_SECONDS = 180;
+const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24;
 const STICKER_COLUMNS = "id,baby_id,created_by,label,storage_path,source,metadata,created_at,updated_at,deleted_at";
 
 type StickerMetadata = Pick<
@@ -102,11 +103,7 @@ async function rowsToStickers(rows: BabyStickerRow[]): Promise<BabySticker[]> {
       .filter((item): item is typeof item & { path: string; signedUrl: string } => Boolean(item.path && item.signedUrl && !item.error))
       .map((item) => [item.path, item.signedUrl]),
   );
-  return rows.map((row) => {
-    const imageUri = signedUrlByPath.get(row.storage_path);
-    if (!imageUri) throw new Error(`Sticker image is not accessible: ${row.id}`);
-    return rowToSticker(row, imageUri);
-  });
+  return rows.map((row) => rowToSticker(row, signedUrlByPath.get(row.storage_path) ?? ""));
 }
 
 export const BabyStickerRepository = {
@@ -189,7 +186,7 @@ export const BabyStickerRepository = {
       throw error;
     }
     const row = data as BabyStickerRow;
-    return rowToSticker(row, await signedUrlForRow(row));
+    return withLocalStickerAssets(rowToSticker(row, await signedUrlForRow(row)), sticker);
   },
 
   async uploadBabySticker(sticker: BabySticker, source = "app"): Promise<BabySticker> {
@@ -211,29 +208,44 @@ export const BabyStickerRepository = {
   },
 
   async uploadLocalBabyStickersMigration(scope: LocalDataScope, local: BabySticker[]): Promise<BabySticker[]> {
-    const flagKey = scopedStorageKey(STORAGE_KEYS.babyStickersMigration, scope);
-    let completed: string | null = null;
-    try {
-      completed = await qaStorage.getItem(flagKey);
-    } catch (error) {
-      if (typeof __DEV__ !== "undefined" && __DEV__) {
-        console.warn("[BabyStickerRepository] migration flag read failed", error);
+    const scopedLocal = local.filter((item) => item.babyId === scope.babyId);
+    const pending = scopedLocal.filter((item) => !item.serverBacked && hasUploadableStickerImage(item));
+    let uploaded: BabySticker[] = [];
+    for (const sticker of pending) {
+      try {
+        uploaded.push(await this.uploadSticker(sticker, "local_migration"));
+      } catch (error) {
+        if (typeof __DEV__ !== "undefined" && __DEV__) {
+          console.warn("[BabyStickerRepository] local sticker upload deferred", sticker.id, error);
+        }
       }
     }
-    if (!completed) {
-      for (const sticker of local.filter((item) => item.babyId === scope.babyId && !item.serverBacked)) {
-        await this.uploadSticker(sticker, "local_migration");
-      }
+
+    const flagKey = scopedStorageKey(STORAGE_KEYS.babyStickersMigration, scope);
+    if (pending.length === uploaded.length) {
       try {
         await qaStorage.setItem(flagKey, JSON.stringify({ migratedAt: new Date().toISOString() }));
       } catch (error) {
         // Uploads already succeeded; keep local originals and retry the flag later.
-        // Do not surface this as a scary "device save" failure banner.
         if (typeof __DEV__ !== "undefined" && __DEV__) {
           console.warn("[BabyStickerRepository] migration flag write failed", error);
         }
       }
     }
-    return this.listByBabyId(scope.babyId);
+
+    let server: BabySticker[] = [];
+    try {
+      server = await this.listByBabyId(scope.babyId);
+    } catch (error) {
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.warn("[BabyStickerRepository] sticker list failed; keeping local vault", error);
+      }
+      return mergeBabyStickerLists(uploaded, scopedLocal);
+    }
+    return mergeBabyStickerLists(server, mergeBabyStickerLists(uploaded, scopedLocal));
   },
 };
+
+function hasUploadableStickerImage(sticker: BabySticker): boolean {
+  return Boolean(sticker.finalStickerImageUri || sticker.cutoutImageUri || sticker.originalImageUri);
+}

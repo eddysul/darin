@@ -57,18 +57,46 @@ function normalize(raw: unknown): BabySticker[] {
   }));
 }
 
-/** Avoid persisting short-lived signed URLs / large local image blobs for server-backed stickers. */
+function isEphemeralImageUri(uri: string): boolean {
+  return /^(https?:)?\/\//i.test(uri) || uri.startsWith("data:");
+}
+
+function pickDurableImageUri(primary: string, fallback: string): string {
+  if (primary && !isEphemeralImageUri(primary)) return primary;
+  if (fallback && !isEphemeralImageUri(fallback)) return fallback;
+  return primary || fallback || "";
+}
+
+/** Keep document-directory copies; drop signed URLs that expire in minutes. */
+export function withLocalStickerAssets(primary: BabySticker, fallback?: BabySticker): BabySticker {
+  if (!fallback) return primary;
+  return {
+    ...primary,
+    originalImageUri: pickDurableImageUri(primary.originalImageUri, fallback.originalImageUri),
+    faceImageUri: pickDurableImageUri(primary.faceImageUri, fallback.faceImageUri),
+    cutoutImageUri: pickDurableImageUri(primary.cutoutImageUri, fallback.cutoutImageUri),
+    finalStickerImageUri: pickDurableImageUri(primary.finalStickerImageUri, fallback.finalStickerImageUri),
+  };
+}
+
+export function mergeBabyStickerLists(server: BabySticker[], local: BabySticker[]): BabySticker[] {
+  const byId = new Map<string, BabySticker>();
+  for (const item of local) byId.set(item.id, item);
+  for (const item of server) {
+    byId.set(item.id, withLocalStickerAssets(item, byId.get(item.id)));
+  }
+  return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Persist local file paths; never cache short-lived signed URLs. */
 function toPersistedStickers(stickers: BabySticker[]): BabySticker[] {
-  return stickers.map((sticker) => {
-    if (!sticker.serverBacked || !sticker.storagePath) return sticker;
-    return {
-      ...sticker,
-      originalImageUri: "",
-      faceImageUri: "",
-      cutoutImageUri: "",
-      finalStickerImageUri: "",
-    };
-  });
+  return stickers.map((sticker) => ({
+    ...sticker,
+    originalImageUri: isEphemeralImageUri(sticker.originalImageUri) ? "" : sticker.originalImageUri,
+    faceImageUri: isEphemeralImageUri(sticker.faceImageUri) ? "" : sticker.faceImageUri,
+    cutoutImageUri: isEphemeralImageUri(sticker.cutoutImageUri) ? "" : sticker.cutoutImageUri,
+    finalStickerImageUri: isEphemeralImageUri(sticker.finalStickerImageUri) ? "" : sticker.finalStickerImageUri,
+  }));
 }
 
 export async function hydrateBabyStickers(scope: LocalDataScope | null, force = false): Promise<boolean> {
