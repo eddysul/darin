@@ -71,6 +71,9 @@ import { colors, type } from "../../theme";
 import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { loadFoodIngredients, normalizeIngredientName, saveFoodIngredients } from "../../utils/foodIngredientsStore";
 import type { MainTabParamList } from "../../navigation/types";
+import { useLanguage } from "../../LanguageContext";
+import { RECORD_VALUE } from "../../constants/recordInternalValues";
+import { quickRecordLabel } from "../../utils/recordDisplay";
 
 type Props = {
   onOpenProfile: (opts?: { convertBirth?: boolean }) => void;
@@ -82,17 +85,18 @@ type Props = {
 /** Window in which a repeated tap on the same quick record is treated as a mis-tap. */
 const QUICK_RECORD_REPEAT_GUARD_MS = 1200;
 
-const TIMER_LABEL: Record<ActiveTimer["kind"], string> = {
-  breastfeeding: "모유수유",
-  formula: "분유 수유",
-  storedMilk: "저장 모유 수유",
-  sleep: "수면",
-  pump: "유축",
-  tummy: "터미타임",
-  play: "놀이",
-};
+const TIMER_LABEL_KEYS = {
+  breastfeeding: "record.timer.breastfeeding",
+  formula: "record.timer.formula",
+  storedMilk: "record.timer.storedMilk",
+  sleep: "record.timer.sleep",
+  pump: "record.timer.pump",
+  tummy: "record.timer.tummy",
+  play: "record.timer.play",
+} as const;
 
 export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenConsult }: Props) {
+  const { t } = useLanguage();
   const route = useRoute<RouteProp<MainTabParamList, "Record">>();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList, "Record">>();
   const { settings, ready: settingsReady } = useAppSettings();
@@ -179,10 +183,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   const canGoNext = selectedDateKey < todayKey;
   const canGoPrev = selectedDateKey > offsetDateKey(todayKey, -365);
   const timelineTitle = isViewingToday
-    ? "오늘의 기록"
+    ? t("record.screen.today")
     : selectedDateKey === yesterdayDateKey()
-      ? "어제 기록"
-      : `${shortDateLabel(selectedDateKey).replace("/", ".")} 기록`;
+      ? t("record.screen.yesterday")
+      : t("record.screen.dateLogs", { date: shortDateLabel(selectedDateKey).replace("/", ".") });
   const activeSleep = useMemo(() => {
     const yesterdayKey = yesterdayDateKey();
     return [...logs]
@@ -396,7 +400,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     const elapsed = Math.max(1, elapsedClockMinutes(sleep.time, nowTime()));
     const { id, ...entry } = sleep;
     updateLog(id, { ...entry, duration: String(elapsed) });
-    announceCreated({ ...entry, id, duration: String(elapsed) }, "수면 종료 완료");
+    announceCreated({ ...entry, id, duration: String(elapsed) }, t("record.screen.sleepEnded"));
     suppressedRestoredSleepId.current = id;
     setActiveTimers((prev) => prev.filter((timer) => timer.kind !== "sleep"));
     setTimerSheetId((openId) => {
@@ -426,8 +430,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     const otherActiveTimer = activeTimers[0];
     if (otherActiveTimer) {
       Alert.alert(
-        "진행 중인 기록이 있어요",
-        `${TIMER_LABEL[otherActiveTimer.kind]} 타이머를 먼저 종료해 주세요.`,
+        t("record.screen.timerConflict"),
+        t("record.screen.timerConflictBody", { label: t(TIMER_LABEL_KEYS[otherActiveTimer.kind]) }),
       );
       return;
     }
@@ -530,35 +534,35 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
             ...entry,
             duration: String(result.durationMinutes),
           });
-          title = "수면 종료 완료";
+          title = t("record.screen.sleepEnded");
           if (saved) suppressedRestoredSleepId.current = id;
         }
       } else if (timer.kind === "sleep") {
-        saved = await addLogWithPersistence({ ...base, cat: "sleep", chip: "낮잠" });
-        title = "수면 타이머 저장";
+        saved = await addLogWithPersistence({ ...base, cat: "sleep", chip: RECORD_VALUE.nap });
+        title = t("record.screen.sleepTimerSaved");
       } else if (timer.kind === "breastfeeding") {
         saved = await addLogWithPersistence({ ...base, cat: "breast" });
-        title = "모유수유 타이머 저장";
+        title = t("record.screen.breastTimerSaved");
       } else if (timer.kind === "formula") {
         saved = await addLogWithPersistence({ ...base, cat: "formula" });
-        title = "분유 수유 저장";
+        title = t("record.screen.formulaSaved");
       } else if (timer.kind === "storedMilk") {
         saved = await addLogWithPersistence({ ...base, cat: "storedMilk" });
-        title = "저장 모유 수유 저장";
+        title = t("record.screen.storedMilkSaved");
       } else if (timer.kind === "pump") {
         const totalAmount = (Number.parseFloat(result.leftAmount ?? "0") || 0) + (Number.parseFloat(result.rightAmount ?? "0") || 0);
         saved = await addLogWithPersistence({ ...base, cat: "pump", amount: totalAmount > 0 ? String(totalAmount) : undefined });
-        title = "유축 타이머 저장";
+        title = t("record.screen.pumpTimerSaved");
       } else if (timer.kind === "tummy") {
         saved = await addLogWithPersistence({ ...base, cat: "tummy" });
-        title = "터미타임 타이머 저장";
+        title = t("record.screen.tummyTimerSaved");
       } else if (timer.kind === "play") {
         saved = await addLogWithPersistence({ ...base, cat: "play" });
-        title = "놀이 타이머 저장";
+        title = t("record.screen.playTimerSaved");
       }
 
       if (!saved) {
-        Alert.alert("기록 저장에 실패했어요.", "다시 시도해 주세요. 진행 중인 타이머는 유지돼요.");
+        Alert.alert(t("record.screen.saveFailed"), t("record.screen.saveFailedBody"));
         return;
       }
       announceCreated(saved, title);
@@ -595,7 +599,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
         const elapsed = Math.max(1, elapsedClockMinutes(activeSleep.time, time));
         const { id, ...entry } = activeSleep;
         updateLog(id, { ...entry, duration: String(elapsed) });
-        announceCreated({ ...entry, id, duration: String(elapsed) }, `${record.label} 완료`);
+        announceCreated({ ...entry, id, duration: String(elapsed) }, t("record.screen.completed", { label: quickRecordLabel(t, record) }));
         suppressedRestoredSleepId.current = id;
         return;
       }
@@ -603,7 +607,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
         const elapsed = Math.max(1, elapsedClockMinutes(activeSleep.time, time));
         const { id, ...entry } = activeSleep;
         updateLog(id, { ...entry, duration: String(elapsed) });
-        announceCreated({ ...entry, id, duration: String(elapsed) }, "수면 종료 완료");
+        announceCreated({ ...entry, id, duration: String(elapsed) }, t("record.screen.sleepEnded"));
         suppressedRestoredSleepId.current = id;
         return;
       }
@@ -621,7 +625,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       duration: defaults.duration,
       notes: defaults.notes,
     });
-    announceCreated(created, `${record.label} 기록 완료`);
+    announceCreated(created, t("record.screen.recorded", { label: quickRecordLabel(t, record) }));
   };
 
   const editingEntry = prefill?.editId ? logs.find((l) => l.id === prefill.editId) : null;
@@ -643,8 +647,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       .filter((entry) => cats.includes(entry.cat as never))
       .sort((a, b) => a.time.localeCompare(b.time));
     const index = editId ? ordered.findIndex((entry) => entry.id === editId) + 1 : ordered.length + 1;
-    const dayPart = targetDate === todayKey ? "오늘" : shortDateLabel(targetDate).replace("/", ".");
-    return `${dayPart} ${Math.max(1, index)}회차 ${cat === "pump" ? "유축" : "수유"}`;
+    const dayPart = targetDate === todayKey ? t("record.screen.todayShort") : shortDateLabel(targetDate).replace("/", ".");
+    return t("record.screen.sessionLabel", { day: dayPart, index: Math.max(1, index), kind: t(cat === "pump" ? "record.screen.pumping" : "record.screen.feeding") });
   };
   const activeSessionLabel = primaryTimer
     ? sessionLabelFor(primaryTimer.kind === "breastfeeding" ? "breast" : primaryTimer.kind, undefined, primaryTimer.dateKey)
@@ -720,18 +724,18 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
         }}
         listEmpty={
           !storageReady ? (
-            <LoadingState label="기록을 불러오는 중…" />
+            <LoadingState label={t("record.screen.loading")} />
           ) : (
             <EmptyState
-              title={isViewingToday ? "아직 기록이 없어요." : "이 날의 기록이 없어요."}
+              title={t(isViewingToday ? "record.screen.emptyToday" : "record.screen.emptyDay")}
               body={
                 allowAdd
                   ? isViewingToday
-                    ? "위에서 기록하거나 자주 쓰는 조합을 눌러 보세요."
-                    : `${dayNavLabel(selectedDateKey)}에 남긴 기록이 없습니다. 위에서 이 날에 남길 수 있어요.`
+                    ? t("record.screen.emptyTodayBody")
+                    : t("record.screen.emptyDayBody", { date: dayNavLabel(selectedDateKey) })
                   : isViewingToday
-                    ? "아직 기록이 없어요."
-                    : `${dayNavLabel(selectedDateKey)}에 남긴 기록이 없습니다.`
+                    ? t("record.screen.emptyToday")
+                    : t("record.screen.emptyDayBody", { date: dayNavLabel(selectedDateKey) })
               }
             />
           )
@@ -740,28 +744,28 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
           <>
         <RecordHomeHeader embedded onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenNotifications={onOpenNotifications} />
         {!allowAdd && (
-          <Text style={styles.viewerBanner}>보기 전용 계정이에요. 기록 추가·수정은 제한돼요.</Text>
+          <Text style={styles.viewerBanner}>{t("record.screen.readOnly")}</Text>
         )}
         {primaryTimer ? (
           <View style={styles.timerBanner}>
             {primaryTimerCategory ? <View style={styles.timerBannerIcon}><LogCategoryIcon categoryKey={primaryTimerCategory} customCategories={customCategories} size={18} color={colors.amberText} /></View> : null}
             <Pressable style={styles.timerBannerCopy} onPress={() => setTimerSheetId(primaryTimer.id)}>
               <Text style={styles.timerBannerTitle}>
-                {TIMER_LABEL[primaryTimer.kind]} 진행 중
+                {t("record.grid.actionInProgress", { label: t(TIMER_LABEL_KEYS[primaryTimer.kind]) })}
                 {activeTimers.length > 1 ? ` · +${activeTimers.length - 1}` : ""}
               </Text>
               <Text style={styles.timerBannerMeta}>
-                {[activeSessionLabel, formatElapsedClock(elapsedMsNow(primaryTimer)), "탭해서 이어서"].filter(Boolean).join(" · ")}
+                {[activeSessionLabel, formatElapsedClock(elapsedMsNow(primaryTimer)), t("record.screen.continue")].filter(Boolean).join(" · ")}
               </Text>
             </Pressable>
             <Pressable
               style={styles.timerBannerAction}
               onPress={() => patchTimer(primaryTimer.id, primaryTimer.status === "paused" ? resumeTimer : pauseTimer)}
             >
-              <Text style={styles.timerBannerActionText}>{primaryTimer.status === "paused" ? "다시 시작" : "일시정지"}</Text>
+              <Text style={styles.timerBannerActionText}>{t(primaryTimer.status === "paused" ? "record.screen.restart" : "record.screen.pause")}</Text>
             </Pressable>
             <Pressable style={styles.timerBannerAction} onPress={() => setTimerSheetId(primaryTimer.id)}>
-              <Text style={styles.timerBannerActionText}>종료</Text>
+              <Text style={styles.timerBannerActionText}>{t("record.screen.end")}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -831,7 +835,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
         onClose={() => setDatePickerOpen(false)}
       />
 
-      {/* Product invariant: keep the full-size AI 상담 FAB unchanged across releases. */}
+      {/* Product invariant: keep the full-size consultation FAB unchanged across releases. */}
       <ConsultFab hidden={fabHidden} onPress={() => setConsultPromptOpen(true)} />
 
       <ConsultPromptSheet
@@ -851,7 +855,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       <RecordCreatedToast
         visible={Boolean(toast)}
         title={toast?.title ?? ""}
-        body="탭해서 수정"
+        body={t("record.screen.tapEdit")}
         onDismiss={() => setToast(null)}
         onPress={() => {
           if (toastEntry) {
@@ -903,8 +907,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
             inputMode: input.inputMode,
             isEnabled: true,
             duration: input.inputMode === "duration",
-            amount: input.inputMode === "amount" ? "회/량" : undefined,
-            chips: input.inputMode === "check" ? ["완료", "미완료"] : undefined,
+            amount: input.inputMode === "amount" ? RECORD_VALUE.countOrAmount : undefined,
+            chips: input.inputMode === "check" ? [RECORD_VALUE.done, RECORD_VALUE.notDone] : undefined,
             stage: pregnancy ? "pregnancy" : "born",
           });
           setAddCategoryOpen(false);

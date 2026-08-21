@@ -10,24 +10,27 @@ import type { BabyRow } from "../../types/database";
 import { colors, fontScaleCap, radius } from "../../theme";
 import { isPregnancyStage } from "../../utils/childDisplay";
 import { BabyLogIcon } from "./BabyLogIcon";
+import { useLanguage } from "../../LanguageContext";
+import type { MessageKey } from "../../i18n";
 
-function babyAgeLabel(baby: Pick<BabyRow, "birth_date" | "child_status">): string {
+function babyAgeLabel(baby: Pick<BabyRow, "birth_date" | "child_status">, t: (key: MessageKey, params?: Record<string, string | number>) => string): string {
   if (isPregnancyStage({ childStatus: baby.child_status, birthDate: baby.birth_date ?? undefined })) {
-    return "임신 중";
+    return t("home.switcher.pregnant");
   }
-  if (!baby.birth_date) return "출생일 미입력";
+  if (!baby.birth_date) return t("home.switcher.noBirthDate");
   const birth = new Date(`${baby.birth_date}T00:00:00`);
   if (!Number.isFinite(birth.getTime())) return baby.birth_date;
   const days = Math.floor((Date.now() - birth.getTime()) / 86_400_000);
   if (days < 0) return `D-${Math.abs(days)}`;
   if (days < 31) return `D+${days}`;
   const months = Math.max(1, Math.floor(days / 30.4375));
-  if (months < 24) return `${months}개월`;
-  return `${Math.floor(months / 12)}세`;
+  if (months < 24) return t("home.switcher.months", { count: months });
+  return t("home.switcher.years", { count: Math.floor(months / 12) });
 }
 
 export function BabySwitcher({ compact = false, variant = "default" }: { compact?: boolean; variant?: "default" | "switchButton" }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { t } = useLanguage();
   const { babies, activeBabyId, babyName, switchActiveBaby, logAuthor } = useBabyLog();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -53,10 +56,10 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
         onPress={() => setOpen(true)}
         hitSlop={compact || variant === "switchButton" ? { top: 12, bottom: 12, left: 8, right: 8 } : undefined}
         accessibilityRole="button"
-        accessibilityLabel={`현재 아기 ${babyName}. 아기 전환`}
+        accessibilityLabel={t("home.a11y.switchBaby", { babyName })}
       >
         {variant === "switchButton" ? null : <BabyLogIcon kind="baby" size={compact ? 15 : 17} color={colors.amberText} />}
-        <Text style={[styles.triggerText, compact && styles.triggerTextCompact, variant === "switchButton" && styles.switchTriggerText]} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>{variant === "switchButton" ? "아기 바꾸기" : babyName}</Text>
+        <Text style={[styles.triggerText, compact && styles.triggerTextCompact, variant === "switchButton" && styles.switchTriggerText]} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>{variant === "switchButton" ? t("home.switcher.button") : babyName}</Text>
         <Text style={[styles.chevron, variant === "switchButton" && styles.switchChevron]}>⌄</Text>
       </Pressable>
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
@@ -66,10 +69,10 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
             <View style={styles.handle} />
             <View style={styles.sheetHeader}>
               <View style={styles.sheetTitleCopy}>
-                <Text style={styles.title}>아기 바꾸기</Text>
-                <Text style={styles.subtitle}>보고 싶은 아기를 선택해 주세요.</Text>
+                <Text style={styles.title}>{t("home.switcher.title")}</Text>
+                <Text style={styles.subtitle}>{t("home.switcher.subtitle")}</Text>
               </View>
-              <Pressable style={styles.closeButton} onPress={() => setOpen(false)} accessibilityRole="button" accessibilityLabel="닫기">
+              <Pressable style={styles.closeButton} onPress={() => setOpen(false)} accessibilityRole="button" accessibilityLabel={t("home.switcher.close")}>
                 <Text style={styles.closeText}>×</Text>
               </Pressable>
             </View>
@@ -87,10 +90,10 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
                         setError("");
                         void switchActiveBaby(baby.id)
                           .then((selected) => {
-                            if (!selected) throw new Error("아기 접근 권한을 다시 확인해 주세요.");
+                            if (!selected) throw new Error(t("home.switcher.accessError"));
                             setOpen(false);
                           })
-                          .catch((cause) => setError(cause instanceof Error ? cause.message : "아기를 전환하지 못했어요."))
+                          .catch((cause) => setError(cause instanceof Error ? cause.message : t("home.switcher.error")))
                           .finally(() => setBusy(false));
                       }}
                     >
@@ -100,21 +103,21 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
                       <View style={styles.babyCopy}>
                         <Text style={[styles.babyName, selected && styles.babyNameActive]} numberOfLines={1}>{baby.name}</Text>
                         <View style={styles.babyMetaRow}>
-                          <Text style={styles.babyMeta}>{babyAgeLabel(baby)}</Text>
+                          <Text style={styles.babyMeta}>{babyAgeLabel(baby, t)}</Text>
                           <Text style={styles.metaDot}>·</Text>
                           <BabyLogIcon kind="profile" size={15} color={colors.amberText} strokeWidth={2.1} />
                           <Text style={styles.sharedText}>
-                            {baby.created_by && baby.created_by === logAuthor.userId ? "내가 등록한 아기" : "나와 공유 중"}
+                            {t(baby.created_by && baby.created_by === logAuthor.userId ? "home.switcher.mine" : "home.switcher.shared")}
                           </Text>
                         </View>
                       </View>
                       {selected ? <View style={styles.selectedCircle}><Text style={styles.selectedCheck}>✓</Text></View> : null}
                     </Pressable>
                 );
-              }) : <Text style={styles.empty}>접근 가능한 아기가 없어요.</Text>}
+              }) : <Text style={styles.empty}>{t("home.switcher.empty")}</Text>}
               <Pressable style={styles.addButton} onPress={() => { setOpen(false); setError(""); navigation.navigate("BabyProfile", { mode: "create" }); }} disabled={busy}>
                 <View style={styles.addIcon}><Text style={styles.addIconText}>＋</Text></View>
-                <Text style={styles.addButtonText}>아기 추가하기</Text>
+                <Text style={styles.addButtonText}>{t("home.switcher.add")}</Text>
               </Pressable>
             </ScrollView>
             {error ? <Text style={styles.error}>{error}</Text> : null}

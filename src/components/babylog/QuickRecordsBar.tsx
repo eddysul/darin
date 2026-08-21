@@ -7,6 +7,8 @@ import { colors, type } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import { QuickRecordEditorSheet } from "./QuickRecordEditorSheet";
+import { useLanguage } from "../../LanguageContext";
+import { quickRecordLabel } from "../../utils/recordDisplay";
 
 type Props = {
   records: QuickRecord[];
@@ -25,6 +27,7 @@ export function QuickRecordsBar({
   onTap,
   onSaveRecords,
 }: Props) {
+  const { t } = useLanguage();
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<QuickRecord | null>(null);
   const [startInForm, setStartInForm] = useState(false);
@@ -61,35 +64,37 @@ export function QuickRecordsBar({
     <View style={styles.card}>
       <View style={styles.header}>
         <View style={styles.headingCopy}>
-          <Text style={styles.title}>자주 쓰는 기록</Text>
-          <Text style={styles.subtitle}>한 번 탭하면 바로 저장돼요.</Text>
+          <Text style={styles.title}>{t("record.quick.title")}</Text>
+          <Text style={styles.subtitle}>{t("record.quick.subtitle")}</Text>
         </View>
         <Pressable
           style={[styles.editBtn, disabled && styles.disabled]}
           disabled={disabled}
           accessibilityRole="button"
-          accessibilityLabel="자주 쓰는 기록 관리"
+          accessibilityLabel={t("record.quick.manageA11y")}
           accessibilityState={{ disabled }}
           hitSlop={8}
           onPress={openManage}
         >
           <BabyLogIcon kind="edit" size={13} color={colors.amberText} />
-          <Text style={styles.edit}>관리</Text>
+          <Text style={styles.edit}>{t("record.quick.manage")}</Text>
         </Pressable>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {pinned.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>아직 자주 쓰는 기록이 없어요.</Text>
+            <Text style={styles.emptyTitle}>{t("record.quick.empty")}</Text>
             <Text style={styles.emptyBody}>
               {pregnancy
-                ? "영양제, 입덧, 태동처럼 반복되는 기록을 저장해 보세요."
-                : "자주 쓰는 조합을 저장해두면 한 번에 기록할 수 있어요."}
+                ? t("record.quick.emptyPregnancy")
+                : t("record.quick.emptyBorn")}
             </Text>
           </View>
         ) : null}
-        {pinned.map((record) => (
+        {pinned.map((record) => {
+          const displayLabel = quickRecordLabel(t, record);
+          return (
           <Pressable
             key={record.id}
             disabled={disabled}
@@ -101,8 +106,8 @@ export function QuickRecordsBar({
             ]}
             onPress={() => onTap(record)}
             accessibilityRole="button"
-            accessibilityLabel={`${record.label} 바로 저장`}
-            accessibilityHint="길게 누르면 이 조합을 수정할 수 있어요"
+            accessibilityLabel={t("record.quick.saveNow", { label: displayLabel })}
+            accessibilityHint={t("record.quick.editHint")}
             accessibilityState={{ disabled }}
             onLongPress={
               disabled
@@ -124,18 +129,19 @@ export function QuickRecordsBar({
               />
             </View>
             <Text style={styles.label} numberOfLines={1}>
-              {record.label}
+              {displayLabel}
             </Text>
           </Pressable>
-        ))}
+          );
+        })}
         <Pressable
           disabled={disabled}
           style={[styles.addChip, disabled && styles.disabled]}
           onPress={openCreate}
           accessibilityRole="button"
-          accessibilityLabel="자주 쓰는 기록 추가"
+          accessibilityLabel={t("record.quick.addA11y")}
         >
-          <Text style={styles.addLabel}>조합 추가</Text>
+          <Text style={styles.addLabel}>{t("record.quick.add")}</Text>
         </Pressable>
       </ScrollView>
 

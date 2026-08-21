@@ -21,6 +21,9 @@ import { LogCategoryIcon } from "./LogCategoryIcon";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { formatVolume, volumeFromMl, volumeToMl } from "../../utils/measurementFormat";
 import { DurationPickerField, DurationPickerSheet } from "../inputs/TimePickerFields";
+import { useLanguage } from "../../LanguageContext";
+import { RECORD_VALUE } from "../../constants/recordInternalValues";
+import { quickRecordLabel, recordCategoryLabel, storedRecordValueLabel } from "../../utils/recordDisplay";
 
 const BORN_LINK_CATS: BabyLogCategoryId[] = [
   "formula",
@@ -91,6 +94,7 @@ export function QuickRecordEditorSheet({
   onSave,
 }: Props) {
   const { settings } = useAppSettings();
+  const { t } = useLanguage();
   const linkCats = pregnancy ? PREGNANCY_LINK_CATS : BORN_LINK_CATS;
   const defaultCat: BabyLogCategoryId = pregnancy ? "pregMood" : "formula";
   const stageRecords = useMemo(() => quickRecordsForStage(records, pregnancy), [pregnancy, records]);
@@ -117,8 +121,8 @@ export function QuickRecordEditorSheet({
         : r.defaults.amount ?? "",
     );
     setChip(
-      r.defaults.cat === "diaper" && ["둘다", "둘 다"].includes(r.defaults.chip ?? "")
-        ? "소변+대변"
+      r.defaults.cat === "diaper" && ([RECORD_VALUE.diaperLegacyBoth, RECORD_VALUE.diaperLegacyBothSpaced] as readonly string[]).includes(r.defaults.chip ?? "")
+        ? RECORD_VALUE.diaperBoth
         : r.defaults.chip ?? "",
     );
     setDuration(r.defaults.duration ?? "");
@@ -152,7 +156,7 @@ export function QuickRecordEditorSheet({
   }, [visible, editing, startInForm, defaultCat]);
 
   const canSave = useMemo(
-    () => label.trim().length > 0 && (cat !== "diaper" || ["소변", "대변", "소변+대변"].includes(chip)),
+    () => label.trim().length > 0 && (cat !== "diaper" || ([RECORD_VALUE.diaperUrine, RECORD_VALUE.diaperStool, RECORD_VALUE.diaperBoth] as readonly string[]).includes(chip)),
     [cat, chip, label],
   );
 
@@ -209,11 +213,11 @@ export function QuickRecordEditorSheet({
           <View style={styles.handle} />
           <View style={styles.titleRow}>
             <Text style={styles.title}>
-              {mode === "form" ? (editId ? "빠른 기록 수정" : "빠른 기록 추가") : "자주 쓰는 기록"}
+              {mode === "form" ? t(editId ? "record.quick.editTitle" : "record.quick.addTitle") : t("record.quick.title")}
             </Text>
             {mode === "list" ? (
-              <Pressable onPress={openCreateForm} accessibilityRole="button" accessibilityLabel="새로 추가">
-                <Text style={styles.link}>새로 추가</Text>
+              <Pressable onPress={openCreateForm} accessibilityRole="button" accessibilityLabel={t("record.quick.new")}>
+                <Text style={styles.link}>{t("record.quick.new")}</Text>
               </Pressable>
             ) : (
               <Pressable
@@ -222,7 +226,7 @@ export function QuickRecordEditorSheet({
                   setMode("list");
                 }}
               >
-                <Text style={styles.link}>목록</Text>
+                <Text style={styles.link}>{t("record.quick.list")}</Text>
               </Pressable>
             )}
           </View>
@@ -232,8 +236,8 @@ export function QuickRecordEditorSheet({
               {stageRecords.length === 0 ? (
                 <Text style={styles.hint}>
                   {pregnancy
-                    ? "임신 중 자주 쓰는 조합을 만들면 한 번에 기록할 수 있어요."
-                    : "자주 쓰는 조합을 만들면 한 번에 기록할 수 있어요."}
+                    ? t("record.quick.listPregnancyHint")
+                    : t("record.quick.listHint")}
                 </Text>
               ) : null}
               {stageRecords.map((r) => (
@@ -247,9 +251,9 @@ export function QuickRecordEditorSheet({
                     />
                   </View>
                   <View style={styles.listBody}>
-                    <Text style={styles.listLabel}>{r.label}</Text>
+                    <Text style={styles.listLabel}>{quickRecordLabel(t, r)}</Text>
                     <Text style={styles.listMeta}>
-                      {getCategory(r.defaults.cat).label}
+                      {recordCategoryLabel(t, r.defaults.cat)}
                       {r.defaults.amount
                         ? ` · ${
                             VOLUME_CATS.includes(r.defaults.cat)
@@ -257,8 +261,8 @@ export function QuickRecordEditorSheet({
                               : r.defaults.amount
                           }`
                         : ""}
-                      {r.defaults.chip ? ` · ${r.defaults.chip}` : ""}
-                      {r.defaults.duration ? ` · ${r.defaults.duration}분` : ""}
+                      {r.defaults.chip ? ` · ${storedRecordValueLabel(t, r.defaults.chip)}` : ""}
+                      {r.defaults.duration ? ` · ${t("record.quick.durationMinutes", { count: r.defaults.duration })}` : ""}
                     </Text>
                   </View>
                   <Pressable
@@ -266,50 +270,50 @@ export function QuickRecordEditorSheet({
                     onPress={() => togglePin(r.id)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: r.pinned }}
-                    accessibilityLabel={`${r.label} ${r.pinned ? "고정 해제" : "고정"}`}
+                    accessibilityLabel={t(r.pinned ? "record.quick.unpinA11y" : "record.quick.pinA11y", { label: quickRecordLabel(t, r) })}
                   >
-                    <Text style={styles.miniBtnText}>{r.pinned ? "고정됨" : "고정"}</Text>
+                    <Text style={styles.miniBtnText}>{t(r.pinned ? "record.quick.pinned" : "record.quick.pin")}</Text>
                   </Pressable>
                   <Pressable
                     style={styles.miniBtn}
                     onPress={() => loadRecord(r)}
                     accessibilityRole="button"
-                    accessibilityLabel={`${r.label} 수정`}
+                    accessibilityLabel={t("record.quick.editA11y", { label: quickRecordLabel(t, r) })}
                   >
-                    <Text style={styles.miniBtnText}>수정</Text>
+                    <Text style={styles.miniBtnText}>{t("record.quick.edit")}</Text>
                   </Pressable>
                   {r.isCustom ? (
                     <Pressable
                       style={styles.miniBtn}
                       onPress={() => remove(r.id)}
                       accessibilityRole="button"
-                      accessibilityLabel={`${r.label} 삭제`}
+                      accessibilityLabel={t("record.quick.deleteA11y", { label: quickRecordLabel(t, r) })}
                     >
-                      <Text style={[styles.miniBtnText, styles.danger]}>삭제</Text>
+                      <Text style={[styles.miniBtnText, styles.danger]}>{t("record.quick.delete")}</Text>
                     </Pressable>
                   ) : null}
                 </View>
               ))}
               <Pressable style={styles.primary} onPress={openCreateForm}>
-                <Text style={styles.primaryText}>새 빠른 기록 만들기</Text>
+                <Text style={styles.primaryText}>{t("record.quick.create")}</Text>
               </Pressable>
             </ScrollView>
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <Text style={styles.label}>이름</Text>
+              <Text style={styles.label}>{t("record.quick.name")}</Text>
               <TextInput
                 style={styles.input}
                 value={label}
                 onChangeText={setLabel}
-                placeholder={pregnancy ? "예: 영양제 저녁" : "예: 비타민D"}
+                placeholder={t(pregnancy ? "record.quick.namePregnancyPlaceholder" : "record.quick.namePlaceholder")}
                 placeholderTextColor={colors.faint}
                 autoFocus={startInForm && !editing}
               />
               {!label.trim() ? (
-                <Text style={styles.hint}>이름을 입력해야 저장할 수 있어요.</Text>
+                <Text style={styles.hint}>{t("record.quick.nameRequired")}</Text>
               ) : null}
 
-              <Text style={styles.label}>색상</Text>
+              <Text style={styles.label}>{t("record.quick.color")}</Text>
               <View style={styles.colorRow}>
                 {QUICK_RECORD_COLORS.map((c) => (
                   <Pressable
@@ -320,7 +324,7 @@ export function QuickRecordEditorSheet({
                 ))}
               </View>
 
-              <Text style={styles.label}>연결 카테고리</Text>
+              <Text style={styles.label}>{t("record.quick.linkCategory")}</Text>
               <View style={styles.chipRow}>
                 {linkCats.map((id) => {
                   const active = cat === id;
@@ -331,7 +335,7 @@ export function QuickRecordEditorSheet({
                       onPress={() => setCat(id)}
                     >
                       <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                        {getCategory(id).label}
+                        {recordCategoryLabel(t, id)}
                       </Text>
                     </Pressable>
                   );
@@ -341,18 +345,18 @@ export function QuickRecordEditorSheet({
               {AMOUNT_CATS.includes(cat) ? (
                 <>
                   <Text style={styles.label}>
-                    {VOLUME_CATS.includes(cat) ? `기본 양 (${settings.units.volume})` : "기본 수치 또는 용량"}
+                    {VOLUME_CATS.includes(cat) ? t("record.quick.defaultVolume", { unit: settings.units.volume }) : t("record.quick.defaultAmount")}
                   </Text>
                   <TextInput
                     style={styles.input}
                     value={amount}
                     onChangeText={setAmount}
                     placeholder={
-                      cat === "temp" ? "예: 36.5"
-                      : cat === "med" ? "예: 1 drop"
-                      : cat === "pregWeight" ? "예: 58.2"
-                      : cat === "pregBp" ? "예: 120/80"
-                      : "예: 120"
+                      cat === "temp" ? t("record.quick.exampleTemperature")
+                      : cat === "med" ? t("record.quick.exampleDose")
+                      : cat === "pregWeight" ? t("record.quick.exampleWeight")
+                      : cat === "pregBp" ? t("record.quick.exampleBloodPressure")
+                      : t("record.quick.exampleAmount")
                     }
                     placeholderTextColor={colors.faint}
                     keyboardType={cat === "med" || cat === "pregBp" ? "default" : "decimal-pad"}
@@ -362,36 +366,36 @@ export function QuickRecordEditorSheet({
 
               {DURATION_CATS.includes(cat) ? (
                 <DurationPickerField
-                  label="기본 지속 시간"
+                  label={t("record.quick.defaultDuration")}
                   valueMinutes={Number.parseInt(duration, 10) || null}
-                  placeholder={cat === "sleep" ? "비워두면 수면 타이머 시작" : "기간 선택"}
+                  placeholder={t(cat === "sleep" ? "record.quick.sleepTimerPlaceholder" : "record.quick.durationPlaceholder")}
                   onPress={() => setDurationPickerOpen(true)}
                 />
               ) : null}
 
               {cat === "diaper" ? (
                 <>
-                  <Text style={styles.label}>기저귀 종류</Text>
+                  <Text style={styles.label}>{t("record.quick.diaperType")}</Text>
                   <View style={styles.chipRow}>
-                    {["소변", "대변", "소변+대변"].map((option) => (
+                    {[RECORD_VALUE.diaperUrine, RECORD_VALUE.diaperStool, RECORD_VALUE.diaperBoth].map((option) => (
                       <Pressable
                         key={option}
                         style={[styles.chip, chip === option && styles.chipActive]}
                         onPress={() => setChip(option)}
                       >
                         <Text style={[styles.chipText, chip === option && styles.chipTextActive]}>
-                          {option}
+                          {storedRecordValueLabel(t, option)}
                         </Text>
                       </Pressable>
                     ))}
                   </View>
-                  {!["소변", "대변", "소변+대변"].includes(chip) ? (
-                    <Text style={styles.hint}>종류를 선택해야 바로 기록할 수 있어요.</Text>
+                  {!([RECORD_VALUE.diaperUrine, RECORD_VALUE.diaperStool, RECORD_VALUE.diaperBoth] as readonly string[]).includes(chip) ? (
+                    <Text style={styles.hint}>{t("record.quick.diaperRequired")}</Text>
                   ) : null}
                 </>
               ) : STATE_CATS.includes(cat) ? (
                 <>
-                  <Text style={styles.label}>기본 상태</Text>
+                  <Text style={styles.label}>{t("record.quick.defaultState")}</Text>
                   {(getCategory(cat).chips ?? []).length > 0 ? (
                     <View style={styles.chipRow}>
                       {(getCategory(cat).chips ?? []).map((option) => (
@@ -401,7 +405,7 @@ export function QuickRecordEditorSheet({
                           onPress={() => setChip(chip === option ? "" : option)}
                         >
                           <Text style={[styles.chipText, chip === option && styles.chipTextActive]}>
-                            {option}
+                            {storedRecordValueLabel(t, option)}
                           </Text>
                         </Pressable>
                       ))}
@@ -411,29 +415,29 @@ export function QuickRecordEditorSheet({
                       style={styles.input}
                       value={chip}
                       onChangeText={setChip}
-                      placeholder={cat === "sleep" ? "예: 낮잠 또는 밤잠" : "선택 사항"}
+                      placeholder={t(cat === "sleep" ? "record.quick.sleepStatePlaceholder" : "record.quick.optional")}
                       placeholderTextColor={colors.faint}
                     />
                   )}
                 </>
               ) : null}
 
-              <Text style={styles.label}>기본값 · 메모</Text>
+              <Text style={styles.label}>{t("record.quick.defaultNote")}</Text>
               <TextInput
                 style={styles.input}
                 value={notes}
                 onChangeText={setNotes}
-                placeholder={pregnancy ? "예: 저녁 식후" : "예: 비타민D 1 drop"}
+                placeholder={t(pregnancy ? "record.quick.defaultNotePregnancyPlaceholder" : "record.quick.defaultNotePlaceholder")}
                 placeholderTextColor={colors.faint}
               />
 
               <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>자주 쓰는 기록으로 고정</Text>
+                <Text style={styles.switchLabel}>{t("record.quick.pinToggle")}</Text>
                 <Switch value={pinned} onValueChange={setPinned} trackColor={{ true: colors.amber }} />
               </View>
 
               <Pressable style={[styles.primary, !canSave && styles.disabled]} disabled={!canSave} onPress={saveForm}>
-                <Text style={styles.primaryText}>저장</Text>
+                <Text style={styles.primaryText}>{t("record.quick.save")}</Text>
               </Pressable>
             </ScrollView>
           )}

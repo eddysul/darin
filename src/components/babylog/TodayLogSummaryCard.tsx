@@ -12,7 +12,7 @@ import {
 import type { BabyLogCategoryId } from "../../constants/babyLogCategories";
 import { getCategory } from "../../constants/babyLogCategories";
 import type { BabyLogEntry } from "../../types/babyLog";
-import { dayNavLabel, formatDateKey } from "../../utils/dateKey";
+import { formatDateKey, parseDateKey } from "../../utils/dateKey";
 import { FEEDING_CATS } from "../../utils/reportAggregates";
 import { toMinutes } from "../../utils/formatLog";
 import { isCustomCategoryKey } from "../../types/logCategory";
@@ -21,6 +21,9 @@ import { BabyLogIcon } from "./BabyLogIcon";
 import { formatTemperature, formatVolume } from "../../utils/measurementFormat";
 import { diaperCounts } from "../../utils/diaperLog";
 import { useCompactLayout } from "../../hooks/useCompactLayout";
+import { useLanguage } from "../../LanguageContext";
+import { formatDurationMinutes, formatLocalizedDate } from "../../utils/localeFormat";
+import type { MessageKey } from "../../i18n";
 
 type Props = {
   logs: BabyLogEntry[];
@@ -48,14 +51,6 @@ const SIDE_PAD = 17;
 /** ~3 cards visible like the demo carousel */
 const CARD_W = Math.min(112, (SCREEN_W - 40 - SIDE_PAD * 2 - CARD_GAP * 2) / 3);
 const PAGE_STRIDE = CARD_W * 3 + CARD_GAP * 3;
-
-function formatDuration(totalMinutes: number): string {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (!hours) return `${minutes}분`;
-  if (!minutes) return `${hours}시간`;
-  return `${hours}시간 ${minutes}분`;
-}
 
 function countCat(logs: BabyLogEntry[], cats: BabyLogCategoryId[]): number {
   return logs.filter(
@@ -90,16 +85,16 @@ function latestTime(logs: BabyLogEntry[], predicate: (entry: BabyLogEntry) => bo
     )?.time;
 }
 
-function formatLastAgo(time: string | undefined, isToday: boolean, now: Date): string {
-  if (!time) return "아직 없음";
+function formatLastAgo(time: string | undefined, isToday: boolean, now: Date, t: (key: MessageKey, params?: Record<string, string | number>) => string): string {
+  if (!time) return t("home.summary.none");
   if (!isToday) return time;
   const current = now.getHours() * 60 + now.getMinutes();
   const recorded = toMinutes(time);
   let diff = current - recorded;
   if (diff < 0) diff += 24 * 60;
-  if (diff < 1) return "방금";
-  if (diff < 60) return `${diff}분 전`;
-  return `${Math.floor(diff / 60)}시간 전`;
+  if (diff < 1) return t("home.summary.now");
+  if (diff < 60) return t("home.summary.minutesAgo", { count: diff });
+  return t("home.summary.hoursAgo", { count: Math.floor(diff / 60) });
 }
 
 export function TodayLogSummaryCard({
@@ -113,11 +108,12 @@ export function TodayLogSummaryCard({
   onPressDate,
 }: Props) {
   const compact = useCompactLayout();
+  const { t, locale } = useLanguage();
   const [page, setPage] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const isToday = dateKey === formatDateKey();
-  const title = isToday ? "오늘 요약" : "하루 요약";
-  const dateLabel = dayNavLabel(dateKey);
+  const title = t(isToday ? "home.summary.today" : "home.summary.day");
+  const dateLabel = formatLocalizedDate(parseDateKey(dateKey), locale, { weekday: "short", month: "numeric", day: "numeric" });
 
   useEffect(() => {
     if (!isToday) return;
@@ -137,23 +133,20 @@ export function TodayLogSummaryCard({
       const core: MetricCard[] = [
         {
           key: "pregSymptom",
-          label: "입덧",
-          value: `${symptomCount}회`,
+          label: t("home.metric.morningSickness"), value: t("home.summary.count", { count: symptomCount }),
           recentTime: latestTime(logs, (entry) => entry.cat === "pregSymptom"),
           cat: "pregSymptom",
         },
         {
           key: "pregWeight",
-          label: "체중",
-          value: `${weightCount}회`,
+          label: t("home.metric.weight"), value: t("home.summary.count", { count: weightCount }),
           detail: latestWeight?.amount ? `${latestWeight.amount}kg` : undefined,
           recentTime: latestTime(logs, (entry) => entry.cat === "pregWeight"),
           cat: "pregWeight",
         },
         {
           key: "pregKick",
-          label: "태동",
-          value: `${kickCount}회`,
+          label: t("home.metric.kick"), value: t("home.summary.count", { count: kickCount }),
           recentTime: latestTime(logs, (entry) => entry.cat === "pregKick"),
           cat: "pregKick",
         },
@@ -166,10 +159,10 @@ export function TodayLogSummaryCard({
         cat: BabyLogCategoryId;
         detail?: () => string | undefined;
       }> = [
-        { key: "pregMood", label: "컨디션", cats: ["pregMood"], cat: "pregMood" },
+        { key: "pregMood", label: t("home.metric.condition"), cats: ["pregMood"], cat: "pregMood" },
         {
           key: "pregBp",
-          label: "혈압",
+          label: t("home.metric.bloodPressure"),
           cats: ["pregBp"],
           cat: "pregBp",
           detail: () => {
@@ -179,8 +172,8 @@ export function TodayLogSummaryCard({
             return latest?.amount ? `${latest.amount}${latest.amount.includes("/") ? "" : "mmHg"}` : undefined;
           },
         },
-        { key: "pregMed", label: "약/영양제", cats: ["pregMed"], cat: "pregMed" },
-        { key: "pregHospital", label: "병원", cats: ["pregHospital"], cat: "pregHospital" },
+        { key: "pregMed", label: t("home.metric.supplement"), cats: ["pregMed"], cat: "pregMed" },
+        { key: "pregHospital", label: t("home.metric.hospital"), cats: ["pregHospital"], cat: "pregHospital" },
       ];
 
       const dynamic: MetricCard[] = [];
@@ -190,7 +183,7 @@ export function TodayLogSummaryCard({
         dynamic.push({
           key: extra.key,
           label: extra.label,
-          value: `${n}회`,
+          value: t("home.summary.count", { count: n }),
           detail: extra.detail?.(),
           recentTime: latestTime(
             logs,
@@ -218,27 +211,23 @@ export function TodayLogSummaryCard({
     const core: MetricCard[] = [
       {
         key: "feeding",
-        label: "수유",
-        value: `${feedingCount}회`,
+        label: t("home.metric.feeding"), value: t("home.summary.count", { count: feedingCount }),
         detail: feedingAmount > 0 ? formatVolume(Math.round(feedingAmount)) : undefined,
         recentTime: lastFeedingTime,
         cat: "formula",
       },
       {
         key: "sleep",
-        label: "수면",
-        value: `${sleepCount}회`,
-        detail: sleepMinutes > 0 ? formatDuration(sleepMinutes) : undefined,
+        label: t("home.metric.sleep"), value: t("home.summary.count", { count: sleepCount }), detail: sleepMinutes > 0 ? formatDurationMinutes(sleepMinutes, locale) : undefined,
         recentTime: lastSleepTime,
         cat: "sleep",
       },
       {
         key: "diaper",
-        label: "기저귀",
-        value: `${diaper.total}회`,
+        label: t("home.metric.diaper"), value: t("home.summary.count", { count: diaper.total }),
         detail:
           diaper.urine || diaper.stool
-            ? `소변 ${diaper.urine} · 대변 ${diaper.stool}`
+            ? t("home.summary.diaperDetail", { urine: diaper.urine, stool: diaper.stool })
             : undefined,
         recentTime: lastDiaperTime,
         cat: "diaper",
@@ -252,10 +241,10 @@ export function TodayLogSummaryCard({
       cat: BabyLogCategoryId;
       detail?: () => string | undefined;
     }> = [
-      { key: "bath", label: "목욕", cats: ["bath"], cat: "bath" },
+      { key: "bath", label: t("home.metric.bath"), cats: ["bath"], cat: "bath" },
       {
         key: "pump",
-        label: "유축",
+        label: t("home.metric.pump"),
         cats: ["pump"],
         cat: "pump",
         detail: () => {
@@ -263,10 +252,10 @@ export function TodayLogSummaryCard({
           return ml > 0 ? formatVolume(Math.round(ml)) : undefined;
         },
       },
-      { key: "med", label: "약", cats: ["med"], cat: "med" },
+      { key: "med", label: t("home.metric.medicine"), cats: ["med"], cat: "med" },
       {
         key: "temp",
-        label: "체온",
+        label: t("home.metric.temperature"),
         cats: ["temp"],
         cat: "temp",
         detail: () => {
@@ -276,23 +265,23 @@ export function TodayLogSummaryCard({
           return temps[0] ? formatTemperature(temps[0]) : undefined;
         },
       },
-      { key: "food", label: "이유식", cats: ["food", "snack"], cat: "food" },
-      { key: "tummy", label: "터미타임", cats: ["tummy"], cat: "tummy" },
-      { key: "play", label: "놀이", cats: ["play"], cat: "play" },
-      { key: "doctor", label: "진료", cats: ["doctor"], cat: "doctor" },
+      { key: "food", label: t("home.metric.food"), cats: ["food", "snack"], cat: "food" },
+      { key: "tummy", label: t("home.metric.tummy"), cats: ["tummy"], cat: "tummy" },
+      { key: "play", label: t("home.metric.play"), cats: ["play"], cat: "play" },
+      { key: "doctor", label: t("home.metric.doctor"), cats: ["doctor"], cat: "doctor" },
       {
         key: "vaccination",
-        label: "예방접종",
+        label: t("home.metric.vaccination"),
         cats: ["vaccination"],
         cat: "vaccination",
         detail: () => {
           const latest = [...logs].filter((entry) => entry.cat === "vaccination").sort((a, b) => b.time.localeCompare(a.time))[0];
           if (!latest?.vaccineName) return undefined;
-          const round = latest.vaccinationRound === "first" ? "1차" : latest.vaccinationRound === "second" ? "2차" : latest.vaccinationRound === "third" ? "3차" : latest.vaccinationRound === "booster" ? "추가" : latest.vaccinationRoundText;
+          const round = latest.vaccinationRound === "first" ? t("home.vaccine.first") : latest.vaccinationRound === "second" ? t("home.vaccine.second") : latest.vaccinationRound === "third" ? t("home.vaccine.third") : latest.vaccinationRound === "booster" ? t("home.vaccine.booster") : latest.vaccinationRoundText;
           return [latest.vaccineName, round].filter(Boolean).join(" · ");
         },
       },
-      { key: "water", label: "물", cats: ["water"], cat: "water" },
+      { key: "water", label: t("home.metric.water"), cats: ["water"], cat: "water" },
     ];
 
     const dynamic: MetricCard[] = [];
@@ -302,7 +291,7 @@ export function TodayLogSummaryCard({
       dynamic.push({
         key: extra.key,
         label: extra.label,
-        value: `${n}회`,
+        value: t("home.summary.count", { count: n }),
         detail: extra.detail?.(),
         recentTime: latestTime(
           logs,
@@ -314,7 +303,7 @@ export function TodayLogSummaryCard({
     }
 
     return [...core, ...dynamic];
-  }, [logs, pregnancy]);
+  }, [locale, logs, pregnancy, t]);
 
   const pageCount = Math.max(1, Math.ceil(metrics.length / 3));
 
@@ -339,7 +328,7 @@ export function TodayLogSummaryCard({
             disabled={!canGoPrev || !onPrevDay}
             hitSlop={10}
             accessibilityRole="button"
-            accessibilityLabel="이전 날"
+            accessibilityLabel={t("home.a11y.previousDay")}
             style={({ pressed }) => [
               styles.arrowBtn,
               (!canGoPrev || !onPrevDay) && styles.arrowDisabled,
@@ -352,7 +341,7 @@ export function TodayLogSummaryCard({
             onPress={onPressDate}
             disabled={!onPressDate}
             accessibilityRole="button"
-            accessibilityLabel="기록 날짜 선택"
+            accessibilityLabel={t("home.a11y.selectDate")}
             style={styles.dateButton}
           >
             <Text style={styles.date}>{dateLabel}</Text>
@@ -363,7 +352,7 @@ export function TodayLogSummaryCard({
             disabled={!canGoNext || !onNextDay}
             hitSlop={10}
             accessibilityRole="button"
-            accessibilityLabel="다음 날"
+            accessibilityLabel={t("home.a11y.nextDay")}
             style={({ pressed }) => [
               styles.arrowBtn,
               (!canGoNext || !onNextDay) && styles.arrowDisabled,
@@ -404,11 +393,11 @@ export function TodayLogSummaryCard({
                 style={[styles.metricRecent, !metric.recentTime && styles.metricRecentEmpty]}
                 accessibilityLabel={
                   metric.recentTime
-                    ? `마지막 ${metric.label} ${formatLastAgo(metric.recentTime, isToday, now)}`
-                    : `${metric.label} 아직 없음`
+                    ? t("home.summary.last", { label: metric.label, time: formatLastAgo(metric.recentTime, isToday, now, t) })
+                    : t("home.summary.noMetric", { label: metric.label })
                 }
               >
-                {formatLastAgo(metric.recentTime, isToday, now)}
+                {formatLastAgo(metric.recentTime, isToday, now, t)}
               </Text>
             </View>
           );

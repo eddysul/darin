@@ -22,6 +22,14 @@ import type { CustomCategory, CustomCategoryInputMode } from "../../types/logCat
 import { CUSTOM_CATEGORY_INPUT_MODES } from "../../types/logCategory";
 import { colors, radius } from "../../theme";
 import { CustomTemplateIcon } from "./CustomTemplateIcon";
+import { useLanguage } from "../../LanguageContext";
+import {
+  customIconLabel,
+  customModeHint,
+  customModeLabel,
+  customSuggestionLabel,
+  recordCategoryLabel,
+} from "../../utils/recordDisplay";
 
 const COLOR_OPTIONS = [
   "#E8918A",
@@ -59,6 +67,7 @@ export function AddCustomCategorySheet({
   onClose,
   onSave,
 }: Props) {
+  const { t } = useLanguage();
   const [label, setLabel] = useState("");
   const [color, setColor] = useState(COLOR_OPTIONS[0]);
   const [iconKey, setIconKey] = useState<CustomCategoryIconKey>(DEFAULT_ICON_KEY);
@@ -81,20 +90,26 @@ export function AddCustomCategorySheet({
     const names = new Set<string>();
     const builtIn = pregnancy ? PREGNANCY_LOG_CATEGORIES : BABY_LOG_CATEGORIES;
     const actions = pregnancy ? PREGNANCY_QUICK_RECORD_ACTIONS : QUICK_RECORD_ACTIONS;
-    for (const item of builtIn) names.add(item.label.trim().toLowerCase());
-    for (const item of actions) names.add(item.label.trim().toLowerCase());
+    for (const item of builtIn) {
+      names.add(item.label.trim().toLowerCase());
+      names.add(recordCategoryLabel(t, item.id).trim().toLowerCase());
+    }
+    for (const item of actions) {
+      names.add(item.label.trim().toLowerCase());
+      names.add(recordCategoryLabel(t, item.cat).trim().toLowerCase());
+    }
     for (const item of existingCategories) names.add(item.label.trim().toLowerCase());
     return names;
-  }, [existingCategories, pregnancy]);
+  }, [existingCategories, pregnancy, t]);
 
   const handleSave = () => {
     const trimmed = label.trim();
     if (!trimmed) {
-      setError("카테고리 이름을 입력해 주세요.");
+      setError(t("record.custom.nameRequired"));
       return;
     }
     if (reservedNames.has(trimmed.toLowerCase())) {
-      setError("이미 있는 카테고리예요.");
+      setError(t("record.custom.duplicate"));
       return;
     }
     onSave({
@@ -111,35 +126,36 @@ export function AddCustomCategorySheet({
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.handle} />
-          <Text style={styles.title}>{pregnancy ? "임신 기록 카테고리 추가" : "기록 카테고리 추가"}</Text>
+          <Text style={styles.title}>{t(pregnancy ? "record.custom.pregnancyTitle" : "record.custom.title")}</Text>
           <Text style={styles.subtitle}>
             {pregnancy
-              ? "태교, 산책, 자궁수축처럼 임신 중에만 쓰는 칸을 만들 수 있어요."
-              : "새 기록에 사용할 이름, 아이콘, 색상, 기록 방식을 정해 주세요."}
+              ? t("record.custom.pregnancyBody")
+              : t("record.custom.body")}
           </Text>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {pregnancy ? (
               <>
-                <Text style={styles.fieldLabel}>추천</Text>
+                <Text style={styles.fieldLabel}>{t("record.custom.recommended")}</Text>
                 <View style={styles.suggestRow}>
                   {PREGNANCY_CATEGORY_SUGGESTIONS.map((suggestion) => {
-                    const active = label === suggestion.label && iconKey === suggestion.iconKey;
+                    const displayLabel = customSuggestionLabel(t, suggestion.iconKey, suggestion.label);
+                    const active = label === displayLabel && iconKey === suggestion.iconKey;
                     return (
                       <Pressable
                         key={suggestion.label}
                         style={[styles.suggestChip, active && styles.suggestChipActive]}
                         onPress={() => {
-                          setLabel(suggestion.label);
+                          setLabel(displayLabel);
                           setIconKey(suggestion.iconKey);
                           setInputMode(suggestion.inputMode);
                           setError("");
                         }}
                         accessibilityRole="button"
-                        accessibilityLabel={`${suggestion.label} 추천 적용`}
+                        accessibilityLabel={t("record.custom.applySuggestion", { label: displayLabel })}
                       >
                         <Text style={[styles.suggestChipText, active && styles.suggestChipTextActive]}>
-                          {suggestion.label}
+                          {displayLabel}
                         </Text>
                       </Pressable>
                     );
@@ -147,7 +163,7 @@ export function AddCustomCategorySheet({
                 </View>
               </>
             ) : null}
-            <Text style={styles.fieldLabel}>카테고리 이름</Text>
+            <Text style={styles.fieldLabel}>{t("record.custom.name")}</Text>
             <TextInput
               style={styles.input}
               value={label}
@@ -155,26 +171,27 @@ export function AddCustomCategorySheet({
                 setLabel(value.slice(0, MAX_LABEL_LENGTH));
                 setError("");
               }}
-              placeholder={pregnancy ? "예: 태교, 산책, 자궁수축" : "예: 산책, 마사지, 병원 전화"}
+              placeholder={t(pregnancy ? "record.custom.pregnancyPlaceholder" : "record.custom.placeholder")}
               placeholderTextColor={colors.faint}
               maxLength={MAX_LABEL_LENGTH}
               autoFocus
             />
 
-            <Text style={styles.fieldLabel}>아이콘</Text>
+            <Text style={styles.fieldLabel}>{t("record.custom.icon")}</Text>
             <View style={styles.iconGrid}>
               {iconOptions.map((option) => {
                 const active = iconKey === option.iconKey;
+                const displayLabel = customIconLabel(t, option.iconKey, option.label);
                 return (
                   <Pressable
                     key={option.iconKey}
                     style={[styles.iconChip, active && styles.iconChipActive]}
                     onPress={() => setIconKey(option.iconKey)}
                     accessibilityRole="button"
-                    accessibilityLabel={`${option.label} 아이콘`}
+                    accessibilityLabel={t("record.custom.iconA11y", { label: displayLabel })}
                   >
                     <CustomTemplateIcon iconKey={option.iconKey} size={20} color={active ? color : option.color} />
-                    <Text style={styles.iconChipText} numberOfLines={2}>{option.label}</Text>
+                    <Text style={styles.iconChipText} numberOfLines={2}>{displayLabel}</Text>
                   </Pressable>
                 );
               })}
@@ -185,7 +202,7 @@ export function AddCustomCategorySheet({
               ))}
             </View>
 
-            <Text style={styles.fieldLabel}>색상</Text>
+            <Text style={styles.fieldLabel}>{t("record.custom.color")}</Text>
             <View style={styles.colorRow}>
               {COLOR_OPTIONS.map((option) => {
                 const active = color === option;
@@ -195,16 +212,18 @@ export function AddCustomCategorySheet({
                     style={[styles.colorDot, { backgroundColor: option }, active && styles.colorDotActive]}
                     onPress={() => setColor(option)}
                     accessibilityRole="button"
-                    accessibilityLabel={`색상 ${option}`}
+                    accessibilityLabel={t("record.custom.colorA11y", { color: option })}
                   />
                 );
               })}
             </View>
 
-            <Text style={styles.fieldLabel}>기록 방식</Text>
+            <Text style={styles.fieldLabel}>{t("record.custom.method")}</Text>
             <View style={styles.modeList}>
               {CUSTOM_CATEGORY_INPUT_MODES.map((mode) => {
                 const active = inputMode === mode.id;
+                const displayLabel = customModeLabel(t, mode.id, mode.label);
+                const displayHint = customModeHint(t, mode.id, mode.hint);
                 return (
                   <Pressable
                     key={mode.id}
@@ -212,10 +231,10 @@ export function AddCustomCategorySheet({
                     onPress={() => setInputMode(mode.id)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
-                    accessibilityLabel={`${mode.label}, ${mode.hint}`}
+                    accessibilityLabel={`${displayLabel}, ${displayHint}`}
                   >
-                    <Text style={[styles.modeLabel, active && styles.modeLabelActive]}>{mode.label}</Text>
-                    <Text style={[styles.modeHint, active && styles.modeHintActive]}>{mode.hint}</Text>
+                    <Text style={[styles.modeLabel, active && styles.modeLabelActive]}>{displayLabel}</Text>
+                    <Text style={[styles.modeHint, active && styles.modeHintActive]}>{displayHint}</Text>
                   </Pressable>
                 );
               })}
@@ -226,10 +245,10 @@ export function AddCustomCategorySheet({
 
           <View style={styles.actions}>
             <Pressable style={[styles.btn, styles.btnGhost]} onPress={onClose}>
-              <Text style={styles.btnGhostText}>취소</Text>
+              <Text style={styles.btnGhostText}>{t("record.custom.cancel")}</Text>
             </Pressable>
             <Pressable style={[styles.btn, styles.btnPrimary]} onPress={handleSave}>
-              <Text style={styles.btnPrimaryText}>저장</Text>
+              <Text style={styles.btnPrimaryText}>{t("record.custom.save")}</Text>
             </Pressable>
           </View>
         </Pressable>

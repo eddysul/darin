@@ -3,7 +3,7 @@ import { DIARY_COVER_TEMPLATE_IDS } from "../src/constants/diaryCoverTemplates";
 import { DIARY_PAGE_TEMPLATE_IDS } from "../src/constants/diaryPageTemplates";
 import { DIARY_MOOD_OPTIONS, DIARY_SKY_OPTIONS } from "../src/constants/diaryCompose";
 import { createT, type Locale, type MessageKey } from "../src/i18n";
-import { coreMessages } from "../src/i18nCoreMessages";
+import { coreMessages, onboardingMessages } from "../src/i18nCoreMessages";
 import { formatDurationMinutes, formatLocalizedDate, formatLocalizedNumber } from "../src/utils/localeFormat";
 
 const locales: Locale[] = ["ko", "en", "ja", "es", "zh-CN"];
@@ -20,6 +20,19 @@ const requiredKeys: MessageKey[] = [
   ...weatherKeys,
   ...moodKeys,
 ];
+
+const onboardingLocales = Object.keys(onboardingMessages) as Locale[];
+const onboardingKeys = Object.keys(onboardingMessages.en).sort();
+
+for (const locale of onboardingLocales) {
+  const localeKeys = Object.keys(onboardingMessages[locale]).sort();
+  assert.deepEqual(localeKeys, onboardingKeys, `${locale}: onboarding key set differs from English`);
+  for (const key of onboardingKeys) {
+    const value = onboardingMessages[locale][key as keyof typeof onboardingMessages.en];
+    assert.equal(typeof value, "string", `${locale}: onboarding key falls back to English: ${key}`);
+    assert.ok(value.trim().length > 0, `${locale}: empty onboarding translation: ${key}`);
+  }
+}
 
 for (const locale of locales) {
   const t = createT(locale);
@@ -41,4 +54,17 @@ for (const locale of locales) {
 
 assert.equal(new Set(DIARY_COVER_TEMPLATE_IDS).size, 10);
 assert.equal(new Set(DIARY_PAGE_TEMPLATE_IDS).size, 10);
+console.log("PASS onboarding locale key parity, explicit translations, and no missing-key fallback");
 console.log("PASS i18n locale list, diary template parity, interpolation, and locale formatters");
+
+const sampleKeys = [
+  "onboardingFlow.stage.unbornTitle",
+  "onboardingFlow.stage.bornTitle",
+  "onboardingFlow.baby.prenatalName",
+  "onboardingFlow.baby.dueDate",
+  "onboardingFlow.complete.start",
+] as const;
+for (const locale of onboardingLocales) {
+  const samples = sampleKeys.map((key) => `${key}=${onboardingMessages[locale][key]}`).join(" | ");
+  console.log(`SAMPLE ${locale}: ${samples}`);
+}

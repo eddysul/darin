@@ -21,6 +21,7 @@ import { formatLogProvenance } from "../../utils/logProvenance";
 import { resolveLogCategory } from "../../utils/resolveLogCategory";
 import { useReduceMotion } from "../../hooks/useReduceMotion";
 import { colors, fontScaleCap, radius, type } from "../../theme";
+import { useLanguage } from "../../LanguageContext";
 
 type ScrollHandlers = {
   onScrollBeginDrag?: () => void;
@@ -51,12 +52,14 @@ export function TodayTimeline({
   onDelete,
   highlightId,
   limit = 3,
-  title = "오늘의 기록",
+  title,
   listHeader,
   listEmpty,
   contentContainerStyle,
   scrollProps,
 }: Props) {
+  const { t } = useLanguage();
+  const resolvedTitle = title ?? t("home.timeline.title");
   const [expanded, setExpanded] = useState(false);
   const sorted = sortLogsNewest(logs);
   const visible = expanded ? sorted : sorted.slice(0, limit);
@@ -67,12 +70,12 @@ export function TodayTimeline({
       {listHeader}
       <View style={styles.header}>
         <View style={styles.titleRow}>
-          <Text style={styles.title} maxFontSizeMultiplier={fontScaleCap.chrome}>{title}</Text>
-          <View style={styles.countBadge}><Text style={styles.countText}>{sorted.length}개</Text></View>
+          <Text style={styles.title} maxFontSizeMultiplier={fontScaleCap.chrome}>{resolvedTitle}</Text>
+          <View style={styles.countBadge}><Text style={styles.countText}>{t("home.timeline.count", { count: sorted.length })}</Text></View>
         </View>
         {canExpand ? (
           <Pressable style={styles.viewAllBtn} onPress={() => setExpanded((value) => !value)} hitSlop={10} accessibilityRole="button">
-            <Text style={styles.viewAll}>{expanded ? "접기" : "더 많은 기록 보기 ›"}</Text>
+            <Text style={styles.viewAll}>{t(expanded ? "home.timeline.collapse" : "home.timeline.more")}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -83,7 +86,7 @@ export function TodayTimeline({
     listEmpty !== undefined
       ? <View>{listEmpty}</View>
       : sorted.length === 0
-        ? <Text style={styles.empty}>아직 기록이 없어요. 위에서 기록해 보세요.</Text>
+        ? <Text style={styles.empty}>{t("home.timeline.empty")}</Text>
         : null;
 
   return (
@@ -136,6 +139,7 @@ function SwipeableTimelineRow({
   onPress: () => void;
   onDelete?: () => void;
 }) {
+  const { t } = useLanguage();
   const translateX = useRef(new Animated.Value(0)).current;
   const reduceMotion = useReduceMotion();
   const category = resolveLogCategory(entry.cat, customCategories);
@@ -147,11 +151,11 @@ function SwipeableTimelineRow({
 
   const confirmDelete = useCallback(() => {
     if (!onDelete) return;
-    Alert.alert("기록 삭제", "이 기록을 삭제할까요?", [
-      { text: "취소", style: "cancel", onPress: reset },
-      { text: "삭제", style: "destructive", onPress: onDelete },
+    Alert.alert(t("home.timeline.deleteTitle"), t("home.timeline.deleteBody"), [
+      { text: t("home.timeline.cancel"), style: "cancel", onPress: reset },
+      { text: t("home.timeline.delete"), style: "destructive", onPress: onDelete },
     ]);
-  }, [onDelete, reset]);
+  }, [onDelete, reset, t]);
 
   const panResponder = useMemo(
     () =>
@@ -186,7 +190,7 @@ function SwipeableTimelineRow({
   return (
     <View style={styles.swipeWrap}>
       <Animated.View style={[styles.deleteUnderlay, { opacity: underlayOpacity }]} pointerEvents="none">
-        <Text style={styles.deleteText}>삭제</Text>
+        <Text style={styles.deleteText}>{t("home.timeline.delete")}</Text>
       </Animated.View>
       <Animated.View
         style={[
@@ -202,9 +206,9 @@ function SwipeableTimelineRow({
           style={styles.row}
           onPress={onPress}
           accessibilityRole="button"
-          accessibilityLabel={`${formatDisplayTime(entry.time)} ${formatTimelineLabel(entry, customCategories)}`}
-          accessibilityHint={onDelete ? "쓸어 넘기면 삭제할 수 있어요" : undefined}
-          accessibilityActions={onDelete ? [{ name: "delete", label: "삭제" }] : undefined}
+          accessibilityLabel={`${formatDisplayTime(entry.time)} ${formatTimelineLabel(entry, customCategories, t)}`}
+          accessibilityHint={onDelete ? t("home.timeline.deleteHint") : undefined}
+          accessibilityActions={onDelete ? [{ name: "delete", label: t("home.timeline.delete") }] : undefined}
           onAccessibilityAction={(event) => {
             if (event.nativeEvent.actionName === "delete") confirmDelete();
           }}
@@ -221,15 +225,15 @@ function SwipeableTimelineRow({
                 customCategories={customCategories}
                 size={16}
               />
-              <Text style={styles.entryText}>{formatTimelineLabel(entry, customCategories)}</Text>
+              <Text style={styles.entryText}>{formatTimelineLabel(entry, customCategories, t)}</Text>
             </View>
-            {formatTimelineSubtitle(entry) ? <Text style={styles.entryMeta}>{formatTimelineSubtitle(entry)}</Text> : null}
+            {formatTimelineSubtitle(entry, t) ? <Text style={styles.entryMeta}>{formatTimelineSubtitle(entry, t)}</Text> : null}
             {formatLogProvenance(entry) ? (
               <Text style={styles.actor}>{formatLogProvenance(entry)}</Text>
             ) : null}
           </View>
           <View style={[styles.editChip, { borderColor: `${category.color}66` }]}>
-            <Text style={[styles.editText, { color: category.color }]}>수정</Text>
+            <Text style={[styles.editText, { color: category.color }]}>{t("home.timeline.edit")}</Text>
           </View>
         </Pressable>
       </Animated.View>

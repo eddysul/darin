@@ -11,6 +11,7 @@ import {
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { volumeToMl } from "../../utils/measurementFormat";
 import { AmountInput, isPositiveAmount } from "../inputs/AmountInput";
+import { useLanguage } from "../../LanguageContext";
 type TimerAmounts = { amount?: string; amountValue?: string; amountUnit?: string; amountText?: string; leftAmount?: string; rightAmount?: string; leftAmountValue?: string; leftAmountUnit?: string; leftAmountText?: string; rightAmountValue?: string; rightAmountUnit?: string; rightAmountText?: string };
 type Props = {
   visible: boolean;
@@ -28,15 +29,15 @@ type Props = {
 // One side runs at a time; switching banks the current side before starting the other.
 const SIDE_OPTIONS: TimerSide[] = ["left", "right"];
 
-const TITLES: Record<ActiveTimer["kind"], string> = {
-  breastfeeding: "모유수유 타이머",
-  formula: "분유 수유 타이머",
-  storedMilk: "저장 모유 수유 타이머",
-  sleep: "수면 타이머",
-  pump: "유축 타이머",
-  tummy: "터미타임 타이머",
-  play: "놀이 타이머",
-};
+const TITLE_KEYS = {
+  breastfeeding: "record.timer.breastfeeding",
+  formula: "record.timer.formula",
+  storedMilk: "record.timer.storedMilk",
+  sleep: "record.timer.sleep",
+  pump: "record.timer.pump",
+  tummy: "record.timer.tummy",
+  play: "record.timer.play",
+} as const;
 
 export function ActiveTimerSheet({
   visible,
@@ -50,6 +51,7 @@ export function ActiveTimerSheet({
   saving = false,
   sessionLabel,
 }: Props) {
+  const { t } = useLanguage();
   const { settings } = useAppSettings();
   const [tick, setTick] = useState(0);
   const [leftAmount, setLeftAmount] = useState("");
@@ -136,13 +138,13 @@ export function ActiveTimerSheet({
           <View style={styles.handle} />
           <View style={styles.titleRow}>
             <View style={styles.liveDot} />
-            <Text style={styles.title}>{TITLES[timer.kind]}</Text>
-            <Text style={styles.badge}>{sessionLabel ?? (paused ? "일시정지" : "진행 중")}</Text>
+            <Text style={styles.title}>{t(TITLE_KEYS[timer.kind])}</Text>
+            <Text style={styles.badge}>{sessionLabel ?? t(paused ? "record.timer.paused" : "record.timer.inProgress")}</Text>
           </View>
 
           <Text style={styles.clock}>{formatElapsedClock(elapsed)}</Text>
           <Text style={styles.subClock}>
-            {msToMinutes(elapsed)}분 · 시작 {timer.startTime}
+            {t("record.timer.summary", { minutes: msToMinutes(elapsed), time: timer.startTime })}
             {needsSide && timer.side ? ` · ${sideLabel(timer.side)}` : ""}
           </Text>
 
@@ -150,7 +152,7 @@ export function ActiveTimerSheet({
             <>
               {allowSideSwitch ? (
                 <>
-                  <Text style={styles.fieldLabel}>수유/유축 쪽</Text>
+                  <Text style={styles.fieldLabel}>{t("record.timer.side")}</Text>
                   <View style={styles.chipRow}>
                     {SIDE_OPTIONS.map((side) => (
                       <Pressable
@@ -168,7 +170,7 @@ export function ActiveTimerSheet({
               ) : null}
               {(timer.kind === "breastfeeding" || timer.kind === "pump") ? (
                 <Text style={styles.sideSplit}>
-                  좌 {formatElapsedClock(leftElapsed)} · 우 {formatElapsedClock(rightElapsed)}
+                  {t("record.timer.sideSummary", { left: formatElapsedClock(leftElapsed), right: formatElapsedClock(rightElapsed) })}
                 </Text>
               ) : null}
             </>
@@ -176,30 +178,30 @@ export function ActiveTimerSheet({
 
           {timer.kind === "pump" ? (
             <>
-              <AmountInput label="왼쪽 유축량" value={leftAmount} unit={volumeUnit} unitOptions={["ml", "oz"]} allowCustomUnit={false} onChangeValue={setLeftAmount} onChangeUnit={(unit) => setVolumeUnit((unit || settings.units.volume) as "ml" | "oz")} />
-              <AmountInput label="오른쪽 유축량" value={rightAmount} unit={volumeUnit} unitOptions={["ml", "oz"]} allowCustomUnit={false} onChangeValue={setRightAmount} onChangeUnit={(unit) => setVolumeUnit((unit || settings.units.volume) as "ml" | "oz")} />
-              <Text style={styles.totalAmount}>총 유축량 {(Number.parseFloat(leftAmount) || 0) + (Number.parseFloat(rightAmount) || 0)} {volumeUnit}</Text>
+              <AmountInput label={t("record.timer.leftPump")} value={leftAmount} unit={volumeUnit} unitOptions={["ml", "oz"]} allowCustomUnit={false} onChangeValue={setLeftAmount} onChangeUnit={(unit) => setVolumeUnit((unit || settings.units.volume) as "ml" | "oz")} />
+              <AmountInput label={t("record.timer.rightPump")} value={rightAmount} unit={volumeUnit} unitOptions={["ml", "oz"]} allowCustomUnit={false} onChangeValue={setRightAmount} onChangeUnit={(unit) => setVolumeUnit((unit || settings.units.volume) as "ml" | "oz")} />
+              <Text style={styles.totalAmount}>{t("record.timer.totalPump", { amount: (Number.parseFloat(leftAmount) || 0) + (Number.parseFloat(rightAmount) || 0), unit: volumeUnit })}</Text>
             </>
           ) : null}
 
-          {needsFeedingAmount ? <AmountInput label="먹은 양" value={feedingAmount} unit={volumeUnit} unitOptions={["ml", "oz"]} allowCustomUnit={false} onChangeValue={setFeedingAmount} onChangeUnit={(unit) => setVolumeUnit((unit || settings.units.volume) as "ml" | "oz")} error={!feedingAmount ? "먹은 양을 입력하면 종료 및 저장할 수 있어요." : undefined} /> : null}
+          {needsFeedingAmount ? <AmountInput label={t("record.timer.feedingAmount")} value={feedingAmount} unit={volumeUnit} unitOptions={["ml", "oz"]} allowCustomUnit={false} onChangeValue={setFeedingAmount} onChangeUnit={(unit) => setVolumeUnit((unit || settings.units.volume) as "ml" | "oz")} error={!feedingAmount ? t("record.timer.amountRequired") : undefined} /> : null}
 
           <View style={styles.actions}>
             <Pressable disabled={saving} style={[styles.btn, styles.btnGhost, saving && styles.btnDisabled]} onPress={onClose}>
-              <Text style={styles.btnGhostText}>닫기</Text>
+              <Text style={styles.btnGhostText}>{t("record.timer.close")}</Text>
             </Pressable>
             {paused ? (
               <Pressable disabled={saving} style={[styles.btn, styles.btnSecondary, saving && styles.btnDisabled]} onPress={onResume}>
-                <Text style={styles.btnSecondaryText}>재개</Text>
+                <Text style={styles.btnSecondaryText}>{t("record.timer.resume")}</Text>
               </Pressable>
             ) : (
               <Pressable disabled={saving} style={[styles.btn, styles.btnSecondary, saving && styles.btnDisabled]} onPress={onPause}>
-                <Text style={styles.btnSecondaryText}>일시정지</Text>
+                <Text style={styles.btnSecondaryText}>{t("record.timer.pause")}</Text>
               </Pressable>
             )}
             <Pressable disabled={saving || !canSave} style={[styles.btn, styles.btnPrimary, (saving || !canSave) && styles.btnDisabled]} onPress={handleStopPress}>
               <Text style={styles.btnPrimaryText}>
-                {saving ? "저장 중" : "종료 및 저장"}
+                {t(saving ? "record.timer.saving" : "record.timer.endSave")}
               </Text>
             </Pressable>
           </View>

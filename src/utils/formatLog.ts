@@ -1,6 +1,7 @@
 import type { CustomCategory, LogCategoryKey } from "../types/logCategory";
 import { resolveLogCategory } from "./resolveLogCategory";
 import { formatTemperature, formatVolume } from "./measurementFormat";
+import { storedRecordValueLabel, type Translate } from "./recordDisplay";
 
 export function formatLogMeta(
   entry: {
@@ -39,6 +40,7 @@ export function formatLogMeta(
     aftercareNotes?: string[];
   },
   customCategories: CustomCategory[] = [],
+  t?: Translate,
 ): string {
   const c = resolveLogCategory(entry.cat, customCategories);
   const parts: string[] = [];
@@ -55,18 +57,26 @@ export function formatLogMeta(
       ?? (entry.doseValue != null && entry.doseUnit ? `${entry.doseValue} ${entry.doseUnit}` : entry.amount);
     if (dose) parts.push(dose);
   }
-  if (entry.cat === "doctor" && entry.visitType) parts.push(entry.visitType === "checkup" ? "검진" : "질환");
+  if (entry.cat === "doctor" && entry.visitType) {
+    parts.push(t ? t(entry.visitType === "checkup" ? "record.timeline.checkup" : "record.timeline.illness") : entry.visitType === "checkup" ? "검진" : "질환");
+  }
   if (entry.cat === "doctor" && entry.doctorName) parts.push(entry.doctorName);
   if (entry.cat === "vaccination") {
     if (entry.vaccineName) parts.push(entry.vaccineName);
-    const roundLabels = { first: "1차", second: "2차", third: "3차", booster: "추가", other: entry.vaccinationRoundText ?? "기타" } as const;
+    const roundLabels = {
+      first: t ? t("home.vaccine.first") : "1차",
+      second: t ? t("home.vaccine.second") : "2차",
+      third: t ? t("home.vaccine.third") : "3차",
+      booster: t ? t("home.vaccine.booster") : "추가",
+      other: entry.vaccinationRoundText ?? (t ? t("record.category.other") : "기타"),
+    } as const;
     if (entry.vaccinationRound) parts.push(roundLabels[entry.vaccinationRound]);
     if (entry.vaccinationHospitalName) parts.push(entry.vaccinationHospitalName);
     if (entry.aftercareNotes?.length) parts.push(entry.aftercareNotes.join(", "));
   }
-  if (entry.chip) parts.push(entry.chip);
-  if (entry.chip2) parts.push(entry.chip2);
-  if (entry.stoolState) parts.push(entry.stoolState);
+  if (entry.chip) parts.push(t ? storedRecordValueLabel(t, entry.chip) : entry.chip);
+  if (entry.chip2) parts.push(t ? storedRecordValueLabel(t, entry.chip2) : entry.chip2);
+  if (entry.stoolState) parts.push(t ? storedRecordValueLabel(t, entry.stoolState) : entry.stoolState);
   if (entry.amountText && entry.cat !== "med") {
     parts.push(entry.amountText);
   } else if (entry.amount && entry.cat !== "med") {
@@ -78,20 +88,24 @@ export function formatLogMeta(
       parts.push(`${entry.amount}${c.amount ?? ""}`);
     }
   }
-  if (entry.duration) parts.push(`${entry.duration}분`);
-  if (entry.leftDuration) parts.push(`왼쪽 ${entry.leftDuration}분`);
-  if (entry.rightDuration) parts.push(`오른쪽 ${entry.rightDuration}분`);
-  if (entry.leftAmountText) parts.push(`왼쪽 ${entry.leftAmountText}`);
-  else if (entry.leftAmount) parts.push(`왼쪽 ${formatVolume(entry.leftAmount)}`);
-  if (entry.rightAmountText) parts.push(`오른쪽 ${entry.rightAmountText}`);
-  else if (entry.rightAmount) parts.push(`오른쪽 ${formatVolume(entry.rightAmount)}`);
+  const minuteLabel = (value: string) => t ? t("record.timeline.minutes", { count: value }) : `${value}분`;
+  const sideLabel = (side: "left" | "right", value: string) => t
+    ? t("record.timeline.sideValue", { side: t(`record.timeline.${side}`), value })
+    : `${side === "left" ? "왼쪽" : "오른쪽"} ${value}`;
+  if (entry.duration) parts.push(minuteLabel(entry.duration));
+  if (entry.leftDuration) parts.push(sideLabel("left", minuteLabel(entry.leftDuration)));
+  if (entry.rightDuration) parts.push(sideLabel("right", minuteLabel(entry.rightDuration)));
+  if (entry.leftAmountText) parts.push(sideLabel("left", entry.leftAmountText));
+  else if (entry.leftAmount) parts.push(sideLabel("left", formatVolume(entry.leftAmount)));
+  if (entry.rightAmountText) parts.push(sideLabel("right", entry.rightAmountText));
+  else if (entry.rightAmount) parts.push(sideLabel("right", formatVolume(entry.rightAmount)));
   if (entry.details) parts.push(entry.details.length > 16 ? `${entry.details.slice(0, 16)}…` : entry.details);
-  if (entry.nextAt) parts.push(`다음 ${entry.nextAt}`);
+  if (entry.nextAt) parts.push(t ? t("record.timeline.next", { value: entry.nextAt }) : `다음 ${entry.nextAt}`);
   const displayNotes = entry.cat === "med" && !entry.medicationName
     ? legacyMedicationNotes.slice(1).join(" · ")
     : entry.notes;
   if (displayNotes) parts.push(displayNotes.length > 16 ? `${displayNotes.slice(0, 16)}…` : displayNotes);
-  return parts.join(" · ") || "기록됨";
+  return parts.join(" · ") || (t ? t("record.timeline.recorded") : "기록됨");
 }
 
 export function nowTime(): string {

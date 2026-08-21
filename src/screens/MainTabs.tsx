@@ -15,7 +15,7 @@ import {
 import { BabyLogIcon, type TabIconKey } from "../components/babylog/BabyLogIcon";
 import { RecordDetailSheet, type RecordSheetPrefill } from "../components/babylog/RecordDetailSheet";
 import { useBabyLog } from "../context/BabyLogContext";
-import { getCategory, isPregnancyLogCategoryId } from "../constants/babyLogCategories";
+import { isPregnancyLogCategoryId } from "../constants/babyLogCategories";
 import { BabyReportScreen } from "./tabs/BabyReportScreen";
 import { DiaryScreen } from "./tabs/DiaryScreen";
 import { RecordScreen } from "./tabs/RecordScreen";
@@ -29,6 +29,7 @@ import { canAddLog, canDeleteLog, canEditLog } from "../types/family";
 import { ErrorBanner } from "../components/states/FeedbackStates";
 import { isPregnancyStage } from "../utils/childDisplay";
 import { formatLogMeta } from "../utils/formatLog";
+import { recordCategoryLabel } from "../utils/recordDisplay";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 
 const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
@@ -78,7 +79,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const allowAdd = canAddLog(myFamilyRole);
   const pregnancyStage = isPregnancyStage(careSetup.child);
   const allowVoice = allowAdd;
-  const voiceBlockedReason = allowVoice ? null : "보기 전용 계정이라 기록을 추가할 수 없어요.";
+  const voiceBlockedReason = allowVoice ? null : t("home.voice.readOnly");
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceSheetCat, setVoiceSheetCat] = useState<LogCategoryKey | null>(null);
@@ -128,7 +129,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                 key={name}
                 style={styles.tabItem}
                 accessibilityRole="button"
-                accessibilityLabel="음성으로 기록"
+                accessibilityLabel={t("home.a11y.voiceRecord")}
                 accessibilityHint={voiceBlockedReason ?? undefined}
                 accessibilityState={{ disabled: !allowVoice }}
                 onPress={() => {
@@ -239,8 +240,8 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
             if (voiceOpen && editingVoiceId && !isCustomCategoryKey(entry.cat)) {
               if (pregnancyStage && !isPregnancyLogCategoryId(entry.cat)) return;
               const cat = entry.cat as BabyLogCategoryId;
-              const meta = formatLogMeta(entry, customCategories);
-              const label = getCategory(cat).label;
+              const meta = formatLogMeta(entry, customCategories, t);
+              const label = recordCategoryLabel(t, cat);
               setVoiceEventPatch({
                 id: editingVoiceId,
                 cat,
@@ -254,7 +255,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                 flags: entry.flags ?? voicePrefill?.flags,
                 confidence: entry.confidence ?? voicePrefill?.confidence ?? 0.9,
                 timeAmbiguous: false,
-                extraLabel: meta === "기록됨" ? label : `${label} · ${meta}`,
+                extraLabel: meta === t("record.timeline.recorded") ? label : `${label} · ${meta}`,
               });
               setVoiceSheetCat(null);
               setVoicePrefill(null);
@@ -343,6 +344,7 @@ function MemoriesTab() {
 }
 
 export function MainTabs() {
+  const { t } = useLanguage();
   const {
     storageIssue,
     retryPersistence,
@@ -367,12 +369,12 @@ export function MainTabs() {
           <ErrorBanner
             message={
               storageIssue.operation === "load"
-                ? "저장된 데이터를 불러오지 못했어요. 다시 시도해 주세요."
+                ? t("home.storage.loadError")
                 : storageIssue.severity === "critical"
-                  ? "변경사항을 기기에 저장하지 못했어요. 앱을 닫기 전에 다시 시도해 주세요."
-                  : "오프라인 저장을 완료하지 못했어요. 다시 불러오면 서버 기록을 확인할 수 있어요."
+                  ? t("home.storage.criticalError")
+                  : t("home.storage.offlineError")
             }
-            actionLabel="재시도"
+            actionLabel={t("home.storage.retry")}
             onAction={() => void retryPersistence()}
             onDismiss={dismissStorageIssue}
           />

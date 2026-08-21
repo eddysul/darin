@@ -12,8 +12,9 @@ import {
 import { colors, radius } from "../../theme";
 import { formatDateKey, offsetDateKey, parseDateKey } from "../../utils/dateKey";
 import { getMonthMatrix } from "../../utils/trialCalendar";
+import { useLanguage } from "../../LanguageContext";
 
-const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+const WEEKDAY_KEYS = ["record.date.weekday.sun", "record.date.weekday.mon", "record.date.weekday.tue", "record.date.weekday.wed", "record.date.weekday.thu", "record.date.weekday.fri", "record.date.weekday.sat"] as const;
 const WHEEL_ITEM_HEIGHT = 44;
 
 export function RecordDatePickerModal({
@@ -21,7 +22,7 @@ export function RecordDatePickerModal({
   selectedDateKey,
   minDateKey,
   maxDateKey,
-  title = "날짜 선택",
+  title,
   onSelect,
   onClose,
 }: {
@@ -33,6 +34,8 @@ export function RecordDatePickerModal({
   onSelect: (dateKey: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
+  const resolvedTitle = title ?? t("record.date.title");
   const selected = parseDateKey(selectedDateKey);
   const [year, setYear] = useState(selected.getFullYear());
   const [month, setMonth] = useState(selected.getMonth());
@@ -123,41 +126,41 @@ export function RecordDatePickerModal({
           {wheelOpen ? (
             <>
               <View style={styles.wheelHeader}>
-                <Pressable style={styles.wheelHeaderButton} onPress={() => setWheelOpen(false)}><Text style={styles.wheelCancel}>취소</Text></Pressable>
-                <Text style={styles.modalTitle}>날짜 선택</Text>
-                <Pressable style={styles.wheelHeaderButton} onPress={confirmWheel}><Text style={styles.wheelDone}>완료</Text></Pressable>
+                <Pressable style={styles.wheelHeaderButton} onPress={() => setWheelOpen(false)}><Text style={styles.wheelCancel}>{t("record.date.cancel")}</Text></Pressable>
+                <Text style={styles.modalTitle}>{t("record.date.title")}</Text>
+                <Pressable style={styles.wheelHeaderButton} onPress={confirmWheel}><Text style={styles.wheelDone}>{t("record.date.done")}</Text></Pressable>
               </View>
               <View style={styles.wheelArea}>
                 <View pointerEvents="none" style={styles.wheelSelection} />
-                <WheelColumn values={yearOptions} value={wheelYear} suffix="년" onChange={setWheelYear} accessibilityLabel="연도" />
-                <WheelColumn values={monthOptions} value={wheelMonth} suffix="월" onChange={setWheelMonth} accessibilityLabel="월" />
-                <WheelColumn values={dayOptions} value={wheelDay} suffix="일" onChange={setWheelDay} accessibilityLabel="일" />
+                <WheelColumn values={yearOptions} value={wheelYear} formatValue={(value) => t("record.date.yearSuffix", { value })} onChange={setWheelYear} accessibilityLabel={t("record.date.year")} />
+                <WheelColumn values={monthOptions} value={wheelMonth} formatValue={(value) => t("record.date.monthSuffix", { value })} onChange={setWheelMonth} accessibilityLabel={t("record.date.month")} />
+                <WheelColumn values={dayOptions} value={wheelDay} formatValue={(value) => t("record.date.daySuffix", { value })} onChange={setWheelDay} accessibilityLabel={t("record.date.day")} />
               </View>
-              <Text style={styles.wheelHelp}>년·월·일을 위아래로 스크롤해서 선택해 주세요.</Text>
+              <Text style={styles.wheelHelp}>{t("record.date.help")}</Text>
             </>
           ) : (
             <>
-              <Text style={styles.modalTitle}>{title}</Text>
+              <Text style={styles.modalTitle}>{resolvedTitle}</Text>
               <View style={styles.header}>
                 <View style={styles.navGroup}>
-                  <Pressable accessibilityLabel="이전 해" style={styles.arrow} onPress={() => moveMonth(-12)}><Text style={styles.yearArrowText}>«</Text></Pressable>
-                  <Pressable accessibilityLabel="이전 달" style={styles.arrow} onPress={() => moveMonth(-1)}><Text style={styles.arrowText}>‹</Text></Pressable>
+                  <Pressable accessibilityLabel={t("record.date.previousYear")} style={styles.arrow} onPress={() => moveMonth(-12)}><Text style={styles.yearArrowText}>«</Text></Pressable>
+                  <Pressable accessibilityLabel={t("record.date.previousMonth")} style={styles.arrow} onPress={() => moveMonth(-1)}><Text style={styles.arrowText}>‹</Text></Pressable>
                 </View>
-                <Pressable style={styles.dateHeaderButton} onPress={openWheel} accessibilityRole="button" accessibilityLabel="년 월 일 스크롤 선택 열기">
-                  <Text style={styles.dateHeaderPart}>{year}년</Text>
-                  <Text style={styles.dateHeaderPart}>{month + 1}월</Text>
+                <Pressable style={styles.dateHeaderButton} onPress={openWheel} accessibilityRole="button" accessibilityLabel={t("record.date.openWheel")}>
+                  <Text style={styles.dateHeaderPart}>{t("record.date.yearSuffix", { value: year })}</Text>
+                  <Text style={styles.dateHeaderPart}>{t("record.date.monthSuffix", { value: month + 1 })}</Text>
                   <Text style={styles.dateHeaderPart}>
-                    {selected.getFullYear() === year && selected.getMonth() === month ? selected.getDate() : 1}일
+                    {t("record.date.daySuffix", { value: selected.getFullYear() === year && selected.getMonth() === month ? selected.getDate() : 1 })}
                   </Text>
                   <Text style={styles.dateHeaderChevron}>⌄</Text>
                 </Pressable>
                 <View style={styles.navGroup}>
-                  <Pressable accessibilityLabel="다음 달" style={styles.arrow} onPress={() => moveMonth(1)}><Text style={styles.arrowText}>›</Text></Pressable>
-                  <Pressable accessibilityLabel="다음 해" style={styles.arrow} onPress={() => moveMonth(12)}><Text style={styles.yearArrowText}>»</Text></Pressable>
+                  <Pressable accessibilityLabel={t("record.date.nextMonth")} style={styles.arrow} onPress={() => moveMonth(1)}><Text style={styles.arrowText}>›</Text></Pressable>
+                  <Pressable accessibilityLabel={t("record.date.nextYear")} style={styles.arrow} onPress={() => moveMonth(12)}><Text style={styles.yearArrowText}>»</Text></Pressable>
                 </View>
               </View>
               <View style={styles.grid}>
-                {WEEKDAYS.map((weekday) => <View key={weekday} style={styles.weekdayCell}><Text style={styles.weekday}>{weekday}</Text></View>)}
+                {WEEKDAY_KEYS.map((weekday) => <View key={weekday} style={styles.weekdayCell}><Text style={styles.weekday}>{t(weekday)}</Text></View>)}
                 {days.map((day, index) => {
                   if (!day) return <View key={`empty-${index}`} style={styles.dayCell} />;
                   const key = formatDateKey(day, "midnight");
@@ -177,7 +180,7 @@ export function RecordDatePickerModal({
                   );
                 })}
               </View>
-              <Pressable style={styles.close} onPress={onClose}><Text style={styles.closeText}>닫기</Text></Pressable>
+              <Pressable style={styles.close} onPress={onClose}><Text style={styles.closeText}>{t("record.date.close")}</Text></Pressable>
             </>
           )}
         </View>
@@ -186,7 +189,7 @@ export function RecordDatePickerModal({
   );
 }
 
-function WheelColumn({ values, value, suffix, onChange, accessibilityLabel }: { values: number[]; value: number; suffix: string; onChange: (value: number) => void; accessibilityLabel: string }) {
+function WheelColumn({ values, value, formatValue, onChange, accessibilityLabel }: { values: number[]; value: number; formatValue: (value: number) => string; onChange: (value: number) => void; accessibilityLabel: string }) {
   const ref = useRef<ScrollView>(null);
   const index = Math.max(0, values.indexOf(value));
 
@@ -214,7 +217,7 @@ function WheelColumn({ values, value, suffix, onChange, accessibilityLabel }: { 
     >
       {values.map((item) => (
         <View key={item} style={styles.wheelItem}>
-          <Text style={[styles.wheelText, item === value && styles.wheelTextSelected]}>{item}{suffix}</Text>
+          <Text style={[styles.wheelText, item === value && styles.wheelTextSelected]}>{formatValue(item)}</Text>
         </View>
       ))}
     </ScrollView>
@@ -222,13 +225,14 @@ function WheelColumn({ values, value, suffix, onChange, accessibilityLabel }: { 
 }
 
 function CalendarDayCell({ label, isSelected, isDisabled, onPress }: { label: string; isSelected: boolean; isDisabled: boolean; onPress: () => void }) {
+  const { t } = useLanguage();
   return (
     <Pressable
       style={[styles.dayCell, isDisabled && styles.disabled]}
       disabled={isDisabled}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${label}일`}
+      accessibilityLabel={t("record.date.dayA11y", { label, day: label })}
       accessibilityState={{ selected: isSelected, disabled: isDisabled }}
     >
       <View style={[styles.dayPill, isSelected && styles.dayPillSelected]}>

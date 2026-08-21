@@ -24,7 +24,7 @@ type Props = {
 export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifications, embedded = false }: Props) {
   const insets = useSafeAreaInsets();
   const { careSetup, setCareSetup } = useApp();
-  const { locale } = useLanguage();
+  const { locale, t } = useLanguage();
   const careSetupRef = useRef(careSetup);
   careSetupRef.current = careSetup;
   const { babyName, babyBirthMeta, activeBabyId, familyMembers } = useBabyLog();
@@ -83,7 +83,7 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
     <View style={[styles.wrap, embedded && styles.wrapEmbedded, compact && styles.wrapCompact, { paddingTop: Math.max(insets.top, compact ? 8 : 12) }]}>
       <View style={styles.headerRow}>
         <View style={[styles.card, compact && styles.cardCompact]}>
-          <Pressable style={[styles.avatarCircle, compact && styles.avatarCompact]} onPress={() => onOpenProfile()} hitSlop={compact ? 4 : undefined} accessibilityRole="button" accessibilityLabel="아기 프로필 열기">
+          <Pressable style={[styles.avatarCircle, compact && styles.avatarCompact]} onPress={() => onOpenProfile()} hitSlop={compact ? 4 : undefined} accessibilityRole="button" accessibilityLabel={t("home.a11y.openBabyProfile")}>
             {babyPhoto ? (
               <Image source={{ uri: babyPhoto }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
             ) : (
@@ -93,7 +93,7 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
 
           <View style={styles.info}>
             <View style={[styles.nameLine, compact && styles.nameLineCompact]}>
-              <Pressable style={styles.nameRow} onPress={() => onOpenProfile()} accessibilityRole="button" accessibilityLabel={`${babyName} 아기 프로필 열기`}>
+              <Pressable style={styles.nameRow} onPress={() => onOpenProfile()} accessibilityRole="button" accessibilityLabel={t("home.a11y.openNamedBabyProfile", { babyName })}>
                 <Text style={styles.name} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>{babyName}</Text>
               </Pressable>
               <View style={styles.switchWrap}><BabySwitcher variant="switchButton" /></View>
@@ -103,22 +103,22 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
               <Pressable
                 onPress={() => onOpenProfile({ convertBirth: true })}
                 accessibilityRole="button"
-                accessibilityLabel="아기가 태어났어요"
+                accessibilityLabel={t("home.a11y.babyBorn")}
               >
-                <Text style={styles.birthCta} maxFontSizeMultiplier={fontScaleCap.chrome}>아기가 태어났어요 🎉</Text>
+                <Text style={styles.birthCta} maxFontSizeMultiplier={fontScaleCap.chrome}>{t("home.header.born")}</Text>
               </Pressable>
             ) : null}
             {isShared ? (
               <View style={styles.sharedMeta}>
                 <BabyLogIcon kind="profile" size={14} color={colors.amberText} strokeWidth={2.1} />
-                <Text style={styles.sharedText} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>공유 중</Text>
+                <Text style={styles.sharedText} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>{t("home.header.shared")}</Text>
               </View>
             ) : null}
           </View>
         </View>
         <View style={styles.actions}>
           {onOpenNotifications ? <NotificationBellButton onPress={onOpenNotifications} /> : null}
-          {onOpenSettings ? <Pressable style={styles.settingsBtn} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel="설정 열기"><BabyLogIcon kind="settings" size={18} color={colors.muted} /></Pressable> : null}
+          {onOpenSettings ? <Pressable style={styles.settingsBtn} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel={t("home.a11y.openSettings")}><BabyLogIcon kind="settings" size={18} color={colors.muted} /></Pressable> : null}
         </View>
       </View>
     </View>

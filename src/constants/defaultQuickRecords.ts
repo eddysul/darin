@@ -1,10 +1,11 @@
 import { isPregnancyLogCategoryId } from "./babyLogCategories";
 import type { QuickRecord } from "../types/quickRecord";
+import { DEFAULT_QUICK_RECORD_VALUES, RECORD_VALUE } from "./recordInternalValues";
 
 export const DEFAULT_QUICK_RECORDS: QuickRecord[] = [
   {
     id: "qr-formula-120",
-    label: "분유 120ml",
+    label: DEFAULT_QUICK_RECORD_VALUES.formulaLabel,
     color: "#E8918A",
     icon: "",
     pinned: true,
@@ -13,60 +14,60 @@ export const DEFAULT_QUICK_RECORDS: QuickRecord[] = [
   },
   {
     id: "qr-sleep-start",
-    label: "낮잠 시작",
+    label: DEFAULT_QUICK_RECORD_VALUES.sleepLabel,
     color: "#7C83FD",
     icon: "",
     pinned: true,
     isCustom: false,
-    defaults: { cat: "sleep", sleepAction: "start", chip: "낮잠" },
+    defaults: { cat: "sleep", sleepAction: "start", chip: RECORD_VALUE.nap },
   },
   {
     id: "qr-diaper-pee",
-    label: "기저귀 소변",
+    label: DEFAULT_QUICK_RECORD_VALUES.diaperLabel,
     color: "#5CB87A",
     icon: "",
     pinned: true,
     isCustom: false,
-    defaults: { cat: "diaper", chip: "소변" },
+    defaults: { cat: "diaper", chip: RECORD_VALUE.diaperUrine },
   },
 ];
 
 export const DEFAULT_PREGNANCY_QUICK_RECORDS: QuickRecord[] = [
   {
     id: "qr-preg-mood-ok",
-    label: "컨디션 좋음",
+    label: DEFAULT_QUICK_RECORD_VALUES.pregnancyMoodLabel,
     color: "#E8918A",
     icon: "",
     pinned: true,
     isCustom: false,
-    defaults: { cat: "pregMood", chip: "좋음" },
+    defaults: { cat: "pregMood", chip: DEFAULT_QUICK_RECORD_VALUES.pregnancyMoodChip },
   },
   {
     id: "qr-preg-symptom-nausea",
-    label: "입덧",
+    label: DEFAULT_QUICK_RECORD_VALUES.pregnancySymptomLabel,
     color: "#C98A54",
     icon: "",
     pinned: true,
     isCustom: false,
-    defaults: { cat: "pregSymptom", chip: "입덧" },
+    defaults: { cat: "pregSymptom", chip: DEFAULT_QUICK_RECORD_VALUES.pregnancySymptomLabel },
   },
   {
     id: "qr-preg-med-vitamin",
-    label: "영양제",
+    label: DEFAULT_QUICK_RECORD_VALUES.pregnancyMedicationLabel,
     color: "#7C83FD",
     icon: "",
     pinned: true,
     isCustom: false,
-    defaults: { cat: "pregMed", chip: "영양제" },
+    defaults: { cat: "pregMed", chip: DEFAULT_QUICK_RECORD_VALUES.pregnancyMedicationLabel },
   },
   {
     id: "qr-preg-kick",
-    label: "태동 느꼈어요",
+    label: DEFAULT_QUICK_RECORD_VALUES.pregnancyKickLabel,
     color: "#5CB87A",
     icon: "",
     pinned: true,
     isCustom: false,
-    defaults: { cat: "pregKick", chip: "느꼈어요" },
+    defaults: { cat: "pregKick", chip: DEFAULT_QUICK_RECORD_VALUES.pregnancyKickChip },
   },
 ];
 

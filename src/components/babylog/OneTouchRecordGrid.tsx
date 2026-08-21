@@ -14,6 +14,8 @@ import { CustomTemplateIcon } from "./CustomTemplateIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
 import { rankQuickActions } from "../../utils/quickCategoryRanking";
 import { useCompactLayout } from "../../hooks/useCompactLayout";
+import { useLanguage } from "../../LanguageContext";
+import { recordCategoryLabel } from "../../utils/recordDisplay";
 
 export type { OneTouchAction } from "../../constants/quickRecordActions";
 
@@ -56,6 +58,7 @@ export function OneTouchRecordGrid({
   babyScopeKey,
 }: Props) {
   const compact = useCompactLayout();
+  const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const catalog = visibleActions?.some((id) => PREGNANCY_QUICK_RECORD_ACTIONS.some((action) => action.id === id))
     ? PREGNANCY_QUICK_RECORD_ACTIONS
@@ -74,11 +77,11 @@ export function OneTouchRecordGrid({
     <View style={styles.section}>
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
-          <Text style={styles.title}>{catalog === PREGNANCY_QUICK_RECORD_ACTIONS ? "임신 기록하기" : "기록하기"}</Text>
+          <Text style={styles.title}>{t(catalog === PREGNANCY_QUICK_RECORD_ACTIONS ? "record.grid.pregnancyTitle" : "record.grid.title")}</Text>
           <Text style={styles.subtitle}>{
             catalog === PREGNANCY_QUICK_RECORD_ACTIONS
-              ? "탭하면 상세 입력이 열려요"
-              : "탭하면 상세 입력이 열려요 · 길게 눌러 타이머 시작"
+              ? t("record.grid.detailHint")
+              : t("record.grid.timerHint")
           }</Text>
         </View>
         {onAdd ? (
@@ -87,9 +90,9 @@ export function OneTouchRecordGrid({
             disabled={disabled}
             onPress={onAdd}
             accessibilityRole="button"
-            accessibilityLabel="카테고리 추가"
+            accessibilityLabel={t("record.grid.addCategory")}
           >
-            <Text style={styles.countBadgeText}>카테고리 추가</Text>
+            <Text style={styles.countBadgeText}>{t("record.grid.addCategory")}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -157,9 +160,9 @@ export function OneTouchRecordGrid({
               style={({ pressed }) => [styles.expandTile, compact && styles.expandTileDense, pressed && styles.pressed]}
               onPress={() => setExpanded(true)}
               accessibilityRole="button"
-              accessibilityLabel="더 보기"
+              accessibilityLabel={t("record.grid.more")}
             >
-              <Text style={styles.expandTileLabel}>더 보기</Text>
+              <Text style={styles.expandTileLabel}>{t("record.grid.more")}</Text>
             </Pressable>
           ) : null}
         </ScrollView>
@@ -170,9 +173,9 @@ export function OneTouchRecordGrid({
           style={({ pressed }) => [styles.collapseButton, pressed && styles.expandPressed]}
           onPress={() => setExpanded(false)}
           accessibilityRole="button"
-          accessibilityLabel="접기"
+          accessibilityLabel={t("record.grid.collapse")}
         >
-          <Text style={styles.expandText}>접기</Text>
+          <Text style={styles.expandText}>{t("record.grid.collapse")}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -192,6 +195,7 @@ function CustomCategoryTile({
   onPress: () => void;
   onInteractionChange?: (active: boolean) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <Pressable
       disabled={disabled}
@@ -206,7 +210,7 @@ function CustomCategoryTile({
       onPressOut={() => onInteractionChange?.(false)}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${category.label} 기록`}
+      accessibilityLabel={t("record.grid.categoryRecord", { label: category.label })}
     >
       <View style={[styles.iconWrap, { backgroundColor: `${category.color}18` }]}>
         <CustomTemplateIcon
@@ -232,6 +236,7 @@ function GrowthTile({
   dense?: boolean;
   onPress: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <Pressable
       disabled={disabled}
@@ -244,12 +249,12 @@ function GrowthTile({
       ]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="성장 기록 추가"
+      accessibilityLabel={t("record.grid.addGrowth")}
     >
       <View style={[styles.iconWrap, styles.growthIconWrap]}>
         <BabyLogIcon kind="tab" tab="report" size={24} color="#69AFA0" strokeWidth={1.8} />
       </View>
-      <Text style={styles.label}>성장</Text>
+      <Text style={styles.label}>{t("record.grid.growth")}</Text>
     </Pressable>
   );
 }
@@ -277,7 +282,9 @@ function ActionTile({
   onOpenActiveTimer?: (action: OneTouchAction) => void;
   onInteractionChange?: (active: boolean) => void;
 }) {
+  const { t } = useLanguage();
   const category = getCategory(action.cat);
+  const displayLabel = recordCategoryLabel(t, action.cat);
   const activeSleep = action.id === "sleep" && sleepActive;
   const inProgress = timerActive || activeSleep;
   const ActionIcon = CATEGORY_ICONS[action.cat];
@@ -304,8 +311,7 @@ function ActionTile({
           longPressedRef.current = false;
           return;
         }
-        // Open sleep logs: the tile says "수면 종료" and should actually end
-        // the session. Other in-progress timers still open the timer sheet.
+        // An active sleep tile ends the session; other timers open their sheet.
         if (activeSleep) {
           onSelect(action.id);
           return;
@@ -328,29 +334,29 @@ function ActionTile({
       accessibilityRole="button"
       accessibilityLabel={
         activeSleep
-          ? "수면 종료"
+          ? t("record.grid.endSleep")
           : inProgress
-            ? `${action.label} 진행 중`
-            : `${action.label} 상세 기록`
+            ? t("record.grid.actionInProgress", { label: displayLabel })
+            : t("record.grid.actionDetail", { label: displayLabel })
       }
       accessibilityHint={
         activeSleep
-          ? "탭하면 수면을 종료하고 기록해요. 길게 누르면 타이머에서 조정할 수 있어요."
+          ? t("record.grid.endSleepHint")
           : inProgress
             ? undefined
-            : "탭하면 상세 입력이 열려요. 바로 저장하려면 자주 쓰는 기록을 사용하세요."
+            : t("record.grid.openHint")
       }
     >
       {inProgress ? (
         <View style={styles.progressBadge}>
-          <Text style={styles.progressBadgeText}>진행 중</Text>
+          <Text style={styles.progressBadgeText}>{t("record.grid.inProgress")}</Text>
         </View>
       ) : null}
       <View style={[styles.iconWrap, { backgroundColor: `${category.color}18` }]}>
         <ActionIcon size={24} color={category.color} strokeWidth={1.8} />
       </View>
       <Text style={[styles.label, inProgress && styles.activeLabel]} numberOfLines={2}>
-        {activeSleep ? "수면 종료" : action.label}
+        {activeSleep ? t("record.grid.endSleep") : displayLabel}
       </Text>
     </Pressable>
   );

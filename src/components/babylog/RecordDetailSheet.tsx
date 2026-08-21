@@ -42,9 +42,17 @@ import {
 import { AmountInput, CUSTOM_AMOUNT_UNIT, isPositiveAmount } from "../inputs/AmountInput";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { matchCautionFoods } from "../../utils/cautionFoodsStore";
+import { useLanguage } from "../../LanguageContext";
+import {
+  LEGACY_MEDICATION_DOSE_UNITS,
+  RECORD_STORED_OPTIONS,
+  RECORD_VALUE,
+  STARTER_FOOD_INGREDIENTS,
+} from "../../constants/recordInternalValues";
+import { recordCategoryLabel, storedRecordValueLabel } from "../../utils/recordDisplay";
 
 function normalizeDiaperChip(value: string): string {
-  return value === "둘다" || value === "둘 다" ? "소변+대변" : value;
+  return value === RECORD_VALUE.diaperLegacyBoth || value === RECORD_VALUE.diaperLegacyBothSpaced ? RECORD_VALUE.diaperBoth : value;
 }
 
 export type RecordSheetPrefill = Partial<BabyLogEntry> & { editId?: string };
@@ -66,8 +74,8 @@ type Props = {
   storedMilkEstimatedAvailableMl?: number;
 };
 
-const STARTER_INGREDIENTS = ["쌀미음", "소고기", "애호박", "바나나", "고구마", "사과"];
-const MEDICATION_DOSE_UNITS = ["ml", "drop", "방울", "포", "정", "회", "스푼", "g", "mg"];
+const STARTER_INGREDIENTS = [...STARTER_FOOD_INGREDIENTS];
+const MEDICATION_DOSE_UNITS = ["ml", "drop", ...LEGACY_MEDICATION_DOSE_UNITS, "g", "mg"];
 const CUSTOM_DOSE_UNIT = CUSTOM_AMOUNT_UNIT;
 const LIQUID_CATEGORIES = ["formula", "storedMilk", "pump", "water", "milk"] as const;
 
@@ -79,17 +87,17 @@ function parseMedicationDose(raw?: string): { value: string; unit: string } | nu
 
 function normalizeMedicationType(value?: string): string {
   if (["medicine", "supplement", "ointment", "eye_drop", "other"].includes(value ?? "")) return value!;
-  if (value === "영양제") return "supplement";
-  if (value === "연고") return "ointment";
-  if (value === "안약") return "eye_drop";
+  if (value === RECORD_VALUE.medicineSupplement) return "supplement";
+  if (value === RECORD_VALUE.medicineOintment) return "ointment";
+  if (value === RECORD_VALUE.medicineEyeDrop) return "eye_drop";
   return value ? "other" : "";
 }
 
 function normalizeMedicationStatus(value?: string): string {
   if (["given", "partial", "refused"].includes(value ?? "")) return value!;
-  if (value === "복용 완료") return "given";
-  if (value === "일부 복용") return "partial";
-  if (value === "건너뜀" || value === "복용 안 함") return "refused";
+  if (value === RECORD_VALUE.medicationGiven) return "given";
+  if (value === RECORD_VALUE.medicationPartial) return "partial";
+  if (value === RECORD_VALUE.medicationSkipped || value === RECORD_VALUE.medicationRefused) return "refused";
   return value ? "given" : "";
 }
 
@@ -104,10 +112,12 @@ function ChipRow({
   options,
   value,
   onChange,
+  getLabel = (option) => option,
 }: {
   options: string[];
   value: string;
   onChange: (next: string) => void;
+  getLabel?: (option: string) => string;
 }) {
   return (
     <View style={styles.chipRow}>
@@ -117,7 +127,7 @@ function ChipRow({
           style={[styles.chip, value === ch && styles.chipSel]}
           onPress={() => onChange(value === ch ? "" : ch)}
         >
-          <Text style={[styles.chipText, value === ch && styles.chipTextSel]}>{ch}</Text>
+          <Text style={[styles.chipText, value === ch && styles.chipTextSel]}>{getLabel(ch)}</Text>
         </Pressable>
       ))}
     </View>
@@ -151,6 +161,7 @@ export function RecordDetailSheet({
   onAddFoodIngredient,
   storedMilkEstimatedAvailableMl,
 }: Props) {
+  const { t } = useLanguage();
   const { settings } = useAppSettings();
   const { babyName, activeBabyId, cautionFoods } = useBabyLog();
   const [time, setTime] = useState(nowTime());
@@ -214,6 +225,8 @@ export function RecordDetailSheet({
   const [vaccinationDatePickerOpen, setVaccinationDatePickerOpen] = useState(false);
   const [vaccinationReminderDatePickerOpen, setVaccinationReminderDatePickerOpen] = useState(false);
   const [sideDurationTarget, setSideDurationTarget] = useState<"left" | "right" | null>(null);
+
+  const storedOptionLabel = (option: string) => storedRecordValueLabel(t, option);
 
   useEffect(() => {
     if (!visible || !catKey) return;
@@ -440,9 +453,9 @@ export function RecordDetailSheet({
   }
 
   function formatIngredientDate(dateKey?: string) {
-    if (!dateKey) return "날짜 없음";
+    if (!dateKey) return t("record.detail.dateNone");
     const [, month, day] = dateKey.split("-").map(Number);
-    return Number.isFinite(month) && Number.isFinite(day) ? `${month}월 ${day}일` : dateKey;
+    return Number.isFinite(month) && Number.isFinite(day) ? t("record.detail.monthDay", { month, day }) : dateKey;
   }
 
   const confirmTimePicker = (valueHHmm: string) => {
@@ -479,83 +492,83 @@ export function RecordDetailSheet({
   const confirmDelete = () => {
     const editId = prefill?.editId;
     if (!editId || !onDelete) return;
-    Alert.alert("기록 삭제", "이 기록을 삭제할까요?", [
-      { text: "취소", style: "cancel" },
-      { text: "삭제", style: "destructive", onPress: () => onDelete(editId) },
+    Alert.alert(t("record.detail.deleteTitle"), t("record.detail.deleteBody"), [
+      { text: t("record.detail.cancel"), style: "cancel" },
+      { text: t("record.detail.delete"), style: "destructive", onPress: () => onDelete(editId) },
     ]);
   };
 
   const handleSave = () => {
     if (!isValidClockInput(time) || (endTime && !isValidClockInput(endTime))) {
-      setTimeError("시간을 00:00부터 23:59 사이로 입력해 주세요.");
+      setTimeError(t("record.detail.invalidTime"));
       return;
     }
     setTimeError("");
-    if (builtinId === "diaper" && !["소변", "대변", "소변+대변"].includes(chip)) {
-      setDiaperError("소변, 대변 또는 소변+대변 중 하나를 선택해 주세요.");
+    if (builtinId === "diaper" && !(RECORD_STORED_OPTIONS.diaperType as readonly string[]).includes(chip)) {
+      setDiaperError(t("record.detail.diaperRequired"));
       return;
     }
     setDiaperError("");
     if ((builtinId === "formula" || builtinId === "storedMilk") && !hasValidAmount) {
-      setFeedingAmountError("0보다 큰 값과 단위를 함께 입력해 주세요.");
+      setFeedingAmountError(t("record.detail.positiveValueUnit"));
       return;
     }
     if ((builtinId === "water" || builtinId === "milk") && !hasValidAmount) {
-      Alert.alert("양을 확인해 주세요", "0보다 큰 값과 단위를 함께 입력해 주세요.");
+      Alert.alert(t("record.detail.amountCheckTitle"), t("record.detail.positiveValueUnit"));
       return;
     }
     if (builtinId === "pump" && ((leftAmount && !hasValidLeftAmount) || (rightAmount && !hasValidRightAmount))) {
-      Alert.alert("유축량을 확인해 주세요", "값과 단위를 함께 입력해 주세요.");
+      Alert.alert(t("record.detail.pumpCheckTitle"), t("record.detail.valueUnit"));
       return;
     }
     setFeedingAmountError("");
     if ((builtinId === "food" || builtinId === "snack") && !selectedIngredients.length && !notes.trim()) {
-      setIngredientError("재료를 하나 이상 선택하거나 메모를 입력해 주세요.");
+      setIngredientError(t("record.detail.ingredientRequired"));
       return;
     }
     setIngredientError("");
     if (builtinId === "temp" && !(Number.parseFloat(amount) > 0)) {
-      Alert.alert("온도를 입력해 주세요", "측정한 체온을 숫자로 입력해 주세요.");
+      Alert.alert(t("record.detail.temperatureTitle"), t("record.detail.temperatureBody"));
       return;
     }
     if (builtinId === "med" && (!medicationType || !medName.trim() || !medicationStatus || !medicationDoseText)) {
-      Alert.alert("투약 정보를 확인해 주세요", "약 종류, 약 이름, 0보다 큰 용량과 단위, 복용 상태를 입력해 주세요.");
+      Alert.alert(t("record.detail.medicationTitle"), t("record.detail.medicationBody"));
       return;
     }
     if (builtinId === "med" && (doseValue || doseUnit) && !hasStructuredDose) {
-      Alert.alert("용량을 확인해 주세요", "0보다 큰 숫자와 단위를 함께 입력해 주세요.");
+      Alert.alert(t("record.detail.doseTitle"), t("record.detail.doseBody"));
       return;
     }
     if (builtinId === "doctor" && (!visitType || !recordTitle.trim() || !details.trim())) {
-      Alert.alert("진료 정보를 확인해 주세요", "방문 유형, 병원 이름과 진료 내용을 입력해 주세요.");
+      Alert.alert(t("record.detail.doctorTitle"), t("record.detail.doctorBody"));
       return;
     }
     if ((medicationReminderEnabled || cautionReminderEnabled) && (!nextAtDate || !nextAtTime)) {
-      Alert.alert("알림 시간을 확인해 주세요", "알림을 사용하려면 날짜와 시간을 모두 선택해 주세요.");
+      Alert.alert(t("record.detail.reminderTitle"), t("record.detail.reminderBody"));
       return;
     }
     if (builtinId === "memo" && !notes.trim()) {
-      Alert.alert("메모를 입력해 주세요");
+      Alert.alert(t("record.detail.memoRequired"));
       return;
     }
     if (builtinId === "other" && !recordTitle.trim()) {
-      Alert.alert("기록 이름을 입력해 주세요");
+      Alert.alert(t("record.detail.nameRequired"));
       return;
     }
     if (builtinId === "vaccination" && (!vaccineName.trim() || !vaccinationRound || (vaccinationRound === "other" && !vaccinationRoundText.trim()))) {
-      Alert.alert("예방접종 정보를 확인해 주세요", "백신 이름과 접종 회차를 입력해 주세요.");
+      Alert.alert(t("record.detail.vaccineTitle"), t("record.detail.vaccineBody"));
       return;
     }
     if (builtinId === "vaccination" && injectionSite === "other" && !injectionSiteText.trim()) {
-      Alert.alert("접종 부위를 입력해 주세요");
+      Alert.alert(t("record.detail.siteRequired"));
       return;
     }
     if (builtinId === "vaccination" && vaccinationReminderSetting !== "none" && (!nextAtDate || !nextAtTime)) {
-      Alert.alert("다음 접종 일정을 확인해 주세요", "알림을 사용하려면 다음 접종 날짜와 시간을 모두 선택해 주세요.");
+      Alert.alert(t("record.detail.nextVaccineTitle"), t("record.detail.nextVaccineBody"));
       return;
     }
     if (builtinId === "vaccination" && vaccinationReminderSetting === "custom" && (!customReminderDate || !customReminderTime)) {
-      Alert.alert("직접 알림 시간을 확인해 주세요", "알림 날짜와 시간을 모두 선택해 주세요.");
+      Alert.alert(t("record.detail.customReminderTitle"), t("record.detail.customReminderBody"));
       return;
     }
     const isFood = builtinId === "food" || builtinId === "snack";
@@ -590,7 +603,7 @@ export function RecordDetailSheet({
       : canonicalAmount;
     const diaperType = builtinId === "diaper" ? chip : "";
     if (!activeBabyId) {
-      Alert.alert("아기를 선택해 주세요", "기록할 아기를 선택한 뒤 다시 시도해 주세요.");
+      Alert.alert(t("record.detail.babyRequiredTitle"), t("record.detail.babyRequiredBody"));
       return;
     }
     const entryToSave: Omit<BabyLogEntry, "id"> = {
@@ -600,11 +613,11 @@ export function RecordDetailSheet({
         chip: chip || undefined,
         // The existing payload fields let us add this without a schema change:
         // amount = urine amount; chip2 = stool amount; stoolState = consistency.
-        chip2: builtinId === "diaper" && diaperType === "소변" ? undefined : chip2 || undefined,
+        chip2: builtinId === "diaper" && diaperType === RECORD_VALUE.diaperUrine ? undefined : chip2 || undefined,
         stoolState:
-          builtinId === "diaper" && diaperType === "소변" ? undefined : stoolState || undefined,
+          builtinId === "diaper" && diaperType === RECORD_VALUE.diaperUrine ? undefined : stoolState || undefined,
         amount:
-          builtinId === "diaper" && diaperType === "대변"
+          builtinId === "diaper" && diaperType === RECORD_VALUE.diaperStool
             ? undefined
             : finalAmount || undefined,
         amountValue: (LIQUID_CATEGORIES as readonly string[]).includes(effectiveCat) && amount ? amount : undefined,
@@ -667,9 +680,9 @@ export function RecordDetailSheet({
     const matchedFoods = isFood ? matchCautionFoods(selectedIngredients, cautionFoods) : [];
     if (matchedFoods.length) {
       Alert.alert(
-        "주의 식품이 포함되어 있어요",
-        `${matchedFoods.join(", ")}은(는) ${babyName}의 주의 식품으로 등록되어 있어요. 그래도 기록할까요?`,
-        [{ text: "취소", style: "cancel" }, { text: "기록하기", onPress: commit }],
+        t("record.detail.cautionTitle"),
+        t("record.detail.cautionBody", { foods: matchedFoods.join(", "), babyName }),
+        [{ text: t("record.detail.cancel"), style: "cancel" }, { text: t("record.detail.logAnyway"), onPress: commit }],
       );
       return;
     }
@@ -689,57 +702,57 @@ export function RecordDetailSheet({
           <View style={[styles.dot, { backgroundColor: c.color }]} />
           <LogCategoryIcon categoryKey={effectiveCat} customCategories={customCategories} size={18} />
           <Text style={styles.title}>
-            {c.label} 기록 {isEdit ? "수정" : "추가"}
+            {t("record.detail.logTitle", { label: builtinId ? recordCategoryLabel(t, builtinId) : c.label, action: t(isEdit ? "record.detail.edit" : "record.detail.add") })}
           </Text>
           {sessionLabel ? <Text style={styles.sessionBadge}>{sessionLabel}</Text> : null}
         </View>
-        <Text style={styles.activeBabyLabel}>기록 대상 · {babyName}</Text>
+        <Text style={styles.activeBabyLabel}>{t("record.detail.target", { babyName })}</Text>
 
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {(builtinId === "breast" || builtinId === "formula" || builtinId === "storedMilk") && (
             <>
               {builtinId === "breast" ? (
                 <>
-                  <DurationPickerField label="왼쪽 시간" valueMinutes={leftDurationValue} onPress={() => setSideDurationTarget("left")} />
-                  <DurationPickerField label="오른쪽 시간" valueMinutes={rightDurationValue} onPress={() => setSideDurationTarget("right")} />
+                  <DurationPickerField label={t("record.detail.leftTime")} valueMinutes={leftDurationValue} onPress={() => setSideDurationTarget("left")} />
+                  <DurationPickerField label={t("record.detail.rightTime")} valueMinutes={rightDurationValue} onPress={() => setSideDurationTarget("right")} />
                   <View style={styles.calculatedCard}>
-                    <Text style={styles.calculatedLabel}>총 수유 시간</Text>
-                    <Text style={styles.calculatedValue}>{sideDurationTotal || durationValue || 0}분</Text>
+                    <Text style={styles.calculatedLabel}>{t("record.detail.totalFeedingTime")}</Text>
+                    <Text style={styles.calculatedValue}>{t("record.detail.minutes", { count: sideDurationTotal || durationValue || 0 })}</Text>
                   </View>
                 </>
               ) : null}
               {builtinId !== "breast" ? (
                 <>
-                  <AmountInput label="먹은 양" value={amount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={(value) => { setAmount(value); setFeedingAmountError(""); }} onChangeUnit={(unit) => { setAmountUnit(unit); setFeedingAmountError(""); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} error={feedingAmountError || undefined} />
-                  <DurationPickerField label="소요 시간 (선택)" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
-                  <Text style={styles.fieldLabel}>영양제 (선택)</Text>
-                  <TextInput style={styles.input} value={supplement} onChangeText={setSupplement} placeholder="예: 비타민D" placeholderTextColor={colors.faint} />
+                  <AmountInput label={t("record.detail.amountFed")} value={amount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={(value) => { setAmount(value); setFeedingAmountError(""); }} onChangeUnit={(unit) => { setAmountUnit(unit); setFeedingAmountError(""); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} error={feedingAmountError || undefined} />
+                  <DurationPickerField label={t("record.detail.optionalDuration")} valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+                  <Text style={styles.fieldLabel}>{t("record.detail.optionalSupplement")}</Text>
+                  <TextInput style={styles.input} value={supplement} onChangeText={setSupplement} placeholder={t("record.detail.exampleVitamin")} placeholderTextColor={colors.faint} />
                 </>
               ) : null}
               {builtinId === "breast" ? (
                 <>
-                  <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
-                  <TimeOfDayPickerField label="종료 시간" valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
+                  <TimeOfDayPickerField label={t("record.detail.startTime")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
+                  <TimeOfDayPickerField label={t("record.detail.endTime")} valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
                 </>
               ) : null}
-              <Text style={styles.fieldLabel}>게워냄 여부</Text>
-              <ChipRow options={["있었어요", "없었어요"]} value={spitUp === "yes" ? "있었어요" : spitUp === "no" ? "없었어요" : ""} onChange={(value) => setSpitUp(value === "있었어요" ? "yes" : value === "없었어요" ? "no" : undefined)} />
+              <Text style={styles.fieldLabel}>{t("record.detail.spitUp")}</Text>
+              <ChipRow options={[RECORD_VALUE.spitUpYes, RECORD_VALUE.spitUpNo]} value={spitUp === "yes" ? RECORD_VALUE.spitUpYes : spitUp === "no" ? RECORD_VALUE.spitUpNo : ""} onChange={(value) => setSpitUp(value === RECORD_VALUE.spitUpYes ? "yes" : value === RECORD_VALUE.spitUpNo ? "no" : undefined)} getLabel={storedOptionLabel} />
               {builtinId === "breast" ? (
                 <>
-                  <Text style={styles.fieldLabel}>트림 여부</Text>
-                  <ChipRow options={["했어요", "안 했어요"]} value={burped === "yes" ? "했어요" : burped === "no" ? "안 했어요" : ""} onChange={(value) => setBurped(value === "했어요" ? "yes" : value === "안 했어요" ? "no" : undefined)} />
-                  <Text style={styles.fieldLabel}>수유 메모 (선택)</Text>
-                  <ChipRow options={["졸려했어요", "잘 먹었어요", "조금 먹었어요", "보챘어요", "기타"]} value={feedingNote} onChange={setFeedingNote} />
+                  <Text style={styles.fieldLabel}>{t("record.detail.burp")}</Text>
+                  <ChipRow options={[RECORD_VALUE.burpedYes, RECORD_VALUE.burpedNo]} value={burped === "yes" ? RECORD_VALUE.burpedYes : burped === "no" ? RECORD_VALUE.burpedNo : ""} onChange={(value) => setBurped(value === RECORD_VALUE.burpedYes ? "yes" : value === RECORD_VALUE.burpedNo ? "no" : undefined)} getLabel={storedOptionLabel} />
+                  <Text style={styles.fieldLabel}>{t("record.detail.feedingNote")}</Text>
+                  <ChipRow options={[...RECORD_STORED_OPTIONS.feedingNote]} value={feedingNote} onChange={setFeedingNote} getLabel={storedOptionLabel} />
                 </>
               ) : null}
               {builtinId === "storedMilk" ? (
                 storedMilkEstimatedRemainingMl == null ? (
-                  <Text style={styles.readOnlyHint}>저장 모유 재고 관리는 후속 기능으로 준비 중이에요.</Text>
+                  <Text style={styles.readOnlyHint}>{t("record.detail.stockComingSoon")}</Text>
                 ) : (
                   <View style={styles.estimatedStockCard}>
-                    <Text style={styles.calculatedLabel}>예상 남은 양</Text>
+                    <Text style={styles.calculatedLabel}>{t("record.detail.estimatedRemaining")}</Text>
                     <Text style={styles.calculatedValue}>{formatVolume(String(storedMilkEstimatedRemainingMl), settings.units.volume)}</Text>
-                    <Text style={styles.estimatedStockHint}>기존 유축 기록과 입력한 먹은 양을 기준으로 계산한 예상이에요.</Text>
+                    <Text style={styles.estimatedStockHint}>{t("record.detail.estimatedStockHint")}</Text>
                   </View>
                 )
               ) : null}
@@ -748,40 +761,42 @@ export function RecordDetailSheet({
 
           {builtinId === "sleep" && (
             <>
-              <Text style={styles.fieldLabel}>낮잠 / 밤잠</Text>
-              <ChipRow options={["낮잠", "밤잠"]} value={chip} onChange={setChip} />
-              <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
-              <TimeOfDayPickerField label="종료 시간" valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
-              <DurationPickerField label="총 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
-              {endTime && isValidClockInput(time) && toMinutes(endTime) < toMinutes(time) ? <Text style={styles.overnightHint}>종료 시간이 시작보다 이르므로 다음 날 종료로 계산해요.</Text> : null}
+              <Text style={styles.fieldLabel}>{t("record.detail.sleepType")}</Text>
+              <ChipRow options={[...RECORD_STORED_OPTIONS.sleep]} value={chip} onChange={setChip} getLabel={storedOptionLabel} />
+              <TimeOfDayPickerField label={t("record.detail.startTime")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
+              <TimeOfDayPickerField label={t("record.detail.endTime")} valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
+              <DurationPickerField label={t("record.detail.totalTime")} valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+              {endTime && isValidClockInput(time) && toMinutes(endTime) < toMinutes(time) ? <Text style={styles.overnightHint}>{t("record.detail.overnightHint")}</Text> : null}
             </>
           )}
 
           {builtinId === "diaper" && (
             <>
-              <Text style={styles.fieldLabel}>무엇이 있었나요?</Text>
+              <Text style={styles.fieldLabel}>{t("record.detail.diaperWhat")}</Text>
               <ChipRow
-                options={["소변", "대변", "소변+대변"]}
+                options={[...RECORD_STORED_OPTIONS.diaperType]}
                 value={chip}
                 onChange={(value) => { setChip(value); setDiaperError(""); }}
+                getLabel={storedOptionLabel}
               />
               {diaperError ? <Text style={styles.inputError}>{diaperError}</Text> : null}
-              {(chip === "소변" || chip === "소변+대변") ? (
+              {(chip === RECORD_VALUE.diaperUrine || chip === RECORD_VALUE.diaperBoth) ? (
                 <>
-                  <Text style={styles.fieldLabel}>소변 양</Text>
-                  <ChipRow options={["적음", "보통", "많음"]} value={amount} onChange={setAmount} />
+                  <Text style={styles.fieldLabel}>{t("record.detail.urineAmount")}</Text>
+                  <ChipRow options={[...RECORD_STORED_OPTIONS.amount]} value={amount} onChange={setAmount} getLabel={storedOptionLabel} />
                 </>
               ) : null}
-              {(chip === "대변" || chip === "소변+대변") ? (
+              {(chip === RECORD_VALUE.diaperStool || chip === RECORD_VALUE.diaperBoth) ? (
                 <>
-                  <Text style={styles.fieldLabel}>대변 상태</Text>
+                  <Text style={styles.fieldLabel}>{t("record.detail.stoolState")}</Text>
                   <ChipRow
-                    options={["보통", "묽음", "딱딱함", "설사", "기타"]}
+                    options={[...RECORD_STORED_OPTIONS.stool]}
                     value={stoolState}
                     onChange={setStoolState}
+                    getLabel={storedOptionLabel}
                   />
-                  <Text style={styles.fieldLabel}>대변 양</Text>
-                  <ChipRow options={["적음", "보통", "많음"]} value={chip2} onChange={setChip2} />
+                  <Text style={styles.fieldLabel}>{t("record.detail.stoolAmount")}</Text>
+                  <ChipRow options={[...RECORD_STORED_OPTIONS.amount]} value={chip2} onChange={setChip2} getLabel={storedOptionLabel} />
                 </>
               ) : null}
             </>
@@ -789,7 +804,7 @@ export function RecordDetailSheet({
 
           {(builtinId === "food" || builtinId === "snack") && (
             <>
-              <Text style={styles.fieldLabel}>{builtinId === "snack" ? "재료/음식 선택" : "재료 선택"}</Text>
+              <Text style={styles.fieldLabel}>{builtinId === "snack" ? t("record.detail.foodIngredients") : t("record.detail.ingredients")}</Text>
               <View style={styles.ingredientGrid}>
                 {ingredientNames.map((name) => {
                   const selected = selectedIngredients.includes(name);
@@ -804,7 +819,7 @@ export function RecordDetailSheet({
                       }}
                     >
                       <Text style={[styles.ingredientName, selected && styles.ingredientNameSelected]}>{name}</Text>
-                      <Text style={[styles.ingredientHistory, selected && styles.ingredientHistorySelected]}>{history.count ? `지난 기록 ${history.count}회` : "처음 기록"}</Text>
+                      <Text style={[styles.ingredientHistory, selected && styles.ingredientHistorySelected]}>{history.count ? t("record.detail.previousCount", { count: history.count }) : t("record.detail.firstLog")}</Text>
                     </Pressable>
                   );
                 })}
@@ -816,7 +831,7 @@ export function RecordDetailSheet({
                     value={newIngredientName}
                     onChangeText={(value) => { setNewIngredientName(value); setIngredientError(""); }}
                     maxLength={30}
-                    placeholder="재료명 입력"
+                    placeholder={t("record.detail.ingredientPlaceholder")}
                     placeholderTextColor={colors.faint}
                     autoFocus
                   />
@@ -824,28 +839,28 @@ export function RecordDetailSheet({
                     style={styles.newIngredientSave}
                     onPress={() => {
                       const clean = newIngredientName.trim().replace(/\s+/g, " ");
-                      if (!clean) { setIngredientError("재료명을 입력해 주세요."); return; }
+                      if (!clean) { setIngredientError(t("record.detail.ingredientNameRequired")); return; }
                       const existing = ingredientNames.find((name) => name.toLocaleLowerCase() === clean.toLocaleLowerCase());
                       if (existing) {
                         setSelectedIngredients((current) => current.includes(existing) ? current : [...current, existing]);
-                        setIngredientError("이미 있는 재료를 선택했어요.");
+                        setIngredientError(t("record.detail.ingredientExists"));
                         setNewIngredientName("");
                         setAddingIngredient(false);
                         return;
                       }
                       const created = onAddFoodIngredient?.(clean, builtinId === "snack" ? "snack" : "baby_food");
-                      if (!created) { setIngredientError("재료를 추가하지 못했어요."); return; }
+                      if (!created) { setIngredientError(t("record.detail.ingredientAddFailed")); return; }
                       setSelectedIngredients((current) => [...current, created.name]);
                       setNewIngredientName("");
                       setAddingIngredient(false);
                     }}
                   >
-                    <Text style={styles.newIngredientSaveText}>추가</Text>
+                    <Text style={styles.newIngredientSaveText}>{t("record.detail.add")}</Text>
                   </Pressable>
                 </View>
               ) : (
                 <Pressable style={styles.addIngredientButton} onPress={() => setAddingIngredient(true)}>
-                  <Text style={styles.addIngredientText}>+ 새 재료 추가</Text>
+                  <Text style={styles.addIngredientText}>{t("record.detail.addIngredient")}</Text>
                 </Pressable>
               )}
               {ingredientError ? <Text style={styles.inputError}>{ingredientError}</Text> : null}
@@ -855,111 +870,111 @@ export function RecordDetailSheet({
                   <View key={`history-${name}`} style={styles.historyRow}>
                     <Text style={styles.historyName}>{name}</Text>
                     <Text style={styles.historyText}>
-                      {history.count === 0 ? "처음 기록하는 재료예요." : `총 ${history.count}회 · 최근 ${formatIngredientDate(history.lastDate)}${history.hasMemo ? " · 메모 있음" : ""}`}
+                      {history.count === 0 ? t("record.detail.firstIngredient") : t("record.detail.ingredientHistory", { count: history.count, date: formatIngredientDate(history.lastDate), memo: history.hasMemo ? t("record.detail.hasMemo") : "" })}
                     </Text>
                   </View>
                 );
               })}
-              <Text style={styles.fieldLabel}>양 (g)</Text>
+              <Text style={styles.fieldLabel}>{t("record.detail.amountGrams")}</Text>
               <TextInput
                 style={styles.input}
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="numeric"
-                placeholder="예: 80"
+                placeholder={t("record.detail.example80")}
                 placeholderTextColor={colors.faint}
               />
-              <Text style={styles.fieldLabel}>반응</Text>
-              <ChipRow options={["잘 먹음", "보통", "거부"]} value={chip} onChange={setChip} />
+              <Text style={styles.fieldLabel}>{t("record.detail.reaction")}</Text>
+              <ChipRow options={[...RECORD_STORED_OPTIONS.foodReaction]} value={chip} onChange={setChip} getLabel={storedOptionLabel} />
             </>
           )}
 
           {(builtinId === "pump") && (
             <>
-              <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
-              <TimeOfDayPickerField label="종료 시간" valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
-              <DurationPickerField label="왼쪽 시간" valueMinutes={leftDurationValue} onPress={() => setSideDurationTarget("left")} />
-              <DurationPickerField label="오른쪽 시간" valueMinutes={rightDurationValue} onPress={() => setSideDurationTarget("right")} />
-              <AmountInput label="왼쪽 유축량" value={leftAmount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={setLeftAmount} onChangeUnit={(unit) => { setAmountUnit(unit); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} />
-              <AmountInput label="오른쪽 유축량" value={rightAmount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={setRightAmount} onChangeUnit={(unit) => { setAmountUnit(unit); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} />
+              <TimeOfDayPickerField label={t("record.detail.startTime")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
+              <TimeOfDayPickerField label={t("record.detail.endTime")} valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
+              <DurationPickerField label={t("record.detail.leftTime")} valueMinutes={leftDurationValue} onPress={() => setSideDurationTarget("left")} />
+              <DurationPickerField label={t("record.detail.rightTime")} valueMinutes={rightDurationValue} onPress={() => setSideDurationTarget("right")} />
+              <AmountInput label={t("record.detail.leftPump")} value={leftAmount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={setLeftAmount} onChangeUnit={(unit) => { setAmountUnit(unit); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} />
+              <AmountInput label={t("record.detail.rightPump")} value={rightAmount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={setRightAmount} onChangeUnit={(unit) => { setAmountUnit(unit); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} />
               <View style={styles.calculatedRow}>
-                <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>총 시간</Text><Text style={styles.calculatedValue}>{sideDurationTotal || durationValue || 0}분</Text></View>
-                <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>총 유축량</Text><Text style={styles.calculatedValue}>{sideAmountTotal}{resolvedAmountUnit ? ` ${resolvedAmountUnit}` : ""}</Text></View>
+                <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>{t("record.detail.totalTime")}</Text><Text style={styles.calculatedValue}>{t("record.detail.minutes", { count: sideDurationTotal || durationValue || 0 })}</Text></View>
+                <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>{t("record.detail.totalPump")}</Text><Text style={styles.calculatedValue}>{sideAmountTotal}{resolvedAmountUnit ? ` ${resolvedAmountUnit}` : ""}</Text></View>
               </View>
             </>
           )}
 
           {(builtinId === "water" || builtinId === "milk") && (
-            <AmountInput label="양" value={amount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={setAmount} onChangeUnit={(unit) => { setAmountUnit(unit); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} />
+            <AmountInput label={t("record.detail.amount")} value={amount} unit={amountUnit} unitOptions={["ml", "oz"]} customUnit={customAmountUnit} onChangeValue={setAmount} onChangeUnit={(unit) => { setAmountUnit(unit); if (unit !== CUSTOM_AMOUNT_UNIT) setCustomAmountUnit(""); }} onChangeCustomUnit={setCustomAmountUnit} />
           )}
 
           {(builtinId === "tummy" || builtinId === "play") && (
             <>
               {builtinId === "play" ? (
                 <>
-                  <Text style={styles.fieldLabel}>놀이 내용</Text>
+                  <Text style={styles.fieldLabel}>{t("record.detail.playDetails")}</Text>
                   <TextInput
                     style={styles.input}
                     value={details}
                     onChangeText={setDetails}
-                    placeholder="예: 모빌 보기"
+                    placeholder={t("record.detail.examplePlay")}
                     placeholderTextColor={colors.faint}
                   />
                 </>
               ) : null}
-              <DurationPickerField label="지속 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+              <DurationPickerField label={t("record.detail.duration")} valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
             </>
           )}
 
-          {builtinId === "bath" ? <DurationPickerField label="목욕 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} /> : null}
+          {builtinId === "bath" ? <DurationPickerField label={t("record.detail.bathDuration")} valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} /> : null}
 
           {builtinId === "med" && (
             <>
-              <Text style={styles.fieldLabel}>약 종류</Text>
+              <Text style={styles.fieldLabel}>{t("record.detail.medicationType")}</Text>
               <LabeledChipRow
                 options={[
-                  { value: "medicine", label: "의약품" },
-                  { value: "supplement", label: "영양제" },
-                  { value: "ointment", label: "연고" },
-                  { value: "eye_drop", label: "안약" },
-                  { value: "other", label: "기타" },
+                  { value: "medicine", label: t("record.detail.medicine") },
+                  { value: "supplement", label: t("record.detail.supplement") },
+                  { value: "ointment", label: t("record.detail.ointment") },
+                  { value: "eye_drop", label: t("record.detail.eyeDrop") },
+                  { value: "other", label: t("record.detail.other") },
                 ]}
                 value={medicationType}
                 onChange={setMedicationType}
               />
-              <Text style={styles.fieldLabel}>약 이름</Text>
+              <Text style={styles.fieldLabel}>{t("record.detail.medicationName")}</Text>
               <TextInput
                 style={styles.input}
                 value={medName}
                 onChangeText={setMedName}
-                placeholder="예: 비타민D"
+                placeholder={t("record.detail.exampleVitamin")}
                 placeholderTextColor={colors.faint}
               />
-              <AmountInput label="용량" value={doseValue} unit={doseUnit} unitOptions={MEDICATION_DOSE_UNITS} customUnit={customDoseUnit} onChangeValue={(value) => { setDoseValue(value); setLegacyDoseText(""); }} onChangeUnit={(value) => { setDoseUnit(value); setDoseUnitTouched(true); setLegacyDoseText(""); if (value !== CUSTOM_DOSE_UNIT) setCustomDoseUnit(""); }} onChangeCustomUnit={(value) => { setCustomDoseUnit(value); setDoseUnitTouched(true); setLegacyDoseText(""); }} />
+              <AmountInput label={t("record.detail.dose")} value={doseValue} unit={doseUnit} unitOptions={MEDICATION_DOSE_UNITS} customUnit={customDoseUnit} onChangeValue={(value) => { setDoseValue(value); setLegacyDoseText(""); }} onChangeUnit={(value) => { setDoseUnit(value); setDoseUnitTouched(true); setLegacyDoseText(""); if (value !== CUSTOM_DOSE_UNIT) setCustomDoseUnit(""); }} onChangeCustomUnit={(value) => { setCustomDoseUnit(value); setDoseUnitTouched(true); setLegacyDoseText(""); }} />
               {legacyDoseText ? (
                 <View style={styles.legacyDoseCard}>
-                  <Text style={styles.legacyDoseLabel}>기존 용량 기록</Text>
+                  <Text style={styles.legacyDoseLabel}>{t("record.detail.legacyDose")}</Text>
                   <Text style={styles.legacyDoseValue}>{legacyDoseText}</Text>
-                  <Text style={styles.legacyDoseHint}>기존 값을 그대로 저장하거나 새 용량과 단위를 입력할 수 있어요.</Text>
+                  <Text style={styles.legacyDoseHint}>{t("record.detail.legacyDoseHint")}</Text>
                 </View>
               ) : null}
-              <Text style={styles.fieldLabel}>복용 상태</Text>
+              <Text style={styles.fieldLabel}>{t("record.detail.medicationStatus")}</Text>
               <LabeledChipRow
                 options={[
-                  { value: "given", label: "복용 완료" },
-                  { value: "partial", label: "일부 복용" },
-                  { value: "refused", label: "복용 안 함" },
+                  { value: "given", label: t("record.detail.given") },
+                  { value: "partial", label: t("record.detail.partial") },
+                  { value: "refused", label: t("record.detail.refused") },
                 ]}
                 value={medicationStatus}
                 onChange={setMedicationStatus}
               />
-              <TimeOfDayPickerField label="시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
-              <DatePickerField label="다음 투약 날짜 (선택)" valueDateKey={nextAtDate} onPress={() => setNextDatePickerOpen(true)} />
-              <TimeOfDayPickerField label="다음 투약 시간 (선택)" valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
+              <TimeOfDayPickerField label={t("record.detail.time")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+              <DatePickerField label={t("record.detail.nextMedicationDateOptional")} valueDateKey={nextAtDate} onPress={() => setNextDatePickerOpen(true)} />
+              <TimeOfDayPickerField label={t("record.detail.nextMedicationTimeOptional")} valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
               <View style={styles.toggleRow}>
                 <View style={styles.toggleCopy}>
-                  <Text style={styles.toggleTitle}>다음 투약 알림</Text>
-                  <Text style={styles.toggleBody}>다음 투약 날짜와 시간이 있을 때 알림 요청을 저장해요.</Text>
+                  <Text style={styles.toggleTitle}>{t("record.detail.nextMedicationReminder")}</Text>
+                  <Text style={styles.toggleBody}>{t("record.detail.nextMedicationReminderHint")}</Text>
                 </View>
                 <Switch value={medicationReminderEnabled} onValueChange={setMedicationReminderEnabled} disabled={!nextAtDate || !nextAtTime} trackColor={{ false: colors.border, true: colors.amber }} />
               </View>
@@ -969,66 +984,66 @@ export function RecordDetailSheet({
           {builtinId === "temp" && (
             <>
               <Text style={styles.fieldLabel}>
-                체온 (°{settings.units.temperature === "c" ? "C" : "F"})
+                {t("record.detail.temperature", { unit: settings.units.temperature === "c" ? "C" : "F" })}
               </Text>
               <TextInput
                 style={styles.input}
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="decimal-pad"
-                placeholder="예: 36.5"
+                placeholder={t("record.detail.exampleTemperature")}
                 placeholderTextColor={colors.faint}
               />
-              <Text style={styles.fieldLabel}>측정 부위 (선택)</Text>
-              <ChipRow options={["겨드랑이", "귀", "이마", "구강"]} value={chip} onChange={setChip} />
+              <Text style={styles.fieldLabel}>{t("record.detail.measurementSite")}</Text>
+              <ChipRow options={[...RECORD_STORED_OPTIONS.temperatureSite]} value={chip} onChange={setChip} getLabel={storedOptionLabel} />
             </>
           )}
 
           {builtinId === "vaccination" && (
             <>
-              <Text style={styles.fieldLabel}>백신 이름</Text>
-              <TextInput style={styles.input} value={vaccineName} onChangeText={setVaccineName} placeholder="예: B형간염, DTaP, Hib, 폐렴구균" placeholderTextColor={colors.faint} />
-              <Text style={styles.fieldLabel}>접종 회차</Text>
+              <Text style={styles.fieldLabel}>{t("record.detail.vaccineName")}</Text>
+              <TextInput style={styles.input} value={vaccineName} onChangeText={setVaccineName} placeholder={t("record.detail.exampleVaccine")} placeholderTextColor={colors.faint} />
+              <Text style={styles.fieldLabel}>{t("record.detail.vaccineRound")}</Text>
               <LabeledChipRow options={[
-                { value: "first", label: "1차" }, { value: "second", label: "2차" }, { value: "third", label: "3차" }, { value: "booster", label: "추가" }, { value: "other", label: "기타" },
+                { value: "first", label: t("record.detail.firstDose") }, { value: "second", label: t("record.detail.secondDose") }, { value: "third", label: t("record.detail.thirdDose") }, { value: "booster", label: t("record.detail.add") }, { value: "other", label: t("record.detail.other") },
               ]} value={vaccinationRound ?? ""} onChange={(value) => setVaccinationRound(value as BabyLogEntry["vaccinationRound"] || undefined)} />
-              {vaccinationRound === "other" ? <TextInput style={[styles.input, { marginTop: 8 }]} value={vaccinationRoundText} onChangeText={setVaccinationRoundText} placeholder="회차를 입력해 주세요" placeholderTextColor={colors.faint} /> : null}
-              <DatePickerField label="접종일" valueDateKey={vaccinationDateKey} onPress={() => setVaccinationDatePickerOpen(true)} />
-              <TimeOfDayPickerField label="접종 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
-              <Text style={styles.fieldLabel}>병원 이름 (선택)</Text>
-              <TextInput style={styles.input} value={vaccinationHospitalName} onChangeText={setVaccinationHospitalName} placeholder="예: ○○소아과" placeholderTextColor={colors.faint} />
-              <Text style={styles.fieldLabel}>의사 이름 (선택)</Text>
-              <TextInput style={styles.input} value={vaccinationDoctorName} onChangeText={setVaccinationDoctorName} placeholder="의사 이름" placeholderTextColor={colors.faint} />
-              <Text style={styles.fieldLabel}>접종 부위 (선택)</Text>
+              {vaccinationRound === "other" ? <TextInput style={[styles.input, { marginTop: 8 }]} value={vaccinationRoundText} onChangeText={setVaccinationRoundText} placeholder={t("record.detail.roundPlaceholder")} placeholderTextColor={colors.faint} /> : null}
+              <DatePickerField label={t("record.detail.vaccinationDate")} valueDateKey={vaccinationDateKey} onPress={() => setVaccinationDatePickerOpen(true)} />
+              <TimeOfDayPickerField label={t("record.detail.vaccinationTime")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} />
+              <Text style={styles.fieldLabel}>{t("record.detail.clinicOptional")}</Text>
+              <TextInput style={styles.input} value={vaccinationHospitalName} onChangeText={setVaccinationHospitalName} placeholder={t("record.detail.exampleClinic")} placeholderTextColor={colors.faint} />
+              <Text style={styles.fieldLabel}>{t("record.detail.doctorOptional")}</Text>
+              <TextInput style={styles.input} value={vaccinationDoctorName} onChangeText={setVaccinationDoctorName} placeholder={t("record.detail.doctorName")} placeholderTextColor={colors.faint} />
+              <Text style={styles.fieldLabel}>{t("record.detail.injectionSite")}</Text>
               <LabeledChipRow options={[
-                { value: "left_thigh", label: "왼쪽 허벅지" }, { value: "right_thigh", label: "오른쪽 허벅지" }, { value: "left_arm", label: "왼쪽 팔" }, { value: "right_arm", label: "오른쪽 팔" }, { value: "other", label: "기타" },
+                { value: "left_thigh", label: t("record.detail.leftThigh") }, { value: "right_thigh", label: t("record.detail.rightThigh") }, { value: "left_arm", label: t("record.detail.leftArm") }, { value: "right_arm", label: t("record.detail.rightArm") }, { value: "other", label: t("record.detail.other") },
               ]} value={injectionSite ?? ""} onChange={(value) => setInjectionSite(value as BabyLogEntry["injectionSite"] || undefined)} />
-              {injectionSite === "other" ? <TextInput style={[styles.input, { marginTop: 8 }]} value={injectionSiteText} onChangeText={setInjectionSiteText} placeholder="접종 부위를 입력해 주세요" placeholderTextColor={colors.faint} /> : null}
-              <Text style={styles.fieldLabel}>접종 후 메모 (선택)</Text>
+              {injectionSite === "other" ? <TextInput style={[styles.input, { marginTop: 8 }]} value={injectionSiteText} onChangeText={setInjectionSiteText} placeholder={t("record.detail.siteRequired")} placeholderTextColor={colors.faint} /> : null}
+              <Text style={styles.fieldLabel}>{t("record.detail.aftercare")}</Text>
               <View style={styles.chipRow}>
-                {["미열", "붓기", "보챔", "평소와 같음", "잘 먹음", "잠이 많음"].map((item) => {
+                {RECORD_STORED_OPTIONS.vaccinationAftercare.map((item) => {
                   const selected = aftercareNotes.includes(item);
-                  return <Pressable key={item} style={[styles.chip, selected && styles.chipSel]} onPress={() => setAftercareNotes((current) => selected ? current.filter((value) => value !== item) : [...current, item])}><Text style={[styles.chipText, selected && styles.chipTextSel]}>{item}</Text></Pressable>;
+                  return <Pressable key={item} style={[styles.chip, selected && styles.chipSel]} onPress={() => setAftercareNotes((current) => selected ? current.filter((value) => value !== item) : [...current, item])}><Text style={[styles.chipText, selected && styles.chipTextSel]}>{storedOptionLabel(item)}</Text></Pressable>;
                 })}
               </View>
-              <DatePickerField label="다음 접종 날짜 (선택)" valueDateKey={nextAtDate} onPress={() => setNextDatePickerOpen(true)} />
-              <TimeOfDayPickerField label="다음 접종 시간 (선택)" valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
-              <Text style={styles.fieldLabel}>다음 접종 알림</Text>
+              <DatePickerField label={t("record.detail.nextVaccineDateOptional")} valueDateKey={nextAtDate} onPress={() => setNextDatePickerOpen(true)} />
+              <TimeOfDayPickerField label={t("record.detail.nextVaccineTimeOptional")} valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
+              <Text style={styles.fieldLabel}>{t("record.detail.nextVaccineReminder")}</Text>
               <LabeledChipRow options={[
-                { value: "none", label: "없음" }, { value: "one_day_before", label: "하루 전" }, { value: "three_days_before", label: "3일 전" }, { value: "custom", label: "직접 설정" },
+                { value: "none", label: t("record.detail.none") }, { value: "one_day_before", label: t("record.detail.oneDayBefore") }, { value: "three_days_before", label: t("record.detail.threeDaysBefore") }, { value: "custom", label: t("record.detail.custom") },
               ]} value={vaccinationReminderSetting ?? "none"} onChange={(value) => {
                 const next = (value || "none") as BabyLogEntry["vaccinationReminderSetting"];
                 if (next !== "none" && (!nextAtDate || !nextAtTime)) {
-                  Alert.alert("다음 접종 일정을 먼저 선택해 주세요");
+                  Alert.alert(t("record.detail.selectNextVaccineFirst"));
                   return;
                 }
                 setVaccinationReminderSetting(next);
               }} />
-              {!nextAtDate || !nextAtTime ? <Text style={styles.readOnlyHint}>다음 접종 날짜와 시간을 선택하면 알림 옵션을 사용할 수 있어요.</Text> : null}
+              {!nextAtDate || !nextAtTime ? <Text style={styles.readOnlyHint}>{t("record.detail.nextVaccineHint")}</Text> : null}
               {vaccinationReminderSetting === "custom" ? (
                 <>
-                  <DatePickerField label="알림 날짜" valueDateKey={customReminderDate} onPress={() => setVaccinationReminderDatePickerOpen(true)} />
-                  <TimeOfDayPickerField label="알림 시간" valueHHmm={customReminderTime} onPress={() => setTimePickerTarget("vaccinationReminder")} />
+                  <DatePickerField label={t("record.detail.reminderDate")} valueDateKey={customReminderDate} onPress={() => setVaccinationReminderDatePickerOpen(true)} />
+                  <TimeOfDayPickerField label={t("record.detail.reminderTime")} valueHHmm={customReminderTime} onPress={() => setTimePickerTarget("vaccinationReminder")} />
                 </>
               ) : null}
             </>
@@ -1036,55 +1051,55 @@ export function RecordDetailSheet({
 
           {builtinId === "doctor" && (
             <>
-              <Text style={styles.fieldLabel}>방문 유형</Text>
+              <Text style={styles.fieldLabel}>{t("record.detail.visitType")}</Text>
               <View style={styles.chipRow}>
                 {(["checkup", "illness"] as const).map((option) => (
                   <Pressable key={option} style={[styles.chip, visitType === option && styles.chipSel]} onPress={() => setVisitType(visitType === option ? undefined : option)}>
-                    <Text style={[styles.chipText, visitType === option && styles.chipTextSel]}>{option === "checkup" ? "검진" : "질환"}</Text>
+                    <Text style={[styles.chipText, visitType === option && styles.chipTextSel]}>{option === "checkup" ? t("record.detail.checkup") : t("record.detail.illness")}</Text>
                   </Pressable>
                 ))}
               </View>
-              <Text style={styles.fieldLabel}>병원 이름</Text>
+              <Text style={styles.fieldLabel}>{t("record.detail.clinicName")}</Text>
               <TextInput
                 style={styles.input}
                 value={recordTitle}
                 onChangeText={setRecordTitle}
-                placeholder="예: 다린소아과"
+                placeholder={t("record.detail.exampleClinic")}
                 placeholderTextColor={colors.faint}
               />
-              <Text style={styles.fieldLabel}>의사 이름</Text>
+              <Text style={styles.fieldLabel}>{t("record.detail.doctorName")}</Text>
               <TextInput
                 style={styles.input}
                 value={doctorName}
                 onChangeText={setDoctorName}
-                placeholder="예: 김다린 선생님"
+                placeholder={t("record.detail.exampleDoctor")}
                 placeholderTextColor={colors.faint}
               />
-              <Text style={styles.fieldLabel}>{visitType === "illness" ? "질환 또는 증상 이름" : "검진 내용"}</Text>
+              <Text style={styles.fieldLabel}>{visitType === "illness" ? t("record.detail.conditionName") : t("record.detail.checkupDetails")}</Text>
               <TextInput
                 style={[styles.input, styles.notes]}
                 value={details}
                 onChangeText={setDetails}
                 multiline
-                placeholder={visitType === "illness" ? "질환명이나 증상을 입력하세요" : "검진 내용을 입력하세요"}
+                placeholder={visitType === "illness" ? t("record.detail.conditionPlaceholder") : t("record.detail.checkupPlaceholder")}
                 placeholderTextColor={colors.faint}
               />
-              <Text style={styles.fieldLabel}>주의해야 할 점</Text>
+              <Text style={styles.fieldLabel}>{t("record.detail.cautions")}</Text>
               <TextInput
                 style={[styles.input, styles.notes]}
                 value={cautions}
                 onChangeText={setCautions}
                 multiline
-                placeholder="의료진에게 안내받은 주의사항을 기록하세요"
+                placeholder={t("record.detail.cautionsPlaceholder")}
                 placeholderTextColor={colors.faint}
               />
-              <TimeOfDayPickerField label="진료 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
-              <DatePickerField label="다음 예약 날짜 (선택)" valueDateKey={nextAtDate} onPress={() => setNextDatePickerOpen(true)} />
-              <TimeOfDayPickerField label="다음 예약 시간 (선택)" valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
+              <TimeOfDayPickerField label={t("record.detail.appointmentTime")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+              <DatePickerField label={t("record.detail.nextAppointmentDateOptional")} valueDateKey={nextAtDate} onPress={() => setNextDatePickerOpen(true)} />
+              <TimeOfDayPickerField label={t("record.detail.nextAppointmentTimeOptional")} valueHHmm={nextAtTime} onPress={() => setTimePickerTarget("nextAt")} />
               <View style={styles.toggleRow}>
                 <View style={styles.toggleCopy}>
-                  <Text style={styles.toggleTitle}>주의사항 확인 알림</Text>
-                  <Text style={styles.toggleBody}>다음 예약 날짜와 시간이 있을 때 알림 요청을 저장해요.</Text>
+                  <Text style={styles.toggleTitle}>{t("record.detail.cautionReminder")}</Text>
+                  <Text style={styles.toggleBody}>{t("record.detail.cautionReminderHint")}</Text>
                 </View>
                 <Switch value={cautionReminderEnabled} onValueChange={setCautionReminderEnabled} disabled={!nextAtDate || !nextAtTime} trackColor={{ false: colors.border, true: colors.amber }} />
               </View>
@@ -1093,61 +1108,61 @@ export function RecordDetailSheet({
 
           {builtinId === "other" && (
             <>
-              <Text style={styles.fieldLabel}>기록 이름</Text>
+              <Text style={styles.fieldLabel}>{t("record.detail.logName")}</Text>
               <TextInput
                 style={styles.input}
                 value={recordTitle}
                 onChangeText={setRecordTitle}
-                placeholder="예: 발진, 토함, 마사지"
+                placeholder={t("record.detail.exampleOther")}
                 placeholderTextColor={colors.faint}
               />
-              <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
-              <DurationPickerField label="지속 시간 (선택)" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+              <TimeOfDayPickerField label={t("record.detail.startTime")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+              <DurationPickerField label={t("record.detail.optionalDuration")} valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
             </>
           )}
 
           {builtinId === "memo" && (
             <>
-              <Text style={styles.fieldLabel}>제목 (선택)</Text>
-              <TextInput style={styles.input} value={recordTitle} onChangeText={setRecordTitle} placeholder="메모 제목" placeholderTextColor={colors.faint} />
-              <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
-              <DurationPickerField label="지속 시간 (선택)" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+              <Text style={styles.fieldLabel}>{t("record.detail.titleOptional")}</Text>
+              <TextInput style={styles.input} value={recordTitle} onChangeText={setRecordTitle} placeholder={t("record.detail.memoTitle")} placeholderTextColor={colors.faint} />
+              <TimeOfDayPickerField label={t("record.detail.startTime")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+              <DurationPickerField label={t("record.detail.optionalDuration")} valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
             </>
           )}
 
           {builtinId !== "sleep" && builtinId !== "breast" && builtinId !== "pump" && builtinId !== "med" && builtinId !== "doctor" && builtinId !== "vaccination" && builtinId !== "memo" && builtinId !== "other" && !(c.isCustom && (c.inputMode ?? "memo") === "duration") && (
-            <TimeOfDayPickerField label="시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+            <TimeOfDayPickerField label={t("record.detail.time")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
           )}
 
           {c.isCustom ? (
             <>
               {(c.inputMode ?? "memo") === "duration" ? (
                 <>
-                  <TimeOfDayPickerField label="시작 시간" valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
-                  <TimeOfDayPickerField label="종료 시간" valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
-                  <DurationPickerField label="총 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+                  <TimeOfDayPickerField label={t("record.detail.startTime")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+                  <TimeOfDayPickerField label={t("record.detail.endTime")} valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
+                  <DurationPickerField label={t("record.detail.totalTime")} valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
                   {endTime && isValidClockInput(time) && toMinutes(endTime) < toMinutes(time) ? (
-                    <Text style={styles.overnightHint}>종료 시간이 시작보다 이르므로 다음 날 종료로 계산해요.</Text>
+                    <Text style={styles.overnightHint}>{t("record.detail.overnightHint")}</Text>
                   ) : null}
                 </>
               ) : null}
               {(c.inputMode ?? "memo") === "amount" ? (
                 <>
-                  <Text style={styles.fieldLabel}>양</Text>
+                  <Text style={styles.fieldLabel}>{t("record.detail.amount")}</Text>
                   <TextInput
                     style={styles.input}
                     value={amount}
                     onChangeText={setAmount}
                     keyboardType="numeric"
-                    placeholder="예: 1, 30, 150"
+                    placeholder={t("record.detail.exampleGeneric")}
                     placeholderTextColor={colors.faint}
                   />
                 </>
               ) : null}
               {(c.inputMode ?? "memo") === "check" ? (
                 <>
-                  <Text style={styles.fieldLabel}>완료 여부</Text>
-                  <ChipRow options={["완료", "미완료"]} value={chip} onChange={setChip} />
+                  <Text style={styles.fieldLabel}>{t("record.detail.completion")}</Text>
+                  <ChipRow options={[...RECORD_STORED_OPTIONS.completion]} value={chip} onChange={setChip} getLabel={storedOptionLabel} />
                 </>
               ) : null}
             </>
@@ -1155,19 +1170,19 @@ export function RecordDetailSheet({
             <>
               {c.chips ? (
                 <>
-                  <Text style={styles.fieldLabel}>상태</Text>
-                  <ChipRow options={c.chips} value={chip} onChange={setChip} />
+                  <Text style={styles.fieldLabel}>{t("record.detail.status")}</Text>
+                  <ChipRow options={c.chips} value={chip} onChange={setChip} getLabel={storedOptionLabel} />
                 </>
               ) : null}
               {c.amount ? (
                 <>
-                  <Text style={styles.fieldLabel}>{builtinId === "pregWeight" ? "체중 (kg)" : builtinId === "pregBp" ? "혈압" : `양 (${c.amount})`}</Text>
+                  <Text style={styles.fieldLabel}>{builtinId === "pregWeight" ? t("record.detail.weightKg") : builtinId === "pregBp" ? t("record.detail.bloodPressure") : t("record.detail.amountWithUnit", { unit: c.amount })}</Text>
                   <TextInput
                     style={styles.input}
                     value={amount}
                     onChangeText={setAmount}
                     keyboardType={builtinId === "pregBp" ? "default" : "numeric"}
-                    placeholder={builtinId === "pregWeight" ? "예: 62.4" : builtinId === "pregBp" ? "예: 120/80" : "예: 150"}
+                    placeholder={builtinId === "pregWeight" ? t("record.detail.exampleWeight") : builtinId === "pregBp" ? t("record.detail.exampleBloodPressure") : t("record.detail.example150")}
                     placeholderTextColor={colors.faint}
                   />
                 </>
@@ -1177,30 +1192,30 @@ export function RecordDetailSheet({
             <>
               {c.chips ? (
                 <>
-                  <Text style={styles.fieldLabel}>상태</Text>
-                  <ChipRow options={c.chips} value={chip} onChange={setChip} />
+                  <Text style={styles.fieldLabel}>{t("record.detail.status")}</Text>
+                  <ChipRow options={c.chips} value={chip} onChange={setChip} getLabel={storedOptionLabel} />
                 </>
               ) : null}
               {c.amount ? (
                 <>
-                  <Text style={styles.fieldLabel}>양 ({c.amount})</Text>
+                  <Text style={styles.fieldLabel}>{t("record.detail.amountWithUnit", { unit: c.amount })}</Text>
                   <TextInput
                     style={styles.input}
                     value={amount}
                     onChangeText={setAmount}
                     keyboardType="numeric"
-                    placeholder="예: 150"
+                    placeholder={t("record.detail.example150")}
                     placeholderTextColor={colors.faint}
                   />
                 </>
               ) : null}
               {c.duration ? (
-                <DurationPickerField label="지속 시간" valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
+                <DurationPickerField label={t("record.detail.duration")} valueMinutes={durationValue} onPress={() => setDurationPickerOpen(true)} />
               ) : null}
             </>
           ) : null}
 
-          <Text style={styles.fieldLabel}>{builtinId === "memo" ? "내용" : "메모"}</Text>
+          <Text style={styles.fieldLabel}>{builtinId === "memo" ? t("record.detail.content") : t("record.detail.memo")}</Text>
           <TextInput
             style={[styles.input, styles.notes]}
             value={notes}
@@ -1208,10 +1223,10 @@ export function RecordDetailSheet({
             multiline
             placeholder={
               builtinId === "memo" || (c.isCustom && (c.inputMode ?? "memo") === "memo")
-                ? "오늘 남기고 싶은 메모"
+                ? t("record.detail.memoPlaceholder")
                 : builtinId === "food"
-                  ? "추가 메모"
-                  : "자유롭게 메모하세요"
+                  ? t("record.detail.extraMemo")
+                  : t("record.detail.freeMemo")
             }
             placeholderTextColor={colors.faint}
           />
@@ -1225,18 +1240,18 @@ export function RecordDetailSheet({
               style={styles.deleteBtn}
               onPress={confirmDelete}
               accessibilityRole="button"
-              accessibilityLabel="이 기록 삭제하기"
+              accessibilityLabel={t("record.detail.deleteA11y")}
             >
-              <Text style={styles.deleteText}>이 기록 삭제하기</Text>
+              <Text style={styles.deleteText}>{t("record.detail.deleteA11y")}</Text>
             </Pressable>
           )}
 
           <View style={styles.actions}>
             <Pressable style={[styles.btn, styles.btnGhost]} onPress={onClose}>
-              <Text style={styles.btnGhostText}>취소</Text>
+              <Text style={styles.btnGhostText}>{t("record.detail.cancel")}</Text>
             </Pressable>
             <Pressable style={[styles.btn, styles.btnPrimary]} onPress={handleSave}>
-              <Text style={styles.btnPrimaryText}>저장</Text>
+              <Text style={styles.btnPrimaryText}>{t("record.detail.save")}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -1245,7 +1260,7 @@ export function RecordDetailSheet({
       <TimePickerSheet
         visible={timePickerTarget !== null}
         valueHHmm={timePickerTarget === "end" ? endTime : timePickerTarget === "nextAt" ? nextAtTime : timePickerTarget === "vaccinationReminder" ? customReminderTime : time}
-        title={timePickerTarget === "end" ? "종료 시간" : timePickerTarget === "nextAt" ? (builtinId === "med" ? "다음 투약 시간" : builtinId === "vaccination" ? "다음 접종 시간" : "다음 예약 시간") : timePickerTarget === "vaccinationReminder" ? "알림 시간" : "시간 선택"}
+        title={timePickerTarget === "end" ? t("record.detail.endTime") : timePickerTarget === "nextAt" ? (builtinId === "med" ? t("record.detail.nextMedicationTime") : builtinId === "vaccination" ? t("record.detail.nextVaccineTime") : t("record.detail.nextAppointmentTime")) : timePickerTarget === "vaccinationReminder" ? t("record.detail.reminderTime") : t("record.detail.pickTime")}
         onCancel={() => setTimePickerTarget(null)}
         onConfirm={confirmTimePicker}
         onClear={timePickerTarget === "end"
@@ -1257,7 +1272,7 @@ export function RecordDetailSheet({
       <DatePickerSheet
         visible={nextDatePickerOpen}
         valueDateKey={nextAtDate}
-        title={builtinId === "med" ? "다음 투약 날짜" : builtinId === "vaccination" ? "다음 접종 날짜" : "다음 예약 날짜"}
+        title={builtinId === "med" ? t("record.detail.nextMedicationDate") : builtinId === "vaccination" ? t("record.detail.nextVaccineDate") : t("record.detail.nextAppointmentDate")}
         minYear={new Date().getFullYear() - 1}
         maxYear={new Date().getFullYear() + 10}
         onCancel={() => setNextDatePickerOpen(false)}
@@ -1277,7 +1292,7 @@ export function RecordDetailSheet({
       <DatePickerSheet
         visible={vaccinationDatePickerOpen}
         valueDateKey={vaccinationDateKey}
-        title="접종일 선택"
+        title={t("record.detail.pickVaccinationDate")}
         minYear={1900}
         maxYear={new Date().getFullYear()}
         onCancel={() => setVaccinationDatePickerOpen(false)}
@@ -1286,7 +1301,7 @@ export function RecordDetailSheet({
       <DatePickerSheet
         visible={vaccinationReminderDatePickerOpen}
         valueDateKey={customReminderDate}
-        title="알림 날짜"
+        title={t("record.detail.reminderDate")}
         minYear={new Date().getFullYear() - 1}
         maxYear={new Date().getFullYear() + 10}
         onCancel={() => setVaccinationReminderDatePickerOpen(false)}
@@ -1302,7 +1317,7 @@ export function RecordDetailSheet({
       <DurationPickerSheet
         visible={sideDurationTarget !== null}
         valueMinutes={sideDurationTarget === "left" ? leftDurationValue : rightDurationValue}
-        title={sideDurationTarget === "left" ? "왼쪽 시간" : "오른쪽 시간"}
+        title={sideDurationTarget === "left" ? t("record.detail.leftTime") : t("record.detail.rightTime")}
         maxMinutes={180}
         onCancel={() => setSideDurationTarget(null)}
         onConfirm={(minutes) => {
