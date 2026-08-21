@@ -100,7 +100,7 @@ const rows = [
   ["099","활동","Activities","活動","Actividades","活动"],
   ["100","지난주 기록 없음","No records last week","先週の記録なし","Sin registros la semana pasada","上周暂无记录"],
   ["101","비교 없음","No comparison","比較なし","Sin comparación","暂无对比"],
-  ["102","비슷","Similar","ほぼ同じ","Similar","相近"],
+  ["102","비슷","Similar","ほぼ同じ","Parecido","相近"],
   ["103","그 밖에","Other","その他","Otros","其他"],
   ["104","닫기","Close","閉じる","Cerrar","关闭"],
   ["105","주간 상세 기록","Weekly details","週間詳細記録","Detalles semanales","每周详细记录"],
