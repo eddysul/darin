@@ -11,6 +11,7 @@ import {
 import { STICKER_DECOR_ART } from "../../constants/stickerDecorArt";
 import type { DiaryCoverPhotoTransform } from "../../types/babyLog";
 import { BabyLogIcon } from "./BabyLogIcon";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   styleId?: DiaryCoverTemplateId | null;
@@ -38,6 +39,7 @@ export function DiaryCoverTemplate({
   fill = false,
   style,
 }: Props) {
+  const { t } = useLanguage();
   const template = diaryCoverTemplate(styleId);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const onLayout = (event: LayoutChangeEvent) => {
@@ -95,7 +97,7 @@ export function DiaryCoverTemplate({
             ) : (
               <View style={styles.placeholder}>
                 <BabyLogIcon kind="image" size={compact ? 16 : 28} color={template.borderColor} />
-                {!compact ? <Text style={[styles.placeholderText, { color: template.borderColor }]}>사진을 넣어주세요</Text> : null}
+                {!compact ? <Text style={[styles.placeholderText, { color: template.borderColor }]}>{t("diary.template.photoPlaceholder")}</Text> : null}
               </View>
             )}
           </View>
@@ -119,7 +121,7 @@ export function DiaryCoverTemplate({
               </Text>
             ) : null}
             <Text style={[styles.title, compact && styles.compactTitle, { color: template.borderColor }]} numberOfLines={2} ellipsizeMode="tail">
-              {title?.trim() || "제목을 입력해 주세요"}
+              {title?.trim() || t("diary.template.titlePlaceholder")}
             </Text>
           </View>
           {!compact && caption?.trim() ? (

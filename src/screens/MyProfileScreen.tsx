@@ -51,17 +51,17 @@ export function MyProfileScreen() {
   const { careSetup, setCareSetup } = useApp();
   const { setSettings } = useAppSettings();
   const { activeBabyId, myFamilyRole, applyOwnerFromSetup, rehydrateFromServer } = useBabyLog();
-  const { setLocale } = useLanguage();
+  const { t, setLocale } = useLanguage();
   const [nickname, setNickname] = useState(careSetup.parent.parentName);
   const [realName, setRealName] = useState(careSetup.parent.nickname ?? "");
-  const [relation, setRelation] = useState<RelationshipLabel>("엄마");
+  const [relation, setRelation] = useState<RelationshipLabel>(PROFILE_RELATION_OPTIONS[0]);
   const [residenceCountry, setResidenceCountry] = useState<ResidenceCountry | null>(null);
   const [preferredLanguage, setPreferredLanguage] = useState<AppLanguagePreference>("system");
   const [guardianBirthDate, setGuardianBirthDate] = useState("");
   const [birthDatePickerOpen, setBirthDatePickerOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const [email, setEmail] = useState("");
-  const [provider, setProvider] = useState("이메일");
+  const [provider, setProvider] = useState(t("settings.critical.002"));
   const [darinTag, setDarinTag] = useState(generateDarinTag());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,7 +77,7 @@ export function MyProfileScreen() {
       if (identities.includes("apple")) setProvider("Apple");
       else if (identities.includes("google")) setProvider("Google");
       else if (identities.includes("kakao")) setProvider("Kakao");
-      else setProvider("이메일");
+      else setProvider(t("settings.critical.002"));
       if (user) {
         const identity = await DarinIdentityRepository.get(user.id);
         if (identity) setDarinTag(identity.tag);
@@ -108,7 +108,7 @@ export function MyProfileScreen() {
         if (mine?.relationship_label) setRelation(mine.relationship_label as RelationshipLabel);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "프로필을 불러오지 못했어요.");
+      setError(cause instanceof Error ? cause.message : t("settings.critical.003"));
     } finally {
       setLoading(false);
     }
@@ -126,11 +126,11 @@ export function MyProfileScreen() {
       return;
     }
     if (!confirmedRealName) {
-      setError("이름을 입력해 주세요.");
+      setError(t("settings.critical.004"));
       return;
     }
     if (!residenceCountry || !guardianBirthDate) {
-      setError("거주 국가와 보호자 생년월일을 확인해 주세요.");
+      setError(t("settings.critical.005"));
       return;
     }
     setSaving(true);
@@ -179,7 +179,7 @@ export function MyProfileScreen() {
       setAvatarUrl(next.avatarUrl);
       await rehydrateFromServer().catch(() => undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "프로필을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      setError(cause instanceof Error ? cause.message : t("settings.critical.006"));
     } finally {
       setSaving(false);
     }
@@ -201,13 +201,13 @@ export function MyProfileScreen() {
             setCareSetup(nextSetup);
             applyOwnerFromSetup(nextSetup);
           })
-          .catch((cause) => setError(cause instanceof Error ? cause.message : "사진을 올리지 못했어요. 다른 사진으로 다시 시도해 주세요."))
+          .catch((cause) => setError(cause instanceof Error ? cause.message : t("settings.critical.007")))
           .finally(() => setSaving(false));
       },
       onClear: () => {
         setSaving(true);
         void ProfileRepository.updateMyProfile({
-          displayName: nickname.trim() || careSetup.parent.parentName || "나",
+          displayName: nickname.trim() || careSetup.parent.parentName || t("settings.critical.008"),
           nickname: realName,
           defaultRelation: relation,
           clearAvatar: true,
@@ -219,7 +219,7 @@ export function MyProfileScreen() {
               parent: { ...careSetup.parent, avatarUri: undefined, parentName: next.displayName },
             });
           })
-          .catch((cause) => setError(cause instanceof Error ? cause.message : "프로필을 저장하지 못했어요. 잠시 후 다시 시도해 주세요."))
+          .catch((cause) => setError(cause instanceof Error ? cause.message : t("settings.critical.006")))
           .finally(() => setSaving(false));
       },
     });
@@ -229,7 +229,7 @@ export function MyProfileScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.amberText} />
-        <Text style={styles.muted}>내 프로필을 불러오는 중…</Text>
+        <Text style={styles.muted}>{t("settings.critical.009")}</Text>
       </View>
     );
   }
@@ -237,19 +237,19 @@ export function MyProfileScreen() {
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? undefined : "padding"} keyboardVerticalOffset={0}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-        <ProfileAvatar uri={avatarUrl} size={104} editable onPress={pickAvatar} label="내 사진 추가" />
+        <ProfileAvatar uri={avatarUrl} size={104} editable onPress={pickAvatar} label={t("settings.critical.010")} />
 
         <View style={styles.card}>
-          <Text style={styles.label}>닉네임 *</Text>
-          <Text style={styles.help}>Darin에서 보이는 이름이에요. 2~12자, #과 /는 사용할 수 없어요.</Text>
-          <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder="예: 콩이맘, 준이아빠" placeholderTextColor={colors.faint} maxLength={12} />
+          <Text style={styles.label}>{t("settings.critical.011")}</Text>
+          <Text style={styles.help}>{t("settings.critical.012")}</Text>
+          <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder={t("settings.critical.013")} placeholderTextColor={colors.faint} maxLength={12} />
           <Text style={styles.label}>Darin ID</Text>
-          <Text style={styles.help}>가족·공유 멤버 검색과 요청에 사용하는 고유 ID예요.</Text>
-          <View style={styles.darinIdRow}><View style={styles.darinIdField}><Text style={styles.darinIdText}>{nickname.trim() ? `${nickname.trim()}#${darinTag}` : "닉네임#코드"}</Text></View><Pressable style={styles.regenerateButton} onPress={() => setDarinTag(generateDarinTag())} accessibilityRole="button" accessibilityLabel="Darin ID 새 코드 만들기"><Text style={styles.regenerateText}>새 코드</Text></Pressable></View>
-          <Text style={styles.label}>가져온 이름 *</Text>
-          <Text style={styles.help}>로그인 제공자에서 가져온 이름으로, 초대 확인에 함께 보여요.</Text>
-          <View style={styles.readonlyField}><Text style={[styles.readonlyText, !realName && styles.datePlaceholder]}>{realName || "가져온 이름이 없어요"}</Text></View>
-          <Text style={styles.label}>아기와의 관계</Text>
+          <Text style={styles.help}>{t("settings.critical.014")}</Text>
+          <View style={styles.darinIdRow}><View style={styles.darinIdField}><Text style={styles.darinIdText}>{nickname.trim() ? `${nickname.trim()}#${darinTag}` : t("settings.critical.015")}</Text></View><Pressable style={styles.regenerateButton} onPress={() => setDarinTag(generateDarinTag())} accessibilityRole="button" accessibilityLabel={t("settings.critical.016")}><Text style={styles.regenerateText}>{t("settings.critical.017")}</Text></Pressable></View>
+          <Text style={styles.label}>{t("settings.critical.018")}</Text>
+          <Text style={styles.help}>{t("settings.critical.019")}</Text>
+          <View style={styles.readonlyField}><Text style={[styles.readonlyText, !realName && styles.datePlaceholder]}>{realName || t("settings.critical.020")}</Text></View>
+          <Text style={styles.label}>{t("settings.critical.021")}</Text>
           <View style={styles.chips}>
             {PROFILE_RELATION_OPTIONS.map((option) => {
               const active = relation === option;
@@ -260,7 +260,7 @@ export function MyProfileScreen() {
               );
             })}
           </View>
-          <Text style={styles.label}>거주 국가 *</Text>
+          <Text style={styles.label}>{t("settings.critical.022")}</Text>
           <View style={styles.chips}>
             {RESIDENCE_COUNTRY_OPTIONS.map((option) => (
               <Pressable key={option.value} style={[styles.chip, residenceCountry === option.value && styles.chipActive]} onPress={() => setResidenceCountry(option.value)}>
@@ -268,7 +268,7 @@ export function MyProfileScreen() {
               </Pressable>
             ))}
           </View>
-          <Text style={styles.label}>앱 언어 *</Text>
+          <Text style={styles.label}>{t("settings.critical.023")}</Text>
           <View style={styles.chips}>
             {APP_LANGUAGE_OPTIONS.map((option) => (
               <Pressable key={option.value} style={[styles.chip, preferredLanguage === option.value && styles.chipActive, option.disabled && styles.chipDisabled]} onPress={() => setPreferredLanguage(option.value)} disabled={option.disabled} accessibilityState={{ disabled: option.disabled, selected: preferredLanguage === option.value }}>
@@ -276,32 +276,32 @@ export function MyProfileScreen() {
               </Pressable>
             ))}
           </View>
-          <Text style={styles.label}>보호자 생년월일 *</Text>
-          <Pressable style={[styles.input, styles.dateInput]} onPress={() => setBirthDatePickerOpen(true)} accessibilityRole="button" accessibilityLabel="보호자 생년월일 선택">
+          <Text style={styles.label}>{t("settings.critical.024")}</Text>
+          <Pressable style={[styles.input, styles.dateInput]} onPress={() => setBirthDatePickerOpen(true)} accessibilityRole="button" accessibilityLabel={t("settings.critical.025")}>
             <Text style={[styles.dateInputText, !guardianBirthDate && styles.datePlaceholder]}>{guardianBirthDate || "YYYY-MM-DD"}</Text>
             <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
           </Pressable>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.metaLabel}>이메일</Text>
-          <Text style={styles.metaValue}>{email || "연결되지 않음"}</Text>
-          <Text style={styles.metaLabel}>로그인 방식</Text>
+          <Text style={styles.metaLabel}>{t("settings.critical.002")}</Text>
+          <Text style={styles.metaValue}>{email || t("settings.critical.026")}</Text>
+          <Text style={styles.metaLabel}>{t("settings.critical.027")}</Text>
           <Text style={styles.metaValue}>{provider}</Text>
-          <Text style={styles.metaLabel}>현재 역할</Text>
+          <Text style={styles.metaLabel}>{t("settings.critical.028")}</Text>
           <Text style={styles.metaValue}>{FAMILY_ROLE_LABELS[myFamilyRole]}</Text>
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Pressable style={[styles.save, saving && styles.disabled]} onPress={() => void save()} disabled={saving}>
-          {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.saveText}>저장</Text>}
+          {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.saveText}>{t("settings.critical.029")}</Text>}
         </Pressable>
         <RecordDatePickerModal
           visible={birthDatePickerOpen}
           selectedDateKey={guardianBirthDate || formatDateKey(new Date(new Date().getFullYear() - 30, 0, 1), "midnight")}
           minDateKey={formatDateKey(new Date(new Date().getFullYear() - 120, 0, 1), "midnight")}
           maxDateKey={formatDateKey()}
-          title="보호자 생년월일 선택"
+          title={t("settings.critical.025")}
           onSelect={setGuardianBirthDate}
           onClose={() => setBirthDatePickerOpen(false)}
         />

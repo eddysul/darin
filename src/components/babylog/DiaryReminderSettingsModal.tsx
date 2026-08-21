@@ -30,6 +30,7 @@ import {
   TimeOfDayPickerField,
   TimePickerSheet,
 } from "../inputs/TimePickerFields";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   visible: boolean;
@@ -45,23 +46,18 @@ type SectionId = "all" | "diary" | "care" | "family" | "invite" | "quiet";
 type TimeTarget = "reminder" | "quietStart" | "quietEnd";
 type DurationTarget = "feeding" | "sleep";
 
-const permissionLabel: Record<ReminderPermissionStatus, string> = {
-  granted: "허용됨",
-  denied: "거부됨",
-  not_determined: "아직 요청하지 않음",
-  unavailable: "사용할 수 없음",
-};
-
 export function DiaryReminderSettingsModal({
   visible,
   value,
-  babyName = "아기",
+  babyName,
   babyId = null,
   onClose,
   onSave,
   onTestNotification,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
+  const displayBabyName = babyName ?? t("diary.reminder.babyFallback");
   const { settings, setSettings } = useAppSettings();
   const [draft, setDraft] = useState(value);
   const [permission, setPermission] = useState<ReminderPermissionStatus>("not_determined");
@@ -101,12 +97,12 @@ export function DiaryReminderSettingsModal({
           showPreview: server.showPreview,
         }));
       })
-      .catch(() => setMessage("서버 설정을 불러오지 못했어요. 기기 설정은 계속 사용할 수 있어요."));
+      .catch(() => setMessage(t("diary.reminder.loadError")));
     // Opening the sheet is the only load trigger. Saving must not start another fetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [babyId, visible]);
+  }, [babyId, t, visible]);
 
-  const previewBody = useMemo(() => `자기 전 ${babyName}와의 순간을 남겨보세요.`, [babyName]);
+  const previewBody = useMemo(() => t("diary.reminder.previewBody", { babyName: displayBabyName }), [displayBabyName, t]);
 
   const persistReminder = async (next: DiaryReminderSettings) => {
     setDraft(next);
@@ -115,7 +111,7 @@ export function DiaryReminderSettingsModal({
     setMessage("");
     try {
       await syncDiaryReminderNotifications(next, {
-        title: "오늘 하루 어땠나요?",
+        title: t("diary.reminder.previewTitle"),
         body: previewBody,
       });
       if (babyId) {
@@ -138,7 +134,7 @@ export function DiaryReminderSettingsModal({
         }
       }
     } catch {
-      setMessage("일부 설정을 저장하지 못했어요. 연결을 확인하고 다시 시도해주세요.");
+      setMessage(t("diary.reminder.saveError"));
     } finally {
       setBusy(false);
     }
@@ -241,8 +237,8 @@ export function DiaryReminderSettingsModal({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.header}>
-          <Pressable onPress={onClose} hitSlop={10}><Text style={styles.headerButton}>닫기</Text></Pressable>
-          <Text style={styles.headerTitle}>알림 설정</Text>
+          <Pressable onPress={onClose} hitSlop={10}><Text style={styles.headerButton}>{t("diary.reminder.close")}</Text></Pressable>
+          <Text style={styles.headerTitle}>{t("diary.reminder.title")}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <ScrollView
@@ -250,22 +246,22 @@ export function DiaryReminderSettingsModal({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.intro}>받고 싶은 알림만 켜고, 필요한 설정은 바로 아래에서 조정하세요.</Text>
+          <Text style={styles.intro}>{t("diary.reminder.intro")}</Text>
 
           <NotificationRow
             id="all"
-            title="전체 알림"
-            description="알림 권한과 미리보기를 확인해요."
+            title={t("diary.reminder.all")}
+            description={t("diary.reminder.allDesc")}
             enabled={allEnabled}
             expanded={expanded === "all"}
             busy={busy}
             onToggle={(next) => void toggleAll(next)}
             onExpand={() => setExpanded(expanded === "all" ? null : "all")}
           >
-            <DetailLine label="권한 상태" value={permissionLabel[permission]} />
-            <DetailLine label="미리보기" value={draft.showPreview === false ? "끔" : "켬"} />
+            <DetailLine label={t("diary.reminder.permissionStatus")} value={t(`diary.reminder.permission.${permission === "not_determined" ? "notDetermined" : permission}`)} />
+            <DetailLine label={t("diary.reminder.preview")} value={t(draft.showPreview === false ? "diary.reminder.off" : "diary.reminder.on")} />
             <View style={styles.inlineSwitchRow}>
-              <Text style={styles.detailLabel}>잠금 화면 미리보기</Text>
+              <Text style={styles.detailLabel}>{t("diary.reminder.lockPreview")}</Text>
               <Switch
                 value={draft.showPreview !== false}
                 onValueChange={(showPreview) => void persistReminder({ ...draft, showPreview })}
@@ -274,91 +270,91 @@ export function DiaryReminderSettingsModal({
             </View>
             {permission !== "granted" ? (
               <Pressable style={styles.secondaryButton} onPress={() => void openDeviceNotificationSettings()}>
-                <Text style={styles.secondaryButtonText}>시스템 설정 열기</Text>
+                <Text style={styles.secondaryButtonText}>{t("diary.reminder.openSystem")}</Text>
               </Pressable>
             ) : null}
           </NotificationRow>
 
           <NotificationRow
             id="diary"
-            title="일기 리마인더"
-            description="하루를 돌아볼 시간을 알려드려요."
+            title={t("diary.reminder.diary")}
+            description={t("diary.reminder.diaryDesc")}
             enabled={draft.enabled}
             expanded={expanded === "diary"}
             busy={busy}
             onToggle={(next) => void toggleDiary(next)}
             onExpand={() => setExpanded(expanded === "diary" ? null : "diary")}
           >
-            <DetailLine label="요일" value="매일" />
-            <Text style={styles.timePrompt}>언제 알려드릴까요?</Text>
-            <Text style={styles.detailBody}>알림을 받을 시간을 직접 설정해 주세요.</Text>
+            <DetailLine label={t("diary.reminder.day")} value={t("diary.reminder.everyDay")} />
+            <Text style={styles.timePrompt}>{t("diary.reminder.when")}</Text>
+            <Text style={styles.detailBody}>{t("diary.reminder.whenDesc")}</Text>
             <View style={styles.selectedTimeCard}>
-              <Text style={styles.selectedTimeLabel}>선택된 시간</Text>
-              <Text style={styles.selectedTimeValue}>매일 {formatTimeOfDay(pickerValue)}</Text>
+              <Text style={styles.selectedTimeLabel}>{t("diary.reminder.selectedTime")}</Text>
+              <Text style={styles.selectedTimeValue}>{t("diary.reminder.everyDayAt", { time: formatTimeOfDay(pickerValue) })}</Text>
             </View>
             <Pressable style={styles.timeButton} onPress={() => setTimeTarget("reminder")} disabled={busy}>
-              <Text style={styles.timeButtonText}>시간 설정</Text>
+              <Text style={styles.timeButtonText}>{t("diary.reminder.setTime")}</Text>
             </Pressable>
             {onTestNotification ? (
               <Pressable style={styles.secondaryButton} onPress={onTestNotification}>
-                <Text style={styles.secondaryButtonText}>알림 미리보기 보내기</Text>
+                <Text style={styles.secondaryButtonText}>{t("diary.reminder.sendPreview")}</Text>
               </Pressable>
             ) : null}
           </NotificationRow>
 
           <NotificationRow
             id="care"
-            title="수유·수면 알림"
-            description="다음 돌봄 시간을 놓치지 않게 도와요."
+            title={t("diary.reminder.care")}
+            description={t("diary.reminder.careDesc")}
             enabled={careEnabled}
             expanded={expanded === "care"}
             busy={busy}
             onToggle={toggleCare}
             onExpand={() => setExpanded(expanded === "care" ? null : "care")}
           >
-            <DurationPickerField label="수유 간격" valueMinutes={settings.notifications.feedingIntervalMinutes} onPress={() => setDurationTarget("feeding")} disabled={busy} />
-            <DurationPickerField label="수면 간격" valueMinutes={settings.notifications.sleepIntervalMinutes} onPress={() => setDurationTarget("sleep")} disabled={busy} />
+            <DurationPickerField label={t("diary.reminder.feedingInterval")} valueMinutes={settings.notifications.feedingIntervalMinutes} onPress={() => setDurationTarget("feeding")} disabled={busy} />
+            <DurationPickerField label={t("diary.reminder.sleepInterval")} valueMinutes={settings.notifications.sleepIntervalMinutes} onPress={() => setDurationTarget("sleep")} disabled={busy} />
           </NotificationRow>
 
           <NotificationRow
             id="family"
-            title="가족 소식"
-            description="가족이 남긴 댓글과 반응을 알려드려요."
+            title={t("diary.reminder.family")}
+            description={t("diary.reminder.familyDesc")}
             enabled={draft.familyActivityEnabled ?? true}
             expanded={expanded === "family"}
             busy={busy}
             onToggle={(next) => toggleReminderField("family", "familyActivityEnabled", next)}
             onExpand={() => setExpanded(expanded === "family" ? null : "family")}
           >
-            <DetailLine label="댓글 알림" value="켬" />
-            <DetailLine label="반응 알림" value="켬" />
+            <DetailLine label={t("diary.reminder.comment")} value={t("diary.reminder.on")} />
+            <DetailLine label={t("diary.reminder.reaction")} value={t("diary.reminder.on")} />
           </NotificationRow>
 
           <NotificationRow
             id="invite"
-            title="초대/참여 알림"
-            description="초대한 가족이나 친구의 참여 소식을 받아요."
+            title={t("diary.reminder.invite")}
+            description={t("diary.reminder.inviteDesc")}
             enabled={draft.inviteActivityEnabled ?? true}
             expanded={expanded === "invite"}
             busy={busy}
             onToggle={(next) => toggleReminderField("invite", "inviteActivityEnabled", next)}
             onExpand={() => setExpanded(expanded === "invite" ? null : "invite")}
           >
-            <Text style={styles.detailBody}>초대 수락과 가족 참여 상태가 바뀌면 알려드려요.</Text>
+            <Text style={styles.detailBody}>{t("diary.reminder.inviteBody")}</Text>
           </NotificationRow>
 
           <NotificationRow
             id="quiet"
-            title="조용한 시간대"
-            description="정한 시간에는 가족 소식 알림을 쉬어요."
+            title={t("diary.reminder.quiet")}
+            description={t("diary.reminder.quietDesc")}
             enabled={draft.quietHoursEnabled ?? false}
             expanded={expanded === "quiet"}
             busy={busy}
             onToggle={(next) => toggleReminderField("quiet", "quietHoursEnabled", next)}
             onExpand={() => setExpanded(expanded === "quiet" ? null : "quiet")}
           >
-            <TimeOfDayPickerField label="시작 시간" valueHHmm={draft.quietHoursStart ?? "22:00"} onPress={() => setTimeTarget("quietStart")} disabled={busy} />
-            <TimeOfDayPickerField label="종료 시간" valueHHmm={draft.quietHoursEnd ?? "07:00"} onPress={() => setTimeTarget("quietEnd")} disabled={busy} />
+            <TimeOfDayPickerField label={t("diary.reminder.startTime")} valueHHmm={draft.quietHoursStart ?? "22:00"} onPress={() => setTimeTarget("quietStart")} disabled={busy} />
+            <TimeOfDayPickerField label={t("diary.reminder.endTime")} valueHHmm={draft.quietHoursEnd ?? "07:00"} onPress={() => setTimeTarget("quietEnd")} disabled={busy} />
           </NotificationRow>
 
           {message ? <Text style={styles.message}>{message}</Text> : null}
@@ -368,7 +364,7 @@ export function DiaryReminderSettingsModal({
         <DurationPickerSheet
           visible={durationTarget !== null}
           valueMinutes={durationTarget === "feeding" ? settings.notifications.feedingIntervalMinutes : settings.notifications.sleepIntervalMinutes}
-          title={durationTarget === "feeding" ? "수유 간격" : "수면 간격"}
+          title={t(durationTarget === "feeding" ? "diary.reminder.feedingInterval" : "diary.reminder.sleepInterval")}
           minMinutes={15}
           maxMinutes={12 * 60}
           onCancel={() => setDurationTarget(null)}
@@ -400,6 +396,7 @@ function NotificationRow({
   onExpand: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useLanguage();
   return (
     <View style={styles.rowCard}>
       <View style={styles.rowHeader}>
@@ -409,11 +406,11 @@ function NotificationRow({
           disabled={!enabled}
           accessibilityRole="button"
           accessibilityState={{ expanded: enabled && expanded, disabled: !enabled }}
-          accessibilityLabel={`${title} 상세 ${expanded ? "접기" : "펼치기"}`}
+          accessibilityLabel={t("diary.reminder.rowA11y", { title, state: t(expanded ? "diary.reminder.collapse" : "diary.reminder.expand") })}
         >
           <Text style={styles.rowTitle}>{title}</Text>
           <Text style={styles.rowDescription}>{description}</Text>
-          {enabled ? <Text style={styles.expandHint}>{expanded ? "접기 ︿" : "자세히 보기 ﹀"}</Text> : null}
+          {enabled ? <Text style={styles.expandHint}>{t(expanded ? "diary.reminder.collapseHint" : "diary.reminder.detailsHint")}</Text> : null}
         </Pressable>
         <Switch
           testID={`notification-toggle-${id}`}

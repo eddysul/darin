@@ -30,6 +30,8 @@ import { isPregnancyStage } from "../../utils/childDisplay";
 import { getMarketingConsent, saveMarketingConsent } from "../../utils/termsStore";
 import { customCategoriesForStage } from "../../types/logCategory";
 import type { AppSettings } from "../../types/appSettings";
+import { useLanguage } from "../../LanguageContext";
+import type { MessageKey } from "../../i18n";
 
 function applyCategoryOrder(current: AppSettings, order: OneTouchAction[]): AppSettings {
   const visible = current.categories.visible;
@@ -62,97 +64,97 @@ export type SettingsPage =
   | "retention"
   | "legal";
 
-export const SETTINGS_PAGE_TITLES: Record<SettingsPage, string> = {
-  account: "계정 설정",
-  timers: "스탑워치 설정",
-  categories: "기록 카테고리 설정",
-  units: "단위 설정",
-  time: "시간 설정",
-  careAlerts: "수유/수면 알림 설정",
-  growthBook: "성장책 설정",
-  billing: "결제/구독",
-  privacy: "개인정보처리방침",
-  terms: "이용약관",
-  medical: "의료 정보 안내",
-  contact: "문의하기",
-  dataExport: "데이터 내보내기",
-  retention: "데이터 보존 및 삭제 안내",
-  legal: "이용약관 및 개인정보 안내",
+export const SETTINGS_PAGE_TITLES: Record<SettingsPage, MessageKey> = {
+  account: "settings.critical.086",
+  timers: "settings.critical.062",
+  categories: "settings.critical.058",
+  units: "settings.critical.064",
+  time: "settings.critical.065",
+  careAlerts: "settings.critical.105",
+  growthBook: "settings.critical.074",
+  billing: "settings.critical.077",
+  privacy: "settings.critical.106",
+  terms: "settings.critical.107",
+  medical: "settings.critical.108",
+  contact: "settings.critical.083",
+  dataExport: "settings.critical.109",
+  retention: "settings.critical.110",
+  legal: "settings.critical.081",
 };
 
 const LEGAL_ACCORDION_SECTIONS: Array<{
-  title: string;
-  paragraphs: Array<[string, string]>;
+  title: MessageKey;
+  paragraphs: Array<[MessageKey, MessageKey]>;
 }> = [
   {
-    title: "서비스 목적",
+    title: "settings.critical.111",
     paragraphs: [
-      ["서비스 목적", "Darin은 보호자의 육아 기록, 일기, 성장책과 초대된 가족 간 공유를 돕는 beta 서비스입니다."],
-      ["서비스 변경", "beta 기간에는 기능이 변경되거나 점검을 위해 일시 중단될 수 있습니다."],
-      ["문의", "서비스 관련 문의는 설정의 문의하기를 이용해주세요."],
+      ["settings.critical.111", "settings.critical.112"],
+      ["settings.critical.113", "settings.critical.114"],
+      ["settings.critical.115", "settings.critical.116"],
     ],
   },
   {
-    title: "사용자 책임",
+    title: "settings.critical.117",
     paragraphs: [
-      ["계정과 기록", "사용자는 계정과 초대 링크를 안전하게 관리하고 입력한 기록의 정확성과 적법성에 책임을 집니다."],
-      ["계정 삭제", "설정에서 계정 삭제를 요청할 수 있으며 공유 데이터는 다른 가족의 권리에 따라 일부 보존될 수 있습니다."],
-      ["면책", "서비스와 AI 안내는 의료 진단이나 응급 판단을 제공하지 않으며 사용자는 필요한 경우 의료 전문가에게 문의해야 합니다."],
+      ["settings.critical.118", "settings.critical.119"],
+      ["settings.critical.089", "settings.critical.120"],
+      ["settings.critical.121", "settings.critical.122"],
     ],
   },
   {
-    title: "가족 공유",
+    title: "settings.critical.123",
     paragraphs: [
-      ["초대 책임", "사용자는 데이터 공유에 동의한 사람만 초대하고 적절한 역할을 설정해야 합니다."],
-      ["공유 범위", "아기의 활성 구성원만 공유 데이터에 접근합니다. 역할과 각 콘텐츠의 공개 범위에 따라 조회·작성·관리 권한이 달라집니다."],
+      ["settings.critical.124", "settings.critical.125"],
+      ["settings.critical.126", "settings.critical.127"],
     ],
   },
   {
-    title: "사진·기록 업로드",
+    title: "settings.critical.128",
     paragraphs: [
-      ["업로드 책임", "본인이 사용할 권한이 있는 사진과 기록만 업로드해야 하며 타인의 권리를 침해해서는 안 됩니다."],
-      ["사진·미디어 처리", "사용자가 선택한 일기·성장책·추억 사진과 관련 metadata를 비공개 Storage에 저장합니다. 접근 권한이 있는 가족에게만 제한된 signed URL을 발급합니다."],
+      ["settings.critical.129", "settings.critical.130"],
+      ["settings.critical.131", "settings.critical.132"],
     ],
   },
   {
-    title: "금지 행위",
-    paragraphs: [["금지되는 사용", "무단 접근, 타인 사칭, 불법 콘텐츠 업로드, 서비스 안정성을 해치는 행위를 금지합니다."]],
+    title: "settings.critical.133",
+    paragraphs: [["settings.critical.134", "settings.critical.135"]],
   },
   {
-    title: "개인정보처리방침",
+    title: "settings.critical.106",
     paragraphs: [
-      ["안내", "Darin은 육아 기록과 가족 공유에 필요한 정보를 처리합니다. 아래 내용은 beta용 앱 내 안내 초안이며 외부 공개 전 법률 검토가 필요합니다."],
-      ["수집하는 정보", "로그인 식별 정보, 프로필 닉네임·이름·관계, 거주 국가, 앱 언어, 보호자 생년월일, 아기 프로필, 수유·수면·기저귀·성장 기록, 일기와 성장책, 추억 및 가족 공유 정보를 처리합니다."],
-      ["알림 정보", "알림 허용 시 기기 식별자와 Expo push token, 알림 설정 및 전송 상태를 처리합니다."],
-      ["사용 목적", "프로필 관리, 앱 언어·단위·지역 기본 설정, 보호자 상황에 맞는 육아 상담 및 안내 개인화, 기록 저장과 복원, 가족 공유, 요약 제공, 알림 전송과 고객 문의 처리를 위해 사용합니다."],
-      ["보관 및 삭제", "계정 삭제 시 닉네임·이름·관계·거주 국가·앱 언어·보호자 생년월일을 포함한 개인 프로필과 설정 및 멤버십을 제거합니다. 혼자 관리하는 아기 데이터는 삭제하며, 공유 아기 데이터는 다른 가족을 위해 보존하고 작성자는 ‘탈퇴한 사용자’로 표시할 수 있습니다."],
-      ["계정 삭제 방법", "설정의 계정 삭제에서 안내를 확인하고 ‘삭제’를 입력해 요청할 수 있습니다."],
-      ["문의", "설정의 문의하기를 이용할 수 있습니다. 문의 내용에는 민감한 아기 건강정보를 입력하지 않는 것을 권장합니다."],
-      ["시행일", "beta 안내 시행일: 2026년 8월 3일"],
+      ["settings.critical.136", "settings.critical.137"],
+      ["settings.critical.138", "settings.critical.139"],
+      ["settings.critical.140", "settings.critical.141"],
+      ["settings.critical.142", "settings.critical.143"],
+      ["settings.critical.144", "settings.critical.145"],
+      ["settings.critical.146", "settings.critical.147"],
+      ["settings.critical.115", "settings.critical.148"],
+      ["settings.critical.149", "settings.critical.150"],
     ],
   },
   {
-    title: "데이터 보존 및 삭제",
+    title: "settings.critical.151",
     paragraphs: [
-      ["안내", "현재 beta에서 적용되는 데이터 보존·삭제 정책입니다. 실제 구현과 함께 갱신하며 외부 공개 전 법률 검토가 필요합니다."],
-      ["개인 계정", "계정 삭제 시 닉네임·이름·관계·거주 국가·앱 언어·보호자 생년월일을 포함한 profile, 알림 token·설정과 baby membership을 제거하고 Auth 계정을 삭제합니다."],
-      ["공유 아기 데이터", "다른 활성 가족이 있으면 아기 기록은 보존되고 탈퇴자의 작성자 식별값은 제거됩니다."],
-      ["혼자 관리하는 아기", "다른 활성 구성원이 없는 아기는 관련 기록·일기·성장책·추억 DB 데이터와 비공개 미디어를 삭제합니다."],
-      ["Soft delete", "사용자가 앱에서 삭제한 일부 일기·성장책·추억은 복원과 동기화 안전성을 위해 soft delete로 처리될 수 있습니다."],
-      ["로컬 캐시", "로그아웃 시 화면 상태를 비우고 계정별 cache를 격리합니다. 계정 삭제에서 이 기기의 로컬 데이터 삭제를 선택할 수 있습니다."],
-      ["알림", "계정 삭제 시 push token과 알림 설정을 삭제합니다. 일반 로그아웃 시 현재 기기의 token을 비활성화합니다."],
-      ["문의", "문의 기록은 지원 이력 관리를 위해 계정 식별값을 제거한 뒤 보존될 수 있습니다."],
-      ["가족 탈퇴", "가족 구성원이 탈퇴하면 membership과 접근 권한이 제거되며 다른 가족의 공유 데이터는 유지됩니다."],
+      ["settings.critical.136", "settings.critical.152"],
+      ["settings.critical.153", "settings.critical.154"],
+      ["settings.critical.155", "settings.critical.156"],
+      ["settings.critical.157", "settings.critical.158"],
+      ["settings.critical.318", "settings.critical.159"],
+      ["settings.critical.160", "settings.critical.161"],
+      ["settings.critical.054", "settings.critical.162"],
+      ["settings.critical.115", "settings.critical.163"],
+      ["settings.critical.164", "settings.critical.165"],
     ],
   },
   {
-    title: "Medical Disclaimer",
+    title: "settings.critical.319",
     paragraphs: [
-      ["안내", "Darin은 육아 기록과 가족 공유를 돕는 도구이며 의료 서비스가 아닙니다."],
-      ["진단·치료 아님", "앱은 의료 진단, 치료 계획 또는 응급 여부 판단을 제공하지 않습니다."],
-      ["기록의 성격", "수유·수면·성장·체온·약 기록과 요약은 보호자가 참고하기 위한 정보입니다."],
-      ["AI 안내", "AI 답변은 일반적인 참고 정보이며 의료 전문가의 진료나 판단을 대체하지 않습니다."],
-      ["도움이 필요한 경우", "걱정되는 증상이나 응급 상황이 있다면 지역의 소아과, 의료기관 또는 응급서비스에 문의해주세요."],
+      ["settings.critical.136", "settings.critical.166"],
+      ["settings.critical.167", "settings.critical.168"],
+      ["settings.critical.169", "settings.critical.170"],
+      ["settings.critical.171", "settings.critical.172"],
+      ["settings.critical.173", "settings.critical.174"],
     ],
   },
 ];
@@ -168,6 +170,7 @@ export function AppSettingsModal({
   embedded?: boolean;
   onOpenMyProfile?: () => void;
 }) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { settings, setSettings } = useAppSettings();
   const { careSetup } = useApp();
@@ -256,11 +259,11 @@ export function AppSettingsModal({
       const user = await AuthRepository.linkGoogleIdentity();
       if (!user) return;
       setGoogleLinked(true);
-      Alert.alert("연결 완료", "Google 계정이 연결되었어요.");
+      Alert.alert(t("settings.critical.175"), t("settings.critical.176"));
     } catch {
       Alert.alert(
-        "연결하지 못했어요",
-        "Google 계정 연결을 완료하지 못했어요. 다시 시도해 주세요.",
+        t("settings.critical.177"),
+        t("settings.critical.178"),
       );
     } finally {
       setGoogleLinkBusy(false);
@@ -274,11 +277,11 @@ export function AppSettingsModal({
       const user = await AuthRepository.linkKakaoIdentity();
       if (!user) return;
       setKakaoLinked(true);
-      Alert.alert("연결 완료", "카카오 계정이 연결되었어요.");
+      Alert.alert(t("settings.critical.175"), t("settings.critical.179"));
     } catch {
       Alert.alert(
-        "연결하지 못했어요",
-        "카카오 계정 연결을 완료하지 못했어요. 다시 시도해 주세요.",
+        t("settings.critical.177"),
+        t("settings.critical.180"),
       );
     } finally {
       setKakaoLinkBusy(false);
@@ -287,7 +290,7 @@ export function AppSettingsModal({
 
   const toggleVisible = (id: OneTouchAction, enabled: boolean) => {
     if (!enabled && settings.categories.visible.length <= 1) {
-      Alert.alert("카테고리가 필요해요", "최소 1개 카테고리는 표시해야 합니다.");
+      Alert.alert(t("settings.critical.181"), t("settings.critical.182"));
       return;
     }
     setSettings((current) => {
@@ -303,7 +306,7 @@ export function AppSettingsModal({
 
   const toggleCore = (id: OneTouchAction, enabled: boolean) => {
     if (enabled && settings.categories.core.length >= 6) {
-      Alert.alert("기본 노출은 6개까지", "먼저 다른 기본 카테고리를 해제해주세요.");
+      Alert.alert(t("settings.critical.183"), t("settings.critical.184"));
       return;
     }
     setSettings((current) => ({
@@ -323,7 +326,7 @@ export function AppSettingsModal({
   const content = (
     <View style={styles.root}>
         {!embedded ? <NavigationHeader
-          title={SETTINGS_PAGE_TITLES[page]}
+          title={t(SETTINGS_PAGE_TITLES[page])}
           onBack={requestClose}
         /> : null}
         <ScrollView
@@ -333,25 +336,25 @@ export function AppSettingsModal({
         >
           {page === "account" ? (
             <>
-              <SettingsSection title="로그인">
-                <InfoRow label="로그인 방식" value={loginMethodLabel(settings.account.loginMethod)} />
+              <SettingsSection title={t("settings.critical.185")}>
+                <InfoRow label={t("settings.critical.027")} value={loginMethodLabel(settings.account.loginMethod, t)} />
                 <InfoRow
-                  label="이메일"
-                  value={settings.account.email.trim() || "연결되지 않음"}
+                  label={t("settings.critical.002")}
+                  value={settings.account.email.trim() || t("settings.critical.026")}
                   last={!showGoogleLogin && !showKakaoLogin}
                 />
                 {showGoogleLogin ? (
                   googleLinked ? (
                     <InfoRow
                       label="Google"
-                      value="연결됨"
+                      value={t("settings.critical.186")}
                       last={!showKakaoLogin}
                     />
                   ) : (
                     <ActionRow
-                      label="Google 계정 연결"
-                      meta={googleLinkBusy ? "연결 중…" : "같은 로그인에 Google을 추가해요"}
-                      action={googleLinkBusy ? "연결 중" : "연결"}
+                      label={t("settings.critical.187")}
+                      meta={googleLinkBusy ? t("settings.critical.188") : t("settings.critical.189")}
+                      action={googleLinkBusy ? t("settings.critical.190") : t("settings.critical.191")}
                       disabled={googleLinkBusy}
                       last={!showKakaoLogin}
                       onPress={() => void connectGoogle()}
@@ -360,12 +363,12 @@ export function AppSettingsModal({
                 ) : null}
                 {showKakaoLogin ? (
                   kakaoLinked ? (
-                    <InfoRow label="카카오" value="연결됨" last />
+                    <InfoRow label={t("settings.critical.192")} value={t("settings.critical.186")} last />
                   ) : (
                     <ActionRow
-                      label="카카오 계정 연결"
-                      meta={kakaoLinkBusy ? "연결 중…" : "같은 로그인에 카카오를 추가해요"}
-                      action={kakaoLinkBusy ? "연결 중" : "연결"}
+                      label={t("settings.critical.193")}
+                      meta={kakaoLinkBusy ? t("settings.critical.188") : t("settings.critical.194")}
+                      action={kakaoLinkBusy ? t("settings.critical.190") : t("settings.critical.191")}
                       disabled={kakaoLinkBusy}
                       last
                       onPress={() => void connectKakao()}
@@ -374,24 +377,23 @@ export function AppSettingsModal({
                 ) : null}
               </SettingsSection>
               {onOpenMyProfile ? (
-                <SettingsSection title="프로필">
+                <SettingsSection title={t("settings.critical.195")}>
                   <ActionRow
-                    label="내 프로필"
-                    meta="이름, 관계, 언어, 사진을 바꿔요"
-                    action="보기"
+                    label={t("settings.critical.046")}
+                    meta={t("settings.critical.196")}
+                    action={t("settings.critical.197")}
                     last
                     onPress={onOpenMyProfile}
                   />
                 </SettingsSection>
               ) : null}
-              <SettingsSection title="데이터 관리">
+              <SettingsSection title={t("settings.critical.198")}>
                 <View style={styles.actionBlock}>
-                  <Text style={styles.actionTitle}>기록 내보내기</Text>
+                  <Text style={styles.actionTitle}>{t("settings.critical.199")}</Text>
                   <Text style={styles.actionBody}>
-                    지금 보고 있는 아기의 기록을 JSON 파일로 저장해요. 사진 원본은 들어가지 않아요.
-                  </Text>
+                    {t("settings.critical.200")}</Text>
                   {exportMessage ? (
-                    <Text style={exportMessage.includes("못") || exportMessage.includes("없어요") ? styles.actionError : styles.actionStatus}>
+                    <Text style={exportMessage.includes(t("settings.critical.201")) || exportMessage.includes(t("settings.critical.202")) ? styles.actionError : styles.actionStatus}>
                       {exportMessage}
                     </Text>
                   ) : null}
@@ -401,21 +403,21 @@ export function AppSettingsModal({
                       if (exporting) return;
                       const babyId = localDataScope?.babyId;
                       if (!babyId) {
-                        setExportMessage("현재 선택된 아기가 없어요.");
+                        setExportMessage(t("settings.critical.203"));
                         return;
                       }
                       setExporting(true);
                       setExportMessage("");
                       void DataExportRepository.exportAndShare(babyId)
-                        .then(() => setExportMessage("내보내기 파일을 만들었어요."))
-                        .catch((error) => setExportMessage(error instanceof Error ? error.message : "내보내지 못했어요."))
+                        .then(() => setExportMessage(t("settings.critical.204")))
+                        .catch((error) => setExportMessage(error instanceof Error ? error.message : t("settings.critical.205")))
                         .finally(() => setExporting(false));
                     }}
                     disabled={exporting}
                     accessibilityRole="button"
-                    accessibilityLabel="데이터 내보내기"
+                    accessibilityLabel={t("settings.critical.109")}
                   >
-                    <Text style={styles.primaryButtonText}>{exporting ? "파일 만드는 중…" : "내보내기"}</Text>
+                    <Text style={styles.primaryButtonText}>{exporting ? t("settings.critical.206") : t("settings.critical.207")}</Text>
                   </Pressable>
                 </View>
               </SettingsSection>
@@ -423,23 +425,22 @@ export function AppSettingsModal({
           ) : null}
 
           {page === "timers" ? (
-            <SettingsSection title="길게 눌러 타이머 시작">
-              <ToggleRow label="모유수유 타이머 사용" value={settings.timers.breastfeeding} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, breastfeeding: value } }))} />
-              <ToggleRow label="좌/우 수유 전환 사용" value={settings.timers.switchBreastSide} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, switchBreastSide: value } }))} />
-              <ToggleRow label="수면 타이머 사용" value={settings.timers.sleep} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, sleep: value } }))} />
-              <ToggleRow label="유축 타이머 사용" value={settings.timers.pump} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, pump: value } }))} />
-              <ToggleRow label="터미타임 타이머 사용" value={settings.timers.tummy} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, tummy: value } }))} />
-              <ToggleRow label="앱 재시작 후 진행 중 타이머 복원" value={settings.timers.restoreAfterRestart} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, restoreAfterRestart: value } }))} />
-              <ToggleRow label="타이머 중 화면 꺼짐 방지" value={settings.timers.keepScreenAwake} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, keepScreenAwake: value } }))} />
+            <SettingsSection title={t("settings.critical.208")}>
+              <ToggleRow label={t("settings.critical.209")} value={settings.timers.breastfeeding} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, breastfeeding: value } }))} />
+              <ToggleRow label={t("settings.critical.210")} value={settings.timers.switchBreastSide} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, switchBreastSide: value } }))} />
+              <ToggleRow label={t("settings.critical.211")} value={settings.timers.sleep} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, sleep: value } }))} />
+              <ToggleRow label={t("settings.critical.212")} value={settings.timers.pump} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, pump: value } }))} />
+              <ToggleRow label={t("settings.critical.213")} value={settings.timers.tummy} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, tummy: value } }))} />
+              <ToggleRow label={t("settings.critical.214")} value={settings.timers.restoreAfterRestart} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, restoreAfterRestart: value } }))} />
+              <ToggleRow label={t("settings.critical.215")} value={settings.timers.keepScreenAwake} onChange={(value) => setSettings((s) => ({ ...s, timers: { ...s.timers, keepScreenAwake: value } }))} />
             </SettingsSection>
           ) : null}
 
           {page === "categories" ? (
             <>
               <Text style={styles.help}>
-                표시 여부와 기본 6개를 선택한 뒤, 왼쪽 점을 길게 눌러 위아래로 끌어 순서를 바꿀 수 있어요. 펼치기 항목을 기본 노출 자리로 옮기면 역할이 서로 바뀝니다. 커스텀 카테고리는 아래에서 추가할 수 있어요.
-              </Text>
-              <SettingsSection title={`기본 노출 ${settings.categories.core.length}/6`} overflowVisible>
+                {t("settings.critical.216")}</Text>
+              <SettingsSection title={t("settings.critical.320", { count: settings.categories.core.length })} overflowVisible>
                 <DraggableCategoryList
                   items={settings.categories.order}
                   onReorder={(order) => setSettings((current) => applyCategoryOrder(current, order))}
@@ -453,24 +454,24 @@ export function AppSettingsModal({
                       <>
                         <View style={styles.categoryCopy}>
                           <Text style={styles.categoryTitle} numberOfLines={1}>{action.label}</Text>
-                          <Text style={styles.categoryMeta}>{core ? "기본 노출" : visible ? "펼치기 영역" : "숨김"}</Text>
+                          <Text style={styles.categoryMeta}>{core ? t("settings.critical.217") : visible ? t("settings.critical.218") : t("settings.critical.219")}</Text>
                         </View>
                         <Pressable style={[styles.stateButton, visible && styles.stateButtonOn]} onPress={() => toggleVisible(id, !visible)}>
-                          <Text style={[styles.stateButtonText, visible && styles.stateButtonTextOn]}>{visible ? "표시" : "숨김"}</Text>
+                          <Text style={[styles.stateButtonText, visible && styles.stateButtonTextOn]}>{visible ? t("settings.critical.220") : t("settings.critical.219")}</Text>
                         </Pressable>
                         <Pressable style={[styles.stateButton, core && styles.coreButtonOn]} onPress={() => toggleCore(id, !core)}>
-                          <Text style={[styles.stateButtonText, core && styles.stateButtonTextOn]}>기본</Text>
+                          <Text style={[styles.stateButtonText, core && styles.stateButtonTextOn]}>{t("settings.critical.221")}</Text>
                         </Pressable>
                       </>
                     );
                   }}
                 />
               </SettingsSection>
-              <SettingsSection title={pregnancy ? "임신 기록 카테고리" : "내 기록 카테고리"}>
+              <SettingsSection title={pregnancy ? t("settings.critical.222") : t("settings.critical.223")}>
                 {stageCustomCategories.length === 0 ? (
                   <View style={styles.settingRow}>
                     <Text style={styles.rowMeta}>
-                      {pregnancy ? "아직 추가한 임신 기록 칸이 없어요." : "아직 추가한 카테고리가 없어요."}
+                      {pregnancy ? t("settings.critical.224") : t("settings.critical.225")}
                     </Text>
                   </View>
                 ) : (
@@ -479,18 +480,18 @@ export function AppSettingsModal({
                       <View style={[styles.customColorDot, { backgroundColor: category.color }]} />
                       <View style={styles.categoryCopy}>
                         <Text style={styles.categoryTitle} numberOfLines={1}>{category.label}</Text>
-                        <Text style={styles.categoryMeta}>커스텀 · 빠른기록에서 선택 가능</Text>
+                        <Text style={styles.categoryMeta}>{t("settings.critical.226")}</Text>
                       </View>
                       <Pressable
                         style={styles.stateButton}
                         onPress={() => {
                           Alert.alert(
-                            "카테고리를 삭제할까요?",
-                            `"${category.label}" 카테고리를 목록에서 제거해요. 이미 저장된 기록은 그대로 남아요.`,
+                            t("settings.critical.227"),
+                            t("settings.critical.321", { label: category.label }),
                             [
-                              { text: "취소", style: "cancel" },
+                              { text: t("settings.critical.032"), style: "cancel" },
                               {
-                                text: "삭제",
+                                text: t("settings.critical.036"),
                                 style: "destructive",
                                 onPress: () => removeCustomCategory(category.id),
                               },
@@ -498,7 +499,7 @@ export function AppSettingsModal({
                           );
                         }}
                       >
-                        <Text style={styles.stateButtonText}>삭제</Text>
+                        <Text style={styles.stateButtonText}>{t("settings.critical.036")}</Text>
                       </Pressable>
                     </View>
                   ))
@@ -507,9 +508,9 @@ export function AppSettingsModal({
                   style={styles.addCategoryRow}
                   onPress={() => setAddCategoryOpen(true)}
                   accessibilityRole="button"
-                  accessibilityLabel="새로 추가"
+                  accessibilityLabel={t("settings.critical.228")}
                 >
-                  <Text style={styles.addCategoryText}>새로 추가</Text>
+                  <Text style={styles.addCategoryText}>{t("settings.critical.228")}</Text>
                 </Pressable>
               </SettingsSection>
               <AddCustomCategorySheet
@@ -528,8 +529,8 @@ export function AppSettingsModal({
                     inputMode: input.inputMode,
                     isEnabled: true,
                     duration: input.inputMode === "duration",
-                    amount: input.inputMode === "amount" ? "회/량" : undefined,
-                    chips: input.inputMode === "check" ? ["완료", "미완료"] : undefined,
+                    amount: input.inputMode === "amount" ? t("settings.critical.229") : undefined,
+                    chips: input.inputMode === "check" ? [t("settings.critical.230"), t("settings.critical.231")] : undefined,
                     stage: pregnancy ? "pregnancy" : "born",
                   });
                   setAddCategoryOpen(false);
@@ -539,125 +540,125 @@ export function AppSettingsModal({
           ) : null}
 
           {page === "units" ? (
-            <SettingsSection title="표시 단위">
-              <ChoiceRow label="수유/음료 단위" value={settings.units.volume} options={[{ value: "ml", label: "ml" }, { value: "oz", label: "oz" }]} onChange={(volume) => setSettings((s) => ({ ...s, units: { ...s.units, volume: volume as "ml" | "oz" } }))} help="분유, 저장 모유, 물, 우유, 유축량 입력의 기본 단위로 사용돼요." />
-              <ChoiceRow label="체온 단위" value={settings.units.temperature} options={[{ value: "c", label: "℃" }, { value: "f", label: "℉" }]} onChange={(temperature) => setSettings((s) => ({ ...s, units: { ...s.units, temperature: temperature as "c" | "f" } }))} help="체온 기록의 기본 단위로 사용돼요." />
-              <ChoiceRow label="성장 단위" value={`${settings.units.weight}/${settings.units.height}`} options={[{ value: "kg/cm", label: "kg/cm" }, { value: "lb/inch", label: "lb/in" }]} onChange={(value) => setSettings((s) => ({ ...s, units: { ...s.units, weight: value === "kg/cm" ? "kg" : "lb", height: value === "kg/cm" ? "cm" : "inch" } }))} help="키, 몸무게, 머리둘레 기록의 기본 단위로 사용돼요." />
-              <ChoiceRow label="투약 기본 단위" value={settings.units.medicationDefaultUnit} options={[
-                { value: "none", label: "없음" }, { value: "ml", label: "ml" }, { value: "drop", label: "drop" }, { value: "방울", label: "방울" }, { value: "포", label: "포" }, { value: "정", label: "정" }, { value: "회", label: "회" }, { value: "스푼", label: "스푼" }, { value: "g", label: "g" }, { value: "mg", label: "mg" }, { value: "other", label: "기타" },
-              ]} onChange={(medicationDefaultUnit) => setSettings((s) => ({ ...s, units: { ...s.units, medicationDefaultUnit: medicationDefaultUnit as typeof s.units.medicationDefaultUnit } }))} help="약마다 단위가 다를 수 있어요. 같은 약의 최근 사용 단위를 우선 보여줘요." />
+            <SettingsSection title={t("settings.critical.232")}>
+              <ChoiceRow label={t("settings.critical.233")} value={settings.units.volume} options={[{ value: "ml", label: "ml" }, { value: "oz", label: "oz" }]} onChange={(volume) => setSettings((s) => ({ ...s, units: { ...s.units, volume: volume as "ml" | "oz" } }))} help={t("settings.critical.234")} />
+              <ChoiceRow label={t("settings.critical.235")} value={settings.units.temperature} options={[{ value: "c", label: "℃" }, { value: "f", label: "℉" }]} onChange={(temperature) => setSettings((s) => ({ ...s, units: { ...s.units, temperature: temperature as "c" | "f" } }))} help={t("settings.critical.236")} />
+              <ChoiceRow label={t("settings.critical.237")} value={`${settings.units.weight}/${settings.units.height}`} options={[{ value: "kg/cm", label: "kg/cm" }, { value: "lb/inch", label: "lb/in" }]} onChange={(value) => setSettings((s) => ({ ...s, units: { ...s.units, weight: value === "kg/cm" ? "kg" : "lb", height: value === "kg/cm" ? "cm" : "inch" } }))} help={t("settings.critical.238")} />
+              <ChoiceRow label={t("settings.critical.239")} value={settings.units.medicationDefaultUnit} options={[
+                { value: "none", label: t("settings.critical.240") }, { value: "ml", label: "ml" }, { value: "drop", label: "drop" }, { value: "\uBC29\uC6B8", label: t("settings.critical.241") }, { value: "\uD3EC", label: t("settings.critical.242") }, { value: "\uC815", label: t("settings.critical.243") }, { value: "\uD68C", label: t("settings.critical.244") }, { value: "\uC2A4\uD47C", label: t("settings.critical.245") }, { value: "g", label: "g" }, { value: "mg", label: "mg" }, { value: "other", label: t("settings.critical.246") },
+              ]} onChange={(medicationDefaultUnit) => setSettings((s) => ({ ...s, units: { ...s.units, medicationDefaultUnit: medicationDefaultUnit as typeof s.units.medicationDefaultUnit } }))} help={t("settings.critical.247")} />
             </SettingsSection>
           ) : null}
 
           {page === "time" ? (
-            <SettingsSection title="날짜와 시간">
-              <ChoiceRow label="시간 표시" value={settings.time.clock} options={[{ value: "12h", label: "12시간" }, { value: "24h", label: "24시간" }]} onChange={(clock) => setSettings((s) => ({ ...s, time: { ...s.time, clock: clock as "12h" | "24h" } }))} />
-              <ChoiceRow label="하루 시작 기준" value={settings.time.dayStart} options={[{ value: "midnight", label: "자정" }, { value: "04:00", label: "새벽 4시" }]} onChange={(dayStart) => setSettings((s) => ({ ...s, time: { ...s.time, dayStart: dayStart as "midnight" | "04:00" } }))} />
-              <ChoiceRow label="주 시작 요일" value={settings.time.weekStart} options={[{ value: "sunday", label: "일요일" }, { value: "monday", label: "월요일" }]} onChange={(weekStart) => setSettings((s) => ({ ...s, time: { ...s.time, weekStart: weekStart as "sunday" | "monday" } }))} />
-              <ChoiceRow label="아기 나이 표시" value={settings.time.babyAge} options={[{ value: "days", label: "D+" }, { value: "monthsDays", label: "개월+일" }, { value: "weeks", label: "주수" }]} onChange={(babyAge) => setSettings((s) => ({ ...s, time: { ...s.time, babyAge: babyAge as "days" | "monthsDays" | "weeks" } }))} />
+            <SettingsSection title={t("settings.critical.248")}>
+              <ChoiceRow label={t("settings.critical.249")} value={settings.time.clock} options={[{ value: "12h", label: t("settings.critical.250") }, { value: "24h", label: t("settings.critical.251") }]} onChange={(clock) => setSettings((s) => ({ ...s, time: { ...s.time, clock: clock as "12h" | "24h" } }))} />
+              <ChoiceRow label={t("settings.critical.252")} value={settings.time.dayStart} options={[{ value: "midnight", label: t("settings.critical.253") }, { value: "04:00", label: t("settings.critical.254") }]} onChange={(dayStart) => setSettings((s) => ({ ...s, time: { ...s.time, dayStart: dayStart as "midnight" | "04:00" } }))} />
+              <ChoiceRow label={t("settings.critical.255")} value={settings.time.weekStart} options={[{ value: "sunday", label: t("settings.critical.256") }, { value: "monday", label: t("settings.critical.257") }]} onChange={(weekStart) => setSettings((s) => ({ ...s, time: { ...s.time, weekStart: weekStart as "sunday" | "monday" } }))} />
+              <ChoiceRow label={t("settings.critical.258")} value={settings.time.babyAge} options={[{ value: "days", label: "D+" }, { value: "monthsDays", label: t("settings.critical.259") }, { value: "weeks", label: t("settings.critical.260") }]} onChange={(babyAge) => setSettings((s) => ({ ...s, time: { ...s.time, babyAge: babyAge as "days" | "monthsDays" | "weeks" } }))} />
             </SettingsSection>
           ) : null}
 
           {page === "careAlerts" ? (
-            <SettingsSection title="돌봄 알림">
-              <ToggleRow label="수유 알림" value={settings.notifications.feedingEnabled} onChange={(feedingEnabled) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, feedingEnabled } }))} />
-              {settings.notifications.feedingEnabled ? <ChoiceRow label="수유 간격" value={String(settings.notifications.feedingIntervalMinutes)} options={[{ value: "120", label: "2시간" }, { value: "180", label: "3시간" }, { value: "240", label: "4시간" }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, feedingIntervalMinutes: Number(value) } }))} /> : null}
-              <ToggleRow label="수면 알림" value={settings.notifications.sleepEnabled} onChange={(sleepEnabled) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, sleepEnabled } }))} />
-              {settings.notifications.sleepEnabled ? <ChoiceRow label="수면 간격" value={String(settings.notifications.sleepIntervalMinutes)} options={[{ value: "60", label: "1시간" }, { value: "120", label: "2시간" }, { value: "180", label: "3시간" }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, sleepIntervalMinutes: Number(value) } }))} /> : null}
+            <SettingsSection title={t("settings.critical.261")}>
+              <ToggleRow label={t("settings.critical.262")} value={settings.notifications.feedingEnabled} onChange={(feedingEnabled) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, feedingEnabled } }))} />
+              {settings.notifications.feedingEnabled ? <ChoiceRow label={t("settings.critical.263")} value={String(settings.notifications.feedingIntervalMinutes)} options={[{ value: "120", label: t("settings.critical.264") }, { value: "180", label: t("settings.critical.265") }, { value: "240", label: t("settings.critical.266") }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, feedingIntervalMinutes: Number(value) } }))} /> : null}
+              <ToggleRow label={t("settings.critical.267")} value={settings.notifications.sleepEnabled} onChange={(sleepEnabled) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, sleepEnabled } }))} />
+              {settings.notifications.sleepEnabled ? <ChoiceRow label={t("settings.critical.268")} value={String(settings.notifications.sleepIntervalMinutes)} options={[{ value: "60", label: t("settings.critical.269") }, { value: "120", label: t("settings.critical.264") }, { value: "180", label: t("settings.critical.265") }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, sleepIntervalMinutes: Number(value) } }))} /> : null}
             </SettingsSection>
           ) : null}
 
           {page === "careAlerts" ? (
-            <SettingsSection title="마케팅 알림">
+            <SettingsSection title={t("settings.critical.270")}>
               <ToggleRow
-                label="마케팅 알림 수신 (선택)"
+                label={t("settings.critical.271")}
                 value={marketingOptIn}
                 onChange={(next) => {
                   setMarketingOptIn(next);
                   void saveMarketingConsent(next);
                 }}
               />
-              <Text style={styles.help}>가입할 때 선택한 동의를 언제든 바꿀 수 있어요. 돌봄 알림에는 영향을 주지 않아요.</Text>
+              <Text style={styles.help}>{t("settings.critical.272")}</Text>
             </SettingsSection>
           ) : null}
 
           {page === "growthBook" ? (
-            <SettingsSection title="미리보기 기본값">
-              <ToggleRow label="날짜 표시" value={settings.growthBook.showDates} onChange={(showDates) => setSettings((s) => ({ ...s, growthBook: { ...s.growthBook, showDates } }))} />
-              <ToggleRow label="작성자 이름 표시" value={settings.growthBook.showAuthorNames} onChange={(showAuthorNames) => setSettings((s) => ({ ...s, growthBook: { ...s.growthBook, showAuthorNames } }))} />
-              <ChoiceRow label="기본 사진 레이아웃" value={String(settings.growthBook.defaultLayout)} options={[1, 2, 3, 4].map((value) => ({ value: String(value), label: `${value}장` }))} onChange={(value) => setSettings((s) => ({ ...s, growthBook: { ...s.growthBook, defaultLayout: Number(value) as 1 | 2 | 3 | 4 } }))} />
+            <SettingsSection title={t("settings.critical.273")}>
+              <ToggleRow label={t("settings.critical.274")} value={settings.growthBook.showDates} onChange={(showDates) => setSettings((s) => ({ ...s, growthBook: { ...s.growthBook, showDates } }))} />
+              <ToggleRow label={t("settings.critical.275")} value={settings.growthBook.showAuthorNames} onChange={(showAuthorNames) => setSettings((s) => ({ ...s, growthBook: { ...s.growthBook, showAuthorNames } }))} />
+              <ChoiceRow label={t("settings.critical.276")} value={String(settings.growthBook.defaultLayout)} options={[1, 2, 3, 4].map((value) => ({ value: String(value), label: t("settings.critical.322", { count: value }) }))} onChange={(value) => setSettings((s) => ({ ...s, growthBook: { ...s.growthBook, defaultLayout: Number(value) as 1 | 2 | 3 | 4 } }))} />
             </SettingsSection>
           ) : null}
 
           {page === "billing" ? (
             <>
-              <SettingsSection title="현재 플랜">
-                <InfoRow label="K-Nanny MVP" value="무료" />
-                <InfoRow label="구독 상태" value="활성" />
+              <SettingsSection title={t("settings.critical.277")}>
+                <InfoRow label="K-Nanny MVP" value={t("settings.critical.278")} />
+                <InfoRow label={t("settings.critical.279")} value={t("settings.critical.280")} />
               </SettingsSection>
-              <Text style={styles.help}>유료 상품은 App Store 상품 승인이 완료된 뒤 이 화면에서 조회·구매·복원할 수 있습니다.</Text>
-              <SecondaryButton label="구매 복원" onPress={() => Alert.alert("복원할 구매 없음", "현재 계정에 복원 가능한 구매가 없습니다.")} />
+              <Text style={styles.help}>{t("settings.critical.281")}</Text>
+              <SecondaryButton label={t("settings.critical.282")} onPress={() => Alert.alert(t("settings.critical.283"), t("settings.critical.284"))} />
             </>
           ) : null}
 
           {page === "privacy" ? (
             <PolicyDocument
-              lead="Darin은 육아 기록과 가족 공유에 필요한 정보를 처리합니다. 아래 내용은 beta용 앱 내 안내 초안이며 외부 공개 전 법률 검토가 필요합니다."
+              lead={t("settings.critical.137")}
               sections={[
-                ["수집하는 정보", "로그인 식별 정보, 프로필 닉네임·이름·관계, 거주 국가, 앱 언어, 보호자 생년월일, 아기 프로필, 수유·수면·기저귀·성장 기록, 일기와 성장책, 추억 및 가족 공유 정보를 처리합니다."],
-                ["사진·미디어", "사용자가 선택한 일기·성장책·추억 사진과 관련 metadata를 비공개 Storage에 저장합니다. 접근 권한이 있는 가족에게만 제한된 signed URL을 발급합니다."],
-                ["알림 정보", "알림 허용 시 기기 식별자와 Expo push token, 알림 설정 및 전송 상태를 처리합니다."],
-                ["사용 목적", "프로필 관리, 앱 언어·단위·지역 기본 설정, 보호자 상황에 맞는 육아 상담 및 안내 개인화, 기록 저장과 복원, 가족 공유, 요약 제공, 알림 전송과 고객 문의 처리를 위해 사용합니다."],
-                ["가족 공유 범위", "아기의 활성 구성원만 공유 데이터에 접근합니다. 역할과 각 콘텐츠의 공개 범위에 따라 조회·작성·관리 권한이 달라집니다."],
-                ["보관 및 삭제", "계정 삭제 시 닉네임·이름·관계·거주 국가·앱 언어·보호자 생년월일을 포함한 개인 프로필과 설정 및 멤버십을 제거합니다. 혼자 관리하는 아기 데이터는 삭제하며, 공유 아기 데이터는 다른 가족을 위해 보존하고 작성자는 ‘탈퇴한 사용자’로 표시할 수 있습니다."],
-                ["계정 삭제 방법", "설정의 계정 삭제에서 안내를 확인하고 ‘삭제’를 입력해 요청할 수 있습니다."],
-                ["문의", "설정의 문의하기를 이용할 수 있습니다. 문의 내용에는 민감한 아기 건강정보를 입력하지 않는 것을 권장합니다."],
-                ["시행일", "beta 안내 시행일: 2026년 8월 3일"],
+                [t("settings.critical.138"), t("settings.critical.139")],
+                [t("settings.critical.285"), t("settings.critical.132")],
+                [t("settings.critical.140"), t("settings.critical.141")],
+                [t("settings.critical.142"), t("settings.critical.143")],
+                [t("settings.critical.286"), t("settings.critical.127")],
+                [t("settings.critical.144"), t("settings.critical.145")],
+                [t("settings.critical.146"), t("settings.critical.147")],
+                [t("settings.critical.115"), t("settings.critical.148")],
+                [t("settings.critical.149"), t("settings.critical.150")],
               ]}
             />
           ) : null}
 
           {page === "terms" ? (
             <PolicyDocument
-              lead="이 내용은 무료 beta/internal TestFlight를 위한 이용약관 초안입니다. 수익화 전에 별도 업데이트와 법률 검토가 필요합니다."
+              lead={t("settings.critical.287")}
               sections={[
-                ["서비스 목적", "Darin은 보호자의 육아 기록, 일기, 성장책과 초대된 가족 간 공유를 돕는 beta 서비스입니다."],
-                ["사용자 책임", "사용자는 계정과 초대 링크를 안전하게 관리하고 입력한 기록의 정확성과 적법성에 책임을 집니다."],
-                ["가족 공유", "사용자는 데이터 공유에 동의한 사람만 초대하고 적절한 역할을 설정해야 합니다."],
-                ["사진·기록 업로드", "본인이 사용할 권한이 있는 사진과 기록만 업로드해야 하며 타인의 권리를 침해해서는 안 됩니다."],
-                ["금지 행위", "무단 접근, 타인 사칭, 불법 콘텐츠 업로드, 서비스 안정성을 해치는 행위를 금지합니다."],
-                ["서비스 변경", "beta 기간에는 기능이 변경되거나 점검을 위해 일시 중단될 수 있습니다."],
-                ["계정 삭제", "설정에서 계정 삭제를 요청할 수 있으며 공유 데이터는 다른 가족의 권리에 따라 일부 보존될 수 있습니다."],
-                ["면책", "서비스와 AI 안내는 의료 진단이나 응급 판단을 제공하지 않으며 사용자는 필요한 경우 의료 전문가에게 문의해야 합니다."],
-                ["문의", "서비스 관련 문의는 설정의 문의하기를 이용해주세요."],
+                [t("settings.critical.111"), t("settings.critical.112")],
+                [t("settings.critical.117"), t("settings.critical.119")],
+                [t("settings.critical.123"), t("settings.critical.125")],
+                [t("settings.critical.128"), t("settings.critical.130")],
+                [t("settings.critical.133"), t("settings.critical.135")],
+                [t("settings.critical.113"), t("settings.critical.114")],
+                [t("settings.critical.089"), t("settings.critical.120")],
+                [t("settings.critical.121"), t("settings.critical.122")],
+                [t("settings.critical.115"), t("settings.critical.116")],
               ]}
             />
           ) : null}
 
           {page === "medical" ? (
             <PolicyDocument
-              lead="Darin은 육아 기록과 가족 공유를 돕는 도구이며 의료 서비스가 아닙니다."
+              lead={t("settings.critical.166")}
               sections={[
-                ["진단·치료 아님", "앱은 의료 진단, 치료 계획 또는 응급 여부 판단을 제공하지 않습니다."],
-                ["기록의 성격", "수유·수면·성장·체온·약 기록과 요약은 보호자가 참고하기 위한 정보입니다."],
-                ["AI 안내", "AI 답변은 일반적인 참고 정보이며 의료 전문가의 진료나 판단을 대체하지 않습니다."],
-                ["도움이 필요한 경우", "걱정되는 증상이나 응급 상황이 있다면 지역의 소아과, 의료기관 또는 응급서비스에 문의해주세요."],
+                [t("settings.critical.167"), t("settings.critical.168")],
+                [t("settings.critical.169"), t("settings.critical.170")],
+                [t("settings.critical.171"), t("settings.critical.172")],
+                [t("settings.critical.173"), t("settings.critical.174")],
               ]}
             />
           ) : null}
 
           {page === "retention" ? (
             <PolicyDocument
-              lead="현재 beta에서 적용되는 데이터 보존·삭제 정책입니다. 실제 구현과 함께 갱신하며 외부 공개 전 법률 검토가 필요합니다."
+              lead={t("settings.critical.152")}
               sections={[
-                ["개인 계정", "계정 삭제 시 닉네임·이름·관계·거주 국가·앱 언어·보호자 생년월일을 포함한 profile, 알림 token·설정과 baby membership을 제거하고 Auth 계정을 삭제합니다."],
-                ["공유 아기 데이터", "다른 활성 가족이 있으면 아기 기록은 보존되고 탈퇴자의 작성자 식별값은 제거됩니다."],
-                ["혼자 관리하는 아기", "다른 활성 구성원이 없는 아기는 관련 기록·일기·성장책·추억 DB 데이터와 비공개 미디어를 삭제합니다."],
-                ["Soft delete", "사용자가 앱에서 삭제한 일부 일기·성장책·추억은 복원과 동기화 안전성을 위해 soft delete로 처리될 수 있습니다."],
-                ["로컬 캐시", "로그아웃 시 화면 상태를 비우고 계정별 cache를 격리합니다. 계정 삭제에서 이 기기의 로컬 데이터 삭제를 선택할 수 있습니다."],
-                ["알림", "계정 삭제 시 push token과 알림 설정을 삭제합니다. 일반 로그아웃 시 현재 기기의 token을 비활성화합니다."],
-                ["문의", "문의 기록은 지원 이력 관리를 위해 계정 식별값을 제거한 뒤 보존될 수 있습니다."],
-                ["가족 탈퇴", "가족 구성원이 탈퇴하면 membership과 접근 권한이 제거되며 다른 가족의 공유 데이터는 유지됩니다."],
+                [t("settings.critical.153"), t("settings.critical.154")],
+                [t("settings.critical.155"), t("settings.critical.156")],
+                [t("settings.critical.157"), t("settings.critical.158")],
+                ["Soft delete", t("settings.critical.159")],
+                [t("settings.critical.160"), t("settings.critical.161")],
+                [t("settings.critical.054"), t("settings.critical.162")],
+                [t("settings.critical.115"), t("settings.critical.163")],
+                [t("settings.critical.164"), t("settings.critical.165")],
               ]}
             />
           ) : null}
@@ -665,50 +666,50 @@ export function AppSettingsModal({
           {page === "legal" ? (
             <>
               <View style={styles.legalIntro}>
-                <Text style={styles.policyLead}>Beta/internal TestFlight용 정책 안내 초안입니다.</Text>
-                <Text style={styles.help}>이 내용은 무료 beta/internal TestFlight를 위한 이용약관 초안입니다. 수익화 전에 별도 업데이트와 법률 검토가 필요합니다.</Text>
-                <Text style={styles.help}>필요한 항목만 펼쳐 읽을 수 있어요.</Text>
-                <Text style={styles.legalUpdated}>마지막 업데이트 · 2026년 8월 3일</Text>
-                <Text style={styles.help}>문의는 설정의 ‘문의하기’를 이용해주세요.</Text>
+                <Text style={styles.policyLead}>{t("settings.critical.288")}</Text>
+                <Text style={styles.help}>{t("settings.critical.287")}</Text>
+                <Text style={styles.help}>{t("settings.critical.289")}</Text>
+                <Text style={styles.legalUpdated}>{t("settings.critical.290")}</Text>
+                <Text style={styles.help}>{t("settings.critical.291")}</Text>
               </View>
               {LEGAL_ACCORDION_SECTIONS.map((section) => (
                 <PolicyAccordion
                   key={section.title}
-                  title={section.title}
+                  title={t(section.title)}
                   open={openLegalSection === section.title}
                   onPress={() => setOpenLegalSection((current) => current === section.title ? null : section.title)}
-                  paragraphs={section.paragraphs}
+                  paragraphs={section.paragraphs.map(([heading, body]) => [t(heading), t(body)])}
                 />
               ))}
-              <Text style={styles.policyFootnote}>Beta 앱 내 안내 초안 · 외부 공개 및 정식 출시 전 법률 검토 필요</Text>
+              <Text style={styles.policyFootnote}>{t("settings.critical.292")}</Text>
             </>
           ) : null}
 
           {page === "dataExport" ? (
             <>
               <PolicyDocument
-                lead="아기 기록과 일기 데이터를 JSON 파일로 내보냅니다. 사진 원본 파일은 이번 내보내기에 포함되지 않습니다."
+                lead={t("settings.critical.293")}
                 sections={[
-                  ["포함 범위", "프로필 기본 정보, 아기 정보, 가족 역할 요약, 돌봄·성장 기록, 일기와 미디어 metadata, 성장책, 추억 metadata, 본인의 알림 설정을 포함합니다."],
-                  ["개인정보 보호", "다른 가족의 계정 식별자는 self 또는 family-member 값으로 치환하며 signed URL은 포함하지 않습니다."],
-                  ["권한", "현재 계정이 앱에서 읽을 수 있는 현재 아기의 데이터만 내보냅니다. 비구성원은 RLS에 의해 차단됩니다."],
+                  [t("settings.critical.294"), t("settings.critical.295")],
+                  [t("settings.critical.296"), t("settings.critical.297")],
+                  [t("settings.critical.298"), t("settings.critical.299")],
                 ]}
               />
               {exportMessage ? <Text style={styles.help}>{exportMessage}</Text> : null}
               <PrimaryButton
-                label={exporting ? "파일 만드는 중…" : "JSON 파일 내보내기"}
+                label={exporting ? t("settings.critical.206") : t("settings.critical.300")}
                 onPress={() => {
                   if (exporting) return;
                   const babyId = localDataScope?.babyId;
                   if (!babyId) {
-                    setExportMessage("현재 선택된 아기가 없어요.");
+                    setExportMessage(t("settings.critical.203"));
                     return;
                   }
                   setExporting(true);
                   setExportMessage("");
                   void DataExportRepository.exportAndShare(babyId)
-                    .then(() => setExportMessage("내보내기 파일을 만들었어요."))
-                    .catch((error) => setExportMessage(error instanceof Error ? error.message : "내보내지 못했어요."))
+                    .then(() => setExportMessage(t("settings.critical.204")))
+                    .catch((error) => setExportMessage(error instanceof Error ? error.message : t("settings.critical.205")))
                     .finally(() => setExporting(false));
                 }}
               />
@@ -717,25 +718,25 @@ export function AppSettingsModal({
 
           {page === "contact" ? (
             <>
-              <Text style={styles.help}>민감한 아기 건강정보, 비밀번호 또는 인증 코드는 문의 내용에 입력하지 마세요.</Text>
-              <SettingsSection title="문의 내용">
+              <Text style={styles.help}>{t("settings.critical.301")}</Text>
+              <SettingsSection title={t("settings.critical.302")}>
                 <ChoiceRow
-                  label="카테고리"
+                  label={t("settings.critical.303")}
                   value={contactCategory}
                   options={[
-                    { value: "bug", label: "버그" }, { value: "account", label: "계정" },
-                    { value: "data", label: "데이터" }, { value: "family", label: "가족 공유" },
-                    { value: "feedback", label: "제안" }, { value: "other", label: "기타" },
+                    { value: "bug", label: t("settings.critical.304") }, { value: "account", label: t("settings.critical.085") },
+                    { value: "data", label: t("settings.critical.305") }, { value: "family", label: t("settings.critical.123") },
+                    { value: "feedback", label: t("settings.critical.306") }, { value: "other", label: t("settings.critical.246") },
                   ]}
                   onChange={(value) => setContactCategory(value as ContactRequestCategory)}
                 />
-                <Field label="답변 받을 이메일" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" />
+                <Field label={t("settings.critical.307")} value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" />
                 <View style={styles.field}>
-                  <Text style={styles.fieldLabel}>문의 내용 · {contactMessage.length}/4000</Text>
+                  <Text style={styles.fieldLabel}>{t("settings.critical.308")}{contactMessage.length}/4000</Text>
                   <TextInput
                     value={contactMessage}
                     onChangeText={setContactMessage}
-                    placeholder="도움이 필요한 내용을 적어주세요."
+                    placeholder={t("settings.critical.309")}
                     placeholderTextColor={colors.faint}
                     multiline
                     maxLength={4000}
@@ -746,7 +747,7 @@ export function AppSettingsModal({
               </SettingsSection>
               {contactStatus ? <Text style={styles.help}>{contactStatus}</Text> : null}
               <PrimaryButton
-                label={contactBusy ? "보내는 중…" : "문의 보내기"}
+                label={contactBusy ? t("settings.critical.310") : t("settings.critical.311")}
                 onPress={() => {
                   if (contactBusy) return;
                   setContactBusy(true);
@@ -754,14 +755,14 @@ export function AppSettingsModal({
                   void ContactRequestRepository.create({ email: contactEmail, category: contactCategory, message: contactMessage })
                     .then(() => {
                       setContactMessage("");
-                      setContactStatus("문의가 접수됐어요. 답변은 입력한 이메일로 안내드릴게요.");
+                      setContactStatus(t("settings.critical.312"));
                     })
-                    .catch((error) => setContactStatus(error instanceof Error ? error.message : "문의를 보내지 못했어요."))
+                    .catch((error) => setContactStatus(error instanceof Error ? error.message : t("settings.critical.313")))
                     .finally(() => setContactBusy(false));
                 }}
               />
               <SecondaryButton
-                label="이메일 앱으로 문의하기"
+                label={t("settings.critical.314")}
                 onPress={() => void Linking.openURL(`mailto:${process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? "support@darin.app"}`)}
               />
             </>
@@ -900,6 +901,7 @@ function ActionRow({
 }
 
 function PolicyDocument({ lead, sections }: { lead: string; sections: Array<[string, string]> }) {
+  const { t } = useLanguage();
   return (
     <>
       <Text style={styles.policyLead}>{lead}</Text>
@@ -909,7 +911,7 @@ function PolicyDocument({ lead, sections }: { lead: string; sections: Array<[str
           <Text style={styles.policyBody}>{body}</Text>
         </View>
       ))}
-      <Text style={styles.policyFootnote}>Beta 앱 내 안내 초안 · 외부 공개 및 정식 출시 전 법률 검토 필요</Text>
+      <Text style={styles.policyFootnote}>{t("settings.critical.292")}</Text>
     </>
   );
 }
@@ -925,6 +927,7 @@ function PolicyAccordion({
   onPress: () => void;
   paragraphs: Array<[string, string]>;
 }) {
+  const { t } = useLanguage();
   return (
     <View style={styles.accordionCard}>
       <Pressable
@@ -932,7 +935,7 @@ function PolicyAccordion({
         onPress={onPress}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        accessibilityLabel={`${title} ${open ? "접기" : "펼치기"}`}
+        accessibilityLabel={t("settings.critical.323", { title, state: open ? t("settings.critical.315") : t("settings.critical.316") })}
       >
         <Text style={styles.accordionTitle}>{title}</Text>
         <Text style={styles.accordionChevron}>{open ? "︿" : "﹀"}</Text>
@@ -979,8 +982,8 @@ function SecondaryButton({
   );
 }
 
-function loginMethodLabel(method: string) {
-  return { apple: "Apple", google: "Google", kakao: "카카오", email: "이메일", demo: "데모 계정" }[method] ?? method;
+function loginMethodLabel(method: string, t: ReturnType<typeof import("../../i18n").createT>) {
+  return { apple: "Apple", google: "Google", kakao: t("settings.critical.192"), email: t("settings.critical.002"), demo: t("settings.critical.317") }[method] ?? method;
 }
 
 const styles = StyleSheet.create({

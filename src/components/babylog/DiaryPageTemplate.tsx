@@ -4,6 +4,7 @@ import Svg, { Line } from "react-native-svg";
 import { diaryPageTemplate, type DiaryPageTemplateId } from "../../constants/diaryPageTemplates";
 import type { DiarySkyId } from "../../constants/diaryCompose";
 import { DiarySkyStamp } from "./DiaryStamp";
+import { useLanguage } from "../../LanguageContext";
 import { DiaryTemplateDecoration, DiaryTemplatePattern } from "./DiaryCoverTemplate";
 
 type Props = {
@@ -21,6 +22,7 @@ const BODY_LINE_HEIGHT = 24;
 const COMMENT_LINE_HEIGHT = 20;
 
 export function DiaryPageTemplate({ styleId, dateLabel, weatherStamp, title, body, comments = [], compact = false, style }: Props) {
+  const { t } = useLanguage();
   const template = diaryPageTemplate(styleId);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const onLayout = (event: LayoutChangeEvent) => {
@@ -48,13 +50,13 @@ export function DiaryPageTemplate({ styleId, dateLabel, weatherStamp, title, bod
           : null}
         <View style={styles.foreground}>
         <View style={[styles.header, template.headerStyle !== "line" && styles.roundedHeader, { borderColor: template.accentColor, backgroundColor: template.headerStyle === "line" ? "transparent" : `${template.accentColor}12` }]}>
-          <Text style={[styles.date, compact && styles.compactDate, { color: template.textColor }]} numberOfLines={1}>{dateLabel || "년 · 월 · 일"}</Text>
+          <Text style={[styles.date, compact && styles.compactDate, { color: template.textColor }]} numberOfLines={1}>{dateLabel || t("diary.template.datePlaceholder")}</Text>
           {weatherStamp ? <DiarySkyStamp id={weatherStamp} selected size={compact ? "sm" : "md"} /> : <View style={[styles.stampPlaceholder, { borderColor: `${template.accentColor}77` }]} />}
         </View>
 
         <RuledTextArea
           text={body}
-          emptyText="오늘의 이야기를 적어보세요"
+          emptyText={t("diary.template.bodyPlaceholder")}
           color={template.textColor}
           lineColor={`${template.accentColor}55`}
           lineStyle={template.writingLineStyle}
@@ -64,8 +66,8 @@ export function DiaryPageTemplate({ styleId, dateLabel, weatherStamp, title, bod
         />
 
         <View style={[styles.titleSection, template.titleSectionStyle === "box" && { borderWidth: 1, borderColor: `${template.accentColor}66`, borderRadius: 8, backgroundColor: `${template.accentColor}0A` }]}>
-          <Text style={[styles.titleLabel, compact && styles.compactLabel, { color: template.accentColor }]}>제목</Text>
-          <Text style={[styles.title, compact && styles.compactTitle, { color: template.textColor, borderBottomColor: `${template.accentColor}66` }]} numberOfLines={2} ellipsizeMode="tail">{title?.trim() || "제목을 입력해 주세요"}</Text>
+          <Text style={[styles.titleLabel, compact && styles.compactLabel, { color: template.accentColor }]}>{t("diary.template.title")}</Text>
+          <Text style={[styles.title, compact && styles.compactTitle, { color: template.textColor, borderBottomColor: `${template.accentColor}66` }]} numberOfLines={2} ellipsizeMode="tail">{title?.trim() || t("diary.template.titlePlaceholder")}</Text>
         </View>
 
         {comments.length > 0 ? (

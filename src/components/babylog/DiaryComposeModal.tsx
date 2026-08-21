@@ -75,11 +75,9 @@ type Props = {
   onDelete?: (id: string) => void;
 };
 
-const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 const MAX_DIARY_PHOTOS = 5;
 
 function formatTodayLabel(locale: Locale, d = new Date()): string {
-  if (locale === "ko") return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`;
   return formatLocalizedDate(d, locale, { month: "long", day: "numeric", weekday: "short" });
 }
 
@@ -332,11 +330,11 @@ export function DiaryComposeModal({
   const pickPhoto = async () => {
     const remaining = MAX_DIARY_PHOTOS - photos.length;
     if (remaining <= 0) {
-      Alert.alert("사진은 최대 5장까지", "사진을 더 추가하려면 먼저 한 장을 삭제해 주세요.");
+      Alert.alert(t("diary.compose.photoLimitTitle"), t("diary.compose.photoLimitBody"));
       return;
     }
     if (!activeBabyId) {
-      setPhotoError("사진을 올리려면 현재 아기가 필요해요.");
+      setPhotoError(t("diary.compose.activeBabyRequired"));
       return;
     }
     try {
@@ -346,8 +344,8 @@ export function DiaryComposeModal({
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!resolvedPermission.granted) {
         Alert.alert(
-          "사진 접근 권한이 필요해요",
-          "설정에서 사진 접근을 허용한 뒤 다시 시도해 주세요.",
+          t("diary.compose.photoPermissionTitle"),
+          t("diary.compose.photoPermissionBody"),
         );
         return;
       }
@@ -380,8 +378,8 @@ export function DiaryComposeModal({
     } catch (error) {
       if (__DEV__) console.warn("[diary-photo-picker] open failed", error instanceof Error ? error.name : "unknown");
       Alert.alert(
-        "사진을 불러오지 못했어요",
-        "iCloud 사진이라면 사진 앱에서 원본을 먼저 열어 다운로드한 뒤 다시 선택해 주세요.",
+        t("diary.compose.photoLoadTitle"),
+        t("diary.compose.photoLoadBody"),
       );
     }
   };
@@ -400,9 +398,9 @@ export function DiaryComposeModal({
     if (!readOnly && !isEdit && onDraftChange) onDraftChange(buildDraft());
     // New entries are kept as a draft, so only edits can actually lose work.
     if (!readOnly && isEdit && baselineRef.current !== null && dirtySignature() !== baselineRef.current) {
-      Alert.alert("수정한 내용을 지울까요?", "저장하지 않고 닫으면 변경한 내용이 사라져요.", [
-        { text: "계속 쓰기", style: "cancel" },
-        { text: "닫기", style: "destructive", onPress: onClose },
+      Alert.alert(t("diary.compose.discardTitle"), t("diary.compose.discardBody"), [
+        { text: t("diary.compose.keepWriting"), style: "cancel" },
+        { text: t("diary.compose.close"), style: "destructive", onPress: onClose },
       ]);
       return;
     }
@@ -411,10 +409,10 @@ export function DiaryComposeModal({
 
   const handleDelete = () => {
     if (readOnly || !editingEntry || !onDelete) return;
-    Alert.alert("일기 삭제", "이 일기를 삭제할까요? 성장책에서도 함께 빠져요.", [
-      { text: "취소", style: "cancel" },
+    Alert.alert(t("diary.compose.deleteTitle"), t("diary.compose.deleteBody"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "삭제",
+        text: t("diary.compose.delete"),
         style: "destructive",
         onPress: () => {
           onDelete(editingEntry.id);
@@ -428,10 +426,10 @@ export function DiaryComposeModal({
     ? t("diary.compose.viewTitle")
     : isEdit
       ? fromPush
-        ? "오늘 일기 이어쓰기"
+        ? t("diary.compose.continueToday")
         : t("diary.compose.editTitle")
       : fromPush
-        ? "알림에서 쓰기"
+        ? t("diary.compose.fromNotification")
         : t("diary.compose.newTitle");
 
   return (
@@ -455,9 +453,9 @@ export function DiaryComposeModal({
               accessibilityState={{ disabled: !canSubmit }}
               accessibilityHint={
                 pendingUploads > 0
-                  ? "사진이 올라가는 중이어도 저장할 수 있어요"
+                  ? t("diary.compose.uploadingSaveHint")
                   : failedUploads > 0
-                    ? "올리지 못한 사진은 다시 시도하거나 삭제해 주세요"
+                    ? t("diary.compose.uploadFailedHint")
                     : undefined
               }
             >
@@ -468,12 +466,12 @@ export function DiaryComposeModal({
 
         {readOnly ? (
           <View style={styles.fromPushBanner}>
-            <Text style={styles.fromPushText}>이 일기는 보기만 할 수 있어요</Text>
+            <Text style={styles.fromPushText}>{t("diary.compose.readOnly")}</Text>
           </View>
         ) : fromPush ? (
           <View style={styles.fromPushBanner}>
             <BabyLogIcon kind="bell" size={14} color={colors.amberText} />
-            <Text style={styles.fromPushText}>알림에서 바로 열린 오늘 일기예요</Text>
+            <Text style={styles.fromPushText}>{t("diary.compose.openedFromNotification")}</Text>
           </View>
         ) : null}
 
@@ -493,21 +491,21 @@ export function DiaryComposeModal({
             <View style={styles.careCard}>
               <View style={styles.careTagRow}>
                 <BabyLogIcon kind="sparkles" size={12} color={colors.amberText} strokeWidth={2.2} />
-                <Text style={styles.careTag}>오늘의 Care Log</Text>
+                <Text style={styles.careTag}>{t("diary.compose.careLog")}</Text>
               </View>
               <Text style={styles.careText}>{displaySummary}</Text>
               {isEdit && frozenSnapshot ? (
-                <Text style={styles.snapshotNote}>저장 당시 요약 · Care Log가 바뀌어도 유지돼요</Text>
+                <Text style={styles.snapshotNote}>{t("diary.compose.snapshotHint")}</Text>
               ) : null}
               {!isEdit && summary.totalCount === 0 ? (
-                <Text style={styles.snapshotNote}>기록이 없어도 일기는 남길 수 있어요</Text>
+                <Text style={styles.snapshotNote}>{t("diary.compose.noRecordsHint")}</Text>
               ) : null}
             </View>
 
             {!readOnly && (!isEdit || fromPush) ? (
               <>
-                <Text style={styles.sectionLabel}>오늘 기록 기반 제안</Text>
-                <Text style={styles.sectionHint}>누르면 코멘트에 이어붙여요</Text>
+                <Text style={styles.sectionLabel}>{t("diary.compose.suggestions")}</Text>
+                <Text style={styles.sectionHint}>{t("diary.compose.suggestionsHint")}</Text>
                 <View style={styles.suggestList}>
                   {suggestions.map((s) => (
                     <Pressable
@@ -540,9 +538,9 @@ export function DiaryComposeModal({
                 </View>
                 <Text style={styles.photoLimit}>
                   {pendingUploads > 0
-                    ? `사진 ${pendingUploads}장을 올리는 중이에요. 지금 저장해도 일기에 남아요.`
+                    ? t("diary.compose.uploadingPhotos", { count: pendingUploads })
                     : failedUploads > 0
-                      ? "올리지 못한 사진이 있어요. 다시 시도하거나 삭제해 주세요."
+                      ? t("diary.compose.uploadFailed")
                       : t("diary.compose.photoCount", { count: photos.length })}
                 </Text>
                 {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
@@ -565,14 +563,14 @@ export function DiaryComposeModal({
                         style={styles.photoFail}
                         onPress={() => retryEagerPhoto(job.id)}
                         accessibilityRole="button"
-                        accessibilityLabel="사진 다시 올리기"
+                        accessibilityLabel={t("diary.compose.retryPhotoA11y")}
                       >
-                        <Text style={styles.photoFailText}>다시 시도</Text>
+                        <Text style={styles.photoFailText}>{t("diary.compose.retry")}</Text>
                       </Pressable>
                     ) : job && job.status !== "uploaded" ? (
                       <View style={styles.photoUploading} pointerEvents="none">
                         <ActivityIndicator size="small" color={colors.onDark} />
-                        <Text style={styles.photoUploadingText}>올리는 중</Text>
+                        <Text style={styles.photoUploadingText}>{t("diary.compose.uploading")}</Text>
                       </View>
                     ) : null}
                     {readOnly ? null : (
@@ -584,7 +582,7 @@ export function DiaryComposeModal({
                             setCoverPhotoTransform({ scale: 1, translateX: 0, translateY: 0 });
                           }}
                           accessibilityRole="button"
-                          accessibilityLabel={`사진 ${index + 1}을 표지로 설정`}
+                          accessibilityLabel={t("diary.compose.setCoverA11y", { count: index + 1 })}
                           accessibilityState={{ selected: coverPhotoUri === uri }}
                         >
                           <Text style={styles.photoCoverSelectText}>{coverPhotoUri === uri ? t("diary.compose.coverSelected") : t("diary.compose.coverSet")}</Text>
@@ -599,7 +597,7 @@ export function DiaryComposeModal({
                             setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index));
                           }}
                           accessibilityRole="button"
-                          accessibilityLabel={`사진 ${index + 1} 삭제`}
+                          accessibilityLabel={t("diary.compose.deletePhotoA11y", { count: index + 1 })}
                         >
                           <View style={styles.photoRemoveGlyph}>
                             <Text style={styles.photoRemoveText}>×</Text>
@@ -695,7 +693,7 @@ export function DiaryComposeModal({
 
             {stickerIds.length > 0 ? (
               <>
-                <Text style={styles.fieldLabel}>오늘의 스티커</Text>
+                <Text style={styles.fieldLabel}>{t("diary.compose.todaySticker")}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stickerRow}>
                   {stickerIds.map((id) => {
                     const sticker = babyStickers.find((item) => item.id === id);
@@ -710,7 +708,7 @@ export function DiaryComposeModal({
                     );
                   })}
                 </ScrollView>
-                {readOnly ? null : <Text style={styles.sectionHint}>길게 누르면 스티커를 빼요</Text>}
+                {readOnly ? null : <Text style={styles.sectionHint}>{t("diary.compose.removeStickerHint")}</Text>}
               </>
             ) : null}
 
@@ -727,7 +725,7 @@ export function DiaryComposeModal({
 
             <Text style={styles.fieldLabel}>{t("diary.compose.weather")}</Text>
             {readOnly ? null : (
-              <Text style={styles.sectionHint}>다시 누르면 선택을 해제할 수 있어요</Text>
+              <Text style={styles.sectionHint}>{t("diary.compose.toggleHint")}</Text>
             )}
             <View pointerEvents={readOnly ? "none" : "auto"}>
               <DiarySkyPicker value={weather} onChange={setWeather} />
@@ -789,7 +787,7 @@ export function DiaryComposeModal({
                 value={customMilestoneTag}
                 onChangeText={setCustomMilestoneTag}
                 editable={!readOnly}
-                placeholder="예: 처음으로 손을 뻗은 날"
+                placeholder={t("diary.compose.milestoneExample")}
                 placeholderTextColor={colors.faint}
               />
             ) : null}
@@ -823,9 +821,9 @@ export function DiaryComposeModal({
                 {!canSave ? (
                   <Text style={styles.saveHint}>{t("diary.compose.needContent")}</Text>
                 ) : pendingUploads > 0 ? (
-                  <Text style={styles.saveHint}>사진은 백그라운드에서 올라가요. 지금 저장해도 돼요.</Text>
+                  <Text style={styles.saveHint}>{t("diary.compose.backgroundUploadHint")}</Text>
                 ) : failedUploads > 0 ? (
-                  <Text style={styles.saveHint}>올리지 못한 사진을 다시 시도하거나 삭제해 주세요</Text>
+                  <Text style={styles.saveHint}>{t("diary.compose.uploadFailedHint")}</Text>
                 ) : null}
 
                 {isEdit && onDelete ? (

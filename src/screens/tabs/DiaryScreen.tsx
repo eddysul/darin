@@ -61,6 +61,8 @@ import { colors, radius, type } from "../../theme";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
 import type { MainTabParamList } from "../../navigation/types";
 import { diaryStageLabel, formatDottedDate } from "../../utils/childDisplay";
+import { useLanguage } from "../../LanguageContext";
+import { formatLocalizedDate } from "../../utils/localeFormat";
 
 type Props = {
   onOpenProfile: () => void;
@@ -73,6 +75,7 @@ type Props = {
 type DiaryFilter = "all" | "growth" | "book";
 
 export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenShared, onOpenConsult }: Props) {
+  const { locale, t } = useLanguage();
   const route = useRoute<RouteProp<MainTabParamList, "Diary">>();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList, "Diary">>();
   const {
@@ -318,14 +321,14 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
 
   const reminderLabel = reminder.enabled
     ? formatReminderTime(reminder.hour, reminder.minute)
-    : "꺼짐";
+    : t("diary.screen.reminderOff");
   const todayDiary = findDiaryForDate(diaryEntries, todayKey);
   const canEditToday = todayDiary ? canEditLog(myFamilyRole, todayDiary.createdBy, me) : allowAdd;
   const writeLabel = todayDiary
     ? canEditToday
-      ? "오늘 일기 수정"
-      : "오늘 일기 보기"
-    : "새 일기 쓰기";
+      ? t("diary.screen.editToday")
+      : t("diary.screen.viewToday")
+    : t("diary.screen.newEntry");
   const writeDisabled = !todayDiary && !allowAdd;
 
   const persistFromDraft = (draft: DiaryComposeDraft, source: "manual" | "notification") => {
@@ -341,9 +344,8 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
       }
       void clearDiaryDraft(localDataScope, todayKey);
       setDraftMemory(null);
-      const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
       const now = new Date();
-      const dateLabel = `${now.getMonth() + 1}월 ${now.getDate()}일 (${weekdays[now.getDay()]})`;
+      const dateLabel = formatLocalizedDate(now, locale, { month: "long", day: "numeric", weekday: "short" });
 
       if (editingEntry) {
         updateDiary(editingEntry.id, {
@@ -455,7 +457,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
         ListHeaderComponent={
           <>
         {!allowAdd && (
-          <Text style={styles.viewerBanner}>보기 전용 계정이에요. 일기 추가·수정은 제한돼요.</Text>
+          <Text style={styles.viewerBanner}>{t("diary.screen.viewerBanner")}</Text>
         )}
         <Pressable
           style={[styles.writeBtn, styles.btnPrimary, writeDisabled && styles.disabled]}
@@ -476,7 +478,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
             style={styles.bookCard}
             onPress={() => setVaultOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel={`${babyName}의 성장책 열기`}
+            accessibilityLabel={t("diary.screen.openGrowthBookA11y", { babyName })}
           >
             <View style={styles.bookCover}>
               {bookCoverPhoto ? (
@@ -489,17 +491,17 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
             </View>
             <View style={styles.bookCardLeft}>
               <View style={styles.bookCardTitleRow}>
-                <Text style={styles.bookCardTitle}>{babyName}의 성장책</Text>
+                <Text style={styles.bookCardTitle}>{t("diary.screen.growthBookTitle", { babyName })}</Text>
               </View>
               <Text style={styles.bookCardStats}>
-                담은 기록 {bookEntries.length}개 · 사진 {bookPhotoCount}장 · 예상 {estimateGrowthBookPageCount(bookEntries.length)}쪽
+                {t("diary.screen.growthBookStats", { entries: bookEntries.length, photos: bookPhotoCount, pages: estimateGrowthBookPageCount(bookEntries.length) })}
               </Text>
               {bookEntries.length === 0 ? (
-                <Text style={styles.bookCardDesc}>소중한 순간을 성장책에 담아보세요</Text>
+                <Text style={styles.bookCardDesc}>{t("diary.screen.growthBookEmpty")}</Text>
               ) : null}
             </View>
             <View style={styles.bookCardBtn}>
-              <Text style={styles.bookCardBtnText}>성장책 열기</Text>
+              <Text style={styles.bookCardBtnText}>{t("diary.screen.openGrowthBook")}</Text>
               <BabyLogIcon kind="chevron" size={14} color={colors.amberText} />
             </View>
           </Pressable>
@@ -508,10 +510,10 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
             style={styles.stickerBtn}
             onPress={() => setStickerOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel="스티커 만들기"
+            accessibilityLabel={t("diary.screen.makeStickerA11y")}
           >
             <BabyLogIcon kind="baby" size={16} color={colors.amberText} />
-            <Text style={styles.stickerBtnText}>스티커</Text>
+            <Text style={styles.stickerBtnText}>{t("diary.screen.sticker")}</Text>
           </Pressable>
         </View>
 
@@ -519,10 +521,10 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
           style={styles.reminderRow}
           onPress={() => setSettingsOpen(true)}
           accessibilityRole="button"
-          accessibilityLabel="일기 리마인더 설정"
+          accessibilityLabel={t("diary.screen.reminderSettingsA11y")}
         >
           <BabyLogIcon kind="clock" size={14} color={colors.muted} />
-          <Text style={styles.reminderHint}>일기 리마인더 · {reminderLabel}</Text>
+          <Text style={styles.reminderHint}>{t("diary.screen.reminderSummary", { value: reminderLabel })}</Text>
           <BabyLogIcon kind="chevron" size={14} color={colors.muted} />
         </Pressable>
 
@@ -533,9 +535,9 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
         >
           {(
             [
-              { key: "all", label: `전체 ${diaryEntries.length}` },
-              { key: "growth", label: `성장 순간 ${growthCount}` },
-              { key: "book", label: `성장책에 담김 ${bookEntries.length}` },
+              { key: "all", label: t("diary.screen.filterAll", { count: diaryEntries.length }) },
+              { key: "growth", label: t("diary.screen.filterGrowth", { count: growthCount }) },
+              { key: "book", label: t("diary.screen.filterBook", { count: bookEntries.length }) },
             ] as const
           ).map((f) => {
             const active = filter === f.key;
@@ -563,23 +565,23 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
           <EmptyState
             title={
               diaryEntries.length === 0
-                ? "아직 작성한 일기가 없어요."
+                ? t("diary.screen.emptyAllTitle")
                 : filter === "growth"
-                  ? "성장 순간으로 표시된 일기가 없어요."
+                  ? t("diary.screen.emptyGrowthTitle")
                   : filter === "book"
-                    ? "아직 성장책에 담은 순간이 없어요."
-                    : "표시할 일기가 없어요."
+                    ? t("diary.screen.emptyBookTitle")
+                    : t("diary.screen.emptyFilteredTitle")
             }
             body={
               diaryEntries.length === 0
-                ? "첫 일기를 남겨보세요."
+                ? t("diary.screen.emptyAllBody")
                 : filter === "growth"
-                  ? "작성할 때 성장 순간 태그를 붙이면 여기에 모여요."
+                  ? t("diary.screen.emptyGrowthBody")
                   : filter === "book"
-                    ? "소중한 일기 사진 옆 책갈피를 눌러 담아보세요."
+                    ? t("diary.screen.emptyBookBody")
                     : undefined
             }
-            ctaLabel={diaryEntries.length === 0 ? "첫 일기 쓰기" : undefined}
+            ctaLabel={diaryEntries.length === 0 ? t("diary.screen.firstEntry") : undefined}
             onPressCta={diaryEntries.length === 0 ? openComposeFresh : undefined}
           />
         }
@@ -733,6 +735,7 @@ function DiaryCard({
   onOpen: () => void;
   onToggleBook: () => void;
 }) {
+  const { t } = useLanguage();
   const inBook = entry.includedInGrowthBook;
   const photo = diaryPrimaryPhoto(entry) ?? entry.photos[0] ?? null;
   const milestone = diaryMilestoneLabel(entry);
@@ -750,7 +753,9 @@ function DiaryCard({
         onPress={onOpen}
         accessibilityRole="button"
         accessibilityLabel={
-          milestone ? `${entry.date} 일기, 성장 순간 ${milestone}` : `${entry.date} 일기`
+          milestone
+            ? t("diary.screen.milestoneEntryA11y", { date: entry.date, milestone })
+            : t("diary.screen.entryA11y", { date: entry.date })
         }
       >
         <View style={styles.thumbWrap}>
@@ -789,7 +794,7 @@ function DiaryCard({
             {diaryDisplayComment(entry)}
           </Text>
           {entry.createdBy?.name ? (
-            <Text style={styles.author}>작성자: {entry.createdBy.name}</Text>
+            <Text style={styles.author}>{t("diary.screen.author", { name: entry.createdBy.name })}</Text>
           ) : null}
           {milestone ? (
             <View style={styles.growthTag}>
@@ -815,11 +820,11 @@ function DiaryCard({
         accessibilityLabel={
           canToggleBook
             ? inBook
-              ? "성장책에서 빼기"
-              : "성장책에 담기"
+              ? t("diary.screen.removeFromBook")
+              : t("diary.screen.addToBook")
             : inBook
-              ? "성장책에 담김, 이 일기는 수정할 수 없어요"
-              : "성장책에 담기, 이 일기는 수정할 수 없어요"
+              ? t("diary.screen.bookReadOnlyIncluded")
+              : t("diary.screen.bookReadOnlyAdd")
         }
         accessibilityState={{ selected: inBook, disabled: !canToggleBook }}
       >

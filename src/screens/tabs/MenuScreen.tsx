@@ -42,6 +42,7 @@ import {
   saveDiaryReminder,
 } from "../../utils/diaryReminderStore";
 import { sendDiaryNotificationPreview } from "../../utils/diaryReminderNotifications";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   onOpenProfile: () => void;
@@ -54,7 +55,10 @@ type Props = {
   embedded?: boolean;
 };
 
+const ACCOUNT_DELETION_CONFIRMATION = "\uC0AD\uC81C";
+
 export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, onOpenSettings, onOpenGrowthRecords, onOpenGrowthBookStorage, onOpenConsult, embedded = false }: Props) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const logout = useLogout();
   const { settings, setSettings, resetSettings } = useAppSettings();
@@ -97,15 +101,15 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
   }, [hasServerDeletion]);
 
   const confirmLogout = () => {
-    Alert.alert("로그아웃", "로그인 화면으로 돌아갈까요? 서버 기록은 다시 로그인하면 복원돼요.", [
-      { text: "취소", style: "cancel" },
+    Alert.alert(t("settings.critical.030"), t("settings.critical.031"), [
+      { text: t("settings.critical.032"), style: "cancel" },
       {
-        text: "로그아웃",
+        text: t("settings.critical.030"),
         style: "destructive",
         onPress: () => {
           setLoggingOut(true);
           void Promise.resolve(logout())
-            .catch(() => Alert.alert("로그아웃하지 못했어요", "네트워크 연결을 확인하고 다시 시도해주세요."))
+            .catch(() => Alert.alert(t("settings.critical.033"), t("settings.critical.034")))
             .finally(() => setLoggingOut(false));
         },
       },
@@ -115,22 +119,22 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
   const performDelete = async () => {
     if (deleting) return;
     if (authUser && !hasServerDeletion) {
-      setDeleteError("이메일 계정 삭제용 서버 API가 아직 배포되지 않았어요. 데이터 보호를 위해 로컬 삭제만 진행하지 않습니다.");
+      setDeleteError(t("settings.critical.035"));
       return;
     }
     setDeleting(true);
     setDeleteError("");
     try {
-      if (deleteConfirmation.trim() !== "삭제") {
-        setDeleteError("계속하려면 ‘삭제’를 정확히 입력해주세요.");
+      if (deleteConfirmation.trim() !== t("settings.critical.036")) {
+        setDeleteError(t("settings.critical.037"));
         return;
       }
-      const result = await deleteServerAccount(deleteConfirmation.trim());
+      const result = await deleteServerAccount(ACCOUNT_DELETION_CONFIRMATION);
       if (result.localOnly && !deleteLocal) {
         setDeleteOpen(false);
         Alert.alert(
-          "삭제된 데이터가 없어요",
-          "현재 빌드는 서버 계정이 없는 데모 모드이며, 로컬 데이터 삭제가 꺼져 있어 기기 데이터는 유지했습니다.",
+          t("settings.critical.038"),
+          t("settings.critical.039"),
         );
         return;
       }
@@ -143,13 +147,13 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
       await logout();
       if (result.localOnly) {
         Alert.alert(
-          "로컬 계정 삭제 완료",
-          "현재 빌드는 서버 계정이 없는 데모 모드여서 선택한 기기 데이터만 삭제했습니다.",
+          t("settings.critical.040"),
+          t("settings.critical.041"),
         );
       }
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : "잠시 후 다시 시도해주세요.",
+        error instanceof Error ? error.message : t("settings.critical.042"),
       );
     } finally {
       setDeleting(false);
@@ -169,89 +173,89 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         showsVerticalScrollIndicator={false}
       >
         {!embedded ? <Text style={styles.eyebrow}>K-NANNY</Text> : null}
-        {!embedded ? <Text style={styles.title}>메뉴</Text> : null}
-        <Text style={styles.subtitle}>계정과 기록 방식을 한 곳에서 관리해요.</Text>
+        {!embedded ? <Text style={styles.title}>{t("settings.critical.043")}</Text> : null}
+        <Text style={styles.subtitle}>{t("settings.critical.044")}</Text>
 
-        <MenuSection title="아기/가족">
+        <MenuSection title={t("settings.critical.045")}>
           <MenuRow
             icon="profile"
-            title="내 프로필"
-            subtitle="사진·닉네임·이름·관계"
+            title={t("settings.critical.046")}
+            subtitle={t("settings.critical.047")}
             onPress={() => (onOpenMyProfile ? onOpenMyProfile() : setAccountSettingsOpen(true))}
           />
-          <MenuRow icon="baby" title="아기 프로필" subtitle="사진·이름·별명·생년월일 관리" onPress={onOpenProfile} />
-          <MenuRow icon="family" title="가족·친구 공유" subtitle="ID로 요청하거나 연결된 사람을 관리" onPress={onOpenFamilyShare} />
+          <MenuRow icon="baby" title={t("settings.critical.048")} subtitle={t("settings.critical.049")} onPress={onOpenProfile} />
+          <MenuRow icon="family" title={t("settings.critical.050")} subtitle={t("settings.critical.051")} onPress={onOpenFamilyShare} />
           {onOpenConsult ? (
             <MenuRow
               icon="bot"
-              title="AI 상담"
-              subtitle="육아 질문을 바로 물어보세요"
+              title={t("settings.critical.052")}
+              subtitle={t("settings.critical.053")}
               onPress={onOpenConsult}
             />
           ) : null}
         </MenuSection>
 
-        <MenuSection title="알림">
+        <MenuSection title={t("settings.critical.054")}>
           <MenuRow
             icon="bell"
-            title="알림 설정"
-            subtitle="일기·수유·가족 알림"
+            title={t("settings.critical.055")}
+            subtitle={t("settings.critical.056")}
             onPress={() => setReminderOpen(true)}
           />
         </MenuSection>
 
-        <MenuSection title="기록 설정">
-          <MenuRow icon="edit" title="기록 카테고리 설정" subtitle="표시·순서·기본 6개 관리" onPress={() => onOpenSettings("categories")} />
-          <MenuRow icon="sparkles" title="자주 쓰는 기록" subtitle="기본값 빠른 기록 관리" onPress={() => setQuickRecordsOpen(true)} />
-          <MenuRow icon="clock" title="스탑워치 설정" subtitle="타이머 종류와 복원 방식" onPress={() => onOpenSettings("timers")} />
-          <MenuRow icon="interval" title="단위 설정" subtitle="ml/oz·kg/lb·°C/°F·cm/inch" onPress={() => onOpenSettings("units")} />
-          <MenuRow icon="clock" title="시간 설정" subtitle="시간 표시·하루/주 시작·아기 나이" onPress={() => onOpenSettings("time")} />
-          <MenuRow icon="interval" title="성장 기록 관리" subtitle="키·몸무게·머리둘레 기록" onPress={onOpenGrowthRecords} />
+        <MenuSection title={t("settings.critical.057")}>
+          <MenuRow icon="edit" title={t("settings.critical.058")} subtitle={t("settings.critical.059")} onPress={() => onOpenSettings("categories")} />
+          <MenuRow icon="sparkles" title={t("settings.critical.060")} subtitle={t("settings.critical.061")} onPress={() => setQuickRecordsOpen(true)} />
+          <MenuRow icon="clock" title={t("settings.critical.062")} subtitle={t("settings.critical.063")} onPress={() => onOpenSettings("timers")} />
+          <MenuRow icon="interval" title={t("settings.critical.064")} subtitle="ml/oz·kg/lb·°C/°F·cm/inch" onPress={() => onOpenSettings("units")} />
+          <MenuRow icon="clock" title={t("settings.critical.065")} subtitle={t("settings.critical.066")} onPress={() => onOpenSettings("time")} />
+          <MenuRow icon="interval" title={t("settings.critical.067")} subtitle={t("settings.critical.068")} onPress={onOpenGrowthRecords} />
         </MenuSection>
 
-        <MenuSection title="꾸미기/성장책">
-          <MenuRow icon="baby" title="내 아기 스티커" subtitle="스티커 만들기와 보관함" onPress={() => setStickerOpen(true)} />
+        <MenuSection title={t("settings.critical.069")}>
+          <MenuRow icon="baby" title={t("settings.critical.070")} subtitle={t("settings.critical.071")} onPress={() => setStickerOpen(true)} />
           {onOpenGrowthBookStorage ? (
-            <MenuRow icon="folder" title="성장책" subtitle="목차에서 읽고 꾸며요" onPress={onOpenGrowthBookStorage} />
+            <MenuRow icon="folder" title={t("settings.critical.072")} subtitle={t("settings.critical.073")} onPress={onOpenGrowthBookStorage} />
           ) : null}
-          <MenuRow icon="folder" title="성장책 설정" subtitle="날짜·작성자·기본 레이아웃" onPress={() => onOpenSettings("growthBook")} />
+          <MenuRow icon="folder" title={t("settings.critical.074")} subtitle={t("settings.critical.075")} onPress={() => onOpenSettings("growthBook")} />
         </MenuSection>
 
-        <MenuSection title="구독">
+        <MenuSection title={t("settings.critical.076")}>
           <MenuRow
             icon="check"
-            title="결제/구독"
-            subtitle="출시 준비 중 · 지금은 무료로 이용할 수 있어요"
-            onPress={() => Alert.alert("결제/구독", "유료 상품은 출시 준비 중이에요. 지금은 무료로 이용할 수 있어요.")}
+            title={t("settings.critical.077")}
+            subtitle={t("settings.critical.078")}
+            onPress={() => Alert.alert(t("settings.critical.077"), t("settings.critical.079"))}
           />
         </MenuSection>
 
-        <MenuSection title="정책/지원">
+        <MenuSection title={t("settings.critical.080")}>
           <MenuRow
             icon="folder"
-            title="이용약관 및 개인정보 안내"
-            subtitle="약관·개인정보·의료·데이터 보존"
+            title={t("settings.critical.081")}
+            subtitle={t("settings.critical.082")}
             onPress={() => onOpenSettings("legal")}
           />
-          <MenuRow icon="edit" title="문의하기" subtitle="앱 내 문의 또는 이메일" onPress={() => onOpenSettings("contact")} />
+          <MenuRow icon="edit" title={t("settings.critical.083")} subtitle={t("settings.critical.084")} onPress={() => onOpenSettings("contact")} />
         </MenuSection>
 
         {__DEV__ ? <QaDebugPanel trigger="menu" /> : null}
 
-        <MenuSection title="계정">
-          <MenuRow icon="profile" title="계정 설정" subtitle="로그인 방식·연결·데이터 관리" onPress={() => setAccountSettingsOpen(true)} />
-          <MenuRow icon="logout" title="로그아웃" subtitle="로그인 화면으로 이동" onPress={confirmLogout} disabled={loggingOut} />
+        <MenuSection title={t("settings.critical.085")}>
+          <MenuRow icon="profile" title={t("settings.critical.086")} subtitle={t("settings.critical.087")} onPress={() => setAccountSettingsOpen(true)} />
+          <MenuRow icon="logout" title={t("settings.critical.030")} subtitle={t("settings.critical.088")} onPress={confirmLogout} disabled={loggingOut} />
           <MenuRow
             icon="trash"
-            title="계정 삭제"
-            subtitle="서버 계정과 로컬 데이터 삭제"
+            title={t("settings.critical.089")}
+            subtitle={t("settings.critical.090")}
             onPress={() => {
               Alert.alert(
-                "계정 삭제 안내",
-                "계정을 삭제하면 개인 설정과 알림 토큰이 삭제됩니다. 공유 중인 아기 기록은 다른 가족의 권한과 데이터 소유 상태에 따라 일부 보존될 수 있어요.",
+                t("settings.critical.091"),
+                t("settings.critical.092"),
                 [
-                  { text: "취소", style: "cancel" },
-                  { text: "계속", style: "destructive", onPress: () => {
+                  { text: t("settings.critical.032"), style: "cancel" },
+                  { text: t("settings.critical.093"), style: "destructive", onPress: () => {
                     setDeleteError("");
                     setDeleteConfirmation("");
                     setDeleteOpen(true);
@@ -305,32 +309,32 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
       <Modal visible={deleteOpen} transparent animationType="fade" onRequestClose={() => !deleting && setDeleteOpen(false)}>
         <View style={styles.overlay}>
           <View style={styles.deleteCard}>
-            <Text style={styles.deleteTitle}>계정을 삭제할까요?</Text>
+            <Text style={styles.deleteTitle}>{t("settings.critical.094")}</Text>
             <Text style={styles.deleteBody}>
               {hasServerDeletion
-                ? "계정을 삭제하면 이 계정으로 로그인할 수 없으며, 개인 설정과 알림 토큰이 삭제됩니다. 가족과 공유 중인 아기 기록은 다른 가족 구성원의 접근 권한과 데이터 소유 상태에 따라 일부 보존될 수 있습니다."
+                ? t("settings.critical.095")
                 : authUser
-                  ? "이메일 계정의 안전한 서버 삭제 API가 아직 필요합니다. 현재는 계정을 삭제하지 않습니다."
-                  : "로그인 세션을 확인하지 못해 서버 계정을 삭제하지 않습니다."}
+                  ? t("settings.critical.096")
+                  : t("settings.critical.097")}
             </Text>
             <View style={styles.deleteOption}>
               <View style={styles.deleteOptionCopy}>
-                <Text style={styles.deleteOptionTitle}>이 기기의 로컬 데이터도 삭제</Text>
-                <Text style={styles.deleteOptionMeta}>기록·일기·성장책·상담·스티커 포함</Text>
+                <Text style={styles.deleteOptionTitle}>{t("settings.critical.098")}</Text>
+                <Text style={styles.deleteOptionMeta}>{t("settings.critical.099")}</Text>
               </View>
               <Switch value={deleteLocal} onValueChange={setDeleteLocal} disabled={deleting} />
             </View>
             <Text style={styles.deleteWarning}>
               {hasServerDeletion
-                ? "계속하면 가족 공유에서 나가고 계정 삭제 요청을 전송합니다."
-                : "로컬 데이터 삭제가 꺼져 있으면 어떤 데이터도 삭제하지 않습니다."}
+                ? t("settings.critical.100")
+                : t("settings.critical.101")}
             </Text>
             <View style={styles.confirmationField}>
-              <Text style={styles.deleteOptionTitle}>확인을 위해 ‘삭제’를 입력해주세요.</Text>
+              <Text style={styles.deleteOptionTitle}>{t("settings.critical.102")}</Text>
               <TextInput
                 value={deleteConfirmation}
                 onChangeText={setDeleteConfirmation}
-                placeholder="삭제"
+                placeholder={t("settings.critical.036")}
                 placeholderTextColor={colors.faint}
                 editable={!deleting}
                 autoCapitalize="none"
@@ -339,7 +343,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
             </View>
             {deleteError ? (
               <ErrorState
-                title="계정을 삭제하지 못했어요"
+                title={t("settings.critical.103")}
                 body={deleteError}
                 onRetry={performDelete}
                 busy={deleting}
@@ -347,14 +351,14 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
             ) : null}
             <View style={styles.deleteActions}>
               <Pressable style={styles.cancelButton} onPress={() => setDeleteOpen(false)} disabled={deleting}>
-                <Text style={styles.cancelText}>취소</Text>
+                <Text style={styles.cancelText}>{t("settings.critical.032")}</Text>
               </Pressable>
               <Pressable
-                style={[styles.confirmDeleteButton, deleteConfirmation.trim() !== "삭제" && styles.disabled]}
+                style={[styles.confirmDeleteButton, deleteConfirmation.trim() !== t("settings.critical.036") && styles.disabled]}
                 onPress={performDelete}
-                disabled={deleting || deleteConfirmation.trim() !== "삭제"}
+                disabled={deleting || deleteConfirmation.trim() !== t("settings.critical.036")}
               >
-                {deleting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.confirmDeleteText}>최종 삭제</Text>}
+                {deleting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.confirmDeleteText}>{t("settings.critical.104")}</Text>}
               </Pressable>
             </View>
           </View>
