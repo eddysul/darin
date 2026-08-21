@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceMotion } from "../../hooks/useReduceMotion";
 import { colors, type } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   onPress: () => void;
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export function ConsultFab({ onPress, compact = false, hidden = false, bottomOffset = 0 }: Props) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const opacity = useRef(new Animated.Value(hidden ? 0 : 1)).current;
   const reduceMotion = useReduceMotion();
@@ -57,10 +59,10 @@ export function ConsultFab({ onPress, compact = false, hidden = false, bottomOff
         ]}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel="AI 상담"
+        accessibilityLabel={t("consult.critical.016")}
       >
         <BabyLogIcon kind="bot" size={compact ? 22 : 25} color={colors.amberDark} strokeWidth={1.9} />
-        {compact ? null : <Text style={styles.text}>AI 상담</Text>}
+        {compact ? null : <Text style={styles.text}>{t("consult.critical.016")}</Text>}
       </Pressable>
     </Animated.View>
   );

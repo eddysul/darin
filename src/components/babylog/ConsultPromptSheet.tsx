@@ -1,6 +1,8 @@
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius } from "../../theme";
+import { useLanguage } from "../../LanguageContext";
+import type { ConsultCriticalKey } from "../../i18nConsultCriticalMessages";
 
 type Props = {
   visible: boolean;
@@ -11,17 +13,17 @@ type Props = {
   onAskFreely: () => void;
 };
 
-const EMPTY_QUESTIONS = [
-  "어떤 기록부터 남기면 좋을까?",
-  "수유 기록은 어떻게 남기면 좋을까?",
-  "수면 기록은 어떻게 보면 좋을까?",
+const EMPTY_QUESTION_KEYS: ConsultCriticalKey[] = [
+  "consult.critical.056",
+  "consult.critical.057",
+  "consult.critical.058",
 ];
 
-const ACTIVE_QUESTIONS = [
-  "오늘 기록 요약해줘",
-  "수유 간격 봐줘",
-  "수면 패턴 봐줘",
-  "최근 7일 변화 알려줘",
+const ACTIVE_QUESTION_KEYS: ConsultCriticalKey[] = [
+  "consult.critical.059",
+  "consult.critical.060",
+  "consult.critical.061",
+  "consult.critical.062",
 ];
 
 export function ConsultPromptSheet({
@@ -31,8 +33,9 @@ export function ConsultPromptSheet({
   onSelectQuestion,
   onAskFreely,
 }: Props) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
-  const questions = todayLogCount === 0 ? EMPTY_QUESTIONS : ACTIVE_QUESTIONS;
+  const questions = (todayLogCount === 0 ? EMPTY_QUESTION_KEYS : ACTIVE_QUESTION_KEYS).map((key) => t(key));
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -42,21 +45,21 @@ export function ConsultPromptSheet({
           onPress={(e) => e.stopPropagation()}
         >
           <View style={styles.handle} />
-          <Text style={styles.title}>무엇을 도와드릴까요?</Text>
+          <Text style={styles.title}>{t("consult.critical.063")}</Text>
           <Text style={styles.subtitle}>
             {todayLogCount === 0
-              ? "오늘 기록이 아직 없어도 자유롭게 물어볼 수 있어요. 아래는 필요할 때만 고르면 돼요."
-              : `오늘 기록 ${todayLogCount}개를 참고해서 답할 수 있어요. 직접 적어도 되고, 예시 질문을 골라도 돼요.`}
+              ? t("consult.critical.064")
+              : t("consult.critical.074", { count: todayLogCount })}
           </Text>
           <Pressable
             style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
             onPress={onAskFreely}
             accessibilityRole="button"
-            accessibilityLabel="직접 물어보기"
+            accessibilityLabel={t("consult.critical.065")}
           >
-            <Text style={styles.primaryBtnText}>직접 물어보기</Text>
+            <Text style={styles.primaryBtnText}>{t("consult.critical.065")}</Text>
           </Pressable>
-          <Text style={styles.exampleLabel}>이런 질문도 있어요</Text>
+          <Text style={styles.exampleLabel}>{t("consult.critical.066")}</Text>
           <View style={styles.list}>
             {questions.map((q) => (
               <Pressable
@@ -74,9 +77,9 @@ export function ConsultPromptSheet({
             style={styles.closeBtn}
             onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="닫기"
+            accessibilityLabel={t("consult.critical.013")}
           >
-            <Text style={styles.closeText}>닫기</Text>
+            <Text style={styles.closeText}>{t("consult.critical.013")}</Text>
           </Pressable>
         </Pressable>
       </Pressable>

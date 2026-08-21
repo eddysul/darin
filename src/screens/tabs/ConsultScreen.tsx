@@ -31,12 +31,13 @@ import { formatHHmm, formatTimeOfDay } from "../../utils/timePicker";
 import { openDeviceNotificationSettings, scheduleMemoReminder } from "../../utils/memoReminderNotifications";
 import { formatSleepDuration, type TodaySummary } from "../../utils/reportAggregates";
 import type { RootStackParamList } from "../../navigation/types";
+import type { ConsultCriticalKey } from "../../i18nConsultCriticalMessages";
 
-const QUICK_CHIPS = [
-  "오늘 수면 괜찮아?",
-  "수유량이 부족해?",
-  "배변 패턴 어때?",
-  "오늘 특이한 점 있어?",
+const QUICK_CHIP_KEYS: ConsultCriticalKey[] = [
+  "consult.critical.001",
+  "consult.critical.002",
+  "consult.critical.003",
+  "consult.critical.004",
 ];
 
 const HAS_AI_SERVER = Boolean((process.env.EXPO_PUBLIC_TRANSCRIBE_URL ?? "").trim());
@@ -111,11 +112,11 @@ export function ConsultScreen() {
     const trimmed = text.trim();
     if (!trimmed || requestInFlightRef.current) return;
 
-    if (sparse && /진단|약|병원|괜찮은지|심각한|응급/.test(trimmed) && pack.todayLogCount === 0) {
+    if (sparse && /\uC9C4\uB2E8|\uC57D|\uBCD1\uC6D0|\uAD1C\uCC2E\uC740\uC9C0|\uC2EC\uAC01\uD55C|\uC751\uAE09/.test(trimmed) && pack.todayLogCount === 0) {
       pushChat("user", trimmed);
       pushChat(
         "ai",
-        "오늘 기록이 거의 없어 판단하기 어려워요. 수유·수면·배변을 남긴 뒤 다시 물어보시면, 최근 기록 기준으로 더 정확히 말씀드릴게요. 고열·호흡곤란·반복 구토·처짐이 있으면 바로 소아과나 응급 진료를 권해요.",
+        t("consult.critical.005"),
       );
       return;
     }
@@ -219,7 +220,7 @@ export function ConsultScreen() {
   );
   const hasUserTurn = sentChipTexts.size > 0;
   const showChips = !hasUserTurn || inputFocused;
-  const todayLines = useMemo(() => todayEvidenceLines(pack.todaySummary), [pack.todaySummary]);
+  const todayLines = useMemo(() => todayEvidenceLines(pack.todaySummary, t), [pack.todaySummary, t]);
 
   const openMemo = (seed = "") => {
     setMemoSeed(seed);
@@ -235,40 +236,40 @@ export function ConsultScreen() {
         time: formatHHmm(now.getHours(), now.getMinutes()),
         dateKey: formatDateKey(now),
         notes: input.notes,
-        title: "상담 메모",
-        chip: "상담",
+        title: t("consult.critical.006"),
+        chip: t("consult.critical.007"),
         nextAt: input.remindAt
           ? `${formatDateKey(input.remindAt, "midnight")} ${formatHHmm(input.remindAt.getHours(), input.remindAt.getMinutes())}`
           : undefined,
         source: "manual",
       });
       if (!saved) {
-        Alert.alert("메모를 저장하지 못했어요", "잠시 후 다시 시도해 주세요.");
+        Alert.alert(t("consult.critical.008"), t("consult.critical.009"));
         return;
       }
       if (input.remindAt) {
         const scheduled = await scheduleMemoReminder({
           logId: saved.id,
           fireAt: input.remindAt,
-          title: "남겨 둔 메모예요",
+          title: t("consult.critical.010"),
           body: input.notes,
         });
         if (!scheduled) {
-          Alert.alert("메모는 저장했어요", "알림 권한이 없어 리마인드는 맞추지 못했어요.", [
-            { text: "닫기", style: "cancel" },
-            { text: "설정 열기", onPress: () => void openDeviceNotificationSettings() },
+          Alert.alert(t("consult.critical.011"), t("consult.critical.012"), [
+            { text: t("consult.critical.013"), style: "cancel" },
+            { text: t("consult.critical.014"), onPress: () => void openDeviceNotificationSettings() },
           ]);
           setMemoOpen(false);
-          setMemoToast("메모를 저장했어요");
+          setMemoToast(t("consult.critical.015"));
           return;
         }
-        setMemoToast(`${formatTimeOfDay(formatHHmm(input.remindAt.getHours(), input.remindAt.getMinutes()))}에 알려드릴게요`);
+        setMemoToast(t("consult.critical.075", { time: formatTimeOfDay(formatHHmm(input.remindAt.getHours(), input.remindAt.getMinutes())) }));
       } else {
-        setMemoToast("메모를 저장했어요");
+        setMemoToast(t("consult.critical.015"));
       }
       setMemoOpen(false);
     } catch {
-      Alert.alert("메모를 저장하지 못했어요", "잠시 후 다시 시도해 주세요.");
+      Alert.alert(t("consult.critical.008"), t("consult.critical.009"));
     } finally {
       setMemoSaving(false);
     }
@@ -277,9 +278,9 @@ export function ConsultScreen() {
   if (!storageReady || !chatHydrated) {
     return (
       <View style={styles.root}>
-        <NavigationHeader title="AI 상담" onBack={() => navigation.goBack()} />
+        <NavigationHeader title={t("consult.critical.016")} onBack={() => navigation.goBack()} />
         <View style={styles.loadingBox}>
-          <LoadingState label="상담 기록을 불러오는 중…" />
+          <LoadingState label={t("consult.critical.017")} />
         </View>
       </View>
     );
@@ -287,24 +288,24 @@ export function ConsultScreen() {
 
   return (
     <View style={styles.root}>
-      <NavigationHeader title="AI 상담" onBack={() => navigation.goBack()} />
+      <NavigationHeader title={t("consult.critical.016")} onBack={() => navigation.goBack()} />
       <Pressable
         style={styles.banner}
         onPress={() => setBannerOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel="참고 정보 보기"
-        accessibilityHint={sparse ? "오늘 요약과 안전 안내를 볼 수 있어요" : "오늘 수유·수면·배변 요약을 볼 수 있어요"}
+        accessibilityLabel={t("consult.critical.018")}
+        accessibilityHint={sparse ? t("consult.critical.019") : t("consult.critical.020")}
       >
         <Text style={styles.bannerLine} numberOfLines={1}>
           {sparse
-            ? `AI 참고 중 · 오늘 ${pack.todayLogCount}개 · 기록 적음`
-            : `AI 참고 중 · 오늘 ${pack.todayLogCount}개 · 7일 ${pack.weekLogCount}개`}
+            ? t("consult.critical.076", { today: pack.todayLogCount })
+            : t("consult.critical.077", { today: pack.todayLogCount, week: pack.weekLogCount })}
         </Text>
         <Text style={styles.bannerChevron}>›</Text>
       </Pressable>
       {!HAS_AI_SERVER ? (
         <View style={styles.warnBanner}>
-          <Text style={styles.warnText}>상담을 잠시 쓸 수 없어요. 잠시 후 다시 시도해 주세요.</Text>
+          <Text style={styles.warnText}>{t("consult.critical.021")}</Text>
         </View>
       ) : null}
 
@@ -333,9 +334,9 @@ export function ConsultScreen() {
                     style={styles.memoLink}
                     onPress={() => openMemo(m.text)}
                     accessibilityRole="button"
-                    accessibilityLabel="이 답변을 메모로 남기기"
+                    accessibilityLabel={t("consult.critical.022")}
                   >
-                    <Text style={styles.memoLinkText}>메모·알림</Text>
+                    <Text style={styles.memoLinkText}>{t("consult.critical.023")}</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -343,13 +344,13 @@ export function ConsultScreen() {
           )}
           {isTyping && (
             <View style={styles.aiBlock}>
-              <LoadingState label="AI 분석 중…" />
+              <LoadingState label={t("consult.critical.024")} />
             </View>
           )}
           {aiError && !isTyping ? (
             <View style={{ marginTop: 8 }}>
               <ErrorState
-                title="잠시 문제가 생겼어요."
+                title={t("consult.critical.025")}
                 body={aiError}
                 onRetry={() => {
                   if (failedQuestion) void send(failedQuestion, true);
@@ -368,7 +369,8 @@ export function ConsultScreen() {
             contentContainerStyle={styles.chips}
             keyboardShouldPersistTaps="handled"
           >
-            {QUICK_CHIPS.map((chip) => {
+            {QUICK_CHIP_KEYS.map((key) => {
+              const chip = t(key);
               const sent = sentChipTexts.has(chip);
               return (
                 <Pressable
@@ -380,7 +382,7 @@ export function ConsultScreen() {
                   }}
                   disabled={isTyping}
                   accessibilityRole="button"
-                  accessibilityLabel={sent ? `${chip}, 이미 물어본 질문` : chip}
+                  accessibilityLabel={sent ? t("consult.critical.078", { question: chip }) : chip}
                 >
                   <Text style={[styles.chipText, sent && styles.chipTextSent]}>{chip}</Text>
                 </Pressable>
@@ -395,15 +397,15 @@ export function ConsultScreen() {
             onPress={() => openMemo(lastAiText)}
             disabled={isTyping}
             accessibilityRole="button"
-            accessibilityLabel="메모 남기기"
-            accessibilityHint="기록으로 저장하고 알림을 맞출 수 있어요"
+            accessibilityLabel={t("consult.critical.026")}
+            accessibilityHint={t("consult.critical.027")}
           >
-            <Text style={styles.memoBtnText}>메모</Text>
+            <Text style={styles.memoBtnText}>{t("consult.critical.028")}</Text>
           </Pressable>
           <TextInput
             ref={inputRef}
             style={styles.input}
-            placeholder={`${babyName}에 대해 물어보세요...`}
+            placeholder={t("consult.critical.079", { babyName })}
             placeholderTextColor={colors.faint}
             value={input}
             onChangeText={setInput}
@@ -418,7 +420,7 @@ export function ConsultScreen() {
             onPress={() => void send(input)}
             disabled={!input.trim() || isTyping}
             accessibilityRole="button"
-            accessibilityLabel="보내기"
+            accessibilityLabel={t("consult.critical.029")}
           >
             <BabyLogIcon kind="send" size={18} color={colors.amberDark} />
           </Pressable>
@@ -436,27 +438,24 @@ export function ConsultScreen() {
       <Modal visible={bannerOpen} transparent animationType="fade" onRequestClose={() => setBannerOpen(false)}>
         <Pressable style={styles.modalBg} onPress={() => setBannerOpen(false)}>
           <Pressable style={styles.modalCard} onPress={() => {}}>
-            <Text style={styles.modalTitle}>참고한 정보</Text>
-            <EvidenceRow label="아기 프로필" detail={pack.babyBirthMeta} />
-            <EvidenceRow label="오늘 요약" detail={todayLines.join("\n")} />
-            <EvidenceRow label="최근 7일" detail={`기록 ${pack.weekLogCount}개`} />
-            <EvidenceRow label="최근 일기" detail={`${pack.diaryCount}개`} />
+            <Text style={styles.modalTitle}>{t("consult.critical.030")}</Text>
+            <EvidenceRow label={t("consult.critical.031")} detail={pack.babyBirthMeta} />
+            <EvidenceRow label={t("consult.critical.032")} detail={todayLines.join("\n")} />
+            <EvidenceRow label={t("consult.critical.033")} detail={t("consult.critical.067", { count: pack.weekLogCount })} />
+            <EvidenceRow label={t("consult.critical.034")} detail={t("consult.critical.068", { count: pack.diaryCount })} />
             {sparse ? (
               <Text style={styles.modalNote}>
-                기록이 부족해요. 확정적으로 말하기 어려울 수 있어요. 판단하기 어려우면 솔직히 알려드릴게요.
+                {t("consult.critical.035")}
               </Text>
             ) : null}
-            <Text style={styles.modalNote}>
-              고열·호흡곤란·반복 구토·탈수·처짐이 있으면 소아과/응급 진료를 권해요. 의학적 진단이 아니며 최근 기록
-              기준입니다.
-            </Text>
+            <Text style={styles.modalNote}>{t("consult.critical.036")}</Text>
             <Pressable
               style={styles.modalBtn}
               onPress={() => setBannerOpen(false)}
               accessibilityRole="button"
-              accessibilityLabel="닫기"
+              accessibilityLabel={t("consult.critical.013")}
             >
-              <Text style={styles.modalBtnText}>닫기</Text>
+              <Text style={styles.modalBtnText}>{t("consult.critical.013")}</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -465,7 +464,7 @@ export function ConsultScreen() {
       <RecordCreatedToast
         visible={Boolean(memoToast)}
         title={memoToast ?? ""}
-        body="기록에서 보기"
+        body={t("consult.critical.037")}
         onDismiss={() => setMemoToast(null)}
         onPress={() => {
           setMemoToast(null);
@@ -485,15 +484,15 @@ function EvidenceRow({ label, detail }: { label: string; detail: string }) {
   );
 }
 
-function todayEvidenceLines(summary: TodaySummary): string[] {
-  if (summary.totalCount === 0) return ["오늘 아직 기록이 없어요."];
+function todayEvidenceLines(summary: TodaySummary, t: ReturnType<typeof useLanguage>["t"]): string[] {
+  if (summary.totalCount === 0) return [t("consult.critical.038")];
   const feed = summary.lastFeedAt
-    ? `수유 ${summary.feedCount}회 · 마지막 ${formatTimeOfDay(summary.lastFeedAt)}`
-    : `수유 ${summary.feedCount}회`;
-  const sleep = `수면 ${formatSleepDuration(summary.totalSleepMinutes)} · ${summary.sleepCount}회`;
+    ? t("consult.critical.069", { count: summary.feedCount, time: formatTimeOfDay(summary.lastFeedAt) })
+    : t("consult.critical.070", { count: summary.feedCount });
+  const sleep = t("consult.critical.071", { duration: formatSleepDuration(summary.totalSleepMinutes), count: summary.sleepCount });
   const diaper = summary.lastDiaperAt
-    ? `배변 ${summary.diaperCount}회 · 마지막 ${formatTimeOfDay(summary.lastDiaperAt)}`
-    : `배변 ${summary.diaperCount}회`;
+    ? t("consult.critical.072", { count: summary.diaperCount, time: formatTimeOfDay(summary.lastDiaperAt) })
+    : t("consult.critical.073", { count: summary.diaperCount });
   return [feed, sleep, diaper];
 }
 

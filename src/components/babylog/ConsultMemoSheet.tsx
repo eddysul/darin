@@ -21,6 +21,7 @@ import {
   TimeOfDayPickerField,
   TimePickerSheet,
 } from "../inputs/TimePickerFields";
+import { useLanguage } from "../../LanguageContext";
 
 const HIT = Platform.OS === "android" ? 48 : 44;
 
@@ -37,6 +38,7 @@ function defaultRemindAt() {
 }
 
 export function ConsultMemoSheet({ visible, initialText = "", saving = false, onClose, onSave }: Props) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [notes, setNotes] = useState(initialText);
   const [remind, setRemind] = useState(false);
@@ -68,7 +70,7 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
   const submit = () => {
     const trimmed = notes.trim();
     if (!trimmed) {
-      setError("메모 내용을 적어 주세요.");
+      setError(t("consult.critical.039"));
       return;
     }
     if (!remind) {
@@ -77,11 +79,11 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
     }
     const fireAt = remindAt();
     if (!fireAt) {
-      setError("알림 날짜와 시간을 모두 선택해 주세요.");
+      setError(t("consult.critical.040"));
       return;
     }
     if (fireAt.getTime() <= Date.now() + 15_000) {
-      setError("알림 시간은 지금부터 조금 뒤로 잡아 주세요.");
+      setError(t("consult.critical.041"));
       return;
     }
     onSave({ notes: trimmed, remindAt: fireAt });
@@ -91,11 +93,11 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="닫기" />
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t("consult.critical.013")} />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
           <View style={styles.handle} />
-          <Text style={styles.title}>메모 남기기</Text>
-          <Text style={styles.subtitle}>기록 탭에 저장되고, 원하면 그때 알림으로 다시 알려드려요.</Text>
+          <Text style={styles.title}>{t("consult.critical.026")}</Text>
+          <Text style={styles.subtitle}>{t("consult.critical.042")}</Text>
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.body}
@@ -106,7 +108,7 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
                 {error}
               </Text>
             ) : null}
-            <Text style={styles.label}>내용</Text>
+            <Text style={styles.label}>{t("consult.critical.043")}</Text>
             <TextInput
               style={styles.input}
               value={notes}
@@ -114,28 +116,28 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
                 setNotes(value);
                 if (error) setError(null);
               }}
-              placeholder="상담에서 기억해 두고 싶은 내용을 적어요"
+              placeholder={t("consult.critical.044")}
               placeholderTextColor={colors.faint}
               multiline
               textAlignVertical="top"
               editable={!saving}
-              accessibilityLabel="메모 내용"
+              accessibilityLabel={t("consult.critical.045")}
             />
             {initialText.trim() && notes.trim() !== initialText.trim() ? (
               <Pressable
                 style={styles.ghostBtn}
                 onPress={() => setNotes(initialText)}
                 accessibilityRole="button"
-                accessibilityLabel="마지막 답변 넣기"
+                accessibilityLabel={t("consult.critical.046")}
               >
-                <Text style={styles.ghostText}>마지막 답변 넣기</Text>
+                <Text style={styles.ghostText}>{t("consult.critical.046")}</Text>
               </Pressable>
             ) : null}
 
             <View style={styles.toggleRow}>
               <View style={styles.toggleCopy}>
-                <Text style={styles.toggleTitle}>알림으로 리마인드</Text>
-                <Text style={styles.toggleBody}>정한 시간에 이 메모를 다시 알려드려요.</Text>
+                <Text style={styles.toggleTitle}>{t("consult.critical.047")}</Text>
+                <Text style={styles.toggleBody}>{t("consult.critical.048")}</Text>
               </View>
               <Switch
                 value={remind}
@@ -145,14 +147,14 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
                 }}
                 disabled={saving}
                 trackColor={{ false: colors.border, true: colors.amber }}
-                accessibilityLabel="알림으로 리마인드"
+                accessibilityLabel={t("consult.critical.047")}
               />
             </View>
 
             {remind ? (
               <>
-                <DatePickerField label="알림 날짜" valueDateKey={remindDate} onPress={() => setDateOpen(true)} />
-                <TimeOfDayPickerField label="알림 시간" valueHHmm={remindTime} onPress={() => setTimeOpen(true)} />
+                <DatePickerField label={t("consult.critical.049")} valueDateKey={remindDate} onPress={() => setDateOpen(true)} />
+                <TimeOfDayPickerField label={t("consult.critical.050")} valueHHmm={remindTime} onPress={() => setTimeOpen(true)} />
               </>
             ) : null}
           </ScrollView>
@@ -162,12 +164,12 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
             onPress={submit}
             disabled={saving}
             accessibilityRole="button"
-            accessibilityLabel={remind ? "메모 저장하고 알림 맞추기" : "메모 저장"}
+            accessibilityLabel={remind ? t("consult.critical.051") : t("consult.critical.052")}
           >
-            <Text style={styles.primaryText}>{saving ? "저장 중…" : remind ? "저장하고 알림 맞추기" : "메모 저장"}</Text>
+            <Text style={styles.primaryText}>{saving ? t("consult.critical.053") : remind ? t("consult.critical.054") : t("consult.critical.052")}</Text>
           </Pressable>
-          <Pressable style={styles.closeBtn} onPress={onClose} accessibilityRole="button" accessibilityLabel="취소">
-            <Text style={styles.closeText}>취소</Text>
+          <Pressable style={styles.closeBtn} onPress={onClose} accessibilityRole="button" accessibilityLabel={t("consult.critical.055")}>
+            <Text style={styles.closeText}>{t("consult.critical.055")}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -175,7 +177,7 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
       <DatePickerSheet
         visible={dateOpen}
         valueDateKey={remindDate}
-        title="알림 날짜"
+        title={t("consult.critical.049")}
         onCancel={() => setDateOpen(false)}
         onConfirm={(value) => {
           setRemindDate(value);
@@ -185,7 +187,7 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
       <TimePickerSheet
         visible={timeOpen}
         valueHHmm={remindTime}
-        title="알림 시간"
+        title={t("consult.critical.050")}
         onCancel={() => setTimeOpen(false)}
         onConfirm={(value) => {
           setRemindTime(value);

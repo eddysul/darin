@@ -54,11 +54,6 @@ import { BabyLogIcon } from "./BabyLogIcon";
 import { DiaryMoodPicker, DiaryMoodStamp, DiarySkyPicker } from "./DiaryStamp";
 import { BabyStickerFromModel } from "./BabyStickerView";
 import { BabyStickerVaultModal } from "./BabyStickerVaultModal";
-import { DiaryCoverPhotoAdjustModal } from "./DiaryCoverPhotoAdjustModal";
-import { DiaryCoverPicker } from "./DiaryCoverPicker";
-import { DiaryCoverTemplate } from "./DiaryCoverTemplate";
-import { DiaryPageStylePicker } from "./DiaryPageStylePicker";
-import { DiaryPageTemplate } from "./DiaryPageTemplate";
 import { useLanguage } from "../../LanguageContext";
 import type { Locale } from "../../i18n";
 import { formatLocalizedDate } from "../../utils/localeFormat";
@@ -111,7 +106,6 @@ export function DiaryComposeModal({
   const [coverPhotoUri, setCoverPhotoUri] = useState<string | null>(null);
   const [coverPhotoTransform, setCoverPhotoTransform] = useState({ scale: 1, translateX: 0, translateY: 0 });
   const [coverTitle, setCoverTitle] = useState("");
-  const [coverPhotoAdjustOpen, setCoverPhotoAdjustOpen] = useState(false);
   const [eagerPhotos, setEagerPhotos] = useState<EagerPhoto[]>([]);
   const [photoError, setPhotoError] = useState("");
   const sessionIdRef = useRef(createUploadSessionId());
@@ -627,70 +621,6 @@ export function DiaryComposeModal({
               </Pressable>
             )}
 
-            <Text style={styles.fieldLabel}>{t("diary.compose.cover")}</Text>
-            <Text style={styles.sectionHint}>{t("diary.compose.coverHint")}</Text>
-            <View style={styles.diaryTemplatePreviewWrap}>
-              <DiaryCoverTemplate
-                styleId={coverStyleId}
-                photoUri={coverPhotoUri}
-                photoTransform={coverPhotoTransform}
-                title={coverTitle || notes}
-                style={styles.diaryCoverPreview}
-              />
-            </View>
-            {readOnly ? null : (
-              <>
-                <DiaryCoverPicker
-                  value={coverStyleId}
-                  photoUri={coverPhotoUri}
-                  title={coverTitle || notes}
-                  onChange={setCoverStyleId}
-                />
-                <TextInput
-                  style={styles.coverTitleInput}
-                  value={coverTitle}
-                  onChangeText={setCoverTitle}
-                  maxLength={60}
-                  placeholder={t("diary.compose.coverTitlePlaceholder")}
-                  placeholderTextColor={colors.faint}
-                />
-                {coverPhotoUri ? (
-                  <Pressable
-                    style={styles.coverAdjustButton}
-                    onPress={() => setCoverPhotoAdjustOpen(true)}
-                    accessibilityRole="button"
-                    accessibilityLabel={t("diary.compose.coverAdjust")}
-                  >
-                    <Text style={styles.coverAdjustButtonText}>{t("diary.compose.coverAdjust")}</Text>
-                  </Pressable>
-                ) : null}
-              </>
-            )}
-
-            <Text style={styles.fieldLabel}>{t("diary.compose.pageStyle")}</Text>
-            <Text style={styles.sectionHint}>{t("diary.compose.pageStyleHint")}</Text>
-            {readOnly ? (
-              <View style={styles.diaryTemplatePreviewWrap}>
-                <DiaryPageTemplate
-                  styleId={pageStyleId}
-                  dateLabel={dateLabel}
-                  weatherStamp={weather}
-                  title={coverTitle || notes}
-                  body={notes}
-                  style={styles.diaryPagePreview}
-                />
-              </View>
-            ) : (
-              <DiaryPageStylePicker
-                value={pageStyleId}
-                dateLabel={dateLabel}
-                weatherStamp={weather}
-                title={coverTitle || notes}
-                body={notes}
-                onChange={setPageStyleId}
-              />
-            )}
-
             {stickerIds.length > 0 ? (
               <>
                 <Text style={styles.fieldLabel}>{t("diary.compose.todaySticker")}</Text>
@@ -852,17 +782,6 @@ export function DiaryComposeModal({
           setStickerPickerOpen(false);
         }}
       />
-      <DiaryCoverPhotoAdjustModal
-        visible={!readOnly && coverPhotoAdjustOpen}
-        photoUri={coverPhotoUri}
-        styleId={coverStyleId}
-        value={coverPhotoTransform}
-        onCancel={() => setCoverPhotoAdjustOpen(false)}
-        onSave={(next) => {
-          setCoverPhotoTransform(next);
-          setCoverPhotoAdjustOpen(false);
-        }}
-      />
     </Modal>
   );
 }
@@ -1009,12 +928,6 @@ const styles = StyleSheet.create({
   photoAddTile: { width: 96, height: 112, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center", gap: 4 },
   photoAddPlus: { color: colors.amberText, fontSize: 26, lineHeight: 28 },
   photoAddText: { color: colors.amberText, fontSize: 11.5, fontWeight: "800" },
-  diaryTemplatePreviewWrap: { alignItems: "center", marginBottom: 10 },
-  diaryCoverPreview: { width: 210, height: 280 },
-  diaryPagePreview: { width: 210, height: 280 },
-  coverTitleInput: { minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 13, fontSize: 14, color: colors.text, marginTop: 10 },
-  coverAdjustButton: { minHeight: 44, marginTop: 8, marginBottom: 4, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  coverAdjustButtonText: { color: colors.text, fontSize: 13, fontWeight: "800" },
   stickerRow: { gap: 10, paddingVertical: 4 },
   notes: {
     backgroundColor: colors.card,
