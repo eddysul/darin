@@ -10,8 +10,10 @@ import {
   Switch,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isPregnancyLogCategoryId, type BabyLogCategoryId } from "../../constants/babyLogCategories";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
@@ -164,6 +166,10 @@ export function RecordDetailSheet({
   const { t } = useLanguage();
   const { settings } = useAppSettings();
   const { babyName, activeBabyId, cautionFoods } = useBabyLog();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetMaxHeight = windowHeight * 0.88;
+  const sheetScrollMaxHeight = Math.max(240, sheetMaxHeight - 112 - Math.max(insets.bottom, 16));
   const [time, setTime] = useState(nowTime());
   const [endTime, setEndTime] = useState("");
   const [selectedCat, setSelectedCat] = useState<LogCategoryKey | null>(catKey);
@@ -691,12 +697,9 @@ export function RecordDetailSheet({
 
   const sheet = (
     <KeyboardAvoidingView style={styles.keyboardRoot} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-    <Pressable
-      style={[styles.backdrop, embedded && styles.embeddedBackdrop]}
-      onPress={onClose}
-      accessible={false}
-    >
-      <Pressable style={styles.sheet} onPress={() => {}} accessible={false}>
+    <View style={[styles.backdrop, embedded && styles.embeddedBackdrop]}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel={t("record.detail.cancel")} />
+      <View style={[styles.sheet, { maxHeight: sheetMaxHeight, paddingBottom: Math.max(insets.bottom, 16) }]}>
         <View style={styles.handle} />
         <View style={styles.titleRow}>
           <View style={[styles.dot, { backgroundColor: c.color }]} />
@@ -708,7 +711,13 @@ export function RecordDetailSheet({
         </View>
         <Text style={styles.activeBabyLabel}>{t("record.detail.target", { babyName })}</Text>
 
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          style={{ maxHeight: sheetScrollMaxHeight }}
+          contentContainerStyle={styles.sheetScrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+        >
           {(builtinId === "breast" || builtinId === "formula" || builtinId === "storedMilk") && (
             <>
               {builtinId === "breast" ? (
@@ -1255,8 +1264,8 @@ export function RecordDetailSheet({
             </Pressable>
           </View>
         </ScrollView>
-      </Pressable>
-      </Pressable>
+      </View>
+    </View>
       <TimePickerSheet
         visible={timePickerTarget !== null}
         valueHHmm={timePickerTarget === "end" ? endTime : timePickerTarget === "nextAt" ? nextAtTime : timePickerTarget === "vaccinationReminder" ? customReminderTime : time}
@@ -1360,8 +1369,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 22,
-    paddingBottom: 26,
-    maxHeight: "88%",
+    width: "100%",
   },
   handle: {
     width: 36,
@@ -1376,6 +1384,7 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.text },
   activeBabyLabel: { marginTop: -4, marginBottom: 10, fontSize: 11.5, fontWeight: "700", color: colors.amberText },
   sessionBadge: { color: colors.amberText, fontSize: 10.5, fontWeight: "800", backgroundColor: colors.amberSoft, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999, overflow: "hidden" },
+  sheetScrollContent: { paddingBottom: 12 },
   fieldLabel: {
     fontSize: 12,
     color: colors.faint,

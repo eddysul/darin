@@ -155,19 +155,25 @@ export function DiaryTemplatePattern({ pattern, color }: { pattern: DiaryTemplat
   const cells = Array.from({ length: pattern === "grid" || pattern === "check" ? 48 : 26 });
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, styles.patternWrap]}>
-      {cells.map((_, index) => (
-        <View
-          key={index}
-          style={[
-            pattern === "stripe" ? styles.stripe : pattern === "grid" || pattern === "check" ? styles.gridCell : styles.dot,
-            {
-              borderColor: `${color}22`,
-              backgroundColor: pattern === "hearts" ? `${color}18` : pattern === "stars" ? `${color}24` : pattern === "dots" ? `${color}28` : "transparent",
-              transform: pattern === "hearts" ? [{ rotate: "45deg" }] : pattern === "stars" ? [{ rotate: `${(index % 4) * 15}deg` }] : undefined,
-            },
-          ]}
-        />
-      ))}
+      {cells.map((_, index) => {
+        const shapeStyle =
+          pattern === "stripe" ? styles.stripe : pattern === "grid" || pattern === "check" ? styles.gridCell : styles.dot;
+        const rotate =
+          pattern === "hearts" ? "45deg" : pattern === "stars" ? `${(index % 4) * 15}deg` : null;
+        return (
+          <View
+            key={index}
+            style={[
+              shapeStyle,
+              {
+                borderColor: `${color}22`,
+                backgroundColor: pattern === "hearts" ? `${color}18` : pattern === "stars" ? `${color}24` : pattern === "dots" ? `${color}28` : "transparent",
+              },
+              rotate ? { transform: [{ rotate }] } : null,
+            ]}
+          />
+        );
+      })}
     </View>
   );
 }
@@ -226,7 +232,7 @@ export function DiaryTemplateDecoration({
     width: boxWidth,
     height: boxHeight,
     opacity,
-    transform: rotate ? [{ rotate }] : undefined,
+    ...(rotate ? { transform: [{ rotate }] } : {}),
   };
   const art = DECORATION_ART[type];
   if (art) {

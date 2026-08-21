@@ -645,7 +645,6 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
         babyName={babyName}
         stickers={babyStickers}
         createdBy={logAuthor.userId}
-        startInCreate
         onClose={() => setStickerOpen(false)}
         onSaveSticker={addBabySticker}
         onDeleteSticker={deleteBabySticker}
