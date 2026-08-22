@@ -325,6 +325,7 @@ function ReportTab() {
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenShared={() => rootNavigation?.navigate("FamilyShare")}
       onOpenRecord={() => navigation.navigate("Record")}
+      onOpenConsult={(initialQuestion) => openConsult(rootNavigation, initialQuestion)}
     />
   );
 }

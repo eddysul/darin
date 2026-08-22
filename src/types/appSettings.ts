@@ -54,6 +54,10 @@ export type AppSettings = {
   notifications: {
     feedingEnabled: boolean;
     feedingIntervalMinutes: number;
+    /** Server preference cache; server remains authoritative when signed in. */
+    feedingDeliveryEnabled: boolean;
+    /** Explicit choice restored after the global notification switch is re-enabled. */
+    feedingDeliveryRestoreEnabled: boolean;
     sleepEnabled: boolean;
     sleepIntervalMinutes: number;
   };
@@ -113,6 +117,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   notifications: {
     feedingEnabled: false,
     feedingIntervalMinutes: 180,
+    feedingDeliveryEnabled: false,
+    feedingDeliveryRestoreEnabled: false,
     sleepEnabled: false,
     sleepIntervalMinutes: 120,
   },

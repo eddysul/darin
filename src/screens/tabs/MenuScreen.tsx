@@ -74,6 +74,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
     rehydrateFromServer,
     localDataScope,
     careSetup,
+    myFamilyRole,
   } = useBabyLog();
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
@@ -278,6 +279,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         value={reminder}
         babyName={babyName}
         babyId={localDataScope?.babyId ?? null}
+        myRole={myFamilyRole}
         onClose={() => setReminderOpen(false)}
         onSave={(next) => {
           setReminder(next);

@@ -32,6 +32,7 @@ function centerTypeFor(eventType: string): CenterItem["type"] {
     case "weekly_summary":
       return "weekly_summary";
     case "diary_reminder":
+    case "feeding_reminder":
     case "reminder":
       return "reminder";
     case "family_joined":

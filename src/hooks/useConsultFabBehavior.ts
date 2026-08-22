@@ -7,7 +7,7 @@ import {
 
 const SCROLL_REVEAL_MS = 500;
 
-/** Shared AI FAB hide/reveal + prompt sheet state for Record / Diary. */
+/** Shared AI FAB hide/reveal + prompt sheet state for Record / Diary / 한눈에. */
 export function useConsultFabBehavior(extraHidden = false) {
   const [scrolling, setScrolling] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);

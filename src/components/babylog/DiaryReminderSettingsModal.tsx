@@ -24,33 +24,34 @@ import {
 } from "../../utils/diaryReminderNotifications";
 import { registerCurrentPushToken } from "../../utils/pushNotifications";
 import {
-  DurationPickerField,
-  DurationPickerSheet,
   formatTimeOfDay,
   TimeOfDayPickerField,
   TimePickerSheet,
 } from "../inputs/TimePickerFields";
 import { useLanguage } from "../../LanguageContext";
+import type { FamilyRole } from "../../types/family";
+import { FeedingReminderSettingsCard } from "./FeedingReminderSettingsCard";
 
 type Props = {
   visible: boolean;
   value: DiaryReminderSettings;
   babyName?: string;
   babyId?: string | null;
+  myRole?: FamilyRole;
   onClose: () => void;
   onSave: (settings: DiaryReminderSettings) => void;
   onTestNotification?: () => void;
 };
 
-type SectionId = "all" | "diary" | "care" | "family" | "invite" | "quiet";
+type SectionId = "all" | "diary" | "family" | "invite" | "quiet";
 type TimeTarget = "reminder" | "quietStart" | "quietEnd";
-type DurationTarget = "feeding" | "sleep";
 
 export function DiaryReminderSettingsModal({
   visible,
   value,
   babyName,
   babyId = null,
+  myRole = "viewer",
   onClose,
   onSave,
   onTestNotification,
@@ -58,18 +59,18 @@ export function DiaryReminderSettingsModal({
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const displayBabyName = babyName ?? t("diary.reminder.babyFallback");
-  const { settings, setSettings } = useAppSettings();
+  const { setSettings } = useAppSettings();
   const [draft, setDraft] = useState(value);
   const [permission, setPermission] = useState<ReminderPermissionStatus>("not_determined");
   const [expanded, setExpanded] = useState<SectionId | null>("all");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [timeTarget, setTimeTarget] = useState<TimeTarget | null>(null);
-  const [durationTarget, setDurationTarget] = useState<DurationTarget | null>(null);
+  const [feedingDeliveryEnabled, setFeedingDeliveryEnabled] = useState(false);
+  const [allCommand, setAllCommand] = useState<{ enabled: boolean; sequence: number }>();
 
-  const careEnabled = settings.notifications.feedingEnabled || settings.notifications.sleepEnabled;
   const allEnabled = draft.enabled
-    || careEnabled
+    || feedingDeliveryEnabled
     || Boolean(draft.familyActivityEnabled)
     || Boolean(draft.inviteActivityEnabled)
     || Boolean(draft.quietHoursEnabled);
@@ -80,7 +81,6 @@ export function DiaryReminderSettingsModal({
     setExpanded("all");
     setMessage("");
     setTimeTarget(null);
-    setDurationTarget(null);
     void getReminderPermissionStatus().then(setPermission).catch(() => setPermission("unavailable"));
     if (!babyId) return;
     void NotificationRepository.getSettings(babyId)
@@ -163,12 +163,11 @@ export function DiaryReminderSettingsModal({
       ...current,
       notifications: {
         ...current.notifications,
-        feedingEnabled: next ? current.notifications.feedingEnabled : false,
-        sleepEnabled: next ? current.notifications.sleepEnabled : false,
+        sleepEnabled: false,
       },
     }));
     const nextDraft: DiaryReminderSettings = next
-      ? { ...draft, enabled: true }
+      ? { ...draft, enabled: true, familyActivityEnabled: true, inviteActivityEnabled: true }
       : {
           ...draft,
           enabled: false,
@@ -177,6 +176,7 @@ export function DiaryReminderSettingsModal({
           quietHoursEnabled: false,
         };
     setExpanded(next ? "all" : null);
+    setAllCommand((current) => ({ enabled: next, sequence: (current?.sequence ?? 0) + 1 }));
     await persistReminder(nextDraft);
   };
 
@@ -184,18 +184,6 @@ export function DiaryReminderSettingsModal({
     if (next && !(await enableWithPermission())) return;
     setExpanded(next ? "diary" : null);
     await persistReminder({ ...draft, enabled: next });
-  };
-
-  const toggleCare = (next: boolean) => {
-    setSettings((current) => ({
-      ...current,
-      notifications: {
-        ...current.notifications,
-        feedingEnabled: next,
-        sleepEnabled: next,
-      },
-    }));
-    setExpanded(next ? "care" : null);
   };
 
   const toggleReminderField = (
@@ -220,17 +208,6 @@ export function DiaryReminderSettingsModal({
     if (target === "quietStart") void persistReminder({ ...draft, quietHoursStart: valueHHmm });
     else if (target === "quietEnd") void persistReminder({ ...draft, quietHoursEnd: valueHHmm });
     else void persistReminder({ ...draft, hour, minute });
-  };
-
-  const confirmCareInterval = (minutes: number) => {
-    const target = durationTarget;
-    setDurationTarget(null);
-    setSettings((current) => ({
-      ...current,
-      notifications: target === "feeding"
-        ? { ...current.notifications, feedingEnabled: true, feedingIntervalMinutes: minutes }
-        : { ...current.notifications, sleepEnabled: true, sleepIntervalMinutes: minutes },
-    }));
   };
 
   return (
@@ -302,19 +279,18 @@ export function DiaryReminderSettingsModal({
             ) : null}
           </NotificationRow>
 
-          <NotificationRow
-            id="care"
-            title={t("diary.reminder.care")}
-            description={t("diary.reminder.careDesc")}
-            enabled={careEnabled}
-            expanded={expanded === "care"}
-            busy={busy}
-            onToggle={toggleCare}
-            onExpand={() => setExpanded(expanded === "care" ? null : "care")}
-          >
-            <DurationPickerField label={t("diary.reminder.feedingInterval")} valueMinutes={settings.notifications.feedingIntervalMinutes} onPress={() => setDurationTarget("feeding")} disabled={busy} />
-            <DurationPickerField label={t("diary.reminder.sleepInterval")} valueMinutes={settings.notifications.sleepIntervalMinutes} onPress={() => setDurationTarget("sleep")} disabled={busy} />
-          </NotificationRow>
+          <FeedingReminderSettingsCard
+            babyId={babyId}
+            myRole={myRole}
+            active={visible}
+            allCommand={allCommand}
+            quietHours={{
+              enabled: draft.quietHoursEnabled ?? false,
+              start: draft.quietHoursStart ?? "22:00",
+              end: draft.quietHoursEnd ?? "07:00",
+            }}
+            onDeliveryStateChange={setFeedingDeliveryEnabled}
+          />
 
           <NotificationRow
             id="family"
@@ -361,15 +337,6 @@ export function DiaryReminderSettingsModal({
         </ScrollView>
 
         <TimePickerSheet visible={timeTarget !== null} valueHHmm={pickerValue} onCancel={() => setTimeTarget(null)} onConfirm={confirmTime} />
-        <DurationPickerSheet
-          visible={durationTarget !== null}
-          valueMinutes={durationTarget === "feeding" ? settings.notifications.feedingIntervalMinutes : settings.notifications.sleepIntervalMinutes}
-          title={t(durationTarget === "feeding" ? "diary.reminder.feedingInterval" : "diary.reminder.sleepInterval")}
-          minMinutes={15}
-          maxMinutes={12 * 60}
-          onCancel={() => setDurationTarget(null)}
-          onConfirm={confirmCareInterval}
-        />
       </View>
     </Modal>
   );

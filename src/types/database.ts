@@ -45,6 +45,7 @@ export type NotificationEventType =
   | "weekly_summary"
   | "reminder"
   | "event"
+  | "feeding_reminder"
   | "test";
 export type NotificationEventStatus = "pending" | "sent" | "failed" | "skipped";
 
@@ -457,6 +458,27 @@ export type NotificationEventRow = {
   updated_at: string;
 };
 
+export type CareReminderSettingRow = {
+  id: string; baby_id: string; reminder_type: "feeding" | "sleep";
+  enabled: boolean; mode: "custom" | "age_preset"; interval_minutes: number;
+  included_log_types: string[]; updated_by: string | null; created_at: string; updated_at: string;
+};
+
+export type CareReminderMemberPreferenceRow = {
+  id: string; baby_id: string; user_id: string; reminder_type: "feeding" | "sleep";
+  delivery_enabled: boolean; quiet_hours_enabled: boolean; quiet_start: string | null;
+  quiet_end: string | null; timezone: string | null; user_modified_at: string | null;
+  created_at: string; updated_at: string;
+};
+
+export type CareReminderStateRow = {
+  id: string; baby_id: string; reminder_type: "feeding" | "sleep";
+  last_relevant_log_id: string | null; last_relevant_log_at: string | null; next_due_at: string | null;
+  version: number; send_status: "scheduled" | "overdue_not_scheduled" | "sent" | "disabled" | "skipped_quiet_hours";
+  last_sent_for_log_id: string | null; last_sent_at: string | null;
+  processing_started_at: string | null; updated_at: string;
+};
+
 export type ContactRequestCategory = "bug" | "account" | "data" | "family" | "feedback" | "other";
 
 export type DarinInviteRequestStatus = "pending" | "accepted" | "declined" | "cancelled";
@@ -662,6 +684,24 @@ export type Database = {
         Update: Partial<NotificationEventRow>;
         Relationships: [];
       };
+      care_reminder_settings: {
+        Row: CareReminderSettingRow;
+        Insert: Partial<CareReminderSettingRow> & Pick<CareReminderSettingRow, "baby_id" | "reminder_type">;
+        Update: Partial<CareReminderSettingRow>;
+        Relationships: [];
+      };
+      care_reminder_member_preferences: {
+        Row: CareReminderMemberPreferenceRow;
+        Insert: Partial<CareReminderMemberPreferenceRow> & Pick<CareReminderMemberPreferenceRow, "baby_id" | "user_id" | "reminder_type">;
+        Update: Partial<CareReminderMemberPreferenceRow>;
+        Relationships: [];
+      };
+      care_reminder_state: {
+        Row: CareReminderStateRow;
+        Insert: Partial<CareReminderStateRow> & Pick<CareReminderStateRow, "baby_id" | "reminder_type">;
+        Update: Partial<CareReminderStateRow>;
+        Relationships: [];
+      };
       darin_invite_requests: {
         Row: DarinInviteRequestRow;
         Insert: Partial<DarinInviteRequestRow> & Pick<DarinInviteRequestRow, "baby_id" | "sender_id" | "receiver_id" | "request_type">;
@@ -760,6 +800,14 @@ export type Database = {
       mark_notification_event_read: {
         Args: { p_event_id: string };
         Returns: undefined;
+      };
+      sync_care_reminder_state: {
+        Args: { p_baby_id: string; p_reminder_type?: string };
+        Returns: undefined;
+      };
+      claim_due_care_reminders: {
+        Args: { p_limit?: number };
+        Returns: CareReminderStateRow[];
       };
       list_my_darin_friends: {
         Args: Record<string, never>;

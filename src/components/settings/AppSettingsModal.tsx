@@ -31,6 +31,7 @@ import { getMarketingConsent, saveMarketingConsent } from "../../utils/termsStor
 import { customCategoriesForStage } from "../../types/logCategory";
 import type { AppSettings } from "../../types/appSettings";
 import { useLanguage } from "../../LanguageContext";
+import { FeedingReminderSettingsCard } from "../babylog/FeedingReminderSettingsCard";
 import type { MessageKey } from "../../i18n";
 
 function applyCategoryOrder(current: AppSettings, order: OneTouchAction[]): AppSettings {
@@ -179,6 +180,7 @@ export function AppSettingsModal({
     customCategories,
     upsertCustomCategory,
     removeCustomCategory,
+    myFamilyRole,
   } = useBabyLog();
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
@@ -560,12 +562,11 @@ export function AppSettingsModal({
           ) : null}
 
           {page === "careAlerts" ? (
-            <SettingsSection title={t("settings.critical.261")}>
-              <ToggleRow label={t("settings.critical.262")} value={settings.notifications.feedingEnabled} onChange={(feedingEnabled) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, feedingEnabled } }))} />
-              {settings.notifications.feedingEnabled ? <ChoiceRow label={t("settings.critical.263")} value={String(settings.notifications.feedingIntervalMinutes)} options={[{ value: "120", label: t("settings.critical.264") }, { value: "180", label: t("settings.critical.265") }, { value: "240", label: t("settings.critical.266") }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, feedingIntervalMinutes: Number(value) } }))} /> : null}
-              <ToggleRow label={t("settings.critical.267")} value={settings.notifications.sleepEnabled} onChange={(sleepEnabled) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, sleepEnabled } }))} />
-              {settings.notifications.sleepEnabled ? <ChoiceRow label={t("settings.critical.268")} value={String(settings.notifications.sleepIntervalMinutes)} options={[{ value: "60", label: t("settings.critical.269") }, { value: "120", label: t("settings.critical.264") }, { value: "180", label: t("settings.critical.265") }]} onChange={(value) => setSettings((s) => ({ ...s, notifications: { ...s.notifications, sleepIntervalMinutes: Number(value) } }))} /> : null}
-            </SettingsSection>
+            <FeedingReminderSettingsCard
+              babyId={localDataScope?.babyId ?? null}
+              myRole={myFamilyRole}
+              active={page === "careAlerts"}
+            />
           ) : null}
 
           {page === "careAlerts" ? (

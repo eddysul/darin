@@ -686,6 +686,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
         value={reminder}
         babyName={babyName}
         babyId={localDataScope?.babyId ?? null}
+        myRole={myFamilyRole}
         onClose={() => setSettingsOpen(false)}
         onSave={(next) => {
           setReminder(next);

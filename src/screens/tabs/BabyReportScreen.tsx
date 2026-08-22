@@ -3,14 +3,18 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
 import { AppHeader } from "../../components/babylog/AppHeader";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
+import { ConsultFab } from "../../components/babylog/ConsultFab";
+import { ConsultPromptSheet } from "../../components/babylog/ConsultPromptSheet";
 import { GrowthRecordModal } from "../../components/babylog/GrowthRecordModal";
 import { BABY_LOG_CATEGORIES, getCategory, type BabyLogCategoryId } from "../../constants/babyLogCategories";
 import { formatLogMeta, toMinutes } from "../../utils/formatLog";
 import { useBabyLog } from "../../context/BabyLogContext";
+import { useConsultFabBehavior } from "../../hooks/useConsultFabBehavior";
 import type { BabyLogEntry } from "../../types/babyLog";
 import { isCustomCategoryKey } from "../../types/logCategory";
 import { formatDateKey } from "../../utils/dateKey";
 import {
+  buildTodaySummary,
   FEEDING_CATS,
   getLogsForDay,
 } from "../../utils/reportAggregates";
@@ -45,20 +49,27 @@ type Props = {
   onOpenNotifications?: () => void;
   onOpenShared?: () => void;
   onOpenRecord?: () => void;
+  onOpenConsult: (initialQuestion?: string) => void;
 };
 export function BabyReportScreen({
   onOpenProfile,
   onOpenSettings,
   onOpenNotifications,
   onOpenShared,
+  onOpenConsult,
 }: Props) {
   const { t } = useLanguage();
   const { logs, babyName, careSetup, growthRecords, addGrowthRecord, updateGrowthRecord } = useBabyLog();
   const [growthModalOpen, setGrowthModalOpen] = useState(false);
   const [editingGrowthRecord, setEditingGrowthRecord] = useState<GrowthRecord | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const { fabHidden, promptOpen, setPromptOpen, scrollProps } = useConsultFabBehavior(
+    growthModalOpen || reportOpen,
+  );
 
   const todayKey = formatDateKey();
   const todayLogs = useMemo(() => getLogsForDay(logs, todayKey, todayKey), [logs, todayKey]);
+  const summary = useMemo(() => buildTodaySummary(logs), [logs]);
   const sortedGrowthRecords = useMemo(
     () => [...growthRecords].sort((a, b) => a.measuredAt.localeCompare(b.measuredAt)),
     [growthRecords],
@@ -72,7 +83,6 @@ export function BabyReportScreen({
   const weekTable = useMemo(() => buildWeeklyFeatureTable(logs, careSetup), [logs, careSetup]);
   const ruleNarrative = useMemo(() => buildRuleNarrative(weekTable), [weekTable]);
   const [narrative, setNarrative] = useState({ headline: "", body: "" });
-  const [reportOpen, setReportOpen] = useState(false);
 
   // 주 1회만 AI 를 부른다. 캐시가 있으면 그대로 쓰고, 실패하면 규칙 문장이 남는다.
   useEffect(() => {
@@ -159,7 +169,7 @@ export function BabyReportScreen({
 
   return (
     <View style={styles.root}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} {...scrollProps}>
         <AppHeader
           onOpenProfile={onOpenProfile}
           onOpenSettings={onOpenSettings}
@@ -271,6 +281,21 @@ export function BabyReportScreen({
         onSave={(draft, editId) => {
           if (editId) updateGrowthRecord(editId, draft);
           else addGrowthRecord(draft);
+        }}
+      />
+
+      <ConsultFab hidden={fabHidden} onPress={() => setPromptOpen(true)} />
+      <ConsultPromptSheet
+        visible={promptOpen}
+        todayLogCount={summary.totalCount}
+        onClose={() => setPromptOpen(false)}
+        onSelectQuestion={(question) => {
+          setPromptOpen(false);
+          onOpenConsult(question);
+        }}
+        onAskFreely={() => {
+          setPromptOpen(false);
+          onOpenConsult();
         }}
       />
     </View>
