@@ -26,6 +26,8 @@
     "qa:care-reminders:worker-policy": "node --experimental-strip-types scripts/care-reminder-worker-policy-smoke.mts",
     "qa:push-worker": "node --experimental-strip-types scripts/push-notification-worker-smoke.mts",
     "qa:secrets": "node scripts/secret-scan.mjs",
+    "deploy:push:qa": "node --env-file=.env.qa scripts/deploy-push-function.mjs qa",
+    "deploy:push:production": "node --env-file=.env.production-backend scripts/deploy-push-function.mjs production",
     "qa:care-reminders:local-postgres": "node scripts/verify-local-care-reminder-postgres.mjs",
     "qa:invite-response-notifications": "node --experimental-strip-types scripts/invite-response-notification-smoke.mts",
     "qa:supabase:guard": "node scripts/qa-project-guard-smoke.mjs",
