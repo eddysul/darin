@@ -1,18 +1,20 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  currentClaimMatches,
+  emptyCounts,
+  expoDeliveryStatus,
+  finalStateStatus,
+  genericEventStatus,
+  inQuietHours,
+  unavailableTokenStatus,
+  type DeliveryCounts,
+  type DeliveryStatus,
+} from "./deliveryPolicy.ts";
 
 type ClaimedState = {
   id: string; baby_id: string; reminder_type: "feeding" | "sleep";
   last_relevant_log_id: string | null; version: number; processing_started_at: string;
 };
-type DeliveryStatus = "sent" | "skipped_quiet_hours" | "skipped_no_token"
-  | "skipped_permission_or_disabled" | "failed_retryable" | "failed_permanent";
-type DeliveryCounts = Record<DeliveryStatus, number>;
-
-const emptyCounts = (): DeliveryCounts => ({
-  sent: 0, skipped_quiet_hours: 0, skipped_no_token: 0,
-  skipped_permission_or_disabled: 0, failed_retryable: 0, failed_permanent: 0,
-});
-
 class StaleClaimError extends Error {
   constructor() { super("stale_claim"); }
 }
@@ -21,28 +23,32 @@ function json(status: number, value: unknown) {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
-function inQuietHours(now: Date, timezone: string | null, start: string | null, end: string | null): boolean {
-  if (!timezone || !start || !end) return false;
-  try {
-    const hm = new Intl.DateTimeFormat("en-GB", {
-      timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false,
-    }).format(now);
-    const current = Number(hm.replace(":", ""));
-    const from = Number(start.slice(0, 5).replace(":", ""));
-    const to = Number(end.slice(0, 5).replace(":", ""));
-    return from <= to ? current >= from && current < to : current >= from || current < to;
-  } catch { return false; }
-}
+type SupportedLocale = "ko" | "en" | "ja" | "es" | "zh-CN";
+const REMINDER_COPY: Record<SupportedLocale, Record<"feeding" | "sleep", { title: string; body: string }>> = {
+  ko: {
+    feeding: { title: "수유 기록 리마인더", body: "수유 기록을 확인해볼 시간이에요. 마지막 기록을 기준으로 한 참고 알림이에요." },
+    sleep: { title: "수면 기록 리마인더", body: "수면 기록을 확인해볼 시간이에요. 마지막 기록을 기준으로 한 참고 알림이에요." },
+  },
+  en: {
+    feeding: { title: "Feeding log reminder", body: "It may be time to review the feeding log. This is a reference reminder based on the last log." },
+    sleep: { title: "Sleep log reminder", body: "It may be time to review the sleep log. This is a reference reminder based on the last log." },
+  },
+  ja: {
+    feeding: { title: "授乳記録のお知らせ", body: "授乳記録を確認する時間です。最後の記録を基準にした参考通知です。" },
+    sleep: { title: "睡眠記録のお知らせ", body: "睡眠記録を確認する時間です。最後の記録を基準にした参考通知です。" },
+  },
+  es: {
+    feeding: { title: "Recordatorio de alimentación", body: "Puede ser un buen momento para revisar el registro. Es un aviso orientativo basado en el último registro." },
+    sleep: { title: "Recordatorio de sueño", body: "Puede ser un buen momento para revisar el registro. Es un aviso orientativo basado en el último registro." },
+  },
+  "zh-CN": {
+    feeding: { title: "喂养记录提醒", body: "可以查看一下喂养记录。这是根据上次记录提供的参考提醒。" },
+    sleep: { title: "睡眠记录提醒", body: "可以查看一下睡眠记录。这是根据上次记录提供的参考提醒。" },
+  },
+};
 
-function intervalText(minutes: number): string {
-  if (minutes % 60 === 0) return `${minutes / 60}시간`;
-  if (minutes > 60) return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`;
-  return `${minutes}분`;
-}
-
-function genericEventStatus(status: DeliveryStatus): "sent" | "failed" | "skipped" {
-  if (status === "sent") return "sent";
-  return status.startsWith("failed_") ? "failed" : "skipped";
+function localeFor(value: unknown): SupportedLocale {
+  return value === "en" || value === "ja" || value === "es" || value === "zh-CN" ? value : "ko";
 }
 
 Deno.serve(async (request) => {
@@ -64,7 +70,7 @@ Deno.serve(async (request) => {
   for (const state of (claimed ?? []) as ClaimedState[]) {
     const counts = emptyCounts();
     try {
-      if (state.reminder_type !== "feeding" || !state.last_relevant_log_id) throw new Error("invalid_claimed_state");
+      if (!["feeding", "sleep"].includes(state.reminder_type) || !state.last_relevant_log_id) throw new Error("invalid_claimed_state");
 
       // Repeated directly before each Expo request. This narrows, but cannot fully
       // eliminate, the post-check race window documented in the QA runbook.
@@ -74,13 +80,19 @@ Deno.serve(async (request) => {
             .select("version,last_relevant_log_id,processing_started_at,send_status")
             .eq("id", state.id).maybeSingle(),
           service.from("care_reminder_settings").select("enabled,interval_minutes")
-            .eq("baby_id", state.baby_id).eq("reminder_type", "feeding").maybeSingle(),
+            .eq("baby_id", state.baby_id).eq("reminder_type", state.reminder_type).maybeSingle(),
         ]);
         if (stateError || settingError) throw stateError ?? settingError;
-        if (!current || !setting?.enabled || current.send_status !== "scheduled"
-          || current.version !== state.version
-          || current.last_relevant_log_id !== state.last_relevant_log_id
-          || current.processing_started_at !== state.processing_started_at) throw new StaleClaimError();
+        if (!setting || !currentClaimMatches({
+          version: state.version,
+          lastRelevantLogId: state.last_relevant_log_id,
+          processingStartedAt: state.processing_started_at,
+        }, current ? {
+          version: current.version,
+          lastRelevantLogId: current.last_relevant_log_id,
+          processingStartedAt: current.processing_started_at,
+          sendStatus: current.send_status,
+        } : null, setting.enabled)) throw new StaleClaimError();
         return setting;
       };
 
@@ -91,24 +103,32 @@ Deno.serve(async (request) => {
 
       for (const member of members ?? []) {
         await assertCurrentDelivery();
-        const { data: preference, error: preferenceError } = await service
-          .from("care_reminder_member_preferences").select("*")
-          .eq("baby_id", state.baby_id).eq("user_id", member.user_id)
-          .eq("reminder_type", "feeding").maybeSingle();
-        if (preferenceError) throw preferenceError;
+        const [{ data: preference, error: preferenceError }, { data: profile, error: profileError }] = await Promise.all([
+          service.from("care_reminder_member_preferences").select("*")
+            .eq("baby_id", state.baby_id).eq("user_id", member.user_id)
+            .eq("reminder_type", state.reminder_type).maybeSingle(),
+          service.from("profiles").select("preferred_language").eq("id", member.user_id).maybeSingle(),
+        ]);
+        if (preferenceError || profileError) throw preferenceError ?? profileError;
 
-        const dedupeKey = `feeding_reminder:${state.baby_id}:${state.last_relevant_log_id}:${state.version}:${member.user_id}`;
+        const eventType = `${state.reminder_type}_reminder` as "feeding_reminder" | "sleep_reminder";
+        const dedupeKey = `${eventType}:${state.baby_id}:${state.last_relevant_log_id}:${state.version}:${member.user_id}`;
         const quiet = Boolean(preference?.delivery_enabled && preference.quiet_hours_enabled && inQuietHours(
           new Date(), preference.timezone, preference.quiet_start, preference.quiet_end,
         ));
         const initialDeliveryStatus: DeliveryStatus | null = !preference?.delivery_enabled
           ? "skipped_permission_or_disabled" : quiet ? "skipped_quiet_hours" : null;
-        const title = "수유 기록을 확인해볼 시간이에요";
-        const body = `마지막 수유 후 ${intervalText(setting.interval_minutes)}이 지났어요. 아기의 수유 신호를 함께 확인해 주세요.`;
-        const eventData = { route: "record", feature: "feedingReminder", babyId: state.baby_id, logId: state.last_relevant_log_id };
+        const { title, body } = REMINDER_COPY[localeFor(profile?.preferred_language)][state.reminder_type];
+        const eventData = {
+          route: "record",
+          feature: state.reminder_type === "feeding" ? "feedingReminder" : "sleepReminder",
+          reminderType: state.reminder_type,
+          babyId: state.baby_id,
+          logId: state.last_relevant_log_id,
+        };
         let { data: event, error: eventError } = await service.from("notification_events").insert({
           recipient_id: member.user_id, actor_id: null, baby_id: state.baby_id,
-          event_type: "feeding_reminder", title, body, data: eventData, dedupe_key: dedupeKey,
+          event_type: eventType, title, body, data: eventData, dedupe_key: dedupeKey,
           status: initialDeliveryStatus ? genericEventStatus(initialDeliveryStatus) : "pending",
           delivery_status: initialDeliveryStatus, error_message: initialDeliveryStatus,
         }).select("id,status,delivery_status").single();
@@ -140,9 +160,9 @@ Deno.serve(async (request) => {
         if (tokenError) throw tokenError;
         const activeTokens = (tokens ?? []).filter((token) => token.disabled_at === null);
         const validTokens = activeTokens.filter((token) => /^Expo(nent)?PushToken\[[^\]]+\]$/.test(token.expo_push_token));
-        if (!validTokens.length) {
-          const deliveryStatus: DeliveryStatus = (tokens ?? []).length === 0
-            ? "skipped_no_token" : "skipped_permission_or_disabled";
+        const unavailableStatus = unavailableTokenStatus((tokens ?? []).length, validTokens.length);
+        if (unavailableStatus) {
+          const deliveryStatus: DeliveryStatus = unavailableStatus;
           const { error } = await service.from("notification_events").update({
             status: "skipped", delivery_status: deliveryStatus, error_message: deliveryStatus,
           }).eq("id", event.id);
@@ -176,8 +196,7 @@ Deno.serve(async (request) => {
               disabledTokenCount += 1;
             }
           }
-          deliveryStatus = successCount > 0 ? "sent"
-            : disabledTokenCount === validTokens.length ? "failed_permanent" : "failed_retryable";
+          deliveryStatus = expoDeliveryStatus(successCount, disabledTokenCount, validTokens.length);
         } catch (error) {
           console.error("care reminder Expo request failed", state.id, member.user_id, error);
           deliveryStatus = "failed_retryable";
@@ -194,7 +213,7 @@ Deno.serve(async (request) => {
       }
 
       const retryScheduled = counts.failed_retryable > 0;
-      const finalStatus = retryScheduled ? "scheduled" : counts.sent > 0 ? "sent" : "processed";
+      const finalStatus = finalStateStatus(counts);
       const { data: finished, error: finishError } = await service.from("care_reminder_state").update({
         send_status: finalStatus, last_sent_for_log_id: state.last_relevant_log_id,
         last_sent_at: counts.sent > 0 ? new Date().toISOString() : null, processing_started_at: null,

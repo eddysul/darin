@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 import { useReduceMotion } from "../../hooks/useReduceMotion";
+import { useLanguage } from "../../LanguageContext";
 import { colors } from "../../theme";
 
 const DEFAULT_ROW_H = 66;
@@ -80,6 +81,7 @@ function DraggableCategoryRow<T extends string>({
   onReorder: (next: T[]) => void;
   children: ReactNode;
 }) {
+  const { t } = useLanguage();
   const translateY = useRef(new Animated.Value(0)).current;
   const startIndexRef = useRef(index);
   const grantOrderRef = useRef<T[]>([]);
@@ -162,11 +164,11 @@ function DraggableCategoryRow<T extends string>({
         style={styles.handle}
         {...panResponder.panHandlers}
         accessibilityRole="adjustable"
-        accessibilityLabel="순서 변경"
-        accessibilityHint="길게 누른 뒤 위아래로 끌어 순서를 바꿔요"
+        accessibilityLabel={t("chrome.critical.038")}
+        accessibilityHint={t("chrome.critical.039")}
         accessibilityActions={[
-          { name: "increment", label: "아래로 이동" },
-          { name: "decrement", label: "위로 이동" },
+          { name: "increment", label: t("chrome.critical.040") },
+          { name: "decrement", label: t("chrome.critical.041") },
         ]}
         onAccessibilityAction={(event) => {
           const current = itemsRef.current;

@@ -38,6 +38,17 @@ const STORED_VALUE_KEYS: Record<string, MessageKey> = {
   "피로": "record.option.fatigue", "느꼈어요": "record.option.felt", "활발": "record.option.active",
   "진료": "record.option.treatment", "초음파": "record.option.ultrasound", "영양제": "record.detail.supplement",
   "약": "record.detail.medicine", "기타": "record.detail.other",
+  "좌측": "record.timeline.left", "우측": "record.timeline.right", "왼쪽": "record.timeline.left", "오른쪽": "record.timeline.right",
+  "양쪽": "chrome.critical.008", "검진": "record.timeline.checkup", "질환": "record.timeline.illness",
+  "열": "chrome.critical.082", "기침": "chrome.critical.083", "콧물": "chrome.critical.084", "발진": "chrome.critical.085",
+  "키": "chrome.critical.086", "몸무게": "home.metric.weight", "머리둘레": "chrome.critical.087",
+  "울음": "record.custom.icon.cry", "1차": "home.vaccine.first", "2차": "home.vaccine.second",
+  "3차": "home.vaccine.third", "추가": "home.vaccine.booster",
+  "트림": "chrome.critical.088", "역류": "chrome.critical.089", "토함": "chrome.critical.090",
+  "산책": "record.custom.icon.walk", "병원": "record.custom.icon.hospital", "친척": "chrome.critical.091",
+  "회/량": "record.screen.countAmount",
+  "쌀미음": "chrome.critical.092", "소고기": "chrome.critical.093", "애호박": "chrome.critical.094",
+  "바나나": "chrome.critical.095", "고구마": "chrome.critical.096", "사과": "chrome.critical.097",
 };
 
 const CUSTOM_SUGGESTION_KEYS: Record<string, MessageKey> = {
@@ -64,6 +75,17 @@ const CUSTOM_MODE_LABEL_KEYS: Record<string, MessageKey> = {
 const CUSTOM_MODE_HINT_KEYS: Record<string, MessageKey> = {
   memo: "record.custom.mode.memo.hint", duration: "record.custom.mode.duration.hint",
   amount: "record.custom.mode.amount.hint", check: "record.custom.mode.check.hint",
+};
+
+const STORED_CUSTOM_LABEL_KEYS: Record<string, MessageKey> = {
+  "메모": "record.custom.icon.memo", "놀이": "record.custom.icon.play", "책": "record.custom.icon.book",
+  "산책": "record.custom.icon.walk", "외출": "record.custom.icon.outing", "목욕": "record.custom.icon.bath",
+  "마사지": "record.custom.icon.massage", "병원": "record.custom.icon.hospital", "약": "record.custom.icon.med",
+  "체온": "record.custom.icon.temp", "성장": "record.custom.icon.growth", "수면": "record.custom.icon.sleep",
+  "수유": "record.custom.icon.feeding", "기저귀": "record.custom.icon.diaper", "기분": "record.custom.icon.mood",
+  "기분/울음": "chrome.critical.081", "울음": "record.custom.icon.cry", "트림/토함": "record.custom.icon.spit",
+  "예방접종": "record.custom.icon.vaccine", "사진": "record.custom.icon.photo", "전화": "record.custom.icon.phone",
+  "기타": "record.custom.icon.other", "증상": "record.custom.icon.symptom", "사용자 카테고리": "chrome.critical.007",
 };
 
 export function recordCategoryLabel(t: Translate, id: BabyLogCategoryId): string {
@@ -98,4 +120,13 @@ export function customModeLabel(t: Translate, mode: string, fallback: string): s
 export function customModeHint(t: Translate, mode: string, fallback: string): string {
   const key = CUSTOM_MODE_HINT_KEYS[mode];
   return key ? t(key) : fallback;
+}
+
+/** Remap seeded Korean custom-category names at display. User-renamed labels stay as stored. */
+export function customCategoryDisplayLabel(
+  t: Translate,
+  category: { label: string },
+): string {
+  const key = STORED_CUSTOM_LABEL_KEYS[category.label];
+  return key ? t(key) : category.label;
 }

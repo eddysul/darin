@@ -474,7 +474,14 @@ begin
     join pg_namespace n on n.oid = t.relnamespace
     where n.nspname = 'public' and t.relname = 'notification_events'
       and c.conname = 'notification_events_event_type_check'
-  ) preserved;
+  ) preserved
+  -- A constraint produced with format('%L::text[]', text[]) is rendered as one
+  -- quoted PostgreSQL array literal. On a re-run, the regexp above sees that
+  -- whole literal (for example "{event,test}") as if it were an event type.
+  -- Known types and types already present in rows are preserved by the other
+  -- branches, so exclude only this parser artifact.
+  where event_type is not null
+    and event_type !~ '^\{.*\}$';
 
   alter table public.notification_events
     drop constraint if exists notification_events_event_type_check;

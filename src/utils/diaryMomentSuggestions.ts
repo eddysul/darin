@@ -1,6 +1,8 @@
 import type { BabyLogEntry } from "../types/babyLog";
+import type { MessageKey } from "../i18n";
 import type { TodaySummary } from "./reportAggregates";
 import { formatSleepDuration } from "./reportAggregates";
+import type { Translate } from "./recordDisplay";
 
 export type MomentSuggestion = {
   id: string;
@@ -17,6 +19,21 @@ const ACTIVITY_LABELS: Partial<Record<string, string>> = {
   walk: "산책",
 };
 
+const ACTIVITY_KEYS: Partial<Record<string, MessageKey>> = {
+  tummy: "diary.suggestion.activity.tummy",
+  bath: "diary.suggestion.activity.bath",
+  play: "diary.suggestion.activity.play",
+  doctor: "diary.suggestion.activity.doctor",
+  med: "diary.suggestion.activity.med",
+  walk: "diary.suggestion.activity.walk",
+};
+
+function activityLabel(cat: string, t?: Translate): string | undefined {
+  const key = ACTIVITY_KEYS[cat];
+  if (!key) return undefined;
+  return t ? t(key) : ACTIVITY_LABELS[cat];
+}
+
 /**
  * Rule-based Daily Summary (frozen into careLogSummarySnapshot on save).
  *
@@ -28,17 +45,27 @@ const ACTIVITY_LABELS: Partial<Record<string, string>> = {
 export function buildCareLogDailySummary(
   summary: TodaySummary,
   todayLogs: BabyLogEntry[] = [],
+  t?: Translate,
 ): string {
   if (summary.totalCount === 0) {
-    return "오늘은 아직 Care Log 기록이 없어요. 수유·수면·기저귀를 남기면 여기에 요약돼요.";
+    return t
+      ? t("diary.suggestion.empty")
+      : "오늘은 아직 Care Log 기록이 없어요. 수유·수면·기저귀를 남기면 여기에 요약돼요.";
   }
 
-  const core = `오늘은 수유 ${summary.feedCount}회, 수면 ${formatSleepDuration(summary.totalSleepMinutes)}, 기저귀 ${summary.diaperCount}회가 기록되었어요.`;
+  const sleep = formatSleepDuration(summary.totalSleepMinutes, t);
+  const core = t
+    ? t("diary.suggestion.core", {
+        feeds: summary.feedCount,
+        sleep,
+        diapers: summary.diaperCount,
+      })
+    : `오늘은 수유 ${summary.feedCount}회, 수면 ${sleep}, 기저귀 ${summary.diaperCount}회가 기록되었어요.`;
 
   const seen = new Set<string>();
   const extras: string[] = [];
   for (const log of todayLogs) {
-    const label = ACTIVITY_LABELS[log.cat];
+    const label = activityLabel(log.cat, t);
     if (!label || seen.has(label)) continue;
     seen.add(label);
     extras.push(label);
@@ -46,8 +73,14 @@ export function buildCareLogDailySummary(
   }
 
   if (extras.length === 0) return core;
-  if (extras.length === 1) return `${core} 추가로 ${extras[0]}도 했어요.`;
-  return `${core} 추가로 ${extras[0]}과 ${extras[1]}도 했어요.`;
+  if (extras.length === 1) {
+    return t
+      ? t("diary.suggestion.extraOne", { core, activity: extras[0] })
+      : `${core} 추가로 ${extras[0]}도 했어요.`;
+  }
+  return t
+    ? t("diary.suggestion.extraTwo", { core, first: extras[0], second: extras[1] })
+    : `${core} 추가로 ${extras[0]}과 ${extras[1]}도 했어요.`;
 }
 
 /**
@@ -58,12 +91,23 @@ export function buildDiaryMomentSuggestions(input: {
   babyName: string;
   todayLogs: BabyLogEntry[];
   summary: TodaySummary;
+  t?: Translate;
 }): MomentSuggestion[] {
-  const { babyName, todayLogs, summary } = input;
+  const { babyName, todayLogs, summary, t } = input;
   const cats = new Set(todayLogs.map((l) => l.cat));
   const out: MomentSuggestion[] = [
-    { id: "first-action", text: `오늘 ${babyName}의 새로운 모습을 발견한 소중한 하루였어요.` },
-    { id: "cute-face", text: `${babyName}의 귀여운 표정이 오래 기억에 남는 하루였어요.` },
+    {
+      id: "first-action",
+      text: t
+        ? t("diary.suggestion.firstAction", { babyName })
+        : `오늘 ${babyName}의 새로운 모습을 발견한 소중한 하루였어요.`,
+    },
+    {
+      id: "cute-face",
+      text: t
+        ? t("diary.suggestion.cuteFace", { babyName })
+        : `${babyName}의 귀여운 표정이 오래 기억에 남는 하루였어요.`,
+    },
   ];
 
   if (
@@ -72,28 +116,38 @@ export function buildDiaryMomentSuggestions(input: {
   ) {
     out.push({
       id: "short-nap",
-      text: "낮잠이 평소보다 짧아 조금 더 세심히 지켜본 하루였어요.",
+      text: t
+        ? t("diary.suggestion.shortNap")
+        : "낮잠이 평소보다 짧아 조금 더 세심히 지켜본 하루였어요.",
     });
   } else if (cats.has("bath")) {
     out.push({
       id: "bath",
-      text: "목욕하며 물과 한층 더 가까워진 즐거운 시간이었어요.",
+      text: t
+        ? t("diary.suggestion.bath")
+        : "목욕하며 물과 한층 더 가까워진 즐거운 시간이었어요.",
     });
   } else if (cats.has("tummy") || cats.has("play")) {
     out.push({
       id: "play",
-      text: "놀이나 터미타임에서 힘차게 움직이는 모습이 인상적이었어요.",
+      text: t
+        ? t("diary.suggestion.play")
+        : "놀이나 터미타임에서 힘차게 움직이는 모습이 인상적이었어요.",
     });
   } else {
     out.push({
       id: "mood",
-      text: "오늘의 표정과 컨디션을 천천히 살펴본 하루였어요.",
+      text: t
+        ? t("diary.suggestion.mood")
+        : "오늘의 표정과 컨디션을 천천히 살펴본 하루였어요.",
     });
   }
 
   out.push({
     id: "growth-book",
-    text: "오늘의 예쁜 순간을 성장책에 오래 남겨두고 싶어요.",
+    text: t
+      ? t("diary.suggestion.growthBook")
+      : "오늘의 예쁜 순간을 성장책에 오래 남겨두고 싶어요.",
   });
 
   return out.slice(0, 4);

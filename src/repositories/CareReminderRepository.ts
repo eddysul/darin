@@ -6,9 +6,10 @@ import type {
 } from "../types/database";
 import type {
   CareReminderMemberPreference,
+  CareReminderBundle,
   CareReminderSetting,
   CareReminderState,
-  FeedingReminderBundle,
+  CareReminderType,
 } from "../types/careReminder";
 import { AuthRepository } from "./AuthRepository";
 
@@ -40,14 +41,14 @@ function stateFromRow(row: CareReminderStateRow): CareReminderState {
 }
 
 export const CareReminderRepository = {
-  async getFeedingBundle(babyId: string): Promise<FeedingReminderBundle> {
+  async getBundle(babyId: string, reminderType: CareReminderType): Promise<CareReminderBundle> {
     const user = await AuthRepository.getUser();
     if (!user) return { setting: null, preference: null, state: null };
     const sb = requireSupabase();
     const [settingResult, preferenceResult, stateResult] = await Promise.all([
-      sb.from("care_reminder_settings").select("*").eq("baby_id", babyId).eq("reminder_type", "feeding").maybeSingle(),
-      sb.from("care_reminder_member_preferences").select("*").eq("baby_id", babyId).eq("user_id", user.id).eq("reminder_type", "feeding").maybeSingle(),
-      sb.from("care_reminder_state").select("*").eq("baby_id", babyId).eq("reminder_type", "feeding").maybeSingle(),
+      sb.from("care_reminder_settings").select("*").eq("baby_id", babyId).eq("reminder_type", reminderType).maybeSingle(),
+      sb.from("care_reminder_member_preferences").select("*").eq("baby_id", babyId).eq("user_id", user.id).eq("reminder_type", reminderType).maybeSingle(),
+      sb.from("care_reminder_state").select("*").eq("baby_id", babyId).eq("reminder_type", reminderType).maybeSingle(),
     ]);
     const error = settingResult.error ?? preferenceResult.error ?? stateResult.error;
     if (error) throw error;
@@ -58,24 +59,35 @@ export const CareReminderRepository = {
     };
   },
 
-  async saveFeedingSetting(babyId: string, input: { enabled: boolean; intervalMinutes: number }): Promise<CareReminderSetting> {
+  getFeedingBundle(babyId: string) { return this.getBundle(babyId, "feeding"); },
+  getSleepBundle(babyId: string) { return this.getBundle(babyId, "sleep"); },
+
+  async saveSetting(babyId: string, reminderType: CareReminderType, input: { enabled: boolean; intervalMinutes: number }): Promise<CareReminderSetting> {
     const user = await AuthRepository.getUser();
     if (!user) throw new Error("로그인이 필요해요.");
     const { data, error } = await requireSupabase().from("care_reminder_settings").upsert({
       baby_id: babyId,
-      reminder_type: "feeding",
+      reminder_type: reminderType,
       enabled: input.enabled,
       mode: "custom",
       interval_minutes: input.intervalMinutes,
-      included_log_types: ["breast", "formula", "storedMilk"],
+      included_log_types: reminderType === "feeding" ? ["breast", "formula", "storedMilk"] : ["sleep"],
       updated_by: user.id,
     }, { onConflict: "baby_id,reminder_type" }).select("*").single();
     if (error) throw error;
     return settingFromRow(data);
   },
 
-  async saveMyFeedingPreference(
+  saveFeedingSetting(babyId: string, input: { enabled: boolean; intervalMinutes: number }) {
+    return this.saveSetting(babyId, "feeding", input);
+  },
+  saveSleepSetting(babyId: string, input: { enabled: boolean; intervalMinutes: number }) {
+    return this.saveSetting(babyId, "sleep", input);
+  },
+
+  async saveMyPreference(
     babyId: string,
+    reminderType: CareReminderType,
     input: { deliveryEnabled: boolean; quietHoursEnabled?: boolean; quietStart?: string | null; quietEnd?: string | null; timezone?: string | null },
   ): Promise<CareReminderMemberPreference> {
     const user = await AuthRepository.getUser();
@@ -83,7 +95,7 @@ export const CareReminderRepository = {
     const { data, error } = await requireSupabase().from("care_reminder_member_preferences").upsert({
       baby_id: babyId,
       user_id: user.id,
-      reminder_type: "feeding",
+      reminder_type: reminderType,
       delivery_enabled: input.deliveryEnabled,
       quiet_hours_enabled: input.quietHoursEnabled ?? false,
       quiet_start: input.quietStart ?? null,
@@ -95,7 +107,14 @@ export const CareReminderRepository = {
     return preferenceFromRow(data);
   },
 
-  async migrateLegacyFeedingSetting(babyId: string, enabled: boolean, intervalMinutes: number): Promise<FeedingReminderBundle> {
+  saveMyFeedingPreference(babyId: string, input: { deliveryEnabled: boolean; quietHoursEnabled?: boolean; quietStart?: string | null; quietEnd?: string | null; timezone?: string | null }) {
+    return this.saveMyPreference(babyId, "feeding", input);
+  },
+  saveMySleepPreference(babyId: string, input: { deliveryEnabled: boolean; quietHoursEnabled?: boolean; quietStart?: string | null; quietEnd?: string | null; timezone?: string | null }) {
+    return this.saveMyPreference(babyId, "sleep", input);
+  },
+
+  async migrateLegacyFeedingSetting(babyId: string, enabled: boolean, intervalMinutes: number): Promise<CareReminderBundle> {
     const current = await this.getFeedingBundle(babyId);
     if (current.setting || !enabled) return current;
     try {
@@ -105,5 +124,17 @@ export const CareReminderRepository = {
       // have won the migration race. In both cases the server is authoritative.
     }
     return this.getFeedingBundle(babyId);
+  },
+
+  async migrateLegacySleepSetting(babyId: string, enabled: boolean, intervalMinutes: number): Promise<CareReminderBundle> {
+    const current = await this.getSleepBundle(babyId);
+    if (current.setting || !enabled) return current;
+    try {
+      await this.saveSleepSetting(babyId, { enabled: true, intervalMinutes });
+    } catch {
+      // Viewers cannot create the shared setting. A concurrent family update is
+      // also harmless because the next read remains authoritative.
+    }
+    return this.getSleepBundle(babyId);
   },
 };

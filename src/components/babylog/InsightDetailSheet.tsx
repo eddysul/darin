@@ -1,6 +1,8 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLanguage } from "../../LanguageContext";
 import type { Insight } from "../../utils/careInsights";
+import { localizeInsight } from "../../utils/insightDisplay";
 import { colors, radius } from "../../theme";
 
 type Props = {
@@ -12,69 +14,68 @@ type Props = {
 
 export function InsightDetailSheet({ visible, insight, babyName, onClose }: Props) {
   const insets = useSafeAreaInsets();
+  const { locale, t } = useLanguage();
   if (!insight) return null;
 
+  const copy = localizeInsight(insight, t, locale);
   const { distribution: dist } = insight;
   const first = dist.buckets[0];
   const last = dist.buckets[dist.buckets.length - 1];
   const firstHigher = first.value >= last.value;
+  const firstCopy = copy.buckets[0];
+  const lastCopy = copy.buckets[copy.buckets.length - 1];
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <Pressable style={styles.backdropFill} onPress={onClose} accessibilityLabel="닫기" />
+        <Pressable style={styles.backdropFill} onPress={onClose} accessibilityLabel={t("report.critical.104")} />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={styles.grabber} />
 
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text style={styles.title}>
-              {insight.lead}
-              {babyName}가 <Text style={styles.gap}>{insight.gapText}</Text> {insight.tail}
+              {copy.lead}
+              {t("report.critical.122", { babyName })}
+              <Text style={styles.gap}>{copy.gapText}</Text> {copy.tail}
             </Text>
-            <Text style={styles.subtitle}>
-              {dist.totalDays}일치 기록에서 {dist.bucketLabel}과 {dist.valueLabel}을 비교했어요.
-            </Text>
+            <Text style={styles.subtitle}>{copy.subtitle}</Text>
 
-            {/* 양 끝만 크게 대비시킨다. 가운데 구간은 아래 표에 남긴다. */}
             <View style={styles.compare}>
               <View style={styles.compareCol}>
-                <Text style={styles.compareRange}>{first.range}</Text>
+                <Text style={styles.compareRange}>{firstCopy.range}</Text>
                 <Text style={[styles.compareValue, firstHigher && styles.compareStrong]}>
-                  {dist.formatValue(first.value)}
+                  {firstCopy.valueLabel}
                 </Text>
-                <Text style={styles.compareDays}>{first.days}일</Text>
+                <Text style={styles.compareDays}>{firstCopy.daysLabel}</Text>
               </View>
               <Text style={styles.compareArrow}>→</Text>
               <View style={styles.compareCol}>
-                <Text style={styles.compareRange}>{last.range}</Text>
+                <Text style={styles.compareRange}>{lastCopy.range}</Text>
                 <Text style={[styles.compareValue, !firstHigher && styles.compareStrong]}>
-                  {dist.formatValue(last.value)}
+                  {lastCopy.valueLabel}
                 </Text>
-                <Text style={styles.compareDays}>{last.days}일</Text>
+                <Text style={styles.compareDays}>{lastCopy.daysLabel}</Text>
               </View>
             </View>
 
-            <Text style={styles.sectionLabel}>구간별로 보면</Text>
-            {dist.buckets.map((bucket) => (
+            <Text style={styles.sectionLabel}>{t("insight.critical.080")}</Text>
+            {copy.buckets.map((bucket) => (
               <View key={bucket.name} style={styles.row}>
                 <Text style={styles.rowName}>{bucket.name}</Text>
                 <Text style={styles.rowRange}>{bucket.range}</Text>
-                <Text style={styles.rowValue}>{dist.formatValue(bucket.value)}</Text>
-                <Text style={styles.rowDays}>{bucket.days}일</Text>
+                <Text style={styles.rowValue}>{bucket.valueLabel}</Text>
+                <Text style={styles.rowDays}>{bucket.daysLabel}</Text>
               </View>
             ))}
 
             <View style={styles.caution}>
-              <Text style={styles.cautionTitle}>참고해 주세요</Text>
-              <Text style={styles.cautionText}>
-                함께 나타난 기록일 뿐, 한쪽이 다른 쪽의 원인이라는 뜻은 아니에요.
-                성장 급증기처럼 두 가지를 동시에 바꾸는 다른 이유가 있을 수 있어요.
-              </Text>
+              <Text style={styles.cautionTitle}>{t("insight.critical.081")}</Text>
+              <Text style={styles.cautionText}>{t("insight.critical.082")}</Text>
             </View>
           </ScrollView>
 
           <Pressable style={styles.closeBtn} onPress={onClose} accessibilityRole="button">
-            <Text style={styles.closeText}>닫기</Text>
+            <Text style={styles.closeText}>{t("report.critical.104")}</Text>
           </Pressable>
         </View>
       </View>

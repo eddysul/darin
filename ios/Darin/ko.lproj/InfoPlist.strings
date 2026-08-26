@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "아기 사진을 촬영하려면 카메라 접근이 필요합니다.";
+"NSMicrophoneUsageDescription" = "돌봄 기록을 음성으로 남기려면 마이크 접근이 필요합니다.";
+"NSPhotoLibraryUsageDescription" = "아기 사진과 일기·성장책 이미지를 추가하려면 사진 접근이 필요합니다.";

@@ -1,6 +1,6 @@
 /**
  * Live growth_records CRUD + RLS verification.
- * Usage: node --env-file=.env scripts/verify-supabase-growth-records.mjs
+ * Usage: pnpm qa:supabase:growth (loads guarded .env.qa)
  * Creates isolated confirmed-email QA users and removes them at the end.
  */
 import { cleanupQaAccounts, createPublicClient, createQaAccounts } from "./lib/qa-auth.mjs";

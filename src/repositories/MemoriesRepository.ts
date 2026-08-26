@@ -16,6 +16,7 @@ import type {
   CreateMemoryWithImageInput,
   CreateMemoryWithImagesInput,
   MemoryCard,
+  FriendMemoryContext,
   MemoryComment,
   MemoryMedia,
   MemoryPost,
@@ -226,6 +227,28 @@ async function removeMemoryMedia(media: MemoryMedia): Promise<void> {
 }
 
 export const MemoriesRepository = {
+  async listMyFriendMemoryContexts(): Promise<FriendMemoryContext[]> {
+    const sb = requireSupabase();
+    const { data, error } = await sb.rpc("list_my_friend_memory_contexts");
+    if (error) throw error;
+    return Promise.all((data ?? []).map(async (row) => ({
+      babyId: row.baby_id,
+      babyName: row.baby_name,
+      avatarStoragePath: row.avatar_storage_path ?? undefined,
+      avatarUrl: row.avatar_storage_path
+        ? await this.createProfileMediaSignedUrl(row.avatar_storage_path).catch(() => undefined)
+        : undefined,
+      latestPostAt: row.latest_post_at ?? undefined,
+    })));
+  },
+
+  async createProfileMediaSignedUrl(storagePath: string): Promise<string> {
+    const sb = requireSupabase();
+    const { data, error } = await sb.storage.from("profile-media").createSignedUrl(storagePath, MEMORY_SIGNED_URL_TTL_SECONDS);
+    if (error || !data?.signedUrl) throw error ?? new Error("프로필 사진을 불러오지 못했어요.");
+    return data.signedUrl;
+  },
+
   async listByBabyId(babyId: string): Promise<MemoryPost[]> {
     const sb = requireSupabase();
     const { data, error } = await sb

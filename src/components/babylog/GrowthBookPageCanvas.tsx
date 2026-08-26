@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image } from "expo-image";
 import {
-  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -10,6 +9,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import type { BabySticker } from "../../types/babySticker";
 import type { GrowthBookPage, GrowthBookPageType } from "../../utils/growthBookPages";
 import {
@@ -91,6 +91,7 @@ export function GrowthBookPageCanvas({
         style,
       ]}
       onLayout={handleLayout}
+      onTouchStart={mode === "edit" ? () => onPageStickerPress?.(null) : undefined}
     >
       {pageType === "cover" ? <CoverContent page={page} /> : null}
       {pageType === "diary" && pageTemplate ? (
@@ -313,7 +314,7 @@ function MomentContent({
               rolling.map((comment) => (
                 <View key={comment.id} style={styles.commentRow}>
                   <Text style={[styles.commentAuthor, { color: template.accentColor }]} numberOfLines={1}>
-                    {formatGrowthAuthorLabel(comment.authorRelationshipLabel, comment.authorName)}
+                    {formatGrowthAuthorLabel(comment.authorRelationshipLabel, comment.authorName, t)}
                   </Text>
                   <View style={styles.rollingRuled}>
                     <DiaryRuledText
@@ -410,11 +411,9 @@ function PageStickerLayer({
   onBringForward?: (id: string) => void;
   onSendBackward?: (id: string) => void;
 }) {
-  const { t } = useLanguage();
   if (!canvasWidth || !canvasHeight) return null;
   const editable = mode === "edit";
   const ordered = pageStickers.slice().sort((a, b) => a.zIndex - b.zIndex);
-  const selected = ordered.find((item) => item.id === selectedId);
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
@@ -434,47 +433,11 @@ function PageStickerLayer({
             heightFactor={heightFactor}
             onSelect={onSelect}
             onChange={onChange}
+            onDelete={onDelete}
           />
         );
       })}
-
-      {editable && selected ? (
-        <View style={styles.stickerControls}>
-          <StickerControl label={t("growth.critical.036")} onPress={() => onDelete?.(selected.id)} danger />
-          <StickerControl label={t("growth.critical.132")} onPress={() => onDuplicate?.(selected.id)} />
-          <StickerControl label={t("growth.critical.133")} onPress={() => onBringForward?.(selected.id)} />
-          <StickerControl label={t("growth.critical.134")} onPress={() => onSendBackward?.(selected.id)} />
-          <StickerControl
-            label="−"
-            onPress={() => {
-              const sticker = stickers.find((item) => item.id === selected.stickerId);
-              onChange?.(scaleGrowthBookPageSticker(selected, 0.85, canvasWidth, canvasHeight, sticker ? growthBookStickerHeightFactor(sticker) : 1));
-            }}
-          />
-          <StickerControl
-            label="＋"
-            onPress={() => {
-              const sticker = stickers.find((item) => item.id === selected.stickerId);
-              onChange?.(scaleGrowthBookPageSticker(selected, 1.15, canvasWidth, canvasHeight, sticker ? growthBookStickerHeightFactor(sticker) : 1));
-            }}
-          />
-        </View>
-      ) : null}
     </View>
-  );
-}
-
-function StickerControl({ label, onPress, danger = false }: { label: string; onPress: () => void; danger?: boolean }) {
-  return (
-    <Pressable
-      onPress={(event) => {
-        event.stopPropagation();
-        onPress();
-      }}
-      style={[styles.stickerControlButton, danger && styles.stickerControlDanger]}
-    >
-      <Text style={[styles.stickerControlText, danger && styles.stickerControlDangerText]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -488,6 +451,7 @@ function FreePageSticker({
   heightFactor,
   onSelect,
   onChange,
+  onDelete,
 }: {
   pageSticker: GrowthBookPageSticker;
   sticker: BabySticker;
@@ -498,15 +462,14 @@ function FreePageSticker({
   heightFactor: number;
   onSelect?: (id: string | null) => void;
   onChange?: (next: GrowthBookPageSticker) => void;
+  onDelete?: (id: string) => void;
 }) {
+  const { t } = useLanguage();
   const [draft, setDraft] = useState(pageSticker);
   const draftRef = useRef(pageSticker);
   const startRef = useRef({ xRatio: pageSticker.xRatio, yRatio: pageSticker.yRatio });
-  const pinchRef = useRef<{
-    active: boolean;
-    distance: number;
-    sticker: GrowthBookPageSticker;
-  } | null>(null);
+  const pinchRef = useRef<GrowthBookPageSticker | null>(null);
+  const rotationRef = useRef(0);
 
   useEffect(() => {
     draftRef.current = pageSticker;
@@ -518,62 +481,35 @@ function FreePageSticker({
     setDraft(next);
   };
 
-  const panResponder = useMemo(
-    () => PanResponder.create({
-      onStartShouldSetPanResponder: () => editable,
-      onMoveShouldSetPanResponder: (event, gesture) =>
-        editable && (event.nativeEvent.touches.length >= 2 || Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2),
-      onPanResponderGrant: (event) => {
-        event.stopPropagation();
-        onSelect?.(pageSticker.id);
-        startRef.current = { xRatio: draftRef.current.xRatio, yRatio: draftRef.current.yRatio };
-      },
-      onPanResponderMove: (event, gesture) => {
-        const touches = event.nativeEvent.touches;
-        if (touches.length >= 2) {
-          const distance = Math.hypot(
-            touches[0].pageX - touches[1].pageX,
-            touches[0].pageY - touches[1].pageY,
-          );
-          if (!pinchRef.current?.active) {
-            pinchRef.current = { active: true, distance, sticker: draftRef.current };
-            return;
-          }
-          if (pinchRef.current.distance > 0) {
-            updateDraft(scaleGrowthBookPageSticker(
-              pinchRef.current.sticker,
-              distance / pinchRef.current.distance,
-              canvasWidth,
-              canvasHeight,
-              heightFactor,
-            ));
-          }
-          return;
-        }
-        if (pinchRef.current?.active) return;
-        const next = clampGrowthBookPageSticker({
-          ...draftRef.current,
-          xRatio: startRef.current.xRatio + gesture.dx / canvasWidth,
-          yRatio: startRef.current.yRatio + gesture.dy / canvasHeight,
-        }, canvasWidth, canvasHeight, heightFactor);
-        updateDraft(next);
-      },
-      onPanResponderRelease: () => {
-        pinchRef.current = null;
-        onChange?.(draftRef.current);
-      },
-      onPanResponderTerminate: () => {
-        pinchRef.current = null;
-        onChange?.(draftRef.current);
-      },
-    }),
-    [canvasHeight, canvasWidth, editable, heightFactor, onChange, onSelect, pageSticker.id],
-  );
+  const commit = () => onChange?.(draftRef.current);
+  const select = () => onSelect?.(pageSticker.id);
+  const pan = Gesture.Pan().enabled(editable).maxPointers(1)
+    .onBegin(() => { select(); startRef.current = { xRatio: draftRef.current.xRatio, yRatio: draftRef.current.yRatio }; })
+    .onUpdate((event) => updateDraft(clampGrowthBookPageSticker({
+      ...draftRef.current,
+      xRatio: startRef.current.xRatio + event.translationX / canvasWidth,
+      yRatio: startRef.current.yRatio + event.translationY / canvasHeight,
+    }, canvasWidth, canvasHeight, heightFactor)))
+    .onEnd(commit).onFinalize(commit).runOnJS(true);
+  const pinch = Gesture.Pinch().enabled(editable)
+    .onBegin(() => { select(); pinchRef.current = draftRef.current; })
+    .onUpdate((event) => {
+      if (!pinchRef.current) return;
+      const scaled = scaleGrowthBookPageSticker(pinchRef.current, event.scale, canvasWidth, canvasHeight, heightFactor);
+      updateDraft({ ...scaled, rotation: draftRef.current.rotation });
+    })
+    .onEnd(commit).onFinalize(() => { pinchRef.current = null; commit(); }).runOnJS(true);
+  const rotation = Gesture.Rotation().enabled(editable)
+    .onBegin(() => { select(); rotationRef.current = Number.isFinite(draftRef.current.rotation) ? draftRef.current.rotation ?? 0 : 0; })
+    .onUpdate((event) => updateDraft({ ...draftRef.current, rotation: rotationRef.current + (event.rotation * 180) / Math.PI }))
+    .onEnd(commit).onFinalize(commit).runOnJS(true);
+  const tap = Gesture.Tap().enabled(editable).onEnd((_event, success) => { if (success) select(); }).runOnJS(true);
+  const gesture = Gesture.Simultaneous(tap, pan, pinch, rotation);
 
   const width = draft.widthRatio * canvasWidth;
   return (
-    <View
-      {...(editable ? panResponder.panHandlers : {})}
+    <GestureDetector gesture={gesture}>
+      <View
       style={[
         styles.freeSticker,
         {
@@ -582,12 +518,25 @@ function FreePageSticker({
           width,
           height: width * heightFactor,
           zIndex: draft.zIndex,
+          transform: [{ rotate: `${Number.isFinite(draft.rotation) ? draft.rotation ?? 0 : 0}deg` }],
         },
         selected && styles.freeStickerSelected,
       ]}
     >
       <BabyStickerFromModel sticker={sticker} size={Math.max(18, width - 24)} style={styles.freeStickerVisual} />
-    </View>
+      {selected ? (
+        <Pressable
+          style={styles.stickerDelete}
+          onPress={(event) => { event.stopPropagation(); onDelete?.(pageSticker.id); }}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={t("sticker.critical.030")}
+        >
+          <Text style={styles.stickerDeleteText}>×</Text>
+        </Pressable>
+      ) : null}
+      </View>
+    </GestureDetector>
   );
 }
 
@@ -655,7 +604,7 @@ function LetterContent({ page, template }: { page: GrowthBookPage; template: Dia
               {letters.slice(0, 3).map((letter) => (
                 <View key={letter.id} style={styles.commentRow}>
                   <Text style={[styles.commentAuthor, { color: template.accentColor }]} numberOfLines={2}>
-                    {formatGrowthAuthorLabel(letter.authorRelationshipLabel, letter.authorName)}
+                    {formatGrowthAuthorLabel(letter.authorRelationshipLabel, letter.authorName, t)}
                   </Text>
                   <View style={styles.rollingRuled}>
                     <DiaryRuledText
@@ -758,11 +707,8 @@ const styles = StyleSheet.create({
   freeSticker: { position: "absolute", alignItems: "center", justifyContent: "center", borderRadius: 8 },
   freeStickerSelected: { borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: "rgba(255,255,255,0.12)" },
   freeStickerVisual: { alignSelf: "center" },
-  stickerControls: { position: "absolute", top: 4, left: 28, right: 6, zIndex: 1000, flexDirection: "row", justifyContent: "flex-end", gap: 2 },
-  stickerControlButton: { minWidth: 23, height: 20, paddingHorizontal: 3, borderRadius: 6, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(61,52,44,0.86)", borderWidth: 1, borderColor: "rgba(255,255,255,0.72)" },
-  stickerControlDanger: { backgroundColor: "rgba(200,75,71,0.94)" },
-  stickerControlText: { color: "#FFF", fontSize: 6.8, fontWeight: "800" },
-  stickerControlDangerText: { color: "#FFF" },
+  stickerDelete: { position: "absolute", right: -10, top: -10, zIndex: 2, width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerText, borderWidth: 1.5, borderColor: "#FFF" },
+  stickerDeleteText: { color: "#FFF", fontSize: 17, lineHeight: 19, fontWeight: "900" },
   letterList: { flex: 1, marginTop: 8, gap: 10 },
   letterBodyWrap: { flex: 1, marginTop: 8 },
   letterStamp: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderStyle: "dashed", alignItems: "center", justifyContent: "center" },

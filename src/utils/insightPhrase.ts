@@ -5,13 +5,16 @@
  * 검증을 통과한 줄만 남기므로, 일부만 통과하면 나머지는 우리 문장이 그대로 쓰인다.
  */
 import { callOpenAI } from "../api/openaiChat";
+import type { Locale } from "../i18n";
 import type { Insight } from "./careInsights";
+import { localizeInsight } from "./insightDisplay";
 import {
   INSIGHT_PHRASE_VERSION,
-  INSIGHT_SYSTEM_PROMPT,
+  insightSystemPrompt,
   describeInsights,
   parseInsightPhrases,
 } from "./insightPhrasePrompt";
+import type { Translate } from "./recordDisplay";
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
 import { qaStorage } from "./qaStorage";
@@ -66,12 +69,15 @@ async function saveInsightPhrases(periodLabel: string, phrases: InsightPhrases):
 export async function buildInsightPhrases(
   insights: Insight[],
   periodLabel: string,
+  locale: Locale = "ko",
+  t?: Translate,
 ): Promise<InsightPhrases> {
   if (!insights.length) return {};
   try {
+    const localized = t ? insights.map((insight) => localizeInsight(insight, t, locale)) : undefined;
     const reply = await callOpenAI(
-      [{ role: "user", content: describeInsights(insights) }],
-      INSIGHT_SYSTEM_PROMPT,
+      [{ role: "user", content: describeInsights(insights, localized) }],
+      insightSystemPrompt(locale),
       300,
     );
     const phrases = parseInsightPhrases(reply, insights);

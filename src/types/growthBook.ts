@@ -2,6 +2,8 @@
 
 import type { DiaryCoverTemplateId } from "../constants/diaryCoverTemplates";
 import type { DiaryPageTemplateId } from "../constants/diaryPageTemplates";
+import { storedRelationshipLabel } from "../utils/familyDisplay";
+import type { Translate } from "../utils/recordDisplay";
 
 export type LegacyPhotoLayout = 1 | 2 | 3 | 4;
 
@@ -96,6 +98,8 @@ export type GrowthBookPageSticker = {
   xRatio: number;
   yRatio: number;
   widthRatio: number;
+  /** Clockwise angle in degrees. Older saved stickers omit this and render at 0. */
+  rotation?: number;
   zIndex: number;
   createdBy: string;
   createdAt: string;
@@ -200,8 +204,10 @@ export type GrowthBookMigrationResult = {
 export function formatGrowthAuthorLabel(
   relationshipLabel: RelationshipLabel | string,
   name: string,
+  t?: Translate,
 ): string {
-  return `${relationshipLabel} ${name}`.trim();
+  const relation = t ? storedRelationshipLabel(t, relationshipLabel) : relationshipLabel;
+  return `${relation} ${name}`.trim();
 }
 
 export function createEmptyGrowthBookEdit(input: {

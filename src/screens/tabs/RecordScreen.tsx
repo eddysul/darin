@@ -45,7 +45,6 @@ import type { FoodIngredient, FoodIngredientSource } from "../../types/foodIngre
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
 import { createId } from "../../utils/id";
 import {
-  dayNavLabel,
   formatDateKey,
   offsetDateKey,
   shortDateLabel,
@@ -74,6 +73,7 @@ import type { MainTabParamList } from "../../navigation/types";
 import { useLanguage } from "../../LanguageContext";
 import { RECORD_VALUE } from "../../constants/recordInternalValues";
 import { quickRecordLabel } from "../../utils/recordDisplay";
+import { formatDayNavLabel } from "../../utils/insightDisplay";
 
 type Props = {
   onOpenProfile: (opts?: { convertBirth?: boolean }) => void;
@@ -732,10 +732,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
                 allowAdd
                   ? isViewingToday
                     ? t("record.screen.emptyTodayBody")
-                    : t("record.screen.emptyDayBody", { date: dayNavLabel(selectedDateKey) })
+                    : t("record.screen.emptyDayBody", { date: formatDayNavLabel(selectedDateKey, t) })
                   : isViewingToday
                     ? t("record.screen.emptyToday")
-                    : t("record.screen.emptyDayBody", { date: dayNavLabel(selectedDateKey) })
+                    : t("record.screen.emptyDayBody", { date: formatDayNavLabel(selectedDateKey, t) })
               }
             />
           )

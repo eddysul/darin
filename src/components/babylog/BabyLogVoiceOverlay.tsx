@@ -23,7 +23,8 @@ import {
 import { VoiceWaveform } from "../VoiceWaveform";
 import { colors } from "../../theme";
 import { formatTemperature, formatVolume } from "../../utils/measurementFormat";
-import { formatDisplayTime } from "../../utils/logSummary";
+import { formatTimeOfDay } from "../../utils/timePicker";
+import { recordCategoryLabel, storedRecordValueLabel, type Translate } from "../../utils/recordDisplay";
 
 export type VoiceResult = VoiceEventDraft;
 
@@ -65,21 +66,8 @@ function formatDuration(ms: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function formatKoClock(hhmm: string): string {
-  const configured = formatDisplayTime(hhmm);
-  if (!configured.endsWith("AM") && !configured.endsWith("PM")) return configured;
-  const [hRaw, mRaw] = hhmm.split(":");
-  const h = Number(hRaw);
-  const m = Number(mRaw);
-  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm;
-  const period = h < 12 ? "오전" : "오후";
-  const h12 = h % 12 || 12;
-  return `${period} ${h12}:${String(m).padStart(2, "0")}`;
-}
-
-function cardSummary(event: VoiceResult): string {
-  const c = getCategory(event.cat);
-  const bits = [c.label];
+function cardSummary(event: VoiceResult, t: Translate, locale: ReturnType<typeof useLanguage>["locale"]): string {
+  const bits = [recordCategoryLabel(t, event.cat)];
   if (event.amount) {
     if (event.cat === "temp") bits.push(formatTemperature(event.amount));
     else if (event.cat === "food") bits.push(`${event.amount}g`);
@@ -87,10 +75,10 @@ function cardSummary(event: VoiceResult): string {
     else if (event.cat === "pregBp") bits.push(event.amount);
     else bits.push(formatVolume(event.amount));
   }
-  if (event.duration) bits.push(`${event.duration}분`);
-  if (event.chip) bits.push(event.chip);
-  if (event.chip2) bits.push(event.chip2);
-  bits.push(formatKoClock(event.time));
+  if (event.duration) bits.push(t("record.timeline.minutes", { count: event.duration }));
+  if (event.chip) bits.push(storedRecordValueLabel(t, event.chip));
+  if (event.chip2) bits.push(storedRecordValueLabel(t, event.chip2));
+  bits.push(formatTimeOfDay(event.time, event.time, locale));
   return bits.join(" · ");
 }
 
@@ -459,11 +447,13 @@ function EventCard({
   onEdit: () => void;
   onRemove: () => void;
   onResolveTime: (time: string) => void;
-  t: (key: MessageKey) => string;
+  t: Translate;
 }) {
+  const { locale } = useLanguage();
   const c = getCategory(event.cat);
-  const summary = cardSummary(event);
+  const summary = cardSummary(event, t, locale);
   const warn = needsConfirm(event);
+  const categoryLabel = recordCategoryLabel(t, event.cat);
 
   return (
     <View style={[styles.resultCard, warn && styles.resultCardWarn]}>
@@ -479,7 +469,7 @@ function EventCard({
           <BabyLogIcon catId={event.cat} size={22} color="#FFFFFF" strokeWidth={2} />
         </View>
         <View style={styles.resultTextWrap}>
-          <Text style={styles.resultLabel}>{c.label}</Text>
+          <Text style={styles.resultLabel}>{categoryLabel}</Text>
           <Text style={styles.resultMeta}>{summary}</Text>
           {event.notes ? <Text style={styles.resultNotes}>{event.notes}</Text> : null}
           {warn && !event.timeAmbiguous ? (
@@ -494,7 +484,7 @@ function EventCard({
         <View style={styles.timeChoices}>
           {event.timeOptions.map((opt) => (
             <Pressable key={opt} style={styles.timeChoice} onPress={() => onResolveTime(opt)}>
-              <Text style={styles.timeChoiceText}>{formatKoClock(opt)}</Text>
+              <Text style={styles.timeChoiceText}>{formatTimeOfDay(opt, opt, locale)}</Text>
             </Pressable>
           ))}
         </View>

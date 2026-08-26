@@ -34,6 +34,7 @@ import type { MessageKey } from "../../i18n";
 import type { RelationshipToChild } from "../../types/careSetup";
 import { colors, radius } from "../../theme";
 import { canSubmitUserProfile } from "../../utils/profileCompletion";
+import { caughtErrorMessage } from "../../utils/familyDisplay";
 import { formatDateKey } from "../../utils/dateKey";
 import {
   getVisibleAppLanguageOptions,
@@ -129,6 +130,7 @@ export function ProfileSetupScreen({
   const pickAvatar = () => {
     presentAvatarPicker({
       hasAvatar: Boolean(avatarUrl || pickedAvatar),
+      t,
       onPick: (avatar) => {
         setPickedAvatar(avatar);
         setAvatarUrl(avatar.uri);
@@ -200,11 +202,7 @@ export function ProfileSetupScreen({
       }));
       await onComplete();
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : t("profileSetup.saveError"),
-      );
+      setError(caughtErrorMessage(t, cause, "profileSetup.saveError"));
     } finally {
       setSaving(false);
     }

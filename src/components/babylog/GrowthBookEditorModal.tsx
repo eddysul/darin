@@ -145,10 +145,10 @@ export function GrowthBookEditorModal({
     [entries],
   );
   const bookPages = useMemo(
-    () => buildGrowthBookPages({ babyName, entries: bookEntries, edit }),
-    [babyName, bookEntries, edit],
+    () => buildGrowthBookPages({ babyName, entries: bookEntries, edit, t }),
+    [babyName, bookEntries, edit, t],
   );
-  const pageMeta = useMemo(() => buildGrowthBookPageMeta(bookPages), [bookPages]);
+  const pageMeta = useMemo(() => buildGrowthBookPageMeta(bookPages, t), [bookPages, t]);
 
   useEffect(() => {
     if (visible && !wasVisible.current) {
@@ -691,7 +691,7 @@ function PageList({
       {entries.map((entry, index) => {
         const pageEdit = resolvePageEdit(entry.id, entry, edit);
         const photos = resolvePagePhotos(entry, pageEdit);
-        const milestone = diaryMilestoneLabel(entry);
+        const milestone = diaryMilestoneLabel(entry, t);
         return (
           <Pressable key={entry.id} style={styles.card} onPress={() => onOpen(entry.id)}>
             <Text style={styles.index}>{index + 1}</Text>
@@ -747,8 +747,8 @@ function PageEditor({
   const pageEdit = resolvePageEdit(entry.id, entry, edit);
   const photos = resolvePagePhotos(entry, pageEdit);
   const page = useMemo(
-    () => buildGrowthBookPages({ babyName, entries: [entry], edit }).find((item) => item.diaryId === entry.id),
-    [babyName, edit, entry],
+    () => buildGrowthBookPages({ babyName, entries: [entry], edit, t }).find((item) => item.diaryId === entry.id),
+    [babyName, edit, entry, t],
   );
   const [sheet, setSheet] = useState<"photo" | "layout" | "comment" | "rolling" | "template" | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
@@ -910,8 +910,17 @@ function PageEditor({
           onPageStickerPress={setSelectedPageStickerId}
           onPageStickerChange={updatePageSticker}
           onPageStickerDelete={(pageStickerId) => {
-            setPageStickers((pageEdit.pageStickers ?? []).filter((item) => item.id !== pageStickerId));
-            setSelectedPageStickerId(null);
+            Alert.alert(t("sticker.critical.030"), t("chrome.critical.033"), [
+              { text: t("common.cancel"), style: "cancel" },
+              {
+                text: t("sticker.critical.032"),
+                style: "destructive",
+                onPress: () => {
+                  setPageStickers((pageEdit.pageStickers ?? []).filter((item) => item.id !== pageStickerId));
+                  setSelectedPageStickerId(null);
+                },
+              },
+            ]);
           }}
           onPageStickerDuplicate={(pageStickerId) => {
             const source = (pageEdit.pageStickers ?? []).find((item) => item.id === pageStickerId);
@@ -1101,7 +1110,7 @@ function PageEditor({
               <ScrollView style={styles.sheetScroll} keyboardShouldPersistTaps="handled">
                 {pageEdit.rollingComments.map((comment) => (
                   <View key={comment.id} style={styles.rollingSheetCard}>
-                    <Text style={styles.commentAuthor}>{formatGrowthAuthorLabel(comment.authorRelationshipLabel, comment.authorName)}</Text>
+                    <Text style={styles.commentAuthor}>{formatGrowthAuthorLabel(comment.authorRelationshipLabel, comment.authorName, t)}</Text>
                     <Text style={styles.commentText}>“{comment.text}”</Text>
                     {(comment.stickerIds ?? []).length > 0 ? (
                       <View style={styles.rollingStickerPreviewRow}>
@@ -1123,7 +1132,7 @@ function PageEditor({
                 ))}
                 {canWrite && me ? (
                   <>
-                    <Text style={styles.autoAuthor}>{t("growth.critical.047", { author: formatGrowthAuthorLabel(memberRelationshipLabel(me), me.name) })}</Text>
+                    <Text style={styles.autoAuthor}>{t("growth.critical.047", { author: formatGrowthAuthorLabel(memberRelationshipLabel(me), me.name, t) })}</Text>
                     <TextInput style={[styles.input, styles.sheetTextArea]} multiline value={rollingDraft} onChangeText={setRollingDraft} placeholder={t("growth.critical.048")} placeholderTextColor={colors.faint} />
                     <View style={styles.commentStickerHeader}>
                       <Text style={styles.commentStickerTitle}>{t("growth.critical.049")}</Text>
@@ -1201,6 +1210,7 @@ function PageEditor({
               xRatio: Math.min(0.7, 0.32 + current.length * 0.04),
               yRatio: Math.min(0.75, 0.52 + current.length * 0.04),
               widthRatio: 0.2,
+              rotation: 0,
               zIndex: Math.max(0, ...current.map((item) => item.zIndex)) + 1,
               createdBy: logAuthor.userId,
               createdAt: now,
@@ -1332,7 +1342,7 @@ function LetterEditor({
       {edit.letters.map((letter) => (
         <CommentRow
           key={letter.id}
-          authorLabel={t("growth.critical.057", { author: formatGrowthAuthorLabel(letter.authorRelationshipLabel, letter.authorName), babyName })}
+          authorLabel={t("growth.critical.057", { author: formatGrowthAuthorLabel(letter.authorRelationshipLabel, letter.authorName, t), babyName })}
           text={letter.text}
           canEdit={canEditOwnGrowthBookNote(myRole, letter.authorId, me)}
           canDelete={canDeleteGrowthBookNote(myRole, letter.authorId, me)}
@@ -1351,7 +1361,7 @@ function LetterEditor({
       {canWrite && me ? (
         <>
           <Text style={styles.autoAuthor}>
-            {t("growth.critical.057", { author: formatGrowthAuthorLabel(memberRelationshipLabel(me), me.name), babyName })}
+            {t("growth.critical.057", { author: formatGrowthAuthorLabel(memberRelationshipLabel(me), me.name, t), babyName })}
           </Text>
           <TextInput
             style={[styles.input, styles.textArea]}

@@ -22,6 +22,7 @@ import { QaDebugPanel } from "../../components/qa/QaDebugPanel";
 import {
   AppSettingsModal,
 } from "../../components/settings/AppSettingsModal";
+import { LanguagePicker } from "../../components/LanguagePicker";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { isPregnancyStage } from "../../utils/childDisplay";
@@ -42,7 +43,10 @@ import {
   saveDiaryReminder,
 } from "../../utils/diaryReminderStore";
 import { sendDiaryNotificationPreview } from "../../utils/diaryReminderNotifications";
+import { localizedErrorMessage } from "../../utils/familyDisplay";
 import { useLanguage } from "../../LanguageContext";
+import { canShowLanguagePicker } from "../../config/featureFlags";
+import type { MessageKey } from "../../i18n";
 
 type Props = {
   onOpenProfile: () => void;
@@ -77,6 +81,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
     myFamilyRole,
   } = useBabyLog();
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const [quickRecordsOpen, setQuickRecordsOpen] = useState(false);
@@ -154,7 +159,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
       }
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : t("settings.critical.042"),
+        error instanceof Error ? localizedErrorMessage(t, error.message) : t("settings.critical.042"),
       );
     } finally {
       setDeleting(false);
@@ -211,6 +216,14 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
           <MenuRow icon="clock" title={t("settings.critical.062")} subtitle={t("settings.critical.063")} onPress={() => onOpenSettings("timers")} />
           <MenuRow icon="interval" title={t("settings.critical.064")} subtitle="ml/oz·kg/lb·°C/°F·cm/inch" onPress={() => onOpenSettings("units")} />
           <MenuRow icon="clock" title={t("settings.critical.065")} subtitle={t("settings.critical.066")} onPress={() => onOpenSettings("time")} />
+          {canShowLanguagePicker() ? (
+            <MenuRow
+              icon="globe"
+              title={t("settings.critical.324")}
+              subtitle={t(`profileSetup.language.${settings.account.language}` as MessageKey)}
+              onPress={() => setLanguageOpen(true)}
+            />
+          ) : null}
           <MenuRow icon="interval" title={t("settings.critical.067")} subtitle={t("settings.critical.068")} onPress={onOpenGrowthRecords} />
         </MenuSection>
 
@@ -273,6 +286,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         page={accountSettingsOpen ? "account" : null}
         onClose={() => setAccountSettingsOpen(false)}
       />
+      <LanguagePicker open={languageOpen} onClose={() => setLanguageOpen(false)} />
 
       <DiaryReminderSettingsModal
         visible={reminderOpen}
@@ -285,7 +299,10 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
           setReminder(next);
           void saveDiaryReminder(next, localDataScope);
         }}
-        onTestNotification={() => void sendDiaryNotificationPreview(babyName)}
+        onTestNotification={() => void sendDiaryNotificationPreview({
+          title: t("diary.reminder.previewTitle"),
+          body: t("diary.reminder.previewBody", { babyName }),
+        })}
       />
 
       <QuickRecordEditorSheet

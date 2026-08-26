@@ -16,15 +16,20 @@ import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { MemoryUploadModal } from "../../components/memories/MemoryUploadModal";
 import { MemoryFeedAdCard } from "../../components/memories/MemoryFeedAdCard";
 import { interleaveExampleFeedAds } from "../../components/memories/memoryFeedAds";
-import { MemoryViewFilterSheet, memoryViewFilterLabel, type MemoryViewFilter } from "../../components/memories/MemoryViewFilterSheet";
+import { MemoryViewFilterSheet, memoryViewFilterMessageKey, type MemoryViewFilter } from "../../components/memories/MemoryViewFilterSheet";
 import { memoryPrivacyPresentation } from "../../components/memories/memoryPresentation";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { MemoriesRepository } from "../../repositories/MemoriesRepository";
 import { createId } from "../../utils/id";
 import { getEagerPhoto, getLocalUriForMedia, subscribeEagerUploads } from "../../utils/eagerMediaUpload";
+import { formatLocalizedDate } from "../../utils/localeFormat";
 import type { MemoryCard, MemoryTag, MemoryTagDraft, PublishEagerMemoryInput } from "../../types/memory";
 import { colors, fontScaleCap, radius } from "../../theme";
 import { NotificationBellButton } from "../../components/NotificationBellButton";
+import { useLanguage } from "../../LanguageContext";
+import { caughtErrorMessage } from "../../utils/familyDisplay";
+
+import type { MemoryCriticalKey } from "../../i18nMemoriesCriticalMessages";
 
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 
@@ -38,13 +43,13 @@ type Props = {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type BabyTargetFilter = "all" | "family" | string;
 
-const EMPTY_COPY: Record<MemoryViewFilter, { title: string; description: string }> = {
-  all: { title: "첫 번째 순간을 남겨보세요", description: "사진 한 장과 짧은 이야기로 오늘을 가족과 나눠보세요." },
-  family_circle: { title: "가족에게 공개된 순간이 아직 없어요", description: "함께 보고 싶은 오늘의 순간을 남겨보세요." },
-  friend_circle: { title: "친구에게 보여줄 순간이 아직 없어요", description: "초대된 친구와 나누고 싶은 순간을 남겨보세요." },
-  only_me: { title: "나만 간직한 순간이 아직 없어요", description: "조용히 보관하고 싶은 사진과 이야기를 남겨보세요." },
-  tagged: { title: "태그된 순간이 아직 없어요", description: "가족이 태그한 순간이 생기면 여기에 모여요." },
-  saved: { title: "저장한 순간이 아직 없어요", description: "다시 보고 싶은 순간의 저장 아이콘을 눌러보세요." },
+const EMPTY_KEYS: Record<MemoryViewFilter, { title: MemoryCriticalKey; description: MemoryCriticalKey }> = {
+  all: { title: "memory.critical.020", description: "memory.critical.021" },
+  family_circle: { title: "memory.critical.022", description: "memory.critical.023" },
+  friend_circle: { title: "memory.critical.024", description: "memory.critical.025" },
+  only_me: { title: "memory.critical.026", description: "memory.critical.027" },
+  tagged: { title: "memory.critical.028", description: "memory.critical.029" },
+  saved: { title: "memory.critical.030", description: "memory.critical.031" },
 };
 
 function tagsFromDrafts(postId: string, drafts: MemoryTagDraft[], createdBy: string): MemoryTag[] {
@@ -89,10 +94,12 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
   saveWorking,
   targetLabel,
 }: FeedCardProps) {
+  const { t, locale } = useLanguage();
   const privacy = memoryPrivacyPresentation(item.post.privacyType);
   const createdAt = new Date(item.post.createdAt);
   const caption = item.post.caption?.trim() ?? "";
-  const failMessage = item.publishError ? "추억을 올리지 못했어요" : "사진 업로드 실패";
+  const failMessage = item.publishError ? t("memory.critical.048") : t("memory.critical.049");
+  const untitled = caption || t("memory.critical.036");
 
   return (
     <View style={styles.card}>
@@ -103,10 +110,10 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
           accessibilityRole="imagebutton"
           accessibilityLabel={
             item.coverUrl
-              ? `${caption || "설명 없는 추억"} 사진${item.mediaCount > 1 ? `, 사진 ${item.mediaCount}장` : ""}`
-              : `${caption || "설명 없는 추억"}, 사진 없음`
+              ? `${untitled}${item.mediaCount > 1 ? `, ${t("memory.critical.037", { count: item.mediaCount })}` : ""}`
+              : `${untitled}, ${t("memory.critical.038")}`
           }
-          accessibilityHint="추억 상세를 열어요"
+          accessibilityHint={t("memory.critical.039")}
         >
           {item.coverUrl ? (
             <Image source={{ uri: item.coverUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
@@ -119,7 +126,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
         )}
         <View style={[styles.privacyBadge, { backgroundColor: privacy.soft }]} pointerEvents="none">
           <BabyLogIcon kind={privacy.icon} size={11} color={privacy.accent} strokeWidth={2.2} />
-          <Text style={[styles.privacyText, { color: privacy.accent }]}>{privacy.label}</Text>
+          <Text style={[styles.privacyText, { color: privacy.accent }]}>{t(privacy.labelKey)}</Text>
         </View>
         {item.mediaCount > 1 ? <View style={styles.mediaCountBadge} pointerEvents="none"><Text style={styles.mediaCountText}>+{item.mediaCount - 1}</Text></View> : null}
         {item.hasFailedMedia || item.publishError ? (
@@ -135,16 +142,16 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
                 style={styles.uploadRetryButton}
                 onPress={onRetryUpload}
                 accessibilityRole="button"
-                accessibilityLabel="다시 시도"
+                accessibilityLabel={t("memory.critical.017")}
               >
-                <Text style={styles.uploadRetryText}>다시 시도</Text>
+                <Text style={styles.uploadRetryText}>{t("memory.critical.017")}</Text>
               </Pressable>
             ) : null}
           </View>
         ) : null}
       </View>
       <View style={styles.cardBody}>
-        <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel="추억 상세 보기">
+        <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={t("memory.critical.039")}>
           <View style={styles.metaRow}>
             <View style={[styles.authorAvatar, { backgroundColor: privacy.soft }]}>
               <BabyLogIcon kind="profile" size={15} color={privacy.accent} />
@@ -152,7 +159,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
             <View style={styles.metaCopy}>
               <View style={styles.authorLine}><Text style={styles.author}>{authorName}</Text><View style={styles.targetBadge}><Text style={styles.targetBadgeText}>{targetLabel}</Text></View></View>
               <Text style={styles.meta}>
-                {createdAt.toLocaleDateString("ko-KR", { month: "long", day: "numeric" })} · {createdAt.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}
+                {formatLocalizedDate(createdAt, locale, { month: "long", day: "numeric" })} · {formatLocalizedDate(createdAt, locale, { hour: "numeric", minute: "2-digit" })}
               </Text>
             </View>
           </View>
@@ -162,7 +169,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
         </Pressable>
         {caption.length > 72 ? (
           <Pressable style={styles.moreButton} onPress={onToggleCaption} hitSlop={8}>
-            <Text style={styles.moreText}>{expanded ? "접기" : "더 보기"}</Text>
+            <Text style={styles.moreText}>{expanded ? t("memory.critical.040") : t("memory.critical.041")}</Text>
           </Pressable>
         ) : null}
         <View style={styles.reactionRow}>
@@ -171,7 +178,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
             onPress={onToggleLike}
             disabled={likeWorking}
             accessibilityRole="button"
-            accessibilityLabel={item.isLiked ? `좋아요 취소, ${item.reactionCount}개` : `좋아요, ${item.reactionCount}개`}
+            accessibilityLabel={item.isLiked ? t("memory.critical.043", { count: item.reactionCount }) : t("memory.critical.042", { count: item.reactionCount })}
             accessibilityState={{ selected: item.isLiked, disabled: likeWorking }}
           >
             <BabyLogIcon
@@ -181,16 +188,16 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
               strokeWidth={2.2}
               fill={item.isLiked ? colors.amberText : "transparent"}
             />
-            <Text style={[styles.reactionText, item.isLiked && styles.reactionTextActive]}>좋아요 {item.reactionCount}</Text>
+            <Text style={[styles.reactionText, item.isLiked && styles.reactionTextActive]}>{t("memory.critical.044", { count: item.reactionCount })}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.reactionButton, pressed && styles.pressed]}
             onPress={onOpen}
             accessibilityRole="button"
-            accessibilityLabel={`댓글 ${item.commentCount}개`}
+            accessibilityLabel={t("memory.critical.045", { count: item.commentCount })}
           >
             <BabyLogIcon kind="chat" size={19} color={colors.muted} />
-            <Text style={styles.reactionText}>댓글 {item.commentCount}</Text>
+            <Text style={styles.reactionText}>{t("memory.critical.045", { count: item.commentCount })}</Text>
           </Pressable>
           <View style={styles.reactionSpacer} />
           <Pressable
@@ -198,7 +205,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
             onPress={onToggleSave}
             disabled={saveWorking}
             accessibilityRole="button"
-            accessibilityLabel={item.isSaved ? "저장 취소" : "나중에 다시 보기"}
+            accessibilityLabel={item.isSaved ? t("memory.critical.047") : t("memory.critical.046")}
             accessibilityState={{ selected: item.isSaved, disabled: saveWorking }}
           >
             <BabyLogIcon
@@ -216,6 +223,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
 
 export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFamily, onOpenDetail }: Props) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const { babyName, careSetup, familyMembers, myFamilyRole, logAuthor, storageReady, babies, activeBabyId } = useBabyLog();
   const [cards, setCards] = useState<MemoryCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -225,6 +233,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewSheetOpen, setViewSheetOpen] = useState(false);
   const [filter, setFilter] = useState<MemoryViewFilter>("all");
+  const [audience, setAudience] = useState<"family" | "friend">("family");
   const [babyFilter, setBabyFilter] = useState<BabyTargetFilter>("all");
   const [hiddenAdIds, setHiddenAdIds] = useState<Set<string>>(() => new Set());
   const [expandedCaptions, setExpandedCaptions] = useState<Set<string>>(() => new Set());
@@ -257,12 +266,14 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
   }, [babies, babyFilter]);
   const targetBabyIds = useCallback((card: MemoryCard) => card.tags.filter((tag) => tag.tagType === "baby" && tag.babyId).map((tag) => tag.babyId!), []);
   const targetLabel = useCallback((card: MemoryCard) => {
-    if (card.post.isFamilyMoment) return "가족 순간";
+    if (card.post.isFamilyMoment) return t("memory.critical.012");
     const ids = targetBabyIds(card);
-    if (!ids.length) return babies.length === 1 ? (babies[0]?.name ?? babyName) : "가족 순간";
+    if (!ids.length) return babies.length === 1 ? (babies[0]?.name ?? babyName) : t("memory.critical.012");
     return ids.map((id) => babies.find((baby) => baby.id === id)?.name).filter(Boolean).join(" · ") || babyName;
-  }, [babies, babyName, targetBabyIds]);
+  }, [babies, babyName, t, targetBabyIds]);
   const filteredCards = useMemo(() => cards.filter((card) => {
+    if (audience === "friend" && card.post.privacyType !== "friend_circle") return false;
+    if (audience === "family" && card.post.privacyType === "friend_circle") return false;
     const ids = targetBabyIds(card);
     const isFamilyMoment = card.post.isFamilyMoment || (!ids.length && babies.length > 1);
     if (babyFilter === "family" && !isFamilyMoment) return false;
@@ -277,24 +288,27 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
     if (filter === "only_me") return card.post.privacyType === "only_me";
     if (filter === "saved") return card.isSaved;
     return card.post.privacyType === "tagged_family" || card.tags.some((tag) => tag.taggedUserId === logAuthor.userId);
-  }), [babyFilter, babies.length, cards, filter, logAuthor.userId, targetBabyIds]);
+  }), [audience, babyFilter, babies.length, cards, filter, logAuthor.userId, targetBabyIds]);
   const emptyCopy = useMemo(() => {
-    if (filter !== "all") return EMPTY_COPY[filter];
+    if (filter !== "all") {
+      const keys = EMPTY_KEYS[filter];
+      return { title: t(keys.title), description: t(keys.description) };
+    }
     if (babyFilter === "family") {
-      return { title: "가족 순간이 아직 없어요", description: "온 가족이 함께한 순간을 남겨보세요." };
+      return { title: t("memory.critical.032"), description: t("memory.critical.033") };
     }
     if (babyFilter !== "all") {
       const name = babies.find((baby) => baby.id === babyFilter)?.name ?? babyName;
-      return { title: `${name}의 순간이 아직 없어요`, description: "사진 한 장과 짧은 이야기로 오늘을 남겨보세요." };
+      return { title: t("memory.critical.034", { name }), description: t("memory.critical.035") };
     }
-    return EMPTY_COPY.all;
-  }, [babies, babyFilter, babyName, filter]);
+    return { title: t(EMPTY_KEYS.all.title), description: t(EMPTY_KEYS.all.description) };
+  }, [babies, babyFilter, babyName, filter, t]);
   const selectedBabyName = babies.find((baby) => baby.id === babyFilter)?.name;
   const viewChipLabel = selectedBabyName
-    ? (filter === "all" ? selectedBabyName : `${selectedBabyName} · ${memoryViewFilterLabel(filter)}`)
+    ? (filter === "all" ? selectedBabyName : `${selectedBabyName} · ${t(memoryViewFilterMessageKey(filter))}`)
     : filter === "all"
-      ? "보기"
-      : memoryViewFilterLabel(filter);
+      ? t("memory.critical.013")
+      : t(memoryViewFilterMessageKey(filter));
   const feedRows = useMemo(
     () => (filter === "all" ? interleaveExampleFeedAds(filteredCards, hiddenAdIds) : filteredCards.map((card) => ({ kind: "memory" as const, card }))),
     [filter, filteredCards, hiddenAdIds],
@@ -306,7 +320,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
       setCards([]);
       setLoading(false);
       setRefreshing(false);
-      setError("현재 아기 정보를 서버에서 찾지 못했어요. 다시 로그인한 뒤 시도해주세요.");
+      setError(t("memory.critical.051"));
       return;
     }
     if (refresh) setRefreshing(true);
@@ -331,12 +345,12 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
         });
       });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "추억을 불러오지 못했어요.");
+      setError(caughtErrorMessage(t, cause, "memory.critical.016"));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [babies, babyId, storageReady]);
+  }, [babies, babyId, storageReady, t]);
 
   // Refetch on every focus so privacy/selection changes and short-lived signed URLs refresh.
   useFocusEffect(useCallback(() => {
@@ -381,10 +395,10 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
         publishError: undefined,
       } : card));
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : "추억을 올리지 못했어요.";
+      const message = caughtErrorMessage(t, cause, "memory.critical.048");
       setCards((current) => current.map((card) => card.post.id === payload.id ? { ...card, publishError: message, isOptimistic: true } : card));
     }
-  }, [logAuthor.userId]);
+  }, [logAuthor.userId, t]);
 
   const handlePosted = useCallback((payload: PublishEagerMemoryInput & { localCoverUri?: string }) => {
     setUploadOpen(false);
@@ -429,7 +443,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
 
   const authorName = (authorId: string) => {
     if (authorId === logAuthor.userId) return logAuthor.name;
-    return familyMembers.find((member) => member.id === authorId)?.name ?? "탈퇴한 사용자";
+    return familyMembers.find((member) => member.id === authorId)?.name ?? t("memory.critical.050");
   };
 
   const toggleLike = useCallback(async (card: MemoryCard) => {
@@ -452,7 +466,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
         isLiked: card.isLiked,
         reactionCount: card.reactionCount,
       } : item));
-      setActionError(cause instanceof Error ? cause.message : "좋아요를 저장하지 못했어요.");
+      setActionError(caughtErrorMessage(t, cause, "memory.critical.052"));
     } finally {
       setLikingPostIds((current) => {
         const next = new Set(current);
@@ -461,7 +475,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
       });
       likingPostIdsRef.current.delete(card.post.id);
     }
-  }, []);
+  }, [t]);
 
   const toggleSave = useCallback(async (card: MemoryCard) => {
     if (savingPostIdsRef.current.has(card.post.id)) return;
@@ -475,7 +489,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
       else await MemoriesRepository.unsaveMemoryPost(card.post.id);
     } catch (cause) {
       setCards((current) => current.map((item) => item.post.id === card.post.id ? { ...item, isSaved: card.isSaved } : item));
-      setActionError(cause instanceof Error ? cause.message : "저장 상태를 바꾸지 못했어요.");
+      setActionError(caughtErrorMessage(t, cause, "memory.critical.053"));
     } finally {
       setSavingPostIds((current) => {
         const next = new Set(current);
@@ -484,28 +498,43 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
       });
       savingPostIdsRef.current.delete(card.post.id);
     }
-  }, []);
+  }, [t]);
 
   const listHeader = (
     <>
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.headerCopy}>
-          <Text style={styles.title} maxFontSizeMultiplier={fontScaleCap.chrome}>우리 순간</Text>
-          <Text style={styles.subtitle} maxFontSizeMultiplier={fontScaleCap.chrome}>가족과 함께 보는 우리 아기의 순간</Text>
+          <Text style={styles.title} maxFontSizeMultiplier={fontScaleCap.chrome}>{t("memory.critical.001")}</Text>
+          <Text style={styles.subtitle} maxFontSizeMultiplier={fontScaleCap.chrome}>{t("memory.critical.002")}</Text>
         </View>
         <View style={styles.headerActions}>
           {onOpenNotifications ? <NotificationBellButton onPress={onOpenNotifications} /> : null}
           {canCreate ? (
-            <Pressable style={styles.iconButton} onPress={() => setUploadOpen(true)} accessibilityRole="button" accessibilityLabel="추억 올리기">
+            <Pressable style={styles.iconButton} onPress={() => setUploadOpen(true)} accessibilityRole="button" accessibilityLabel={t("memory.critical.003")}>
               <BabyLogIcon kind="new" size={20} color={colors.amberText} strokeWidth={2.2} />
             </Pressable>
           ) : null}
           {onOpenSettings ? (
-            <Pressable style={styles.iconButton} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel="설정 열기">
+            <Pressable style={styles.iconButton} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel={t("memory.critical.004")}>
               <BabyLogIcon kind="settings" size={19} color={colors.muted} />
             </Pressable>
           ) : null}
         </View>
+      </View>
+
+      <View style={styles.audienceBar} accessibilityRole="tablist">
+        <Pressable
+          style={[styles.audienceChip, audience === "family" && styles.audienceChipActive]}
+          onPress={() => { setAudience("family"); setFilter("all"); }}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: audience === "family" }}
+        ><Text style={[styles.audienceText, audience === "family" && styles.audienceTextActive]}>{t("memory.critical.152")}</Text></Pressable>
+        <Pressable
+          style={[styles.audienceChip, audience === "friend" && styles.audienceChipActive]}
+          onPress={() => { setAudience("friend"); setFilter("friend_circle"); }}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: audience === "friend" }}
+        ><Text style={[styles.audienceText, audience === "friend" && styles.audienceTextActive]}>{t("memory.critical.153")}</Text></Pressable>
       </View>
 
       <View style={[styles.familySection, activeFamilyMembers.length > 0 && styles.familySectionCompact]}>
@@ -513,18 +542,20 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
           style={styles.familyMain}
           onPress={onOpenFamily}
           accessibilityRole="button"
-          accessibilityLabel={activeFamilyMembers.length === 0 ? "가족 초대하기" : "가족 구성원 관리"}
+          accessibilityLabel={activeFamilyMembers.length === 0 ? t("memory.critical.005") : t("memory.critical.006")}
         >
           <View style={styles.paperPlane}><BabyLogIcon kind="send" size={16} color={colors.amberText} strokeWidth={2.2} /></View>
           <View style={styles.familyCopy}>
-            <Text style={styles.familyTitle}>{babyName}네 가족</Text>
+            <Text style={styles.familyTitle}>{t("family.critical.044", { babyName })}</Text>
             <Text style={styles.familySummary}>
               {activeFamilyMembers.length === 0
-                ? "아직 초대된 가족이 없어요"
-                : `가족 ${activeFamilyMembers.length + 1}명${togetherDays ? ` · 함께 ${togetherDays}일` : ""}`}
+                ? t("memory.critical.007")
+                : togetherDays
+                  ? t("memory.critical.009", { count: activeFamilyMembers.length + 1, days: togetherDays })
+                  : t("memory.critical.008", { count: activeFamilyMembers.length + 1 })}
             </Text>
             {activeFamilyMembers.length === 0 ? (
-              <Text style={styles.familyHint}>여기를 눌러 요청을 보내 보세요.</Text>
+              <Text style={styles.familyHint}>{t("memory.critical.010")}</Text>
             ) : null}
           </View>
           <BabyLogIcon kind="chevron" size={16} color={colors.faint} />
@@ -536,19 +567,19 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
           style={[styles.filterChip, babyFilter === "all" && styles.filterChipActive]}
           onPress={() => setBabyFilter("all")}
           accessibilityRole="button"
-          accessibilityLabel="전체"
+          accessibilityLabel={t("memory.critical.011")}
           accessibilityState={{ selected: babyFilter === "all" }}
         >
-          <Text style={[styles.filterText, babyFilter === "all" && styles.filterTextActive]}>전체</Text>
+          <Text style={[styles.filterText, babyFilter === "all" && styles.filterTextActive]}>{t("memory.critical.011")}</Text>
         </Pressable>
         <Pressable
           style={[styles.filterChip, babyFilter === "family" && styles.filterChipActive]}
           onPress={() => setBabyFilter("family")}
           accessibilityRole="button"
-          accessibilityLabel="가족 순간"
+          accessibilityLabel={t("memory.critical.012")}
           accessibilityState={{ selected: babyFilter === "family" }}
         >
-          <Text style={[styles.filterText, babyFilter === "family" && styles.filterTextActive]}>가족</Text>
+          <Text style={[styles.filterText, babyFilter === "family" && styles.filterTextActive]}>{t("memory.critical.155")}</Text>
         </Pressable>
         <Pressable
           style={[
@@ -558,8 +589,8 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
           onPress={() => setViewSheetOpen(true)}
           accessibilityRole="button"
           accessibilityLabel={filter === "all" && (babyFilter === "all" || babyFilter === "family")
-            ? "보기 선택"
-            : `보기 ${viewChipLabel}`}
+            ? t("memory.critical.154")
+            : t("memory.critical.014", { label: viewChipLabel })}
           accessibilityState={{ expanded: viewSheetOpen, selected: filter !== "all" || (babyFilter !== "all" && babyFilter !== "family") }}
         >
           <Text
@@ -597,19 +628,19 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
           loading ? (
-            <View style={styles.emptyState}><ActivityIndicator color={colors.amberText} /><Text style={styles.centerCopy}>가족 추억을 불러오는 중…</Text></View>
+            <View style={styles.emptyState}><ActivityIndicator color={colors.amberText} /><Text style={styles.centerCopy}>{t("memory.critical.015")}</Text></View>
           ) : error ? (
             <View style={styles.emptyState}>
-              <Text style={styles.errorTitle}>추억을 불러오지 못했어요.</Text>
+              <Text style={styles.errorTitle}>{t("memory.critical.016")}</Text>
               <Text style={styles.centerCopy}>{error}</Text>
-              <Pressable style={styles.secondaryButton} onPress={() => void load()}><Text style={styles.secondaryText}>다시 시도</Text></Pressable>
+              <Pressable style={styles.secondaryButton} onPress={() => void load()}><Text style={styles.secondaryText}>{t("memory.critical.017")}</Text></Pressable>
             </View>
           ) : (
             <View style={styles.emptyState}>
               <View style={styles.emptyIcon}><BabyLogIcon kind="sparkles" size={34} color={colors.amberText} /></View>
               <Text style={styles.emptyTitle}>{emptyCopy.title}</Text>
               <Text style={styles.emptyCopy}>{emptyCopy.description}</Text>
-              {canCreate && filter !== "tagged" ? <Pressable style={styles.primaryButton} onPress={() => setUploadOpen(true)}><Text style={styles.primaryText}>{filter === "all" ? "첫 순간 올리기" : "순간 올리기"}</Text></Pressable> : null}
+              {canCreate && filter !== "tagged" ? <Pressable style={styles.primaryButton} onPress={() => setUploadOpen(true)}><Text style={styles.primaryText}>{filter === "all" ? t("memory.critical.018") : t("memory.critical.019")}</Text></Pressable> : null}
             </View>
           )
         }
@@ -661,7 +692,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
       <MemoryViewFilterSheet
         visible={viewSheetOpen}
         value={filter}
-        onChange={setFilter}
+        onChange={(value) => { setFilter(value); setAudience(value === "friend_circle" ? "friend" : "family"); }}
         whoValue={babyFilter}
         onChangeWho={setBabyFilter}
         babies={babies.map((baby) => ({ id: baby.id, name: baby.name }))}
@@ -678,6 +709,11 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 27, fontWeight: "800", letterSpacing: -0.5 },
   subtitle: { color: colors.muted, fontSize: 12.5, marginTop: 2 },
   headerActions: { flexDirection: "row", gap: 8 },
+  audienceBar: { flexDirection: "row", marginHorizontal: 16, marginBottom: 10, padding: 4, borderRadius: radius.full, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.border },
+  audienceChip: { flex: 1, minHeight: 40, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
+  audienceChipActive: { backgroundColor: colors.card },
+  audienceText: { color: colors.muted, fontSize: 12.5, fontWeight: "700" },
+  audienceTextActive: { color: colors.amberText, fontWeight: "800" },
   iconButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   familySection: { marginHorizontal: 16, marginBottom: 10, padding: 13, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   familySectionCompact: { paddingVertical: 10, paddingHorizontal: 12 },

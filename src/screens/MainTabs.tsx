@@ -20,6 +20,7 @@ import { BabyReportScreen } from "./tabs/BabyReportScreen";
 import { DiaryScreen } from "./tabs/DiaryScreen";
 import { RecordScreen } from "./tabs/RecordScreen";
 import { MemoriesScreen } from "./tabs/MemoriesScreen";
+import { FriendMemoriesScreen } from "./tabs/FriendMemoriesScreen";
 import type { LogCategoryKey } from "../types/logCategory";
 import type { BabyLogCategoryId } from "../constants/babyLogCategories";
 import type { MessageKey } from "../i18n";
@@ -60,7 +61,7 @@ function MicPlaceholder() {
   return <View style={{ flex: 1, backgroundColor: colors.background }} />;
 }
 
-function CustomTabBar({ state, navigation }: BottomTabBarProps) {
+function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarProps & { friendOnly?: boolean }) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const {
@@ -102,7 +103,9 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     setVoiceEventPatch(null);
   }, [allowVoice]);
 
-  const tabs: { name: keyof MainTabParamList; center?: boolean }[] = [
+  const tabs: { name: keyof MainTabParamList; center?: boolean }[] = friendOnly ? [
+    { name: "Memories" },
+  ] : [
     { name: "Record" },
     { name: "Diary" },
     { name: "Mic", center: true },
@@ -343,7 +346,18 @@ function MemoriesTab() {
   );
 }
 
-export function MainTabs() {
+function FriendMemoriesTab() {
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  return (
+    <FriendMemoriesScreen
+      onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
+      onOpenDetail={(memoryPostId) => rootNavigation?.navigate("MemoryDetail", { memoryPostId, source: "friend" })}
+    />
+  );
+}
+
+export function MainTabs({ friendOnly = false }: { friendOnly?: boolean }) {
   const { t } = useLanguage();
   const {
     storageIssue,
@@ -355,14 +369,21 @@ export function MainTabs() {
   return (
     <>
       <Tab.Navigator
-        tabBar={(props) => <CustomTabBar {...props} />}
+        tabBar={(props) => <CustomTabBar {...props} friendOnly={friendOnly} />}
+        initialRouteName={friendOnly ? "Memories" : "Record"}
         screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}
       >
-        <Tab.Screen name="Record" component={RecordTab} />
-        <Tab.Screen name="Diary" component={DiaryTab} />
-        <Tab.Screen name="Mic" component={MicPlaceholder} />
-        <Tab.Screen name="Report" component={ReportTab} />
-        <Tab.Screen name="Memories" component={MemoriesTab} />
+        {friendOnly ? (
+          <Tab.Screen name="Memories" component={FriendMemoriesTab} />
+        ) : (
+          <>
+            <Tab.Screen name="Record" component={RecordTab} />
+            <Tab.Screen name="Diary" component={DiaryTab} />
+            <Tab.Screen name="Mic" component={MicPlaceholder} />
+            <Tab.Screen name="Report" component={ReportTab} />
+            <Tab.Screen name="Memories" component={MemoriesTab} />
+          </>
+        )}
       </Tab.Navigator>
       {storageIssue ? (
         <View style={[styles.storageBanner, { top: insets.top + 8 }]}>

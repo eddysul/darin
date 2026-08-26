@@ -163,6 +163,15 @@ const rows = [
   ["159", "템플릿", "Template", "テンプレート", "Plantilla", "模板"],
   ["163", "편지 템플릿", "Letter template", "手紙テンプレート", "Plantilla de carta", "信件模板"],
   ["164", "편지 장의 종이 색과 장식을 골라 주세요.", "Choose this letter page’s paper color and decorations.", "手紙ページの紙の色と飾りを選んでください。", "Elige el color y los adornos de la página de carta.", "请选择信件页的纸张颜色和装饰。"],
+  ["165", "{babyName}의 하루", "{babyName}'s day", "{babyName}の一日", "El día de {babyName}", "{babyName}的一天"],
+  ["166", "성장 순간", "Growth moment", "成長の瞬間", "Momento de crecimiento", "成长瞬间"],
+  ["167", "일기", "Diary", "日記", "Diario", "日记"],
+  ["168", "표지", "Cover", "表紙", "Portada", "封面"],
+  ["169", "편지", "Letter", "手紙", "Carta", "信件"],
+  ["170", "사랑하는 너에게", "To you, with love", "愛するきみへ", "Para ti, con cariño", "写给你，满满的爱"],
+  ["171", "{author}가", "From {author}", "{author}より", "De {author}", "{author}写"],
+  ["172", "{babyName}야,\n\n이 책에 담긴 {count}개의 순간은 우리가 함께 웃고, 울고, 성장한 날들이야.\n\n앞으로도 너의 하루하루를 소중히 남겨둘게.\n\n사랑해.", "{babyName},\n\nThe {count} moments in this book are the days we laughed, cried, and grew together.\n\nWe'll keep treasuring each of your days.\n\nLove you.", "{babyName}へ。\n\nこの本に残した{count}の瞬間は、一緒に笑い、泣き、成長した日々だよ。\n\nこれからも一日一日を大切に残していくね。\n\n大好きだよ。", "{babyName}:\n\nLos {count} momentos de este libro son los días en que reímos, lloramos y crecimos juntos.\n\nSeguiremos guardando cada uno de tus días.\n\nTe queremos.", "{babyName}：\n\n这本书里的{count}个瞬间，是我们一起欢笑、哭泣、成长的日子。\n\n我们会继续珍藏你的每一天。\n\n爱你。"],
+  ["173", "{babyName}야,\n\n앞으로의 소중한 순간들을 이 책에 하나씩 담아갈게.\n\n사랑해.", "{babyName},\n\nWe'll keep adding the precious moments ahead, one by one.\n\nLove you.", "{babyName}へ。\n\nこれからの大切な瞬間を、この本にひとつずつ残していくね。\n\n大好きだよ。", "{babyName}:\n\nIremos guardando aquí, uno a uno, los momentos que vendrán.\n\nTe queremos.", "{babyName}：\n\n今后的珍贵瞬间，我们会一个一个收进这本书。\n\n爱你。"],
 ] as const;
 
 type GrowthId = typeof rows[number][0];

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { BabyLogIcon } from "./babylog/BabyLogIcon";
 import { colors } from "../theme";
+import { useLanguage } from "../LanguageContext";
 import { hasUnreadNotificationQaSeed } from "../data/notificationQaSeed";
 import { NotificationRepository } from "../repositories/NotificationRepository";
 
@@ -13,6 +14,7 @@ type Props = {
 
 /** A shared entry point for the in-app notification center. */
 export function NotificationBellButton({ onPress, hasUnread }: Props) {
+  const { t } = useLanguage();
   const [serverUnread, setServerUnread] = useState(false);
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -31,8 +33,8 @@ export function NotificationBellButton({ onPress, hasUnread }: Props) {
       style={styles.button}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="알림"
-      accessibilityHint="알림과 리마인더를 확인합니다"
+      accessibilityLabel={t("chrome.critical.034")}
+      accessibilityHint={t("chrome.critical.024")}
     >
       <BabyLogIcon kind="bell" size={19} color={colors.muted} strokeWidth={1.7} />
       {showUnread ? <View style={styles.dot} /> : null}

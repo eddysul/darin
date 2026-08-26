@@ -10,6 +10,7 @@ import {
 import type { User } from "@supabase/supabase-js";
 import { useLanguage } from "../../LanguageContext";
 import { AuthRepository } from "../../repositories/AuthRepository";
+import { localizedErrorMessage } from "../../utils/familyDisplay";
 import { colors } from "../../theme";
 
 export type EmailAuthMode = "login" | "signup" | "forgot" | "confirm" | "reset-password";
@@ -72,7 +73,7 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
     if (lower.includes("already registered") || lower.includes("already been registered") || lower.includes("email exists")) return t("auth.email.error.alreadyRegistered");
     if (lower.includes("weak_password") || lower.includes("password should") || lower.includes("password is too weak")) return t("auth.email.error.weakPassword");
     if (lower.includes("rate limit")) return t("auth.email.error.rateLimit");
-    return message;
+    return localizedErrorMessage(t, message);
   };
 
   const finish = async (user: User, fallbackEmail = email) => {

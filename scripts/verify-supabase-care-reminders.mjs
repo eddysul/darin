@@ -43,8 +43,12 @@ try {
   if (viewerDefault) throw new Error("viewer unexpectedly defaulted to delivery ON");
   pass("admin/editor default ON and viewer default OFF");
 
-  const { error: viewerUpdate } = await viewer.sb.from("care_reminder_settings").update({ interval_minutes: 120, updated_by: viewer.user.id }).eq("id", setting.id);
-  if (!viewerUpdate) throw new Error("viewer changed shared setting");
+  const { data: viewerUpdateRows, error: viewerUpdateError } = await viewer.sb
+    .from("care_reminder_settings")
+    .update({ interval_minutes: 120, updated_by: viewer.user.id })
+    .eq("id", setting.id)
+    .select("id");
+  if (viewerUpdateError || viewerUpdateRows?.length) throw new Error("viewer changed shared setting");
   const { data: outsiderRows } = await outsider.sb.from("care_reminder_settings").select("id").eq("baby_id", babyId);
   if (outsiderRows?.length) throw new Error("outsider read shared setting");
   pass("viewer mutation and outsider access blocked");
@@ -94,7 +98,7 @@ try {
   if (afterPump?.version !== version) throw new Error("pump changed feeding state");
   pass("pump is excluded from feeding state");
 
-  const newerAt = new Date(recordedAt.getTime() + 2 * 60_000);
+  const newerAt = new Date(recordedAt.getTime() + 20 * 60_000);
   const newerLogId = crypto.randomUUID();
   const { error: newerLogError } = await admin.sb.from("care_logs").insert({
     id: newerLogId, baby_id: babyId, client_generated_id: `care-reminder-newer-${Date.now()}`,
@@ -132,6 +136,48 @@ try {
     throw new Error("setting OFF did not disable due state");
   }
   pass("setting OFF removes the reminder from due processing");
+
+  const { data: sleepSetting, error: sleepSettingError } = await editor.sb.from("care_reminder_settings").insert({
+    baby_id: babyId, reminder_type: "sleep", enabled: true, interval_minutes: 120,
+    included_log_types: ["sleep"], updated_by: editor.user.id,
+  }).select("*").single();
+  if (sleepSettingError || !sleepSetting) throw new Error(`sleep setting create: ${sleepSettingError?.message}`);
+  const { data: sleepDefaults } = await editor.sb.from("care_reminder_member_preferences")
+    .select("user_id,delivery_enabled").eq("baby_id", babyId).eq("reminder_type", "sleep");
+  if (!sleepDefaults?.some((row) => row.user_id === editor.user.id && row.delivery_enabled)) {
+    throw new Error("sleep editor default preference missing");
+  }
+
+  const sleepBaseMs = Date.now();
+  const firstSleepId = crypto.randomUUID();
+  const secondSleepId = crypto.randomUUID();
+  for (const [id, offsetMinutes, duration] of [[firstSleepId, 10, "30"], [secondSleepId, 30, "20"]]) {
+    const at = new Date(sleepBaseMs + Number(offsetMinutes) * 60_000);
+    const { error } = await admin.sb.from("care_logs").insert({
+      id, baby_id: babyId, client_generated_id: `sleep-reminder-${id}`,
+      category: "sleep", recorded_at: at.toISOString(), date_key: at.toISOString().slice(0, 10),
+      time_local: "13:00", payload: { duration }, source: "manual", created_by: admin.user.id,
+    });
+    if (error) throw error;
+  }
+  const { data: sleepState, error: sleepStateError } = await admin.sb.from("care_reminder_state").select("*")
+    .eq("baby_id", babyId).eq("reminder_type", "sleep").single();
+  if (sleepStateError || sleepState.last_relevant_log_id !== secondSleepId || sleepState.send_status !== "scheduled") {
+    throw new Error("sleep state not scheduled from latest sleep end");
+  }
+  const expectedSleepEnd = sleepBaseMs + 50 * 60_000;
+  if (Math.abs(new Date(sleepState.last_relevant_log_at).getTime() - expectedSleepEnd) > 2_000) {
+    throw new Error("sleep duration was not applied to the end time");
+  }
+  await admin.sb.from("care_logs").delete().eq("id", secondSleepId);
+  const { data: restoredSleep } = await admin.sb.from("care_reminder_state").select("last_relevant_log_id")
+    .eq("id", sleepState.id).single();
+  if (restoredSleep?.last_relevant_log_id !== firstSleepId) throw new Error("deleting latest sleep did not restore previous sleep");
+  const backdatedSleep = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+  await admin.sb.from("care_logs").update({ recorded_at: backdatedSleep, date_key: backdatedSleep.slice(0, 10), payload: {} }).eq("id", firstSleepId);
+  const { data: overdueSleep } = await admin.sb.from("care_reminder_state").select("send_status").eq("id", sleepState.id).single();
+  if (overdueSleep?.send_status !== "overdue_not_scheduled") throw new Error("backdated sleep was scheduled immediately");
+  pass("sleep uses end time, restores prior log, and blocks backdated immediate delivery");
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 } finally {

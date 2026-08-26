@@ -12,6 +12,7 @@ import { toMinutes } from "./formatLog";
 import { getAppSettings } from "./appSettingsStore";
 import type { WeekStart } from "../types/appSettings";
 import { offsetDateKey, parseDateKey } from "./dateKey";
+import type { Translate } from "./recordDisplay";
 
 /** Intake events shown as feeding; pumping and solid food are tracked separately. */
 export const FEEDING_CATS: BabyLogCategoryId[] = ["breast", "formula", "storedMilk", "milk"];
@@ -374,7 +375,14 @@ export function buildTodaySummary(logs: BabyLogEntry[], now = new Date()): Today
   };
 }
 
-export function formatSleepDuration(mins: number): string {
+export function formatSleepDuration(mins: number, t?: Translate): string {
+  if (t) {
+    if (mins <= 0) return t("report.critical.114", { count: 0 });
+    if (mins < 60) return t("report.critical.114", { count: mins });
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m ? t("report.critical.115", { hours: h, minutes: m }) : t("report.critical.116", { hours: h });
+  }
   if (mins <= 0) return "0분";
   if (mins < 60) return `${mins}분`;
   const h = Math.floor(mins / 60);

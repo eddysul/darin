@@ -22,23 +22,31 @@ import { BabyStickerVaultModal } from "../components/babylog/BabyStickerVaultMod
 import { ProfileAvatar } from "../components/profile/ProfileAvatar";
 import { MemoryEditModal } from "../components/memories/MemoryEditModal";
 import { MemoryMediaViewer } from "../components/memories/MemoryMediaViewer";
-import { memoryPrivacyLabel } from "../components/memories/MemoryPrivacyPicker";
 import { memoryPrivacyPresentation } from "../components/memories/memoryPresentation";
 import { useBabyLog } from "../context/BabyLogContext";
+import { useLanguage } from "../LanguageContext";
 import type { RootStackParamList } from "../navigation/types";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { MemoriesRepository, MEMORY_DETAIL_IMAGE_WIDTH } from "../repositories/MemoriesRepository";
+import { ProfileRepository } from "../repositories/ProfileRepository";
 import type { BabySticker } from "../types/babySticker";
 import type { MemoryComment, MemoryPostBundle } from "../types/memory";
+import type { DisplayProfile } from "../types/profileSettings";
+import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
 import { getLocalUriForMedia } from "../utils/eagerMediaUpload";
+import { formatLocalizedDate } from "../utils/localeFormat";
 import { memberRelationshipLabel } from "../types/family";
+import type { RelationshipLabel } from "../types/growthBook";
+import type { MessageKey } from "../i18n";
 import { colors, radius } from "../theme";
+import { caughtErrorMessage } from "../utils/familyDisplay";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MemoryDetail">;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function MemoryDetailScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const { t, locale } = useLanguage();
   const { babyName, babies, familyMembers, myFamilyRole, logAuthor, babyStickers, addBabySticker, deleteBabySticker } = useBabyLog();
   const [bundle, setBundle] = useState<MemoryPostBundle | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
@@ -52,6 +60,9 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [stickerVaultOpen, setStickerVaultOpen] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [visibleProfiles, setVisibleProfiles] = useState<DisplayProfile[]>([]);
+  const [friendBabyName, setFriendBabyName] = useState("");
+  const friendView = route.params.source === "friend";
   const serverFamilyMembers = useMemo(() => familyMembers.filter((member) => UUID_PATTERN.test(member.id)), [familyMembers]);
 
   const load = useCallback(async (showSpinner = true) => {
@@ -60,9 +71,22 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     if (showSpinner) setImageUrls([]); // drop stale URLs when entering; keep current media stable during inline mutations
     try {
       const next = await MemoriesRepository.getBundleById(route.params.memoryPostId);
-      if (!next) throw new Error("삭제되었거나 볼 수 없는 추억이에요.");
+      if (!next) throw new Error(t("memory.critical.124"));
+      if (friendView && next.post.privacyType !== "friend_circle") throw new Error(t("memory.critical.156"));
       setBundle(next);
-      setIsSaved(await MemoriesRepository.isSaved(next.post.id));
+      setIsSaved(friendView ? false : await MemoriesRepository.isSaved(next.post.id));
+      if (friendView) {
+        const [profiles, contexts] = await Promise.all([
+          ProfileRepository.listVisibleDisplayProfiles([
+            next.post.authorId,
+            ...next.comments.map((item) => item.authorId),
+            ...next.reactions.map((item) => item.authorId),
+          ]),
+          MemoriesRepository.listMyFriendMemoryContexts(),
+        ]);
+        setVisibleProfiles(profiles);
+        setFriendBabyName(contexts.find((item) => item.babyId === next.post.babyId)?.babyName ?? "");
+      }
       setImageUrls(await Promise.all(next.media.map(async (media) => {
         const localUri = getLocalUriForMedia(media.id);
         if (media.uploadStatus !== "ready") return localUri ?? "";
@@ -74,11 +98,11 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       })));
     } catch (cause) {
       setBundle(null);
-      setError(cause instanceof Error ? cause.message : "추억을 불러오지 못했어요.");
+      setError(caughtErrorMessage(t, cause, "memory.critical.016"));
     } finally {
       if (showSpinner) setLoading(false);
     }
-  }, [route.params.memoryPostId]);
+  }, [friendView, route.params.memoryPostId, t]);
 
   // Always reload + remint signed URL on focus (TTL is short; do not keep stale media links).
   useFocusEffect(useCallback(() => { void load(); }, [load]));
@@ -86,15 +110,24 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
 
   const authorName = (id: string) => {
     if (id === logAuthor.userId || id === userId) return logAuthor.name;
-    return familyMembers.find((member) => member.id === id)?.name ?? "탈퇴한 사용자";
+    return familyMembers.find((member) => member.id === id)?.name
+      ?? visibleProfiles.find((profile) => profile.userId === id)?.displayName
+      ?? t("memory.critical.050");
   };
 
-  const authorAvatar = (id: string) => familyMembers.find((member) => member.id === id)?.avatarUrl;
+  const authorAvatar = (id: string) => familyMembers.find((member) => member.id === id)?.avatarUrl
+    ?? visibleProfiles.find((profile) => profile.userId === id)?.avatarUrl;
 
   const commentAuthorLabel = (id: string) => {
-    if (id === logAuthor.userId || id === userId) return `나 · ${logAuthor.name}`;
+    if (id === logAuthor.userId || id === userId) return t("memory.critical.125", { name: logAuthor.name });
     const member = familyMembers.find((item) => item.id === id);
-    return member ? `${memberRelationshipLabel(member)} · ${member.name}` : "탈퇴한 사용자";
+    const visible = visibleProfiles.find((item) => item.userId === id);
+    if (visible) return visible.displayName;
+    if (!member) return t("memory.critical.050");
+    const suffixes = ["mom", "dad", "grandmother", "grandfather", "aunt", "uncle", "guardian", "family", "sitter", "friend", "other"] as const;
+    const stored = memberRelationshipLabel(member);
+    const suffix = suffixes[PROFILE_RELATION_OPTIONS.indexOf(stored as RelationshipLabel)] ?? "other";
+    return `${t(`profileSetup.relation.${suffix}` as MessageKey)} · ${member.name}`;
   };
 
   const isAuthor = bundle?.post.authorId === userId;
@@ -112,7 +145,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       setComment("");
       await load(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "댓글을 남기지 못했어요.");
+      setError(caughtErrorMessage(t, cause, "memory.critical.126"));
     } finally {
       setWorking(false);
     }
@@ -146,7 +179,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       await load(false);
     } catch (cause) {
       setBundle((current) => current ? { ...current, comments: current.comments.filter((item) => item.id !== tempId) } : current);
-      setError(cause instanceof Error ? cause.message : "스티커 댓글을 남기지 못했어요.");
+      setError(caughtErrorMessage(t, cause, "memory.critical.127"));
     } finally {
       setWorking(false);
     }
@@ -163,7 +196,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       else await MemoriesRepository.saveMemoryPost(bundle.post.id);
     } catch (cause) {
       setIsSaved(previous);
-      setError(cause instanceof Error ? cause.message : "저장 상태를 바꾸지 못했어요.");
+      setError(caughtErrorMessage(t, cause, "memory.critical.053"));
     } finally {
       setWorking(false);
     }
@@ -178,7 +211,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       else await MemoriesRepository.setReaction({ memoryPostId: bundle.post.id, reactionType: "heart" });
       await load(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "반응을 저장하지 못했어요.");
+      setError(caughtErrorMessage(t, cause, "memory.critical.128"));
     } finally {
       setLikeWorking(false);
     }
@@ -192,7 +225,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       await MemoriesRepository.setReaction({ memoryPostId: bundle.post.id, reactionType: "heart" });
       await load(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "반응을 저장하지 못했어요.");
+      setError(caughtErrorMessage(t, cause, "memory.critical.128"));
     } finally {
       setLikeWorking(false);
     }
@@ -200,27 +233,27 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
 
   const confirmDelete = () => {
     if (!bundle || !canDelete || working) return;
-    Alert.alert("이 추억을 삭제할까요?", "가족 앨범 목록에서 사라져요.", [
-      { text: "취소", style: "cancel" },
+    Alert.alert(t("memory.critical.120"), t("memory.critical.121"), [
+      { text: t("memory.critical.083"), style: "cancel" },
       {
-        text: "삭제",
+        text: t("memory.critical.122"),
         style: "destructive",
         onPress: () => {
           setWorking(true);
           void MemoriesRepository.softDeleteMemoryPost(bundle.post.id)
             .then(() => navigation.goBack())
-            .catch((cause) => setError(cause instanceof Error ? cause.message : "삭제하지 못했어요."))
+            .catch((cause) => setError(caughtErrorMessage(t, cause, "memory.critical.123")))
             .finally(() => setWorking(false));
         },
       },
     ]);
   };
 
-  if (loading) return <View style={styles.center}><ActivityIndicator color={colors.amberText} /><Text style={styles.muted}>추억을 불러오는 중…</Text></View>;
+  if (loading) return <View style={styles.center}><ActivityIndicator color={colors.amberText} /><Text style={styles.muted}>{t("memory.critical.118")}</Text></View>;
   if (!bundle || error && !bundle) return (
     <View style={styles.center}>
-      <Text style={styles.errorTitle}>추억을 열지 못했어요.</Text><Text style={styles.muted}>{error}</Text>
-      <Pressable style={styles.outlineButton} onPress={() => void load()}><Text style={styles.outlineText}>다시 시도</Text></Pressable>
+      <Text style={styles.errorTitle}>{t("memory.critical.119")}</Text><Text style={styles.muted}>{error}</Text>
+      <Pressable style={styles.outlineButton} onPress={() => void load()}><Text style={styles.outlineText}>{t("memory.critical.017")}</Text></Pressable>
     </View>
   );
 
@@ -247,10 +280,10 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
               void MemoriesRepository.retryFailedMedia(bundle.post.id).then(() => load(false));
             }}
             accessibilityRole="button"
-            accessibilityLabel="실패한 사진 다시 올리기"
+            accessibilityLabel={t("memory.critical.148")}
           >
-            <Text style={styles.retryBannerText}>사진 업로드 실패</Text>
-            <Text style={styles.retryBannerAction}>다시 시도</Text>
+            <Text style={styles.retryBannerText}>{t("memory.critical.049")}</Text>
+            <Text style={styles.retryBannerAction}>{t("memory.critical.017")}</Text>
           </Pressable>
         ) : null}
 
@@ -259,11 +292,11 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
             <ProfileAvatar uri={authorAvatar(bundle.post.authorId)} size={38} />
             <View style={styles.metaCopy}>
               <Text style={styles.author}>{authorName(bundle.post.authorId)}</Text>
-              <Text style={styles.date}>{new Date(bundle.post.createdAt).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })}</Text>
+              <Text style={styles.date}>{formatLocalizedDate(bundle.post.createdAt, locale, { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })}</Text>
             </View>
             <View style={[styles.privacyBadge, { backgroundColor: privacy.soft }]}>
               <BabyLogIcon kind={privacy.icon} size={12} color={privacy.accent} strokeWidth={2.2} />
-              <Text style={[styles.privacyBadgeText, { color: privacy.accent }]}>{memoryPrivacyLabel(bundle.post.privacyType)}</Text>
+              <Text style={[styles.privacyBadgeText, { color: privacy.accent }]}>{t(privacy.labelKey)}</Text>
             </View>
           </View>
           <View style={styles.actionRow}>
@@ -272,32 +305,32 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
               onPress={() => void toggleReaction()}
               disabled={likeWorking}
               accessibilityRole="button"
-              accessibilityLabel={myReaction ? "좋아요 취소" : "좋아요"}
+              accessibilityLabel={myReaction ? t("memory.critical.145") : t("memory.critical.144")}
               accessibilityState={{ selected: Boolean(myReaction), disabled: likeWorking }}
             >
               <BabyLogIcon kind="heart" size={20} color={myReaction ? colors.amberText : colors.muted} strokeWidth={2.2} fill={myReaction ? colors.amberText : "transparent"} />
-              <Text style={[styles.actionPairText, myReaction && styles.actionPairTextActive]}>좋아요 {bundle.reactions.length}</Text>
+              <Text style={[styles.actionPairText, myReaction && styles.actionPairTextActive]}>{t("memory.critical.044", { count: bundle.reactions.length })}</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [styles.actionPair, pressed && styles.pressed]}
               onPress={() => setCommentsOpen(true)}
               accessibilityRole="button"
-              accessibilityLabel={`댓글 ${bundle.comments.length}개`}
+              accessibilityLabel={t("memory.critical.045", { count: bundle.comments.length })}
             >
               <BabyLogIcon kind="chat" size={20} color={colors.muted} />
-              <Text style={styles.actionPairText}>댓글 {bundle.comments.length}</Text>
+              <Text style={styles.actionPairText}>{t("memory.critical.045", { count: bundle.comments.length })}</Text>
             </Pressable>
             <View style={styles.actionSpacer} />
-            <Pressable
+            {!friendView ? <Pressable
               style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
               onPress={() => void toggleSave()}
               disabled={working}
               accessibilityRole="button"
-              accessibilityLabel={isSaved ? "저장 취소" : "나중에 다시 보기"}
+              accessibilityLabel={isSaved ? t("memory.critical.047") : t("memory.critical.046")}
               accessibilityState={{ selected: isSaved, disabled: working }}
             >
               <BabyLogIcon kind="bookmark" size={20} color={isSaved ? colors.amberText : colors.muted} fill={isSaved ? colors.amberText : "transparent"} />
-            </Pressable>
+            </Pressable> : null}
           </View>
           {bundle.post.caption ? (
             <Text style={styles.caption}>
@@ -305,31 +338,33 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
               {bundle.post.caption}
             </Text>
           ) : null}
-          {familyTagLabels.length ? (
+          {friendView && friendBabyName ? (
+            <View style={styles.chipRow}><View style={styles.familyChip}><Text style={styles.familyChipText}>{friendBabyName}</Text></View></View>
+          ) : !friendView && familyTagLabels.length ? (
             <View style={styles.chipRow}>
               {familyTagLabels.map((label) => (
                 <View key={`family-${label}`} style={styles.familyChip}><Text style={styles.familyChipText}>{label}</Text></View>
               ))}
             </View>
           ) : null}
-          {guestTagLabels.length ? (
+          {!friendView && guestTagLabels.length ? (
             <View style={styles.chipRow}>
               {guestTagLabels.map((label) => (
-                <View key={`guest-${label}`} style={styles.guestChip}><Text style={styles.guestChipText}>표시 · {label}</Text></View>
+                <View key={`guest-${label}`} style={styles.guestChip}><Text style={styles.guestChipText}>{t("memory.critical.147", { label })}</Text></View>
               ))}
             </View>
           ) : null}
           {canEdit || canDelete ? (
             <View style={styles.ownerActions}>
-              {canEdit ? <Pressable style={styles.smallButton} onPress={() => setEditOpen(true)}><Text style={styles.smallButtonText}>수정</Text></Pressable> : null}
-              {canDelete ? <Pressable style={styles.smallButton} onPress={confirmDelete}><Text style={styles.deleteText}>삭제</Text></Pressable> : null}
+              {canEdit ? <Pressable style={styles.smallButton} onPress={() => setEditOpen(true)}><Text style={styles.smallButtonText}>{t("memory.critical.146")}</Text></Pressable> : null}
+              {canDelete ? <Pressable style={styles.smallButton} onPress={confirmDelete}><Text style={styles.deleteText}>{t("memory.critical.122")}</Text></Pressable> : null}
             </View>
           ) : null}
         </View>
 
         <Pressable style={styles.commentsSummary} onPress={() => setCommentsOpen(true)}>
           <BabyLogIcon kind="chat" size={18} color={colors.amberText} />
-          <Text style={styles.commentsSummaryText}>{bundle.comments.length ? `댓글 ${bundle.comments.length}개 보기` : "첫 댓글 남기기"}</Text>
+          <Text style={styles.commentsSummaryText}>{bundle.comments.length ? t("memory.critical.132", { count: bundle.comments.length }) : t("memory.critical.133")}</Text>
         </Pressable>
         {error ? <Text style={styles.inlineError}>{error}</Text> : null}
       </ScrollView>
@@ -342,17 +377,17 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>댓글 {bundle.comments.length}</Text>
-              <Pressable style={styles.sheetClose} onPress={() => setCommentsOpen(false)} accessibilityLabel="댓글 닫기"><Text style={styles.sheetCloseText}>닫기</Text></Pressable>
+              <Text style={styles.sheetTitle}>{t("memory.critical.134", { count: bundle.comments.length })}</Text>
+              <Pressable style={styles.sheetClose} onPress={() => setCommentsOpen(false)} accessibilityLabel={t("memory.critical.135")}><Text style={styles.sheetCloseText}>{t("memory.critical.067")}</Text></Pressable>
             </View>
             <ScrollView style={styles.commentList} contentContainerStyle={styles.commentListContent} keyboardShouldPersistTaps="handled">
-              {bundle.comments.length === 0 ? <Text style={styles.emptyComments}>아직 댓글이 없어요. 가족에게 첫 마음을 남겨보세요.</Text> : bundle.comments.map((item) => {
+              {bundle.comments.length === 0 ? <Text style={styles.emptyComments}>{t("memory.critical.136")}</Text> : bundle.comments.map((item) => {
                 const mayDelete = item.authorId === userId || canDelete;
                 return (
                   <View key={item.id} style={styles.commentRow}>
                     <ProfileAvatar uri={authorAvatar(item.authorId)} size={30} />
                     <View style={styles.commentCopy}>
-                      <View style={styles.commentMeta}><Text style={styles.commentAuthor}>{commentAuthorLabel(item.authorId)}</Text><Text style={styles.commentDate}>{new Date(item.createdAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</Text></View>
+                      <View style={styles.commentMeta}><Text style={styles.commentAuthor}>{commentAuthorLabel(item.authorId)}</Text><Text style={styles.commentDate}>{formatLocalizedDate(item.createdAt, locale, { month: "numeric", day: "numeric" })}</Text></View>
                       {item.commentType === "sticker" ? (
                         <View style={styles.stickerComment}>
                           {(() => {
@@ -371,25 +406,25 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
                         style={styles.commentDelete}
                         onPress={() => {
                           if (working) return;
-                          Alert.alert("댓글을 삭제할까요?", "삭제한 댓글은 되돌릴 수 없어요.", [
-                            { text: "취소", style: "cancel" },
+                          Alert.alert(t("memory.critical.129"), t("memory.critical.130"), [
+                            { text: t("memory.critical.083"), style: "cancel" },
                             {
-                              text: "삭제",
+                              text: t("memory.critical.122"),
                               style: "destructive",
                               onPress: () => {
                                 setWorking(true);
                                 void MemoriesRepository.deleteComment(item.id)
                                   .then(() => load(false))
-                                  .catch((cause) => setError(cause instanceof Error ? cause.message : "댓글을 삭제하지 못했어요."))
+                                  .catch((cause) => setError(caughtErrorMessage(t, cause, "memory.critical.131")))
                                   .finally(() => setWorking(false));
                               },
                             },
                           ]);
                         }}
                         accessibilityRole="button"
-                        accessibilityLabel="댓글 삭제"
+                        accessibilityLabel={t("memory.critical.170")}
                       >
-                        <Text style={styles.commentDeleteText}>삭제</Text>
+                        <Text style={styles.commentDeleteText}>{t("memory.critical.122")}</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -397,42 +432,42 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
               })}
             </ScrollView>
             {error ? <Text style={styles.sheetError}>{error}</Text> : null}
-            {babyStickers.length ? (
+            {!friendView && babyStickers.length ? (
               <View style={styles.stickerBarBlock}>
-                <Text style={styles.stickerBarTitle}>내 아기 스티커</Text>
+                <Text style={styles.stickerBarTitle}>{t("memory.critical.137")}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stickerBar} keyboardShouldPersistTaps="handled">
                   {babyStickers.map((sticker) => (
-                    <Pressable key={sticker.id} style={styles.stickerChoice} onPress={() => void submitStickerComment(sticker)} disabled={working} accessibilityLabel={`${sticker.label} 스티커 댓글 보내기`}>
+                    <Pressable key={sticker.id} style={styles.stickerChoice} onPress={() => void submitStickerComment(sticker)} disabled={working} accessibilityLabel={t("memory.critical.138", { label: sticker.label })}>
                       <BabyStickerFromModel sticker={sticker} size={48} />
                       <Text style={styles.stickerChoiceLabel} numberOfLines={1}>{sticker.label}</Text>
                     </Pressable>
                   ))}
                 </ScrollView>
               </View>
-            ) : (
+            ) : !friendView ? (
               <View style={styles.stickerEmpty}>
-                <Text style={styles.stickerEmptyText}>아직 만든 아기 스티커가 없어요.</Text>
-                <Pressable style={styles.stickerCreateButton} onPress={() => setStickerVaultOpen(true)}><Text style={styles.stickerCreateText}>스티커 만들기</Text></Pressable>
+                <Text style={styles.stickerEmptyText}>{t("memory.critical.139")}</Text>
+                <Pressable style={styles.stickerCreateButton} onPress={() => setStickerVaultOpen(true)}><Text style={styles.stickerCreateText}>{t("memory.critical.140")}</Text></Pressable>
               </View>
-            )}
+            ) : null}
             <View style={styles.composerBlock}>
-              <Text style={styles.composerLabel}>가족에게 댓글</Text>
+              <Text style={styles.composerLabel}>{friendView ? t("memory.critical.157") : t("memory.critical.141")}</Text>
               <View style={styles.composer}>
                 <TextInput
                   style={styles.commentInput}
                   value={comment}
                   onChangeText={setComment}
-                  placeholder="마음을 남겨 보세요"
+                  placeholder={t("memory.critical.142")}
                   placeholderTextColor={colors.faint}
                   maxLength={500}
                   multiline
-                  accessibilityLabel="가족에게 댓글"
+                  accessibilityLabel={t("memory.critical.157")}
                 />
-                {comment.trim() ? <Pressable style={[styles.send, working && styles.disabled]} onPress={() => void submitComment()} disabled={working}><Text style={styles.sendText}>보내기</Text></Pressable> : null}
+                {comment.trim() ? <Pressable style={[styles.send, working && styles.disabled]} onPress={() => void submitComment()} disabled={working}><Text style={styles.sendText}>{t("memory.critical.143")}</Text></Pressable> : null}
               </View>
             </View>
           </View>
-          <BabyStickerVaultModal
+          {!friendView ? <BabyStickerVaultModal
             visible={stickerVaultOpen}
             embedded
             pickMode
@@ -444,7 +479,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
             onSaveSticker={addBabySticker}
             onDeleteSticker={deleteBabySticker}
             onPickSticker={(sticker) => void submitStickerComment(sticker)}
-          />
+          /> : null}
         </KeyboardAvoidingView>
       </Modal>
     </KeyboardAvoidingView>

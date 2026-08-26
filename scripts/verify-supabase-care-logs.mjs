@@ -1,6 +1,6 @@
 /**
  * Live Supabase verification for Care Log slice.
- * Usage: node --env-file=.env scripts/verify-supabase-care-logs.mjs
+ * Usage: node --env-file=.env.qa --import ./scripts/lib/qa-project-preload.mjs scripts/verify-supabase-care-logs.mjs
  * Does not print secret keys.
  */
 import { createClient } from "@supabase/supabase-js";

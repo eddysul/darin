@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { colors } from "../../theme";
+import { useLanguage } from "../../LanguageContext";
 import {
   DEFAULT_CIRCLE_CROP,
   type CircularCutoutCrop,
@@ -78,6 +79,7 @@ function cropFromTranslate(
 }
 
 export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP, bottomPad, onConfirm }: Props) {
+  const { t } = useLanguage();
   const { width, height } = useWindowDimensions();
   const compact = height < 700;
   const viewport = Math.round(Math.min(width - 48, height * (compact ? 0.34 : 0.42), compact ? 240 : 300));
@@ -238,7 +240,7 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad + 16 }]}>
-      <Text style={styles.hint}>사진을 밀거나 두 손가락으로 확대해 원하는 위치를 맞춰주세요.</Text>
+      <Text style={styles.hint}>{t("sticker.critical.094")}</Text>
 
       <View style={styles.stage}>
         {ready && natural && imgW > 0 ? (
@@ -246,8 +248,8 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
             <View
               style={[styles.crop, { width: viewport, height: viewport, borderRadius: 24 }]}
               accessibilityRole="image"
-              accessibilityLabel="둥근 사각형 스티커 미리보기"
-              accessibilityHint="손가락으로 밀어 위치를 맞춰 주세요"
+              accessibilityLabel={t("sticker.critical.095")}
+              accessibilityHint={t("sticker.critical.096")}
               {...panResponder.panHandlers}
             >
             <Image
@@ -267,7 +269,7 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
         ) : (
           <View style={[styles.crop, styles.loading, { width: viewport, height: viewport, borderRadius: 24 }]}>
             {loadError ? (
-              <Text style={styles.loadError}>사진을 불러오지 못했어요</Text>
+              <Text style={styles.loadError}>{t("sticker.critical.015")}</Text>
             ) : (
               <ActivityIndicator color={colors.amberText} />
             )}
@@ -282,36 +284,36 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
             onPress={() => applyZoom(zoom - ZOOM_STEP)}
             disabled={!ready || zoom <= MIN_ZOOM}
             accessibilityRole="button"
-            accessibilityLabel="축소"
+            accessibilityLabel={t("sticker.critical.097")}
           >
-            <Text style={styles.chipText}>축소</Text>
+            <Text style={styles.chipText}>{t("sticker.critical.097")}</Text>
           </Pressable>
           <Pressable
             style={[styles.chip, !ready && styles.disabled]}
             onPress={resetCenter}
             disabled={!ready}
             accessibilityRole="button"
-            accessibilityLabel="가운데로"
+            accessibilityLabel={t("sticker.critical.098")}
           >
-            <Text style={styles.chipText}>가운데</Text>
+            <Text style={styles.chipText}>{t("sticker.critical.098")}</Text>
           </Pressable>
           <Pressable
             style={[styles.chip, !ready && styles.disabled]}
             onPress={resetOriginal}
             disabled={!ready}
             accessibilityRole="button"
-            accessibilityLabel="원위치"
+            accessibilityLabel={t("sticker.critical.099")}
           >
-            <Text style={styles.chipText}>원위치</Text>
+            <Text style={styles.chipText}>{t("sticker.critical.099")}</Text>
           </Pressable>
           <Pressable
             style={[styles.chip, (!ready || zoom >= MAX_ZOOM) && styles.disabled]}
             onPress={() => applyZoom(zoom + ZOOM_STEP)}
             disabled={!ready || zoom >= MAX_ZOOM}
             accessibilityRole="button"
-            accessibilityLabel="확대"
+            accessibilityLabel={t("sticker.critical.100")}
           >
-            <Text style={styles.chipText}>확대</Text>
+            <Text style={styles.chipText}>{t("sticker.critical.100")}</Text>
           </Pressable>
         </View>
 
@@ -320,9 +322,9 @@ export function StickerCirclePositioner({ uri, initialCrop = DEFAULT_CIRCLE_CROP
           disabled={!ready}
           onPress={confirm}
           accessibilityRole="button"
-          accessibilityLabel="이 위치로 자르기"
+          accessibilityLabel={t("sticker.critical.101")}
         >
-          <Text style={styles.primaryBtnText}>이 위치로 자르기</Text>
+          <Text style={styles.primaryBtnText}>{t("sticker.critical.101")}</Text>
         </Pressable>
       </View>
     </View>

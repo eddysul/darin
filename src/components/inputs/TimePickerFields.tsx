@@ -1,24 +1,40 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLanguage } from "../../LanguageContext";
 import { colors, radius } from "../../theme";
 import { formatDurationMinutes, formatHHmm, formatTimeOfDay, parseHHmm } from "../../utils/timePicker";
 import { formatDateKey, parseDateKey } from "../../utils/dateKey";
+import { formatLocalizedDate } from "../../utils/localeFormat";
 
 export { formatDurationMinutes, formatHHmm, formatTimeOfDay, parseHHmm } from "../../utils/timePicker";
 
 const ITEM_HEIGHT = 44;
 const HOURS_12 = Array.from({ length: 12 }, (_, index) => String(index + 1));
 const MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
-const PERIODS = ["오전", "오후"];
 
-export function TimeOfDayPickerField({ label, valueHHmm, placeholder = "시간 선택", onPress, disabled = false, error }: { label: string; valueHHmm?: string | null; placeholder?: string; onPress: () => void; disabled?: boolean; error?: string }) {
+function durationLabel(
+  valueMinutes: number | null | undefined,
+  placeholder: string,
+  t: ReturnType<typeof useLanguage>["t"],
+) {
+  return formatDurationMinutes(valueMinutes, placeholder, (hours, minutes) => {
+    if (!hours) return t("report.critical.114", { count: minutes });
+    if (!minutes) return t("report.critical.116", { hours });
+    return t("report.critical.115", { hours, minutes });
+  });
+}
+
+export function TimeOfDayPickerField({ label, valueHHmm, placeholder, onPress, disabled = false, error }: { label: string; valueHHmm?: string | null; placeholder?: string; onPress: () => void; disabled?: boolean; error?: string }) {
+  const { locale, t } = useLanguage();
+  const resolvedPlaceholder = placeholder ?? t("picker.critical.001");
   const hasValue = Boolean(parseHHmm(valueHHmm));
+  const display = formatTimeOfDay(valueHHmm, resolvedPlaceholder, locale);
   return (
     <View style={styles.fieldBlock}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${hasValue ? formatTimeOfDay(valueHHmm) : placeholder}`}>
-        <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{formatTimeOfDay(valueHHmm, placeholder)}</Text>
+      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${hasValue ? display : resolvedPlaceholder}`}>
+        <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{display}</Text>
         <Text style={styles.fieldArrow}>›</Text>
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -26,13 +42,16 @@ export function TimeOfDayPickerField({ label, valueHHmm, placeholder = "시간 �
   );
 }
 
-export function DurationPickerField({ label, valueMinutes, placeholder = "기간 선택", onPress, disabled = false, error }: { label: string; valueMinutes?: number | null; placeholder?: string; onPress: () => void; disabled?: boolean; error?: string }) {
+export function DurationPickerField({ label, valueMinutes, placeholder, onPress, disabled = false, error }: { label: string; valueMinutes?: number | null; placeholder?: string; onPress: () => void; disabled?: boolean; error?: string }) {
+  const { t } = useLanguage();
+  const resolvedPlaceholder = placeholder ?? t("picker.critical.002");
   const hasValue = valueMinutes != null && Number.isFinite(valueMinutes) && valueMinutes > 0;
+  const display = durationLabel(valueMinutes, resolvedPlaceholder, t);
   return (
     <View style={styles.fieldBlock}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${formatDurationMinutes(valueMinutes, placeholder)}`}>
-        <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{formatDurationMinutes(valueMinutes, placeholder)}</Text>
+      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${display}`}>
+        <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{display}</Text>
         <Text style={styles.fieldArrow}>›</Text>
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -40,27 +59,33 @@ export function DurationPickerField({ label, valueMinutes, placeholder = "기간
   );
 }
 
-export function DatePickerField({ label, valueDateKey, placeholder = "날짜 선택", onPress, disabled = false }: { label: string; valueDateKey?: string | null; placeholder?: string; onPress: () => void; disabled?: boolean }) {
+export function DatePickerField({ label, valueDateKey, placeholder, onPress, disabled = false }: { label: string; valueDateKey?: string | null; placeholder?: string; onPress: () => void; disabled?: boolean }) {
+  const { locale, t } = useLanguage();
+  const resolvedPlaceholder = placeholder ?? t("picker.critical.003");
   const hasValue = /^\d{4}-\d{2}-\d{2}$/.test(valueDateKey ?? "");
+  const display = hasValue ? formatLocalizedDate(parseDateKey(valueDateKey!), locale, { year: "numeric", month: "short", day: "numeric" }) : resolvedPlaceholder;
   return (
     <View style={styles.fieldBlock}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button">
-        <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{hasValue ? valueDateKey : placeholder}</Text>
+        <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{display}</Text>
         <Text style={styles.fieldArrow}>›</Text>
       </Pressable>
     </View>
   );
 }
 
-export function VolumePickerField({ label, value, unit = "ml", placeholder = "양 선택", onPress, disabled = false, error }: { label: string; value?: string | null; unit?: string; placeholder?: string; onPress: () => void; disabled?: boolean; error?: string }) {
+export function VolumePickerField({ label, value, unit = "ml", placeholder, onPress, disabled = false, error }: { label: string; value?: string | null; unit?: string; placeholder?: string; onPress: () => void; disabled?: boolean; error?: string }) {
+  const { t } = useLanguage();
+  const resolvedPlaceholder = placeholder ?? t("picker.critical.004");
   const numeric = Number.parseFloat(value ?? "");
   const hasValue = Number.isFinite(numeric) && numeric >= 0;
+  const display = hasValue ? `${value}${unit}` : resolvedPlaceholder;
   return (
     <View style={styles.fieldBlock}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${hasValue ? `${value}${unit}` : placeholder}`}>
-        <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{hasValue ? `${value}${unit}` : placeholder}</Text>
+      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${display}`}>
+        <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{display}</Text>
         <Text style={styles.fieldArrow}>›</Text>
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -68,11 +93,13 @@ export function VolumePickerField({ label, value, unit = "ml", placeholder = "�
   );
 }
 
-export function TimePickerSheet({ visible, valueHHmm, title = "시간 선택", onCancel, onConfirm, onClear }: { visible: boolean; valueHHmm?: string | null; title?: string; onCancel: () => void; onConfirm: (valueHHmm: string) => void; onClear?: () => void }) {
+export function TimePickerSheet({ visible, valueHHmm, title, onCancel, onConfirm, onClear }: { visible: boolean; valueHHmm?: string | null; title?: string; onCancel: () => void; onConfirm: (valueHHmm: string) => void; onClear?: () => void }) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [periodIndex, setPeriodIndex] = useState(0);
   const [hour12, setHour12] = useState(12);
   const [minute, setMinute] = useState(0);
+  const periods = [t("picker.critical.005"), t("picker.critical.006")];
 
   useEffect(() => {
     if (!visible) return;
@@ -88,19 +115,20 @@ export function TimePickerSheet({ visible, valueHHmm, title = "시간 선택", o
     onConfirm(formatHHmm(hour24, minute));
   };
   return (
-    <PickerOverlay title={title} onCancel={onCancel} onConfirm={confirm} bottomInset={insets.bottom} help="선택한 시각을 24시간 형식으로 안전하게 저장해요." onClear={onClear}>
+    <PickerOverlay title={title ?? t("picker.critical.001")} onCancel={onCancel} onConfirm={confirm} bottomInset={insets.bottom} help={t("picker.critical.015")} onClear={onClear}>
       <View style={styles.wheelArea}>
         <View pointerEvents="none" style={styles.selection} />
-        <WheelColumn options={PERIODS} selectedIndex={periodIndex} onSelect={setPeriodIndex} label="오전 오후" />
-        <WheelColumn options={HOURS_12} selectedIndex={hour12 - 1} onSelect={(index) => setHour12(index + 1)} label="시" />
-        <WheelColumn options={MINUTES} selectedIndex={minute} onSelect={setMinute} label="분" />
+        <WheelColumn options={periods} selectedIndex={periodIndex} onSelect={setPeriodIndex} label={t("picker.critical.020")} />
+        <WheelColumn options={HOURS_12} selectedIndex={hour12 - 1} onSelect={(index) => setHour12(index + 1)} label={t("picker.critical.007")} />
+        <WheelColumn options={MINUTES} selectedIndex={minute} onSelect={setMinute} label={t("picker.critical.008")} />
       </View>
-      <View style={styles.wheelLabels}><Text style={styles.wheelLabel}>오전/오후</Text><Text style={styles.wheelLabel}>시</Text><Text style={styles.wheelLabel}>분</Text></View>
+      <View style={styles.wheelLabels}><Text style={styles.wheelLabel}>{t("picker.critical.009")}</Text><Text style={styles.wheelLabel}>{t("picker.critical.007")}</Text><Text style={styles.wheelLabel}>{t("picker.critical.008")}</Text></View>
     </PickerOverlay>
   );
 }
 
-export function DurationPickerSheet({ visible, valueMinutes, title = "기간 선택", minMinutes = 1, maxMinutes = 24 * 60 - 1, onCancel, onConfirm, onClear }: { visible: boolean; valueMinutes?: number | null; title?: string; minMinutes?: number; maxMinutes?: number; onCancel: () => void; onConfirm: (valueMinutes: number) => void; onClear?: () => void }) {
+export function DurationPickerSheet({ visible, valueMinutes, title, minMinutes = 1, maxMinutes = 24 * 60 - 1, onCancel, onConfirm, onClear }: { visible: boolean; valueMinutes?: number | null; title?: string; minMinutes?: number; maxMinutes?: number; onCancel: () => void; onConfirm: (valueMinutes: number) => void; onClear?: () => void }) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const maxHours = Math.floor(maxMinutes / 60);
   const hours = Array.from({ length: maxHours + 1 }, (_, index) => String(index));
@@ -117,18 +145,19 @@ export function DurationPickerSheet({ visible, valueMinutes, title = "기간 선
   if (!visible) return null;
   const confirm = () => onConfirm(Math.max(minMinutes, Math.min(maxMinutes, hour * 60 + minute)));
   return (
-    <PickerOverlay title={title} onCancel={onCancel} onConfirm={confirm} bottomInset={insets.bottom} help="선택한 기간은 총 분 단위로 저장해요." onClear={onClear}>
+    <PickerOverlay title={title ?? t("picker.critical.002")} onCancel={onCancel} onConfirm={confirm} bottomInset={insets.bottom} help={t("picker.critical.016")} onClear={onClear}>
       <View style={styles.wheelArea}>
         <View pointerEvents="none" style={styles.selection} />
-        <WheelColumn options={hours} selectedIndex={hour} onSelect={setHour} label="시간" />
-        <WheelColumn options={MINUTES} selectedIndex={minute} onSelect={setMinute} label="분" />
+        <WheelColumn options={hours} selectedIndex={hour} onSelect={setHour} label={t("picker.critical.010")} />
+        <WheelColumn options={MINUTES} selectedIndex={minute} onSelect={setMinute} label={t("picker.critical.008")} />
       </View>
-      <View style={styles.wheelLabels}><Text style={styles.wheelLabel}>시간</Text><Text style={styles.wheelLabel}>분</Text></View>
+      <View style={styles.wheelLabels}><Text style={styles.wheelLabel}>{t("picker.critical.010")}</Text><Text style={styles.wheelLabel}>{t("picker.critical.008")}</Text></View>
     </PickerOverlay>
   );
 }
 
-export function DatePickerSheet({ visible, valueDateKey, title = "날짜 선택", minYear = 1900, maxYear = new Date().getFullYear() + 10, onCancel, onConfirm, onClear }: { visible: boolean; valueDateKey?: string | null; title?: string; minYear?: number; maxYear?: number; onCancel: () => void; onConfirm: (valueDateKey: string) => void; onClear?: () => void }) {
+export function DatePickerSheet({ visible, valueDateKey, title, minYear = 1900, maxYear = new Date().getFullYear() + 10, onCancel, onConfirm, onClear }: { visible: boolean; valueDateKey?: string | null; title?: string; minYear?: number; maxYear?: number; onCancel: () => void; onConfirm: (valueDateKey: string) => void; onClear?: () => void }) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const fallback = new Date();
   const initial = /^\d{4}-\d{2}-\d{2}$/.test(valueDateKey ?? "") ? parseDateKey(valueDateKey!) : fallback;
@@ -155,25 +184,26 @@ export function DatePickerSheet({ visible, valueDateKey, title = "날짜 선택"
   if (!visible) return null;
   return (
     <PickerOverlay
-      title={title}
+      title={title ?? t("picker.critical.003")}
       onCancel={onCancel}
       onConfirm={() => onConfirm(formatDateKey(new Date(year, month - 1, Math.min(day, maxDay)), "midnight"))}
       bottomInset={insets.bottom}
-      help="년·월·일을 위아래로 스크롤해서 선택해 주세요."
+      help={t("picker.critical.017")}
       onClear={onClear}
     >
       <View style={styles.wheelArea}>
         <View pointerEvents="none" style={styles.selection} />
-        <WheelColumn options={years} selectedIndex={Math.max(0, year - minYear)} onSelect={(index) => setYear(minYear + index)} label="년" />
-        <WheelColumn options={months} selectedIndex={month - 1} onSelect={(index) => setMonth(index + 1)} label="월" />
-        <WheelColumn options={days} selectedIndex={Math.min(day, maxDay) - 1} onSelect={(index) => setDay(index + 1)} label="일" />
+        <WheelColumn options={years} selectedIndex={Math.max(0, year - minYear)} onSelect={(index) => setYear(minYear + index)} label={t("picker.critical.011")} />
+        <WheelColumn options={months} selectedIndex={month - 1} onSelect={(index) => setMonth(index + 1)} label={t("picker.critical.012")} />
+        <WheelColumn options={days} selectedIndex={Math.min(day, maxDay) - 1} onSelect={(index) => setDay(index + 1)} label={t("picker.critical.013")} />
       </View>
-      <View style={styles.wheelLabels}><Text style={styles.wheelLabel}>년</Text><Text style={styles.wheelLabel}>월</Text><Text style={styles.wheelLabel}>일</Text></View>
+      <View style={styles.wheelLabels}><Text style={styles.wheelLabel}>{t("picker.critical.011")}</Text><Text style={styles.wheelLabel}>{t("picker.critical.012")}</Text><Text style={styles.wheelLabel}>{t("picker.critical.013")}</Text></View>
     </PickerOverlay>
   );
 }
 
-export function VolumePickerSheet({ visible, value, title = "양 선택", unit = "ml", max = 500, step = 5, allowZero = false, onCancel, onConfirm, onClear }: { visible: boolean; value?: string | null; title?: string; unit?: string; max?: number; step?: number; allowZero?: boolean; onCancel: () => void; onConfirm: (value: string) => void; onClear?: () => void }) {
+export function VolumePickerSheet({ visible, value, title, unit = "ml", max = 500, step = 5, allowZero = false, onCancel, onConfirm, onClear }: { visible: boolean; value?: string | null; title?: string; unit?: string; max?: number; step?: number; allowZero?: boolean; onCancel: () => void; onConfirm: (value: string) => void; onClear?: () => void }) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const minimum = allowZero ? 0 : step;
   const options = Array.from({ length: Math.floor((max - minimum) / step) + 1 }, (_, index) => `${minimum + index * step}`);
@@ -185,7 +215,7 @@ export function VolumePickerSheet({ visible, value, title = "양 선택", unit =
   }, [initial, visible]);
   if (!visible) return null;
   return (
-    <PickerOverlay title={title} onCancel={onCancel} onConfirm={() => onConfirm(options[selectedIndex] ?? String(minimum))} bottomInset={insets.bottom} help={`선택한 양은 ${unit} 단위로 저장해요.`} onClear={onClear}>
+    <PickerOverlay title={title ?? t("picker.critical.004")} onCancel={onCancel} onConfirm={() => onConfirm(options[selectedIndex] ?? String(minimum))} bottomInset={insets.bottom} help={t("picker.critical.018", { unit })} onClear={onClear}>
       <View style={styles.singleWheelArea}>
         <View pointerEvents="none" style={styles.selection} />
         <WheelColumn options={options} selectedIndex={selectedIndex} onSelect={setSelectedIndex} label={unit} />
@@ -196,18 +226,19 @@ export function VolumePickerSheet({ visible, value, title = "양 선택", unit =
 }
 
 function PickerOverlay({ title, onCancel, onConfirm, onClear, bottomInset, help, children }: { title: string; onCancel: () => void; onConfirm: () => void; onClear?: () => void; bottomInset: number; help: string; children: React.ReactNode }) {
+  const { t } = useLanguage();
   return (
     <View style={styles.overlay}>
-      <Pressable style={styles.backdrop} onPress={onCancel} accessibilityLabel="선택 취소" />
+      <Pressable style={styles.backdrop} onPress={onCancel} accessibilityLabel={t("picker.critical.019")} />
       <View style={[styles.sheet, { paddingBottom: Math.max(bottomInset, 12) }]}>
         <View style={styles.header}>
-          <Pressable style={styles.action} onPress={onCancel}><Text style={styles.cancel}>취소</Text></Pressable>
+          <Pressable style={styles.action} onPress={onCancel}><Text style={styles.cancel}>{t("common.cancel")}</Text></Pressable>
           <Text style={styles.title}>{title}</Text>
-          <Pressable style={styles.action} onPress={onConfirm}><Text style={styles.done}>완료</Text></Pressable>
+          <Pressable style={styles.action} onPress={onConfirm}><Text style={styles.done}>{t("common.done")}</Text></Pressable>
         </View>
         {children}
         <Text style={styles.help}>{help}</Text>
-        {onClear ? <Pressable style={styles.clearButton} onPress={onClear}><Text style={styles.clearText}>선택 지우기</Text></Pressable> : null}
+        {onClear ? <Pressable style={styles.clearButton} onPress={onClear}><Text style={styles.clearText}>{t("picker.critical.014")}</Text></Pressable> : null}
       </View>
     </View>
   );

@@ -6,6 +6,8 @@ import type { GrowthBookEdit } from "../types/growthBook";
 import type { BabySticker, StickerTemplateId } from "../types/babySticker";
 import { formatGrowthAuthorLabel } from "../types/growthBook";
 import { buildGrowthBookPages, type GrowthBookPage } from "./growthBookPages";
+import type { Translate } from "./recordDisplay";
+import type { Locale } from "../i18n";
 import { growthBookStickerHeightFactor, growthBookStickerPdfPosition } from "./growthBookStickerLayout";
 import { getPhotoLayoutSlots, normalizePhotoLayout, photoSlotPercentStyle } from "./growthBookPhotoLayouts";
 
@@ -92,11 +94,11 @@ function stickerVisualHtml(sticker: BabySticker, sizeClass: string): string {
   return `<span class="sticker-visual ${sizeClass}${frameClass}${borderClass}${shadowClass}${shapeClass}${placementClass}"><img src="${escapeHtml(uri)}" alt="" />${decorationLayer}${bubble}</span>`;
 }
 
-function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker>): string {
+function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker>, t?: Translate): string {
   if (page.kind === "cover") {
     return `
       <section class="page cover">
-        <p class="eyebrow">${escapeHtml(page.subtitle ?? "성장책")}</p>
+        <p class="eyebrow">${escapeHtml(page.subtitle ?? (t ? t("growth.critical.013") : "성장책"))}</p>
         <h1>${escapeHtml(page.title)}</h1>
         ${
           page.photoUri
@@ -112,21 +114,21 @@ function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker
     const letterBlocks =
       letters.length > 0
         ? letters
-            .map(
-              (letter) => `
+            .map((letter) => {
+              const author = formatGrowthAuthorLabel(letter.authorRelationshipLabel, letter.authorName, t);
+              const from = t ? t("growth.critical.171", { author }) : `${author}가`;
+              return `
           <div class="letter-block">
-            <p class="letter-from">${escapeHtml(
-              formatGrowthAuthorLabel(letter.authorRelationshipLabel, letter.authorName),
-            )}가</p>
+            <p class="letter-from">${escapeHtml(from)}</p>
             <p class="letter-body">${escapeHtml(letter.text).replace(/\n/g, "<br/>")}</p>
-          </div>`,
-            )
+          </div>`;
+            })
             .join("")
         : `<p class="body">${escapeHtml(page.body ?? "").replace(/\n/g, "<br/>")}</p>`;
 
     return `
       <section class="page letter">
-        <p class="eyebrow">${escapeHtml(page.subtitle ?? "마지막 편지")}</p>
+        <p class="eyebrow">${escapeHtml(page.subtitle ?? (t ? t("growth.critical.010") : "마지막 편지"))}</p>
         <h2>${escapeHtml(page.title)}</h2>
         ${letterBlocks}
       </section>`;
@@ -142,7 +144,7 @@ function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker
       return `
       <div class="comment">
         <p class="comment-author">${escapeHtml(
-          formatGrowthAuthorLabel(c.authorRelationshipLabel, c.authorName),
+          formatGrowthAuthorLabel(c.authorRelationshipLabel, c.authorName, t),
         )}</p>
         <div class="comment-line"><p class="comment-text">“${escapeHtml(c.text)}”</p>${familyStickers ? `<span class="family-stickers">${familyStickers}</span>` : ""}</div>
       </div>`;
@@ -161,7 +163,7 @@ function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker
       const sticker = stickersById[item.stickerId];
       if (!sticker) return "";
       const position = growthBookStickerPdfPosition(item, growthBookStickerHeightFactor(sticker));
-      return `<div class="page-sticker" style="left:${position.leftPercent}%;top:${position.topPercent}%;width:${position.widthPercent}%;z-index:${position.zIndex}">${stickerVisualHtml(sticker, "sticker-lg")}</div>`;
+      return `<div class="page-sticker" style="left:${position.leftPercent}%;top:${position.topPercent}%;width:${position.widthPercent}%;z-index:${position.zIndex};transform:rotate(${position.rotation}deg)">${stickerVisualHtml(sticker, "sticker-lg")}</div>`;
     })
     .join("");
 
@@ -183,15 +185,20 @@ export function buildGrowthBookPdfHtml(input: {
   entries: DiaryEntry[];
   edit?: GrowthBookEdit | null;
   stickers?: BabySticker[];
+  t?: Translate;
+  locale?: Locale;
 }): string {
   const pages = buildGrowthBookPages(input);
   const stickersById = Object.fromEntries((input.stickers ?? []).map((s) => [s.id, s]));
-  const sections = pages.map((page) => pageHtml(page, stickersById)).join("\n");
+  const sections = pages.map((page) => pageHtml(page, stickersById, input.t)).join("\n");
+  const title = input.t
+    ? input.t("growth.critical.139", { babyName: input.babyName })
+    : `${input.babyName}의 성장책`;
   return `<!DOCTYPE html>
-<html lang="ko">
+<html lang="${input.locale ?? "ko"}">
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(input.babyName)}의 성장책</title>
+  <title>${escapeHtml(title)}</title>
   <style>
     @page { size: A4; margin: 0; }
     html, body { margin: 0; padding: 0; }
@@ -277,6 +284,8 @@ export async function createGrowthBookPdf(input: {
   entries: DiaryEntry[];
   edit?: GrowthBookEdit | null;
   stickers?: BabySticker[];
+  t?: Translate;
+  locale?: Locale;
 }): Promise<{ uri: string } | null> {
   try {
     const html = buildGrowthBookPdfHtml(input);
@@ -285,18 +294,27 @@ export async function createGrowthBookPdf(input: {
     if (canShare) {
       await Sharing.shareAsync(file.uri, {
         mimeType: "application/pdf",
-        dialogTitle: `${input.babyName}의 성장책 PDF`,
+        dialogTitle: input.t
+          ? input.t("chrome.critical.046", { babyName: input.babyName })
+          : `${input.babyName}의 성장책 PDF`,
         UTI: "com.adobe.pdf",
       });
     } else if (Platform.OS === "ios") {
       await Print.printAsync({ html });
     } else {
-      Alert.alert("PDF 준비됨", `파일이 생성되었어요.\n${file.uri}`);
+      Alert.alert(
+        input.t ? input.t("chrome.critical.042") : "PDF 준비됨",
+        input.t ? input.t("chrome.critical.043", { uri: file.uri }) : `파일이 생성되었어요.\n${file.uri}`,
+      );
     }
     return file;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "알 수 없는 오류";
-    Alert.alert("PDF 만들기 실패", message);
+    const message = error instanceof Error
+      ? error.message
+      : input.t
+        ? input.t("chrome.critical.045")
+        : "알 수 없는 오류";
+    Alert.alert(input.t ? input.t("chrome.critical.044") : "PDF 만들기 실패", message);
     return null;
   }
 }

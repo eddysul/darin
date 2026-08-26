@@ -21,6 +21,8 @@ import {
   resolveGrowthBookLetterTemplateId,
   resolveGrowthBookPageTemplateId,
 } from "./growthBookTemplates";
+import { formatGrowthAuthorLabel } from "../types/growthBook";
+import type { Translate } from "./recordDisplay";
 import type { DiaryCoverTemplateId } from "../constants/diaryCoverTemplates";
 import type { DiaryPageTemplateId } from "../constants/diaryPageTemplates";
 
@@ -163,10 +165,13 @@ export function buildGrowthBookPages(input: {
   babyName: string;
   entries: DiaryEntry[];
   edit?: GrowthBookEdit | null;
+  t?: Translate;
 }): GrowthBookPage[] {
   const sorted = sortGrowthBookEntries(input.entries.filter((e) => e.includedInGrowthBook));
   const pages: GrowthBookPage[] = [];
   const edit = input.edit ?? null;
+  const t = input.t;
+  const defaultKoCoverTitle = `${input.babyName}의 성장책`;
 
   const defaultCoverPhoto =
     edit?.coverPhotoUri ??
@@ -176,12 +181,24 @@ export function buildGrowthBookPages(input: {
     }).find(Boolean) ??
     null;
 
+  const storedCoverTitle = edit?.coverTitle?.trim();
+  const storedCoverSubtitle = edit?.coverSubtitle?.trim();
   pages.push({
     id: "cover",
     kind: "cover",
     pageType: "cover",
-    title: edit?.coverTitle?.trim() || `${input.babyName}의 성장책`,
-    subtitle: edit?.coverSubtitle?.trim() || "성장책",
+    title:
+      storedCoverTitle && storedCoverTitle !== defaultKoCoverTitle
+        ? storedCoverTitle
+        : t
+          ? t("growth.critical.139", { babyName: input.babyName })
+          : storedCoverTitle || defaultKoCoverTitle,
+    subtitle:
+      storedCoverSubtitle && storedCoverSubtitle !== "성장책"
+        ? storedCoverSubtitle
+        : t
+          ? t("growth.critical.013")
+          : storedCoverSubtitle || "성장책",
     photoUri: defaultCoverPhoto,
     photoUris: defaultCoverPhoto ? [defaultCoverPhoto] : [],
     dateLabel: edit?.coverDateRange?.trim() || formatRange(sorted) || `${new Date().getFullYear()}`,
@@ -191,7 +208,7 @@ export function buildGrowthBookPages(input: {
   for (const entry of sorted) {
     const pageEdit = resolvePageEdit(entry.id, entry, edit);
     const photos = resolvePagePhotos(entry, pageEdit);
-    const milestone = diaryMilestoneLabel(entry);
+    const milestone = diaryMilestoneLabel(entry, t);
     const kind: GrowthBookPageKind = photos.length > 0 && !milestone ? "photo" : "moment";
     const photoLayout = pageEdit.photoLayout;
 
@@ -200,8 +217,18 @@ export function buildGrowthBookPages(input: {
       kind,
       pageType: "diary",
       diaryId: entry.id,
-      title: milestone ?? `${input.babyName}의 하루`,
-      subtitle: milestone ? "성장 순간" : photos.length ? "사진" : "일기",
+      title: milestone ?? (t ? t("growth.critical.165", { babyName: input.babyName }) : `${input.babyName}의 하루`),
+      subtitle: milestone
+        ? t
+          ? t("growth.critical.166")
+          : "성장 순간"
+        : photos.length
+          ? t
+            ? t("growth.critical.021")
+            : "사진"
+          : t
+            ? t("growth.critical.167")
+            : "일기",
       body: resolvePageBody(entry, pageEdit),
       photoUri: photos[0] ?? null,
       photoUris: photos.slice(0, getPhotoLayoutCount(photoLayout)),
@@ -224,21 +251,28 @@ export function buildGrowthBookPages(input: {
   const letterBody =
     letters.length > 0
       ? letters
-          .map(
-            (letter) =>
-              `${letter.authorRelationshipLabel} ${letter.authorName}가 ${input.babyName}에게\n\n${letter.text}`,
-          )
+          .map((letter) => {
+            const author = formatGrowthAuthorLabel(letter.authorRelationshipLabel, letter.authorName, t);
+            const heading = t
+              ? t("growth.critical.057", { author, babyName: input.babyName })
+              : `${letter.authorRelationshipLabel} ${letter.authorName}가 ${input.babyName}에게`;
+            return `${heading}\n\n${letter.text}`;
+          })
           .join("\n\n————————\n\n")
       : sorted.length > 0
-        ? `${input.babyName}야,\n\n이 책에 담긴 ${sorted.length}개의 순간은 우리가 함께 웃고, 울고, 성장한 날들이야.\n\n앞으로도 너의 하루하루를 소중히 남겨둘게.\n\n사랑해.`
-        : `${input.babyName}야,\n\n앞으로의 소중한 순간들을 이 책에 하나씩 담아갈게.\n\n사랑해.`;
+        ? t
+          ? t("growth.critical.172", { babyName: input.babyName, count: sorted.length })
+          : `${input.babyName}야,\n\n이 책에 담긴 ${sorted.length}개의 순간은 우리가 함께 웃고, 울고, 성장한 날들이야.\n\n앞으로도 너의 하루하루를 소중히 남겨둘게.\n\n사랑해.`
+        : t
+          ? t("growth.critical.173", { babyName: input.babyName })
+          : `${input.babyName}야,\n\n앞으로의 소중한 순간들을 이 책에 하나씩 담아갈게.\n\n사랑해.`;
 
   pages.push({
     id: "letter",
     kind: "letter",
     pageType: "final_letter",
-    title: "사랑하는 너에게",
-    subtitle: "마지막 편지",
+    title: t ? t("growth.critical.170") : "사랑하는 너에게",
+    subtitle: t ? t("growth.critical.010") : "마지막 편지",
     body: letterBody,
     letters,
     pageTemplateId: resolveGrowthBookLetterTemplateId(edit?.letterTemplateId, edit?.pageTemplateId),
@@ -248,7 +282,7 @@ export function buildGrowthBookPages(input: {
 }
 
 /** Ordered adapter used by editor navigation, preview and PDF book flow. */
-export function buildGrowthBookPageMeta(pages: GrowthBookPage[]): GrowthBookPageMeta[] {
+export function buildGrowthBookPageMeta(pages: GrowthBookPage[], t?: Translate): GrowthBookPageMeta[] {
   let diaryNumber = 0;
   return pages.map((page, order) => {
     if (page.pageType === "diary") diaryNumber += 1;
@@ -257,7 +291,16 @@ export function buildGrowthBookPageMeta(pages: GrowthBookPage[]): GrowthBookPage
       pageType: page.pageType,
       order,
       linkedDiaryEntryId: page.diaryId,
-      title: page.pageType === "cover" ? "표지" : page.pageType === "final_letter" ? "편지" : `${diaryNumber}`,
+      title:
+        page.pageType === "cover"
+          ? t
+            ? t("growth.critical.168")
+            : "표지"
+          : page.pageType === "final_letter"
+            ? t
+              ? t("growth.critical.169")
+              : "편지"
+            : `${diaryNumber}`,
       dataRef: page.diaryId ?? page.id,
     };
   });

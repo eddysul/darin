@@ -1,5 +1,6 @@
 import { formatLogMeta } from "./formatLog";
-import type { Locale } from "../i18n";
+import { createT, type Locale } from "../i18n";
+import { aiOutputLanguageInstruction } from "./aiLocale";
 import type { BabyLogEntry, DiaryEntry } from "../types/babyLog";
 import type { CareSetup, DefaultFeedingMethod } from "../types/careSetup";
 import { buildBabyDisplay, buildProfileContextBlock } from "./childDisplay";
@@ -14,21 +15,7 @@ import {
 } from "./reportAggregates";
 
 function feedingMethodLabel(method: DefaultFeedingMethod, locale: Locale): string {
-  const ko: Record<DefaultFeedingMethod, string> = {
-    breastfeeding: "모유 수유",
-    formula: "분유",
-    mixed: "혼합 수유",
-    pumped_milk: "유축 모유",
-    not_sure: "미정",
-  };
-  const en: Record<DefaultFeedingMethod, string> = {
-    breastfeeding: "Breastfeeding",
-    formula: "Formula",
-    mixed: "Mixed feeding",
-    pumped_milk: "Pumped milk",
-    not_sure: "Not sure yet",
-  };
-  return locale === "ko" ? ko[method] : en[method];
+  return createT(locale)(`onboardingFlow.feeding.${method}`);
 }
 
 export type QuestionFocus =
@@ -86,13 +73,20 @@ export function buildCareContextPack(input: {
   const weekLogCount = week.reduce((s, d) => s + d.totalCount, 0);
 
   const sources = [
-    input.locale === "ko" ? "아기 프로필" : "Baby profile",
-    input.locale === "ko" ? "오늘 수유/수면/배변 기록" : "Today feeding/sleep/diaper",
-    input.locale === "ko" ? "최근 7일 트렌드" : "Last 7-day trend",
-    input.locale === "ko" ? "최근 일기" : "Recent diaries",
-  ];
+    { ko: "아기 프로필", en: "Baby profile", ja: "赤ちゃんプロフィール", es: "Perfil del bebé", "zh-CN": "宝宝资料" },
+    { ko: "오늘 수유/수면/배변 기록", en: "Today feeding/sleep/diaper", ja: "今日の授乳・睡眠・おむつ記録", es: "Tomas, sueño y pañal de hoy", "zh-CN": "今日喂养／睡眠／尿布记录" },
+    { ko: "최근 7일 트렌드", en: "Last 7-day trend", ja: "直近7日の傾向", es: "Tendencia de 7 días", "zh-CN": "近7天趋势" },
+    { ko: "최근 일기", en: "Recent diaries", ja: "最近の日記", es: "Diarios recientes", "zh-CN": "近期日记" },
+  ].map((row) => row[input.locale]);
   if (focus !== "general") {
-    sources.push(input.locale === "ko" ? `질문 관련 기록 (${focus})` : `Question-related logs (${focus})`);
+    const related = {
+      ko: `질문 관련 기록 (${focus})`,
+      en: `Question-related logs (${focus})`,
+      ja: `質問に関連する記録 (${focus})`,
+      es: `Registros relacionados (${focus})`,
+      "zh-CN": `与问题相关的记录 (${focus})`,
+    };
+    sources.push(related[input.locale]);
   }
 
   return {
@@ -149,13 +143,9 @@ If there are signs of high fever, breathing difficulty, repeated vomiting, dehyd
 Do not make medical diagnoses. Ground answers in logged data; say when unsure.
 You may note answers are based on recent logs.`;
 
-  const langInstruction = isKo
-    ? "Always respond in Korean (한국어로만 답변하세요)."
-    : "Always respond in English.";
+  const langInstruction = aiOutputLanguageInstruction(input.locale);
 
-  const prefs = isKo
-    ? `기본 수유 방식: ${feedingMethodLabel(input.careSetup.preferences.defaultFeedingMethod, "ko")}`
-    : `Default feeding: ${feedingMethodLabel(input.careSetup.preferences.defaultFeedingMethod, "en")}`;
+  const prefs = `${input.locale === "ko" ? "기본 수유 방식" : input.locale === "ja" ? "基本の授乳方法" : input.locale === "es" ? "Método de alimentación" : input.locale === "zh-CN" ? "默认喂养方式" : "Default feeding"}: ${feedingMethodLabel(input.careSetup.preferences.defaultFeedingMethod, input.locale)}`;
 
   const s = pack.todaySummary;
   const todayBlock = isKo

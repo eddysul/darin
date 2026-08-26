@@ -47,7 +47,7 @@ import {
   buildCareLogDailySummary,
   buildDiaryMomentSuggestions,
 } from "../../utils/diaryMomentSuggestions";
-import { DIARY_PHOTO_ONLY_COMMENT } from "../../utils/diaryModel";
+import { DIARY_PHOTO_ONLY_COMMENT, storedGrowthMomentLabel } from "../../utils/diaryModel";
 import { buildTodaySummary, getLogsForDay } from "../../utils/reportAggregates";
 import { colors, radius } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
@@ -130,12 +130,16 @@ export function DiaryComposeModal({
   const todayLogs = useMemo(() => getLogsForDay(logs, todayKey, todayKey), [logs, todayKey]);
   const summary = useMemo(() => buildTodaySummary(logs), [logs]);
   const liveSummary = useMemo(
+    () => buildCareLogDailySummary(summary, todayLogs, t),
+    [summary, todayLogs, t],
+  );
+  const storedSummary = useMemo(
     () => buildCareLogDailySummary(summary, todayLogs),
     [summary, todayLogs],
   );
   const suggestions = useMemo(
-    () => buildDiaryMomentSuggestions({ babyName, todayLogs, summary }),
-    [babyName, todayLogs, summary],
+    () => buildDiaryMomentSuggestions({ babyName, todayLogs, summary, t }),
+    [babyName, todayLogs, summary, t],
   );
 
   /** Edit keeps frozen snapshot; create shows live Care Log summary */
@@ -163,7 +167,7 @@ export function DiaryComposeModal({
     milestoneTag: resolvedPreset,
     customMilestoneTag: resolvedCustom,
     includedInGrowthBook: inBook,
-    careLogSummarySnapshot: isEdit ? frozenSnapshot || liveSummary : liveSummary,
+    careLogSummarySnapshot: isEdit ? frozenSnapshot || storedSummary : storedSummary,
     momentSuggestionsUsed: usedSuggestions,
   });
 
@@ -685,7 +689,7 @@ export function DiaryComposeModal({
                   {t("diary.compose.none")}
                 </Text>
               </Pressable>
-              {DIARY_GROWTH_MOMENTS.map((m) => {
+                  {DIARY_GROWTH_MOMENTS.map((m) => {
                 const active = !customMode && milestoneTag === m;
                 return (
                   <Pressable
@@ -697,7 +701,7 @@ export function DiaryComposeModal({
                       setMilestoneTag(active ? null : m);
                     }}
                   >
-                    <Text style={[styles.tagChipText, active && styles.tagChipTextActive]}>🌱 {m}</Text>
+                    <Text style={[styles.tagChipText, active && styles.tagChipTextActive]}>🌱 {storedGrowthMomentLabel(t, m)}</Text>
                   </Pressable>
                 );
               })}

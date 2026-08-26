@@ -228,8 +228,8 @@ function SwipeableTimelineRow({
               <Text style={styles.entryText}>{formatTimelineLabel(entry, customCategories, t)}</Text>
             </View>
             {formatTimelineSubtitle(entry, t) ? <Text style={styles.entryMeta}>{formatTimelineSubtitle(entry, t)}</Text> : null}
-            {formatLogProvenance(entry) ? (
-              <Text style={styles.actor}>{formatLogProvenance(entry)}</Text>
+            {formatLogProvenance(entry, t) ? (
+              <Text style={styles.actor}>{formatLogProvenance(entry, t)}</Text>
             ) : null}
           </View>
           <View style={[styles.editChip, { borderColor: `${category.color}66` }]}>

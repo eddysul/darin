@@ -220,7 +220,7 @@ export function ConsultScreen() {
   );
   const hasUserTurn = sentChipTexts.size > 0;
   const showChips = !hasUserTurn || inputFocused;
-  const todayLines = useMemo(() => todayEvidenceLines(pack.todaySummary, t), [pack.todaySummary, t]);
+  const todayLines = useMemo(() => todayEvidenceLines(pack.todaySummary, t, locale), [locale, pack.todaySummary, t]);
 
   const openMemo = (seed = "") => {
     setMemoSeed(seed);
@@ -263,7 +263,7 @@ export function ConsultScreen() {
           setMemoToast(t("consult.critical.015"));
           return;
         }
-        setMemoToast(t("consult.critical.075", { time: formatTimeOfDay(formatHHmm(input.remindAt.getHours(), input.remindAt.getMinutes())) }));
+        setMemoToast(t("consult.critical.075", { time: formatTimeOfDay(formatHHmm(input.remindAt.getHours(), input.remindAt.getMinutes()), "", locale) }));
       } else {
         setMemoToast(t("consult.critical.015"));
       }
@@ -327,7 +327,7 @@ export function ConsultScreen() {
             ) : (
               <View key={m.id} style={styles.aiBlock}>
                 <View style={[styles.bubble, styles.aiBubble]}>
-                  <Text style={styles.bubbleText}>{m.text}</Text>
+                  <Text style={styles.bubbleText}>{m.id === "greet-1" ? t("consult.critical.080") : m.text}</Text>
                 </View>
                 {m.id !== "greet-1" ? (
                   <Pressable
@@ -484,14 +484,14 @@ function EvidenceRow({ label, detail }: { label: string; detail: string }) {
   );
 }
 
-function todayEvidenceLines(summary: TodaySummary, t: ReturnType<typeof useLanguage>["t"]): string[] {
+function todayEvidenceLines(summary: TodaySummary, t: ReturnType<typeof useLanguage>["t"], locale: ReturnType<typeof useLanguage>["locale"]): string[] {
   if (summary.totalCount === 0) return [t("consult.critical.038")];
   const feed = summary.lastFeedAt
-    ? t("consult.critical.069", { count: summary.feedCount, time: formatTimeOfDay(summary.lastFeedAt) })
+    ? t("consult.critical.069", { count: summary.feedCount, time: formatTimeOfDay(summary.lastFeedAt, "", locale) })
     : t("consult.critical.070", { count: summary.feedCount });
-  const sleep = t("consult.critical.071", { duration: formatSleepDuration(summary.totalSleepMinutes), count: summary.sleepCount });
+  const sleep = t("consult.critical.071", { duration: formatSleepDuration(summary.totalSleepMinutes, t), count: summary.sleepCount });
   const diaper = summary.lastDiaperAt
-    ? t("consult.critical.072", { count: summary.diaperCount, time: formatTimeOfDay(summary.lastDiaperAt) })
+    ? t("consult.critical.072", { count: summary.diaperCount, time: formatTimeOfDay(summary.lastDiaperAt, "", locale) })
     : t("consult.critical.073", { count: summary.diaperCount });
   return [feed, sleep, diaper];
 }

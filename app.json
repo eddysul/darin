@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.darin.childcare",
-      "buildNumber": "16",
+      "buildNumber": "17",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -30,7 +30,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.darin.childcare",
-      "versionCode": 16
+      "versionCode": 17
     },
     "web": {
       "bundler": "metro"
@@ -40,7 +40,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "아기 사진과 일기·성장책 이미지를 추가하려면 사진 접근이 필요합니다."
+          "photosPermission": "Photo access is needed to add baby, diary, and growth book images."
         }
       ],
       [

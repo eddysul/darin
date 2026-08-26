@@ -19,6 +19,7 @@ import {
   MessageCircle,
   FileText,
   FolderOpen,
+  Globe,
   Handshake,
   Heart,
   Image as ImageIcon,
@@ -115,7 +116,8 @@ export type MiscIconKey =
   | "alert"
   | "cake"
   | "lock"
-  | "handshake";
+  | "handshake"
+  | "globe";
 
 export const TAB_ICONS: Record<TabIconKey, IconComponent> = {
   record: ClipboardList,
@@ -156,4 +158,5 @@ export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
   cake: Cake,
   lock: Lock,
   handshake: Handshake,
+  globe: Globe,
 };

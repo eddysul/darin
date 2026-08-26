@@ -1,4 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { useLanguage } from "../../LanguageContext";
 import { colors, radius } from "../../theme";
 
 type EmptyProps = {
@@ -31,19 +32,20 @@ type ErrorProps = {
 };
 
 export function ErrorState({
-  title = "잠시 문제가 생겼어요.",
-  body = "다시 시도해주세요.",
-  retryLabel = "다시 시도",
+  title,
+  body,
+  retryLabel,
   onRetry,
   busy,
 }: ErrorProps) {
+  const { t } = useLanguage();
   return (
     <View style={[styles.box, styles.errorBox]}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.body}>{body}</Text>
+      <Text style={styles.title}>{title ?? t("chrome.critical.004")}</Text>
+      <Text style={styles.body}>{body ?? t("chrome.critical.005")}</Text>
       {onRetry ? (
         <Pressable style={[styles.cta, busy && styles.disabled]} onPress={onRetry} disabled={busy}>
-          <Text style={styles.ctaText}>{busy ? "처리 중…" : retryLabel}</Text>
+          <Text style={styles.ctaText}>{busy ? t("chrome.critical.006") : retryLabel ?? t("chrome.critical.002")}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -54,11 +56,12 @@ type LoadingProps = {
   label?: string;
 };
 
-export function LoadingState({ label = "불러오는 중…" }: LoadingProps) {
+export function LoadingState({ label }: LoadingProps) {
+  const { t } = useLanguage();
   return (
     <View style={styles.box}>
       <ActivityIndicator color={colors.amberText} />
-      <Text style={[styles.body, { marginTop: 10 }]}>{label}</Text>
+      <Text style={[styles.body, { marginTop: 10 }]}>{label ?? t("chrome.critical.003")}</Text>
     </View>
   );
 }
@@ -71,6 +74,7 @@ type ErrorBannerProps = {
 };
 
 export function ErrorBanner({ message, actionLabel, onAction, onDismiss }: ErrorBannerProps) {
+  const { t } = useLanguage();
   return (
     <View style={styles.banner} accessibilityRole="alert">
       <Text style={styles.bannerText}>{message}</Text>
@@ -80,7 +84,7 @@ export function ErrorBanner({ message, actionLabel, onAction, onDismiss }: Error
         </Pressable>
       ) : null}
       {onDismiss ? (
-        <Pressable hitSlop={10} onPress={onDismiss} accessibilityLabel="오류 배너 닫기">
+        <Pressable hitSlop={10} onPress={onDismiss} accessibilityLabel={t("chrome.critical.013")}>
           <Text style={styles.bannerClose}>✕</Text>
         </Pressable>
       ) : null}

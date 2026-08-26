@@ -1,6 +1,16 @@
 # Care reminder QA/Staging setup
 
-이 문서는 수유 알림 서버 기능의 QA 전용 준비 및 중지 절차다. production 프로젝트에는 별도 승인 전까지 이 migration, Function, Vault secret, cron을 적용하지 않는다.
+이 문서는 수유·수면 알림 서버 기능의 QA 전용 준비 및 중지 절차다. 이 문서의 명령은 QA project guard를 통과한 환경에서만 실행한다. production의 실제 반영 상태와 남은 승인 항목은 `BUILD17-PRODUCTION-BACKEND-PLAN.md`를 기준으로 하며, production migration·Function·Vault·cron은 이 절차로 변경하지 않는다.
+
+## 0. 유료 QA 프로젝트 없이 로컬 우선 검증
+
+Homebrew PostgreSQL 16이 있으면 다음 명령으로 임시 Unix-socket DB를 생성해 DB migration을 두 번 적용하고 RLS/RPC/trigger 계산을 검증할 수 있다.
+
+```sh
+npm run qa:care-reminders:local-postgres
+```
+
+검증이 끝나면 임시 DB는 자동으로 중지·삭제된다. production URL이나 key를 읽지 않는다. 이 검증은 vanilla PostgreSQL 기반이므로 Supabase Edge runtime, Vault, `pg_cron`/`pg_net`, Expo push 및 실제 기기 fan-out을 대체하지는 않는다.
 
 ## 1. QA 프로젝트 체크리스트
 
@@ -9,7 +19,7 @@
 - production 데이터를 복제하지 않는다. 합성 테스트 계정과 아기만 사용한다.
 - 저장소의 선행 migration 전체를 순서대로 QA에 적용한다.
 - `create_baby_with_owner`, `baby_permission`, `is_baby_member`, `set_updated_at`, `care_logs`, `baby_members`, `profiles`, `push_tokens`, `notification_events` 존재를 확인한다.
-- care reminder DB migration은 `202608220001`만 먼저 적용한다.
+- care reminder DB migration `202608220001` 적용 후 Build 17 확장 `202608260002`를 적용한다.
 - `qa:supabase:care-reminders`와 notification QA가 통과하기 전 Function을 배포하지 않는다.
 - Function은 QA project에만 JWT gateway 검증을 끈 상태(`--no-verify-jwt`)로 배포하고, Function 내부의 `x-cron-secret` 검증을 cron 없이 수동 호출로 확인한다. JWT gateway를 켜면 전용 header 요청이 Function까지 도달하지 않는다.
 - 실제 iOS/Android fan-out을 통과한 뒤 Vault를 구성하고 `202608220002`를 마지막에 적용한다.
@@ -23,7 +33,7 @@
 - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: QA anon/publishable key
 - `EXPO_PUBLIC_FEATURE_ENV=qa`
 - `EXPO_PUBLIC_FEATURE_PROFILE=internal`
-- `EXPO_PUBLIC_FEATURE_ALLOWLIST`: 최소 `feedingReminder,careReminderServer`
+- `EXPO_PUBLIC_INTERNAL_FEATURES`: 최소 `feedingReminder,sleepReminder,careReminderServer`
 
 Edge Function env/secret:
 
@@ -61,15 +71,15 @@ secret 값을 저장소, 문서, 로그, issue, 앱 bundle에 기록하지 않�
 
 추가 데이터:
 
-- baby A: breast/formula/storedMilk/pump, backdated, quiet-hours, 최신 기록 삭제 시나리오
-- baby B: baby A와 겹치는 시간의 수유 기록으로 격리 확인
+- baby A: breast/formula/storedMilk/pump/sleep, backdated, quiet-hours, 최신 수유·수면 기록 삭제 시나리오
+- baby B: baby A와 겹치는 시간의 수유·수면 기록으로 격리 확인
 - 정상 token, token 없음, disabled token, 의도적으로 폐기된 DeviceNotRegistered token
 
 ## 4. QA 적용 순서
 
 1. QA project/ref와 앱 QA env를 확정한다.
 2. 선행 migration 전체를 적용한다.
-3. `202608220001_care_reminders.sql`을 적용하고 동일 파일 재실행을 확인한다.
+3. `202608220001_care_reminders.sql`, `202608260002_build17_sleep_reminders_and_notification_locale.sql`을 순서대로 적용하고 동일 파일 재실행을 확인한다.
 4. RLS/RPC/trigger 자동 QA를 실행한다.
 5. `process-care-reminders`를 QA에만 배포한다.
    - custom cron header를 사용하므로 QA 배포 시 `--no-verify-jwt`가 필요하다.
@@ -90,11 +100,11 @@ secret 값을 저장소, 문서, 로그, issue, 앱 bundle에 기록하지 않�
 2. 모든 `care_reminder_settings.enabled`를 false로 바꾸고 state가 `disabled`인지 확인한다.
 3. 필요하면 QA Edge Function을 비활성화하거나 cron secret을 회전한다.
 4. trigger 격리가 필요하면 다음 trigger만 제거한다.
-   - `care_logs_sync_feeding_reminder`
+   - `care_logs_sync_care_reminders`
    - `care_reminder_settings_changed`
    - `baby_members_care_reminder_default`
 5. 중간 migration 실패는 오류가 지목한 누락 컬럼/unique constraint를 별도 forward-fix migration으로 복구한 뒤 원 migration을 재실행한다. 적용 이력이 있는 migration 파일을 production 적용 후 수정하지 않는다.
-6. `notification_events_event_type_check`는 기존 허용 타입과 실제 사용 타입을 보존한 상태로 `feeding_reminder`만 추가한다. 복원할 때는 배포 직전 저장한 `pg_get_constraintdef` 결과를 사용한다.
+6. `notification_events_event_type_check`는 기존 허용 타입과 실제 사용 타입을 보존한 상태로 `feeding_reminder`, `sleep_reminder`를 추가한다. 복원할 때는 배포 직전 저장한 `pg_get_constraintdef` 결과를 사용한다.
 7. 테이블/이벤트 삭제는 합성 데이터만 있는 QA 프로젝트에서 명시적 승인 후 수행한다. production에서는 우선 cron 중지, 설정 OFF, Function 비활성화 후 forward-fix migration을 사용한다.
 
-관찰해야 할 P1 잔여 위험: 발송 직전 version/enabled/log를 재검사하지만 검사 완료와 Expo 요청 사이의 매우 짧은 stale push 가능성은 남는다. QA에서 설정 OFF 및 새 수유 기록을 worker 호출과 경쟁시켜 관찰한다.
+관찰해야 할 P1 잔여 위험: 발송 직전 version/enabled/log를 재검사하지만 검사 완료와 Expo 요청 사이의 매우 짧은 stale push 가능성은 남는다. QA에서 설정 OFF 및 새 수유·수면 기록을 worker 호출과 경쟁시켜 관찰한다.

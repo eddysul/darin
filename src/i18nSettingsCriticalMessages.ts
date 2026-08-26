@@ -322,6 +322,7 @@ export const settingsCriticalEn = {
   "settings.critical.321": "Remove “{label}” from the category list. Existing records will remain.",
   "settings.critical.322": "{count} photos",
   "settings.critical.323": "{title}, {state}",
+  "settings.critical.324": "App language",
 } as const;
 
 export const settingsCriticalKo: { [K in keyof typeof settingsCriticalEn]: string } = {
@@ -648,6 +649,7 @@ export const settingsCriticalKo: { [K in keyof typeof settingsCriticalEn]: strin
   "settings.critical.321": "“{label}” 카테고리를 목록에서 제거해요. 이미 저장된 기록은 그대로 남아요.",
   "settings.critical.322": "{count}장",
   "settings.critical.323": "{title} {state}",
+  "settings.critical.324": "앱 언어",
 };
 
 export const settingsCriticalJa: { [K in keyof typeof settingsCriticalEn]: string } = {
@@ -974,6 +976,7 @@ export const settingsCriticalJa: { [K in keyof typeof settingsCriticalEn]: strin
   "settings.critical.321": "「{label}」をカテゴリー一覧から削除します。保存済みの記録はそのまま残ります。",
   "settings.critical.322": "写真{count}枚",
   "settings.critical.323": "{title}、{state}",
+  "settings.critical.324": "アプリの言語",
 };
 
 export const settingsCriticalEs: { [K in keyof typeof settingsCriticalEn]: string } = {
@@ -1300,6 +1303,7 @@ export const settingsCriticalEs: { [K in keyof typeof settingsCriticalEn]: strin
   "settings.critical.321": "Quita «{label}» de la lista de categorías. Los registros guardados se conservarán.",
   "settings.critical.322": "{count} fotos",
   "settings.critical.323": "{title}: {state}",
+  "settings.critical.324": "Idioma de la app",
 };
 
 export const settingsCriticalZhCN: { [K in keyof typeof settingsCriticalEn]: string } = {
@@ -1626,5 +1630,6 @@ export const settingsCriticalZhCN: { [K in keyof typeof settingsCriticalEn]: str
   "settings.critical.321": "从分类列表中移除“{label}”。已保存的记录会保留。",
   "settings.critical.322": "{count}张照片",
   "settings.critical.323": "{title}，{state}",
+  "settings.critical.324": "应用语言",
 };
 

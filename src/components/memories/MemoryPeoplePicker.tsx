@@ -1,7 +1,19 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { FamilyMember } from "../../types/family";
 import { memberRelationshipLabel } from "../../types/family";
+import { PROFILE_RELATION_OPTIONS } from "../../types/profileSettings";
+import type { RelationshipLabel } from "../../types/growthBook";
+import { useLanguage } from "../../LanguageContext";
+import type { MessageKey } from "../../i18n";
 import { colors, radius } from "../../theme";
+
+const RELATION_SUFFIXES = ["mom", "dad", "grandmother", "grandfather", "aunt", "uncle", "guardian", "family", "sitter", "friend", "other"] as const;
+
+function localizedRelation(t: (key: MessageKey, params?: Record<string, string | number>) => string, member: FamilyMember) {
+  const stored = memberRelationshipLabel(member);
+  const suffix = RELATION_SUFFIXES[PROFILE_RELATION_OPTIONS.indexOf(stored as RelationshipLabel)] ?? "other";
+  return t(`profileSetup.relation.${suffix}` as MessageKey);
+}
 
 export function MemoryPeoplePicker({
   members,
@@ -18,12 +30,13 @@ export function MemoryPeoplePicker({
   onToggleTagged: (id: string) => void;
   onToggleSelected: (id: string) => void;
 }) {
+  const { t } = useLanguage();
   const activeMembers = members.filter((member) => member.status === "active" && !member.isMe);
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>가족 태그</Text>
+      <Text style={styles.label}>{t("memory.critical.077")}</Text>
       {activeMembers.length === 0 ? (
-        <Text style={styles.hint}>초대된 가족이 아직 없어요.</Text>
+        <Text style={styles.hint}>{t("memory.critical.078")}</Text>
       ) : (
         <View style={styles.chips}>
           {activeMembers.map((member) => {
@@ -31,7 +44,7 @@ export function MemoryPeoplePicker({
             return (
               <Pressable key={member.id} style={[styles.chip, active && styles.chipActive]} onPress={() => onToggleTagged(member.id)}>
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                  {member.name} · {memberRelationshipLabel(member)}
+                  {member.name} · {localizedRelation(t, member)}
                 </Text>
               </Pressable>
             );
@@ -41,7 +54,7 @@ export function MemoryPeoplePicker({
 
       {showSelectedPeople ? (
         <>
-          <Text style={styles.label}>볼 수 있는 사람</Text>
+          <Text style={styles.label}>{t("memory.critical.079")}</Text>
           <View style={styles.chips}>
             {activeMembers.map((member) => {
               const active = selectedIds.includes(member.id);

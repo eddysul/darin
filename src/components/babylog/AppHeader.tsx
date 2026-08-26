@@ -7,6 +7,7 @@ import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { colors, fontScaleCap, radius } from "../../theme";
 import { BabySwitcher } from "./BabySwitcher";
 import { NotificationBellButton } from "../NotificationBellButton";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   onOpenProfile: () => void;
@@ -19,6 +20,7 @@ export function AppHeader({ onOpenProfile, onOpenSettings, onOpenShared, onOpenN
   const insets = useSafeAreaInsets();
   const compact = useCompactLayout();
   const { babyBadge } = useBabyLog();
+  const { t } = useLanguage();
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, compact ? 8 : 12) }]}>
@@ -40,7 +42,7 @@ export function AppHeader({ onOpenProfile, onOpenSettings, onOpenShared, onOpenN
           style={styles.profileBtn}
           onPress={onOpenSettings ?? onOpenProfile}
           accessibilityRole="button"
-          accessibilityLabel={onOpenSettings ? "설정 열기" : "아기 프로필 및 가족 관리"}
+          accessibilityLabel={onOpenSettings ? t("home.a11y.openSettings") : t("chrome.critical.025")}
         >
           <BabyLogIcon kind={onOpenSettings ? "settings" : "profile"} size={18} color={colors.muted} />
           </Pressable>

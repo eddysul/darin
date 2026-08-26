@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Image } from "expo-image";
 import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from "react-native";
 import { ErrorState } from "../components/states/FeedbackStates";
+import { useLanguage } from "../LanguageContext";
 import { colors } from "../theme";
 
 /** Matches `assets/darin-logo.png` / native splash imageset (1024×768). */
@@ -20,6 +21,7 @@ export function SplashScreen({
   routingBusy,
   onRetryRouting,
 }: SplashScreenProps) {
+  const { t } = useLanguage();
   // Native Expo splash pins the image view edge-to-edge with aspect-fit (contain).
   const screenWidth = Dimensions.get("window").width;
   const logoWidth = Math.min(screenWidth, 430);
@@ -45,9 +47,9 @@ export function SplashScreen({
         {routingError ? (
           <View style={styles.errorWrap}>
             <ErrorState
-              title="불러오지 못했어요"
+              title={t("chrome.critical.001")}
               body={routingError}
-              retryLabel="다시 시도"
+              retryLabel={t("chrome.critical.002")}
               onRetry={onRetryRouting}
               busy={routingBusy}
             />
@@ -55,7 +57,7 @@ export function SplashScreen({
         ) : routing ? (
           <View style={styles.busy} accessibilityLiveRegion="polite">
             <ActivityIndicator color={colors.amberText} />
-            <Text style={styles.busyLabel}>불러오는 중…</Text>
+            <Text style={styles.busyLabel}>{t("chrome.critical.003")}</Text>
           </View>
         ) : null}
       </View>

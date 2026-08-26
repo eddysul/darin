@@ -12,7 +12,9 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { QUICK_RECORD_ACTIONS, type OneTouchAction } from "../../constants/quickRecordActions";
+import { PREGNANCY_QUICK_RECORD_ACTIONS, QUICK_RECORD_ACTIONS, type OneTouchAction } from "../../constants/quickRecordActions";
+import { RECORD_VALUE } from "../../constants/recordInternalValues";
+import { customCategoryDisplayLabel, recordCategoryLabel } from "../../utils/recordDisplay";
 import { useApp } from "../../context/AppContext";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { useBabyLog } from "../../context/BabyLogContext";
@@ -31,6 +33,7 @@ import { getMarketingConsent, saveMarketingConsent } from "../../utils/termsStor
 import { customCategoriesForStage } from "../../types/logCategory";
 import type { AppSettings } from "../../types/appSettings";
 import { useLanguage } from "../../LanguageContext";
+import { localizedErrorMessage } from "../../utils/familyDisplay";
 import { FeedingReminderSettingsCard } from "../babylog/FeedingReminderSettingsCard";
 import type { MessageKey } from "../../i18n";
 
@@ -241,7 +244,7 @@ export function AppSettingsModal({
   }, [page, settings.account.email]);
 
   const actionById = useMemo(
-    () => new Map(QUICK_RECORD_ACTIONS.map((action) => [action.id, action])),
+    () => new Map([...QUICK_RECORD_ACTIONS, ...PREGNANCY_QUICK_RECORD_ACTIONS].map((action) => [action.id, action])),
     [],
   );
 
@@ -412,7 +415,7 @@ export function AppSettingsModal({
                       setExportMessage("");
                       void DataExportRepository.exportAndShare(babyId)
                         .then(() => setExportMessage(t("settings.critical.204")))
-                        .catch((error) => setExportMessage(error instanceof Error ? error.message : t("settings.critical.205")))
+                        .catch((error) => setExportMessage(error instanceof Error ? localizedErrorMessage(t, error.message) : t("settings.critical.205")))
                         .finally(() => setExporting(false));
                     }}
                     disabled={exporting}
@@ -455,7 +458,7 @@ export function AppSettingsModal({
                     return (
                       <>
                         <View style={styles.categoryCopy}>
-                          <Text style={styles.categoryTitle} numberOfLines={1}>{action.label}</Text>
+                          <Text style={styles.categoryTitle} numberOfLines={1}>{recordCategoryLabel(t, action.cat)}</Text>
                           <Text style={styles.categoryMeta}>{core ? t("settings.critical.217") : visible ? t("settings.critical.218") : t("settings.critical.219")}</Text>
                         </View>
                         <Pressable style={[styles.stateButton, visible && styles.stateButtonOn]} onPress={() => toggleVisible(id, !visible)}>
@@ -477,11 +480,13 @@ export function AppSettingsModal({
                     </Text>
                   </View>
                 ) : (
-                  stageCustomCategories.map((category) => (
+                  stageCustomCategories.map((category) => {
+                    const displayLabel = customCategoryDisplayLabel(t, category);
+                    return (
                     <View key={category.id} style={styles.categoryRow}>
                       <View style={[styles.customColorDot, { backgroundColor: category.color }]} />
                       <View style={styles.categoryCopy}>
-                        <Text style={styles.categoryTitle} numberOfLines={1}>{category.label}</Text>
+                        <Text style={styles.categoryTitle} numberOfLines={1}>{displayLabel}</Text>
                         <Text style={styles.categoryMeta}>{t("settings.critical.226")}</Text>
                       </View>
                       <Pressable
@@ -489,7 +494,7 @@ export function AppSettingsModal({
                         onPress={() => {
                           Alert.alert(
                             t("settings.critical.227"),
-                            t("settings.critical.321", { label: category.label }),
+                            t("settings.critical.321", { label: displayLabel }),
                             [
                               { text: t("settings.critical.032"), style: "cancel" },
                               {
@@ -504,7 +509,8 @@ export function AppSettingsModal({
                         <Text style={styles.stateButtonText}>{t("settings.critical.036")}</Text>
                       </Pressable>
                     </View>
-                  ))
+                    );
+                  })
                 )}
                 <Pressable
                   style={styles.addCategoryRow}
@@ -531,8 +537,8 @@ export function AppSettingsModal({
                     inputMode: input.inputMode,
                     isEnabled: true,
                     duration: input.inputMode === "duration",
-                    amount: input.inputMode === "amount" ? t("settings.critical.229") : undefined,
-                    chips: input.inputMode === "check" ? [t("settings.critical.230"), t("settings.critical.231")] : undefined,
+                    amount: input.inputMode === "amount" ? RECORD_VALUE.countOrAmount : undefined,
+                    chips: input.inputMode === "check" ? [RECORD_VALUE.done, RECORD_VALUE.notDone] : undefined,
                     stage: pregnancy ? "pregnancy" : "born",
                   });
                   setAddCategoryOpen(false);
@@ -562,11 +568,20 @@ export function AppSettingsModal({
           ) : null}
 
           {page === "careAlerts" ? (
-            <FeedingReminderSettingsCard
-              babyId={localDataScope?.babyId ?? null}
-              myRole={myFamilyRole}
-              active={page === "careAlerts"}
-            />
+            <>
+              <FeedingReminderSettingsCard
+                reminderType="feeding"
+                babyId={localDataScope?.babyId ?? null}
+                myRole={myFamilyRole}
+                active={page === "careAlerts"}
+              />
+              <FeedingReminderSettingsCard
+                reminderType="sleep"
+                babyId={localDataScope?.babyId ?? null}
+                myRole={myFamilyRole}
+                active={page === "careAlerts"}
+              />
+            </>
           ) : null}
 
           {page === "careAlerts" ? (
@@ -710,7 +725,7 @@ export function AppSettingsModal({
                   setExportMessage("");
                   void DataExportRepository.exportAndShare(babyId)
                     .then(() => setExportMessage(t("settings.critical.204")))
-                    .catch((error) => setExportMessage(error instanceof Error ? error.message : t("settings.critical.205")))
+                    .catch((error) => setExportMessage(error instanceof Error ? localizedErrorMessage(t, error.message) : t("settings.critical.205")))
                     .finally(() => setExporting(false));
                 }}
               />
@@ -758,7 +773,7 @@ export function AppSettingsModal({
                       setContactMessage("");
                       setContactStatus(t("settings.critical.312"));
                     })
-                    .catch((error) => setContactStatus(error instanceof Error ? error.message : t("settings.critical.313")))
+                    .catch((error) => setContactStatus(error instanceof Error ? localizedErrorMessage(t, error.message) : t("settings.critical.313")))
                     .finally(() => setContactBusy(false));
                 }}
               />

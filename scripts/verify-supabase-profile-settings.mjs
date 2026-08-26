@@ -7,7 +7,7 @@
  *   E = invited editor
  *   C = non-member
  *
- * Usage: node --env-file=.env scripts/verify-supabase-profile-settings.mjs
+ * Usage: pnpm qa:supabase:profile (loads guarded .env.qa)
  */
 import { cleanupQaAccounts, createPublicClient, createQaAccounts } from "./lib/qa-auth.mjs";
 

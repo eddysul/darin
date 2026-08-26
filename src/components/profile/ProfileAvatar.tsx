@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { BabyLogIcon } from "../babylog/BabyLogIcon";
 import { colors } from "../../theme";
+import { useLanguage } from "../../LanguageContext";
 
 export function ProfileAvatar({
   uri,
@@ -9,7 +10,7 @@ export function ProfileAvatar({
   fallback = "profile",
   editable = false,
   onPress,
-  label = "사진 추가",
+  label,
   imageFit = "cover",
 }: {
   uri?: string | null;
@@ -20,6 +21,10 @@ export function ProfileAvatar({
   label?: string;
   imageFit?: "cover" | "contain";
 }) {
+  const { t } = useLanguage();
+  const addLabel = t("chrome.critical.031");
+  const changeLabel = t("chrome.critical.032");
+  const resolvedLabel = label ?? addLabel;
   const content = (
     <View style={[styles.wrap, { width: size, height: size, borderRadius: size / 2 }]}>
       {uri ? (
@@ -31,9 +36,9 @@ export function ProfileAvatar({
   );
   if (!onPress) return content;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.press}>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={resolvedLabel} style={styles.press}>
       {content}
-      {editable ? <Text style={styles.caption}>{uri ? "사진 변경" : "사진 추가"}</Text> : null}
+      {editable ? <Text style={styles.caption}>{uri ? changeLabel : addLabel}</Text> : null}
     </Pressable>
   );
 }

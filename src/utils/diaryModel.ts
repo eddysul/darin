@@ -6,30 +6,51 @@ import {
 import { DEFAULT_DIARY_COVER_TEMPLATE_ID, isDiaryCoverTemplateId } from "../constants/diaryCoverTemplates";
 import { DEFAULT_DIARY_PAGE_TEMPLATE_ID, isDiaryPageTemplateId } from "../constants/diaryPageTemplates";
 import type { DiaryDraftStatus, DiaryEntry, DiarySource } from "../types/babyLog";
+import type { MessageKey } from "../i18n";
 import { formatDateKey } from "./dateKey";
+import type { Translate } from "./recordDisplay";
 
 /** Stored when user saves photos without a written comment. */
 export const DIARY_PHOTO_ONLY_COMMENT = "(사진만 남긴 하루)";
+
+const GROWTH_MOMENT_KEYS: Record<string, MessageKey> = {
+  "첫 목욕": "diary.moment.bath",
+  "처음 뒤집은 날": "diary.moment.roll",
+  "처음 웃은 날": "diary.moment.smile",
+  "첫 이유식": "diary.moment.food",
+  "첫걸음": "diary.moment.steps",
+  "첫 단어": "diary.moment.word",
+};
+
+export function storedGrowthMomentLabel(t: Translate, value: string): string {
+  const key = GROWTH_MOMENT_KEYS[value];
+  return key ? t(key) : value;
+}
 
 export function diaryPrimaryPhoto(entry: Pick<DiaryEntry, "photos" | "coverPhotoUri">): string | null {
   if (entry.coverPhotoUri && entry.photos.includes(entry.coverPhotoUri)) return entry.coverPhotoUri;
   return entry.photos[0] ?? null;
 }
 
-export function diaryCoverTitle(entry: Pick<DiaryEntry, "coverTitle" | "milestoneTag" | "customMilestoneTag" | "comment">): string {
+export function diaryCoverTitle(
+  entry: Pick<DiaryEntry, "coverTitle" | "milestoneTag" | "customMilestoneTag" | "comment">,
+  t?: Translate,
+): string {
   const explicit = entry.coverTitle?.trim();
-  if (explicit) return explicit;
-  const milestone = entry.milestoneTag || entry.customMilestoneTag;
+  if (explicit) return t ? storedGrowthMomentLabel(t, explicit) : explicit;
+  const milestone = diaryMilestoneLabel(entry, t);
   if (milestone) return milestone;
   const firstLine = entry.comment.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
-  return firstLine && firstLine !== DIARY_PHOTO_ONLY_COMMENT ? firstLine : "우리 아기의 하루";
+  if (firstLine && firstLine !== DIARY_PHOTO_ONLY_COMMENT) return firstLine;
+  return t ? t("diary.display.defaultCover") : "우리 아기의 하루";
 }
 
 /** Soft copy for list/vault cards (never show the raw placeholder). */
-export function diaryDisplayComment(entry: Pick<DiaryEntry, "comment" | "photos">): string {
+export function diaryDisplayComment(entry: Pick<DiaryEntry, "comment" | "photos">, t?: Translate): string {
   const trimmed = entry.comment.trim();
   if (!trimmed || trimmed === DIARY_PHOTO_ONLY_COMMENT) {
-    return entry.photos.length > 0 ? "사진만 남긴 하루" : "짧은 하루를 남겼어요";
+    if (entry.photos.length > 0) return t ? t("diary.display.photoOnly") : "사진만 남긴 하루";
+    return t ? t("diary.display.shortDay") : "짧은 하루를 남겼어요";
   }
   return trimmed;
 }
@@ -47,8 +68,11 @@ export function diaryPhotoCount(entries: Pick<DiaryEntry, "photos">[]): number {
 
 export function diaryMilestoneLabel(
   entry: Pick<DiaryEntry, "milestoneTag" | "customMilestoneTag">,
+  t?: Translate,
 ): string | null {
-  return entry.milestoneTag || entry.customMilestoneTag || null;
+  const raw = entry.milestoneTag || entry.customMilestoneTag || null;
+  if (!raw) return null;
+  return t ? storedGrowthMomentLabel(t, raw) : raw;
 }
 
 export function diaryHasMilestone(

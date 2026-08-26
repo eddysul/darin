@@ -28,6 +28,7 @@ import { displayKey, displayMeta, hasDuration, isDisplayableCat } from "../../ut
 import { WeeklyReportSheet } from "../../components/babylog/WeeklyReportSheet";
 import { buildWeeklyFeatureTable } from "../../utils/weeklyFeatureTable";
 import { buildRuleNarrative } from "../../utils/weeklyRuleNarrative";
+import { chartCategoryLabel, formatWeekOfMonth } from "../../utils/insightDisplay";
 import { buildWeeklyNarrative } from "../../utils/weeklyNarrative";
 import {
   getWeeklyNarrative,
@@ -58,7 +59,7 @@ export function BabyReportScreen({
   onOpenShared,
   onOpenConsult,
 }: Props) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const { logs, babyName, careSetup, growthRecords, addGrowthRecord, updateGrowthRecord } = useBabyLog();
   const [growthModalOpen, setGrowthModalOpen] = useState(false);
   const [editingGrowthRecord, setEditingGrowthRecord] = useState<GrowthRecord | null>(null);
@@ -81,7 +82,7 @@ export function BabyReportScreen({
   const insights = useMemo(() => findInsights(logs, todayKey), [logs, todayKey]);
 
   const weekTable = useMemo(() => buildWeeklyFeatureTable(logs, careSetup), [logs, careSetup]);
-  const ruleNarrative = useMemo(() => buildRuleNarrative(weekTable), [weekTable]);
+  const ruleNarrative = useMemo(() => buildRuleNarrative(weekTable, t, locale), [locale, t, weekTable]);
   const [narrative, setNarrative] = useState({ headline: "", body: "" });
 
   // 주 1회만 AI 를 부른다. 캐시가 있으면 그대로 쓰고, 실패하면 규칙 문장이 남는다.
@@ -91,29 +92,30 @@ export function BabyReportScreen({
       setNarrative({ headline: "", body: "" });
       return;
     }
+    const cacheKey = `${weekTable.meta.periodLabel}:${locale}`;
     const fallback = { headline: ruleNarrative.headline, body: ruleNarrative.body, fromAI: false };
     setNarrative(fallback);
 
     void (async () => {
       await hydrateWeeklyNarrative();
       if (!active) return;
-      const cached = getWeeklyNarrative(weekTable.meta.periodLabel);
+      const cached = getWeeklyNarrative(cacheKey);
       if (cached) {
         setNarrative({ headline: cached.headline, body: cached.body });
         return;
       }
-      const result = await buildWeeklyNarrative(weekTable, fallback);
+      const result = await buildWeeklyNarrative(weekTable, fallback, locale);
       if (!active) return;
       setNarrative({ headline: result.headline, body: result.body });
       if (result.fromAI) {
-        void saveWeeklyNarrative({ periodLabel: weekTable.meta.periodLabel, ...result });
+        void saveWeeklyNarrative({ periodLabel: cacheKey, ...result });
       }
     })();
 
     return () => {
       active = false;
     };
-  }, [ruleNarrative, weekTable]);
+  }, [locale, ruleNarrative, weekTable]);
 
   // 발견 문장 다듬기. 상관은 이미 기기에서 찾았고 여기서는 표현만 바꾼다.
   // 실패하면 빈 객체라 우리 문장이 그대로 나간다.
@@ -124,7 +126,7 @@ export function BabyReportScreen({
       setInsightPhrases({});
       return;
     }
-    const periodLabel = weekTable.meta.periodLabel;
+    const periodLabel = `${weekTable.meta.periodLabel}:${locale}`;
 
     void (async () => {
       await hydrateInsightPhrases();
@@ -134,14 +136,14 @@ export function BabyReportScreen({
         setInsightPhrases(cached);
         return;
       }
-      const phrases = await buildInsightPhrases(insights, periodLabel);
+      const phrases = await buildInsightPhrases(insights, periodLabel, locale, t);
       if (active) setInsightPhrases(phrases);
     })();
 
     return () => {
       active = false;
     };
-  }, [insights, weekTable.meta.periodLabel]);
+  }, [insights, locale, t, weekTable.meta.periodLabel]);
 
   // 백분위는 성별 기준이 달라서, 성별을 모르면 그리지 않는다.
   const growthSex: WhoSex | null =
@@ -185,7 +187,7 @@ export function BabyReportScreen({
                   </View>
                   <View style={styles.rhythmLegend}>
                     {dialSeries.legend.map((item) => (
-                      <LegendDot key={item.key} color={item.color} label={item.label} />
+                      <LegendDot key={item.key} color={item.color} label={chartCategoryLabel(item.key, t)} />
                     ))}
                   </View>
                 </>
@@ -201,7 +203,7 @@ export function BabyReportScreen({
               >
                 <View style={styles.weeklyTop}>
                   <Text style={styles.weeklyKicker}>{t("report.critical.091")}</Text>
-                  <Text style={styles.weeklyBadge}>{weekTable.meta.weekLabel}</Text>
+                  <Text style={styles.weeklyBadge}>{formatWeekOfMonth(weekTable.meta.dateKeys[weekTable.meta.dateKeys.length - 1], t)}</Text>
                 </View>
 
                 <Text style={styles.weeklyHeadline}>{narrative.headline}</Text>

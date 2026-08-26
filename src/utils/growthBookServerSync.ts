@@ -7,6 +7,7 @@ import {
   markGrowthBookServerMigrationComplete,
 } from "./growthBookServerMigrationStore";
 import { isValidLocalDataScope, type LocalDataScope } from "./scopedLocalStorage";
+import { devWarn } from "./devLog";
 
 export type GrowthBookBootstrapResult = {
   usedServer: boolean;
@@ -69,7 +70,7 @@ export async function bootstrapGrowthBookFromServer(input: {
     return { ...empty, usedServer: true, edit: remote };
   } catch (error) {
     const errorText = message(error);
-    console.warn("[supabase] growth book bootstrap failed:", errorText);
+    devWarn("[supabase] growth book bootstrap failed:", errorText);
     return { ...empty, error: errorText };
   }
 }
@@ -90,13 +91,13 @@ export async function syncGrowthBookEdit(input: {
       diaryOrder: input.diaryOrder,
     });
     if (result.mediaFailed > 0) {
-      console.warn(`[supabase] ${result.mediaFailed} growth book media upload(s) failed; local source was retained.`);
+      devWarn(`[supabase] ${result.mediaFailed} growth book media upload(s) failed; local source was retained.`);
       return null;
     }
     await markGrowthBookServerMigrationComplete(input.scope);
     return result.edit;
   } catch (error) {
-    console.warn("[supabase] growth book save failed:", message(error));
+    devWarn("[supabase] growth book save failed:", message(error));
     return null;
   }
 }

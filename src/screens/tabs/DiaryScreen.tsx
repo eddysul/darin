@@ -130,8 +130,8 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   const todayKey = formatDateKey();
   const summary = useMemo(() => buildTodaySummary(logs), [logs]);
   const notifCopy = useMemo(
-    () => buildDiaryNotificationCopy({ babyName, summary }),
-    [babyName, summary],
+    () => buildDiaryNotificationCopy({ babyName, summary, t }),
+    [babyName, summary, t],
   );
 
   useEffect(() => {
@@ -313,7 +313,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     [bookEntries, growthBookEdit],
   );
   const filtered = useMemo(() => filterDiaries(diaryEntries, filter), [diaryEntries, filter]);
-  const monthSections = useMemo(() => groupDiariesByMonth(filtered), [filtered]);
+  const monthSections = useMemo(() => groupDiariesByMonth(filtered, t), [filtered, t]);
 
   const liveEditing = editingEntry
     ? diaryEntries.find((d) => d.id === editingEntry.id) ?? editingEntry
@@ -596,7 +596,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
         renderItem={({ item: d }) => (
           <DiaryCard
             entry={d}
-            ageLabel={diaryStageLabel(d, careSetup.child)}
+            ageLabel={diaryStageLabel(d, careSetup.child, locale)}
             dateLabel={formatDottedDate(d.dateKey) ?? d.date}
             canToggleBook={canEditLog(myFamilyRole, d.createdBy, me)}
             onOpen={() => openEdit(d)}
@@ -738,7 +738,7 @@ function DiaryCard({
   const { t } = useLanguage();
   const inBook = entry.includedInGrowthBook;
   const photo = diaryPrimaryPhoto(entry) ?? entry.photos[0] ?? null;
-  const milestone = diaryMilestoneLabel(entry);
+  const milestone = diaryMilestoneLabel(entry, t);
   const [photoFailed, setPhotoFailed] = useState(false);
   const showPhoto = !!photo && !photoFailed;
   const moodStamp = entry.moodStamp;
@@ -791,7 +791,7 @@ function DiaryCard({
             ) : null}
           </View>
           <Text style={styles.comment} numberOfLines={2}>
-            {diaryDisplayComment(entry)}
+            {diaryDisplayComment(entry, t)}
           </Text>
           {entry.createdBy?.name ? (
             <Text style={styles.author}>{t("diary.screen.author", { name: entry.createdBy.name })}</Text>

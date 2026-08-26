@@ -33,6 +33,7 @@ import { BabyLogIcon } from "../babylog/BabyLogIcon";
 import { MemoryPeoplePicker } from "./MemoryPeoplePicker";
 import { MemoryPrivacyPicker } from "./MemoryPrivacyPicker";
 import type { BabyRow } from "../../types/database";
+import { useLanguage } from "../../LanguageContext";
 
 const MAX_MEMORY_PHOTOS = 5;
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
@@ -70,6 +71,7 @@ export function MemoryUploadModal({
   onPosted: (input: PublishEagerMemoryInput & { localCoverUri?: string }) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const sessionIdRef = useRef(createUploadSessionId());
   const postIdRef = useRef(createId());
   const postedRef = useRef(false);
@@ -120,9 +122,9 @@ export function MemoryUploadModal({
 
   const closeSafely = () => {
     if (!dirty) return onClose();
-    Alert.alert("작성 중인 추억을 닫을까요?", "입력한 내용은 저장되지 않아요.", [
-      { text: "계속 작성", style: "cancel" },
-      { text: "닫기", style: "destructive", onPress: onClose },
+    Alert.alert(t("memory.critical.094"), t("memory.critical.095"), [
+      { text: t("memory.critical.096"), style: "cancel" },
+      { text: t("memory.critical.067"), style: "destructive", onPress: onClose },
     ]);
   };
 
@@ -130,14 +132,14 @@ export function MemoryUploadModal({
     setError("");
     const remaining = MAX_MEMORY_PHOTOS - photos.length;
     if (remaining <= 0) {
-      setError("사진을 더 추가하려면 먼저 한 장을 삭제해 주세요.");
+      setError(t("memory.critical.097"));
       return;
     }
     try {
       const permission = await ImagePicker.getMediaLibraryPermissionsAsync();
       const resolvedPermission = permission.granted ? permission : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!resolvedPermission.granted) {
-        setError("사진을 선택하려면 설정에서 사진 보관함 접근을 허용해 주세요.");
+        setError(t("memory.critical.098"));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -158,22 +160,22 @@ export function MemoryUploadModal({
       setPhotos(listEagerPhotos(sessionIdRef.current));
     } catch (cause) {
       if (__DEV__) console.warn("[memory-photo-picker] open failed", cause instanceof Error ? cause.name : "unknown");
-      setError("iCloud 사진이라면 사진 앱에서 원본을 먼저 열어 다운로드한 뒤 다시 선택해 주세요.");
+      setError(t("memory.critical.099"));
     }
   };
 
   const submit = () => {
     if (photos.length === 0 || postedRef.current) return;
     if (pendingUploads > 0) {
-      setError("사진을 올리는 중이에요. 잠시 후 다시 시도해 주세요.");
+      setError(t("memory.critical.100"));
       return;
     }
     if (privacy === "tagged_family" && taggedIds.length === 0) {
-      setError("태그된 가족만 공개하려면 가족을 한 명 이상 태그해주세요.");
+      setError(t("memory.critical.101"));
       return;
     }
     if (privacy === "selected_people" && selectedIds.length === 0) {
-      setError("사진을 볼 가족을 한 명 이상 선택해주세요.");
+      setError(t("memory.critical.102"));
       return;
     }
     postedRef.current = true;
@@ -199,11 +201,11 @@ export function MemoryUploadModal({
       >
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
           <Pressable style={styles.headerAction} onPress={closeSafely}>
-            <Text style={styles.cancel}>취소</Text>
+            <Text style={styles.cancel}>{t("memory.critical.083")}</Text>
           </Pressable>
           <View style={styles.titleWrap}>
-            <Text style={styles.title}>오늘의 순간을 남겨요</Text>
-            <Text style={styles.subtitle}>아기의 사진과 짧은 이야기를 가족과 함께 나눠보세요.</Text>
+            <Text style={styles.title}>{t("memory.critical.080")}</Text>
+            <Text style={styles.subtitle}>{t("memory.critical.081")}</Text>
           </View>
           <Pressable
             style={styles.headerAction}
@@ -211,9 +213,9 @@ export function MemoryUploadModal({
             disabled={!canSubmit}
             accessibilityRole="button"
             accessibilityState={{ disabled: !canSubmit }}
-            accessibilityHint={pendingUploads > 0 ? "사진 업로드가 끝나면 올릴 수 있어요" : undefined}
+            accessibilityHint={pendingUploads > 0 ? t("memory.critical.103") : undefined}
           >
-            <Text style={[styles.save, !canSubmit && styles.disabledText]}>올리기</Text>
+            <Text style={[styles.save, !canSubmit && styles.disabledText]}>{t("memory.critical.082")}</Text>
           </Pressable>
         </View>
         <ScrollView
@@ -222,10 +224,10 @@ export function MemoryUploadModal({
           keyboardDismissMode="interactive"
         >
           {photos.length === 0 ? (
-            <Pressable style={styles.photo} onPress={() => void pickImage()} accessibilityRole="button" accessibilityLabel="사진 선택">
+            <Pressable style={styles.photo} onPress={() => void pickImage()} accessibilityRole="button" accessibilityLabel={t("memory.critical.158")}>
               <View style={styles.photoEmpty}>
                 <BabyLogIcon kind="new" size={32} color={colors.amberText} strokeWidth={2.2} />
-                <Text style={styles.photoLabel}>사진을 선택해 주세요</Text>
+                <Text style={styles.photoLabel}>{t("memory.critical.084")}</Text>
               </View>
             </Pressable>
           ) : (
@@ -233,48 +235,48 @@ export function MemoryUploadModal({
               {photos.map((image, index) => (
                 <View key={image.id} style={styles.photoThumbWrap}>
                   <Image source={{ uri: image.localUri }} style={styles.photoThumb} contentFit="cover" />
-                  {index === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>대표</Text></View> : null}
+                  {index === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>{t("memory.critical.085")}</Text></View> : null}
                   {image.status === "failed" ? (
-                    <Pressable style={styles.photoFail} onPress={() => retryEagerPhoto(image.id)} accessibilityRole="button" accessibilityLabel="사진 다시 올리기">
-                      <Text style={styles.photoFailText}>다시 시도</Text>
+                    <Pressable style={styles.photoFail} onPress={() => retryEagerPhoto(image.id)} accessibilityRole="button" accessibilityLabel={t("memory.critical.178")}>
+                      <Text style={styles.photoFailText}>{t("memory.critical.017")}</Text>
                     </Pressable>
                   ) : image.status !== "uploaded" ? (
                     <View style={styles.photoUploading} pointerEvents="none">
                       <ActivityIndicator size="small" color="#fff" />
-                      <Text style={styles.photoUploadingText}>올리는 중</Text>
+                      <Text style={styles.photoUploadingText}>{t("memory.critical.104")}</Text>
                     </View>
                   ) : null}
                   <Pressable
                     style={styles.photoRemove}
                     onPress={() => { removeEagerPhoto(image.id); setPhotos(listEagerPhotos(sessionIdRef.current)); }}
                     accessibilityRole="button"
-                    accessibilityLabel={`사진 ${index + 1} 삭제`}
+                    accessibilityLabel={t("memory.critical.159", { count: index + 1 })}
                   >
                     <BabyLogIcon kind="trash" size={16} color={colors.onDark} strokeWidth={2.2} />
                   </Pressable>
                 </View>
               ))}
               {photos.length < MAX_MEMORY_PHOTOS ? (
-                <Pressable style={styles.photoAddTile} onPress={() => void pickImage()} accessibilityRole="button" accessibilityLabel="사진 추가">
+                <Pressable style={styles.photoAddTile} onPress={() => void pickImage()} accessibilityRole="button" accessibilityLabel={t("memory.critical.086")}>
                   <BabyLogIcon kind="new" size={22} color={colors.amberText} strokeWidth={2.2} />
-                  <Text style={styles.photoAddText}>사진 추가</Text>
+                  <Text style={styles.photoAddText}>{t("memory.critical.086")}</Text>
                 </Pressable>
               ) : null}
             </ScrollView>
           )}
           <Text style={styles.photoGuide}>
             {pendingUploads > 0
-              ? `사진 ${pendingUploads}장을 올리는 중이에요. 업로드가 끝나면 올릴 수 있어요.`
-              : `선택한 사진 ${photos.length}장 · 지금은 사진만, 최대 5장까지 추가할 수 있어요.`}
+              ? t("memory.critical.087", { count: pendingUploads })
+              : t("memory.critical.088", { count: photos.length })}
           </Text>
 
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>짧은 이야기</Text>
+            <Text style={styles.fieldLabel}>{t("memory.critical.089")}</Text>
             <TextInput
               style={styles.caption}
               value={caption}
               onChangeText={setCaption}
-              placeholder="오늘 어떤 순간이었나요?"
+              placeholder={t("memory.critical.090")}
               placeholderTextColor={colors.faint}
               multiline
               maxLength={1200}
@@ -284,20 +286,20 @@ export function MemoryUploadModal({
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>공개 범위</Text>
+            <Text style={styles.fieldLabel}>{t("memory.critical.073")}</Text>
             <MemoryPrivacyPicker value={privacy} onChange={setPrivacy} />
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>이 순간에 함께한 아기</Text>
+            <Text style={styles.fieldLabel}>{t("memory.critical.091")}</Text>
             <View style={styles.babyTargetRow}>
               {babies.map((baby) => {
                 const selected = !familyMoment && selectedBabyIds.includes(baby.id);
                 return <Pressable key={baby.id} style={[styles.babyTargetChip, selected && styles.babyTargetChipActive]} onPress={() => { setFamilyMoment(false); setSelectedBabyIds((current) => { const next = toggle(current, baby.id); return next.length ? next : [baby.id]; }); }}><Text style={[styles.babyTargetText, selected && styles.babyTargetTextActive]}>{baby.name}</Text></Pressable>;
               })}
-              <Pressable style={[styles.babyTargetChip, familyMoment && styles.babyTargetChipActive]} onPress={() => { setFamilyMoment(true); setSelectedBabyIds([]); }}><Text style={[styles.babyTargetText, familyMoment && styles.babyTargetTextActive]}>가족 순간</Text></Pressable>
+              <Pressable style={[styles.babyTargetChip, familyMoment && styles.babyTargetChipActive]} onPress={() => { setFamilyMoment(true); setSelectedBabyIds([]); }}><Text style={[styles.babyTargetText, familyMoment && styles.babyTargetTextActive]}>{t("memory.critical.012")}</Text></Pressable>
             </View>
-            <Text style={styles.babyTag}>{familyMoment ? "가족 모두의 순간으로 표시돼요." : `${selectedBabyIds.length || 1}명의 아기와 연결돼요.`}</Text>
+            <Text style={styles.babyTag}>{familyMoment ? t("memory.critical.092") : t("memory.critical.093", { count: selectedBabyIds.length || 1 })}</Text>
             <MemoryPeoplePicker
               members={familyMembers}
               taggedIds={taggedIds}

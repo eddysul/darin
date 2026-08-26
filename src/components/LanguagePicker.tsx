@@ -1,8 +1,9 @@
 import { Check } from "lucide-react-native";
 import { Modal, Pressable, StyleSheet, Text } from "react-native";
+import { useAppSettings } from "../context/AppSettingsContext";
 import { useLanguage } from "../LanguageContext";
-import type { Locale } from "../i18n";
-import { canShowLanguagePicker, isLocaleAvailable } from "../config/featureFlags";
+import { canShowLanguagePicker } from "../config/featureFlags";
+import { getVisibleAppLanguageOptions, type AppLanguagePreference } from "../types/profilePreferences";
 import { colors, radius } from "../theme";
 
 type LanguagePickerProps = {
@@ -10,35 +11,37 @@ type LanguagePickerProps = {
   onClose: () => void;
 };
 
-const OPTIONS: { locale: Locale; label: string }[] = [
-  { locale: "ko", label: "한국어" },
-  { locale: "en", label: "English" },
-  { locale: "ja", label: "日本語" },
-  { locale: "es", label: "Español" },
-  { locale: "zh-CN", label: "简体中文" },
-];
-
 export function LanguagePicker({ open, onClose }: LanguagePickerProps) {
-  const { locale, setLocale, t } = useLanguage();
+  const { t } = useLanguage();
+  const { settings, setSettings } = useAppSettings();
   if (!canShowLanguagePicker()) return null;
-  const options = OPTIONS.filter(({ locale: option }) => isLocaleAvailable(option));
+  const options = getVisibleAppLanguageOptions();
+  const selected = settings.account.language;
+
+  const choose = (value: AppLanguagePreference) => {
+    setSettings((current) => current.account.language === value
+      ? current
+      : { ...current, account: { ...current.account, language: value } });
+    onClose();
+  };
 
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.title}>{t("langPicker.title")}</Text>
-          {options.map(({ locale: opt, label }) => (
+          <Text style={styles.title}>{t("settings.critical.324")}</Text>
+          {options.map((option) => (
             <Pressable
-              key={opt}
-              style={[styles.option, locale === opt && styles.optionActive]}
-              onPress={() => {
-                setLocale(opt);
-                onClose();
-              }}
+              key={option.value}
+              style={[styles.option, selected === option.value && styles.optionActive]}
+              onPress={() => choose(option.value)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: selected === option.value }}
             >
-              <Text style={[styles.optionText, locale === opt && styles.optionTextActive]}>{label}</Text>
-              {locale === opt && <Check size={16} color={colors.yellow} strokeWidth={2.5} />}
+              <Text style={[styles.optionText, selected === option.value && styles.optionTextActive]}>
+                {option.value === "system" ? t("profileSetup.language.system") : option.label}
+              </Text>
+              {selected === option.value ? <Check size={16} color={colors.yellow} strokeWidth={2.5} /> : null}
             </Pressable>
           ))}
         </Pressable>
@@ -69,6 +72,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    minHeight: 44,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: radius.md,

@@ -145,11 +145,15 @@ export function extractDailyFeatures(
 
 // ── 분포 ────────────────────────────────────────────────────────────────
 
+export type FeatureFormatKind = "clock" | "count" | "minutes" | "ml" | "gram";
+
 export type DistributionBucket = {
   /** "이른 편", "보통", "늦은 편" */
   name: string;
   /** 이 구간의 실제 범위 표기 ("~19:40") */
   range: string;
+  rangeStart: number;
+  rangeEnd: number;
   /** 구간 평균 결과값 */
   value: number;
   /** 이 구간에 속한 날 수 */
@@ -218,6 +222,8 @@ export function buildDistribution(
           : index === 2
             ? `${format(group[0].input)}~`
             : `${format(group[0].input)}~${format(group[group.length - 1].input)}`,
+      rangeStart: group[0].input,
+      rangeEnd: group[group.length - 1].input,
       value: group.reduce((sum, point) => sum + point.output, 0) / group.length,
       days: group.length,
     })),
@@ -328,6 +334,7 @@ type FeatureFamily = "feed" | "sleep" | "diaper" | "water" | "food" | "activity"
 type FeatureMeta = {
   /** 같은 영역끼리는 짝짓지 않는다. 정의가 겹쳐 당연한 결과만 나온다. */
   family: FeatureFamily;
+  kind: FeatureFormatKind;
   /** 분포 축에 쓰는 이름 */
   axis: string;
   format: (value: number) => string;
@@ -348,11 +355,11 @@ function formatMinutes(mins: number): string {
   return m ? `${h}시간 ${m}분` : `${h}시간`;
 }
 
-const CLOCK = { format: formatClock, buckets: ["이른 편", "보통", "늦은 편"] as [string, string, string] };
-const COUNT = { format: (v: number) => `${Math.round(v)}회`, buckets: ["적은 편", "보통", "많은 편"] as [string, string, string] };
-const MINUTES = { format: (v: number) => formatMinutes(Math.round(v)), buckets: ["짧은 편", "보통", "긴 편"] as [string, string, string] };
-const ML = { format: (v: number) => `${Math.round(v)}ml`, buckets: ["적은 편", "보통", "많은 편"] as [string, string, string] };
-const GRAM = { format: (v: number) => `${Math.round(v)}g`, buckets: ["적은 편", "보통", "많은 편"] as [string, string, string] };
+const CLOCK = { kind: "clock" as const, format: formatClock, buckets: ["이른 편", "보통", "늦은 편"] as [string, string, string] };
+const COUNT = { kind: "count" as const, format: (v: number) => `${Math.round(v)}회`, buckets: ["적은 편", "보통", "많은 편"] as [string, string, string] };
+const MINUTES = { kind: "minutes" as const, format: (v: number) => formatMinutes(Math.round(v)), buckets: ["짧은 편", "보통", "긴 편"] as [string, string, string] };
+const ML = { kind: "ml" as const, format: (v: number) => `${Math.round(v)}ml`, buckets: ["적은 편", "보통", "많은 편"] as [string, string, string] };
+const GRAM = { kind: "gram" as const, format: (v: number) => `${Math.round(v)}g`, buckets: ["적은 편", "보통", "많은 편"] as [string, string, string] };
 
 const FEATURES: Record<FeatureKey, FeatureMeta> = {
   lastFeedMinutes: { family: "feed", axis: "마지막 수유 시각", low: "마지막 수유가 이른", high: "마지막 수유가 늦은", more: "마지막 수유가 늦어졌어요", less: "마지막 수유가 빨라졌어요", ...CLOCK },
@@ -373,6 +380,10 @@ const FEATURES: Record<FeatureKey, FeatureMeta> = {
   foodAmount: { family: "food", axis: "이유식 양", low: "이유식을 적게 먹은", high: "이유식을 많이 먹은", more: "이유식을 더 많이 먹었어요", less: "이유식을 덜 먹었어요", ...GRAM },
   milkVolume: { family: "food", axis: "우유 섭취량", low: "우유를 적게 마신", high: "우유를 많이 마신", more: "우유를 더 많이 마셨어요", less: "우유를 덜 마셨어요", ...ML },
 };
+
+export function featureFormatKind(key: FeatureKey): FeatureFormatKind {
+  return FEATURES[key].kind;
+}
 
 /**
  * 후보 쌍은 손으로 나열하지 않고 서로 다른 영역끼리 자동으로 만든다.

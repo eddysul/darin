@@ -45,7 +45,7 @@ export async function registerCurrentPushToken(): Promise<boolean> {
   try {
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("default", {
-        name: "Darin 알림",
+        name: "Darin",
         importance: Notifications.AndroidImportance.DEFAULT,
       });
     }

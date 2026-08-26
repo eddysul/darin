@@ -96,6 +96,14 @@ export type MemoryCard = {
   publishError?: string;
 };
 
+export type FriendMemoryContext = {
+  babyId: string;
+  babyName: string;
+  avatarStoragePath?: string;
+  avatarUrl?: string;
+  latestPostAt?: string;
+};
+
 export type PreparedMemoryPhoto = {
   id: string;
   localUri: string;

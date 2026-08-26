@@ -4,6 +4,7 @@ import { cleanupQaAccounts, createAdminClient, createQaAccounts } from "./lib/qa
 const accounts = await createQaAccounts(["DarinIdQA-Owner", "DarinIdQA-Family", "DarinIdQA-Friend", "DarinIdQA-Outsider"]);
 const [owner, family, friend, outsider] = accounts;
 const admin = createAdminClient();
+const skipEdgeFunction = process.env.QA_SKIP_EDGE_FUNCTION === "true";
 let babyId = null;
 
 function assertBlocked(result, message) {
@@ -78,8 +79,20 @@ try {
   if (familyMember.error || familyMember.data?.permission_role !== "editor") {
     throw familyMember.error ?? new Error("family role not applied as editor");
   }
-  const acceptedEvent = await owner.sb.from("notification_events").select("id").eq("event_type", "family_joined").eq("data->>requestId", familyRequestId);
+  const acceptedEvent = await owner.sb.from("notification_events").select("id,status,error_message").eq("event_type", "family_joined").eq("data->>requestId", familyRequestId);
   if (acceptedEvent.error || !acceptedEvent.data?.length) throw new Error("requester did not receive accepted in-app event");
+  if (!skipEdgeFunction) {
+    const acceptedPush = await family.sb.functions.invoke("send-push-notification", {
+      body: { action: "sendInviteResponse", targetId: familyRequestId },
+    });
+    if (acceptedPush.error) throw acceptedPush.error;
+    const acceptedDelivery = await owner.sb.from("notification_events").select("status,error_message")
+      .eq("id", acceptedEvent.data[0].id).single();
+    if (acceptedDelivery.error || acceptedDelivery.data?.status !== "skipped"
+        || acceptedDelivery.data?.error_message !== "no_active_token") {
+      throw new Error("accepted response push no-token result was not recorded");
+    }
+  }
 
   const friendRequest = await owner.sb.rpc("send_darin_id_invite_request", {
     p_baby_id: babyId, p_darin_id: "darin-qa-2#1002", p_request_type: "friend", p_role: "viewer", p_relation: "친구",
@@ -118,8 +131,22 @@ try {
   if (declinedMembership.error || declinedMembership.data?.length) throw new Error("declined request granted baby access");
   const declinedEvent = await owner.sb.from("notification_events").select("id").eq("event_type", "invite_declined").eq("data->>requestId", declineRequestId);
   if (declinedEvent.error || !declinedEvent.data?.length) throw new Error("requester did not receive declined in-app event");
+  if (!skipEdgeFunction) {
+    const declinedPush = await outsider.sb.functions.invoke("send-push-notification", {
+      body: { action: "sendInviteResponse", targetId: declineRequestId },
+    });
+    if (declinedPush.error) throw declinedPush.error;
+    const declinedDelivery = await owner.sb.from("notification_events").select("status,error_message")
+      .eq("id", declinedEvent.data[0].id).single();
+    if (declinedDelivery.error || declinedDelivery.data?.status !== "skipped"
+        || declinedDelivery.data?.error_message !== "no_active_token") {
+      throw new Error("declined response push no-token result was not recorded");
+    }
+  }
 
-  console.log("PASS Darin ID validation, 30-day expiry, request RLS, accept/decline notifications, family role, and friend isolation");
+  console.log(skipEdgeFunction
+    ? "PASS Darin ID validation, request RLS, accept/decline in-app events, family role, and friend isolation (Edge Function skipped)"
+    : "PASS Darin ID validation, request RLS, accept/decline in-app and push delivery, family role, and friend isolation");
 } finally {
   if (babyId) await owner.sb.from("babies").delete().eq("id", babyId);
   await cleanupQaAccounts(accounts);

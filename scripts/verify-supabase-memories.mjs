@@ -8,7 +8,7 @@
  *   C = non-member
  *   F = explicitly invited Memories-only friend (not a baby_member)
  *
- * Usage: node --env-file=.env scripts/verify-supabase-memories.mjs
+ * Usage: pnpm qa:supabase:memories (loads guarded .env.qa)
  */
 import { cleanupQaAccounts, createPublicClient, createQaAccounts } from "./lib/qa-auth.mjs";
 import { readFileSync } from "node:fs";
@@ -190,11 +190,12 @@ try {
   const friendPath = await attachMedia(friendPost.id, "friend_circle");
   expectOne(await readById(accountA.sb, friendPost.id), "A friend post");
   expectOne(await readById(accountF.sb, friendPost.id), "F invited friend post");
-  expectNone(await readById(accountB.sb, friendPost.id), "B family-only account on friend post");
+  expectOne(await readById(accountB.sb, friendPost.id), "B family viewer friend post");
+  expectOne(await readById(accountE.sb, friendPost.id), "E family editor friend post");
   expectNone(await readById(accountC.sb, friendPost.id), "C non-member friend post");
   await expectAllowedSignedUrl(accountF.sb, friendPath, "F friend post signed URL");
   await expectBlockedSignedUrl(accountC.sb, friendPath, "C friend post signed URL");
-  pass("friend_circle visible only to author + explicit Memories friend; not public/non-member");
+  pass("friend_circle visible to family members + explicit Memories friend; not public/non-member");
 
   // ---------- Memories V2B: private saves ----------
   const saveRow = async (account, post) => account.sb.from("memory_saves").insert({

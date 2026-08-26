@@ -26,26 +26,19 @@ import {
 } from "../repositories/FamilyRepository";
 import { ProfileRepository } from "../repositories/ProfileRepository";
 import { parseDarinId } from "../repositories/DarinIdentityRepository";
-import { FAMILY_ROLE_LABELS } from "../types/family";
+import { familyRoleMessageKey } from "../types/family";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, radius } from "../theme";
+import { useLanguage } from "../LanguageContext";
+import {
+  familyErrorMessage,
+  inviteRequestBody,
+  inviteRequestTitle,
+  storedFamilyRoleLabel,
+  storedRelationshipLabel,
+} from "../utils/familyDisplay";
 
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
-
-const INVITE_LABELS: Record<VisibleInviteType, string> = {
-  family: "가족 초대",
-  baby_friend: "친구 초대",
-};
-
-const INVITE_DESCRIPTIONS: Record<VisibleInviteType, string> = {
-  family: "기록과 성장책을 함께 볼 수 있어요.",
-  baby_friend: "친구 공개 순간만 볼 수 있어요.",
-};
-
-const INVITE_PERMISSION_COPY: Record<VisibleInviteType, string> = {
-  family: "기본은 기록 가능 권한이에요. 관리자는 명시적으로 선택한 경우에만 부여해요.",
-  baby_friend: "친구 공개 순간만 볼 수 있고 기록·일기·성장책은 볼 수 없어요.",
-};
 
 const INVITE_ICON: Record<VisibleInviteType, MiscIconKey> = {
   family: "family",
@@ -66,6 +59,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "FamilyShare">;
 
 export function FamilyShareScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const { babyName, myFamilyRole, familyMembers, rehydrateFromServer, activeBabyId, switchActiveBaby } = useBabyLog();
   const babyId = activeBabyId;
   const isAdmin = myFamilyRole === "owner" || myFamilyRole === "admin";
@@ -133,7 +127,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
     const preview = parseDarinId(targetDarinId);
     if (!preview) {
       setIdPreview(null);
-      setError("Darin ID를 닉네임#0000 형식으로 입력해 주세요.");
+      setError(t("family.critical.015"));
       return;
     }
     setError("");
@@ -143,7 +137,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
   const sendDarinIdRequest = async () => {
     if (working || !idPreview) return;
     if (!babyId || !isAdmin) {
-      setError("초대 요청은 아기 관리자만 보낼 수 있어요.");
+      setError(t("family.critical.016"));
       return;
     }
     setWorking(true);
@@ -156,16 +150,16 @@ export function FamilyShareScreen({ navigation, route }: Props) {
         role,
         relationshipLabel: relation,
       });
-      if (!request) throw new Error("초대 요청을 만들지 못했어요.");
+      if (!request) throw new Error(t("family.critical.017"));
       setTargetDarinId("");
       setIdPreview(null);
       Alert.alert(
-        inviteType === "family" ? "가족 초대 요청을 보냈어요" : "친구 추가 요청을 보냈어요",
-        `${request.recipient_nickname}님에게 요청을 보냈어요.`,
+        inviteType === "family" ? t("family.critical.018") : t("family.critical.019"),
+        t("family.critical.020", { name: request.recipient_nickname }),
       );
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "초대 요청을 보내지 못했어요.");
+      setError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.021"));
     } finally {
       setWorking(false);
     }
@@ -182,10 +176,10 @@ export function FamilyShareScreen({ navigation, route }: Props) {
         role,
         relationshipLabel: relation,
       });
-      if (!row?.code) throw new Error("초대코드를 만들지 못했어요.");
+      if (!row?.code) throw new Error(t("family.critical.022"));
       setInviteCode(row.code);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "초대코드를 만들지 못했어요.");
+      setError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.022"));
     } finally {
       setCreatingCode(false);
     }
@@ -194,20 +188,25 @@ export function FamilyShareScreen({ navigation, route }: Props) {
   const copyInviteCode = async () => {
     if (!inviteCode) return;
     await Clipboard.setStringAsync(inviteCode);
-    Alert.alert("초대코드를 복사했어요", "카카오톡이나 문자에 붙여넣어 공유할 수 있어요.");
+    Alert.alert(t("family.critical.023"), t("family.critical.024"));
   };
 
   const copyInviteLink = async () => {
     if (!inviteCode) return;
     await Clipboard.setStringAsync(`knanny://invite/${encodeURIComponent(inviteCode)}`);
-    Alert.alert("초대 링크를 복사했어요", "앱이 열리지 않으면 초대코드를 직접 입력해 주세요.");
+    Alert.alert(t("family.critical.025"), t("family.critical.026"));
   };
 
   const shareInviteCode = async () => {
     if (!inviteCode) return;
     const inviteLink = `knanny://invite/${encodeURIComponent(inviteCode)}`;
     await Share.share({
-      message: `${babyName}의 다린 ${inviteType === "family" ? "가족" : "친구"} 초대예요.\n${inviteLink}\n앱이 열리지 않으면 초대코드 ${inviteCode}를 입력해 주세요.`,
+      message: t("family.critical.027", {
+        babyName,
+        kind: inviteType === "family" ? t("family.critical.028") : t("family.critical.029"),
+        link: inviteLink,
+        code: inviteCode,
+      }),
     });
   };
 
@@ -220,10 +219,10 @@ export function FamilyShareScreen({ navigation, route }: Props) {
     try {
       const row = await FamilyRepository.previewInviteCode(code);
       if (!row?.is_valid) {
-        throw new Error(row?.invalid_reason === "expired" ? "만료된 초대코드예요." : "유효하지 않은 초대코드예요.");
+        throw new Error(row?.invalid_reason === "expired" ? t("family.critical.030") : t("family.critical.031"));
       }
       if (row.invite_type === "darin_friend") {
-        throw new Error("이전 버전 초대코드예요. 새로운 초대코드를 요청해 주세요.");
+        throw new Error(t("family.critical.032"));
       }
       setCodePreview({
         code,
@@ -233,7 +232,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
         inviteType: row.invite_type,
       });
     } catch (cause) {
-      setCodeError(cause instanceof Error ? cause.message : "초대코드를 확인하지 못했어요.");
+      setCodeError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.033"));
     } finally {
       setCodeWorking(false);
     }
@@ -245,14 +244,14 @@ export function FamilyShareScreen({ navigation, route }: Props) {
     setCodeError("");
     try {
       const profile = await ProfileRepository.getMyDisplayProfile();
-      if (!profile) throw new Error("프로필을 먼저 완성해 주세요.");
+      if (!profile) throw new Error(t("family.critical.034"));
       const accepted = await FamilyRepository.acceptInviteCode({
         code: codePreview.code,
         displayName: profile.displayName,
         nickname: profile.nickname,
         relation: profile.defaultRelation ?? "가족",
       });
-      if (!accepted) throw new Error("초대를 수락하지 못했어요.");
+      if (!accepted) throw new Error(t("family.critical.035"));
       setEnteredCode("");
       setCodePreview(null);
       if (accepted.invite_type === "family" && accepted.baby_id) {
@@ -261,11 +260,11 @@ export function FamilyShareScreen({ navigation, route }: Props) {
         await refresh();
       }
       Alert.alert(
-        "초대 수락 완료",
-        accepted.invite_type === "family" ? "가족 공유에 연결됐어요." : "친구 공개 순간에 연결됐어요.",
+        t("family.critical.036"),
+        accepted.invite_type === "family" ? t("family.critical.037") : t("family.critical.038"),
       );
     } catch (cause) {
-      setCodeError(cause instanceof Error ? cause.message : "초대를 수락하지 못했어요.");
+      setCodeError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.035"));
     } finally {
       setCodeWorking(false);
     }
@@ -276,10 +275,10 @@ export function FamilyShareScreen({ navigation, route }: Props) {
     setRespondingId(item.id);
     try {
       await FamilyRepository.respondToDarinIdInviteRequest(item.id, accept);
-      Alert.alert(accept ? "요청을 수락했어요" : "요청을 거절했어요", accept ? "공유 멤버 연결이 완료되었어요." : "요청을 거절했어요.");
+      Alert.alert(accept ? t("family.critical.039") : t("family.critical.040"), accept ? t("family.critical.041") : t("family.critical.040"));
       await refresh();
     } catch (cause) {
-      Alert.alert("요청을 처리하지 못했어요", cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요.");
+      Alert.alert(t("family.critical.042"), cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.043"));
     } finally {
       setRespondingId(null);
     }
@@ -299,10 +298,10 @@ export function FamilyShareScreen({ navigation, route }: Props) {
             <BabyLogIcon kind="family" size={22} color={colors.amberText} />
           </View>
           <View style={styles.summaryCopy}>
-            <Text style={styles.summaryTitle}>{babyName}네 가족</Text>
-            <Text style={styles.summaryMeta}>가족 {activeFamily.length}명 · 친구 {friends.length}명</Text>
+            <Text style={styles.summaryTitle}>{t("family.critical.044", { babyName })}</Text>
+            <Text style={styles.summaryMeta}>{t("family.critical.045", { family: activeFamily.length, friends: friends.length })}</Text>
             <Text style={styles.summaryHint} numberOfLines={2}>
-              {activeFamily.length <= 1 ? "아직 초대된 가족이 없어요." : `${activeFamily.length - 1}명의 가족과 연결되어 있어요.`}
+              {activeFamily.length <= 1 ? t("family.critical.046") : t("family.critical.047", { count: activeFamily.length - 1 })}
             </Text>
           </View>
         </View>
@@ -321,9 +320,9 @@ export function FamilyShareScreen({ navigation, route }: Props) {
           <View style={styles.hubCard}>
             <View style={styles.tabs} accessibilityRole="tablist">
               {([
-                ["create", "요청 보내기"],
-                ["enter", "요청 받기"],
-                ["people", "연결된 사람"],
+                ["create", t("family.critical.048")],
+                ["enter", t("family.critical.049")],
+                ["people", t("family.critical.050")],
               ] as const).map(([value, label]) => (
                 <Pressable
                   key={value}
@@ -344,7 +343,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
               <View style={styles.tabBody}>
                 {isAdmin ? (
                   <>
-                <Text style={styles.sectionTitle}>누구를 초대할까요?</Text>
+                <Text style={styles.sectionTitle}>{t("family.critical.051")}</Text>
                 {(["family", "baby_friend"] as VisibleInviteType[]).map((type) => (
                     <Pressable
                       key={type}
@@ -358,16 +357,16 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                         <BabyLogIcon kind={INVITE_ICON[type]} size={18} color={inviteType === type ? colors.amberText : colors.muted} />
                       </View>
                       <View style={styles.optionCopy}>
-                        <Text style={styles.optionTitle}>{INVITE_LABELS[type]}</Text>
-                        <Text style={styles.optionDescription}>{INVITE_DESCRIPTIONS[type]}</Text>
+                        <Text style={styles.optionTitle}>{type === "family" ? t("family.critical.009") : t("family.critical.010")}</Text>
+                        <Text style={styles.optionDescription}>{type === "family" ? t("family.critical.011") : t("family.critical.012")}</Text>
                       </View>
                     </Pressable>
                 ))}
 
-                <Text style={styles.permissionHint}>{INVITE_PERMISSION_COPY[inviteType]}</Text>
+                <Text style={styles.permissionHint}>{inviteType === "family" ? t("family.critical.013") : t("family.critical.014")}</Text>
                 {inviteType === "family" ? (
                   <View style={styles.roleArea}>
-                    <Text style={styles.fieldLabel}>가족 권한</Text>
+                    <Text style={styles.fieldLabel}>{t("family.critical.052")}</Text>
                     <View style={styles.chips}>
                       {(["admin", "editor"] as const).map((value) => (
                         <Pressable
@@ -377,17 +376,17 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                           accessibilityRole="button"
                           accessibilityState={{ selected: role === value }}
                         >
-                          <Text style={[styles.chipText, role === value && styles.chipTextActive]}>{value === "admin" ? "관리자" : "기록 가능"}</Text>
+                          <Text style={[styles.chipText, role === value && styles.chipTextActive]}>{t(familyRoleMessageKey(value))}</Text>
                         </Pressable>
                       ))}
                     </View>
-                    <Text style={styles.permissionHint}>관리자는 구성원과 초대를 관리하고, 기록 가능은 기록을 추가·수정할 수 있어요.</Text>
+                    <Text style={styles.permissionHint}>{t("family.critical.053")}</Text>
                   </View>
                 ) : null}
 
                 <View style={styles.sendSection}>
-                  <Text style={styles.sectionTitle}>{inviteType === "family" ? "Darin ID로 가족 요청" : "Darin ID로 친구 요청"}</Text>
-                  <Text style={styles.description}>상대가 알려준 Darin ID 형식을 확인한 뒤 요청을 보내요. 실명과 사진은 보낸 뒤에 알려 줘요.</Text>
+                  <Text style={styles.sectionTitle}>{inviteType === "family" ? t("family.critical.054") : t("family.critical.055")}</Text>
+                  <Text style={styles.description}>{t("family.critical.056")}</Text>
                   <TextInput
                     style={styles.input}
                     value={targetDarinId}
@@ -396,7 +395,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                       setError("");
                       setIdPreview(null);
                     }}
-                    placeholder="예: 콩이맘#4821"
+                    placeholder={t("family.critical.057")}
                     placeholderTextColor={colors.faint}
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -412,9 +411,9 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                       onPress={confirmDarinId}
                       disabled={!targetDarinId.trim() || working}
                       accessibilityRole="button"
-                      accessibilityLabel="형식 확인"
+                      accessibilityLabel={t("family.critical.058")}
                     >
-                      <Text style={styles.secondaryText}>형식 확인</Text>
+                      <Text style={styles.secondaryText}>{t("family.critical.058")}</Text>
                     </Pressable>
                   ) : (
                     <>
@@ -423,7 +422,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                         <View style={styles.friendCopy}>
                           <Text style={styles.person}>{idPreview.nickname}</Text>
                           <Text style={styles.nickname}>{idPreview.darinId}</Text>
-                          <Text style={styles.permissionHint}>형식만 확인했어요. 상대가 없으면 전송되지 않아요.</Text>
+                          <Text style={styles.permissionHint}>{t("family.critical.059")}</Text>
                         </View>
                       </View>
                       <Pressable
@@ -431,31 +430,31 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                         onPress={() => void sendDarinIdRequest()}
                         disabled={working}
                         accessibilityRole="button"
-                        accessibilityLabel="요청 보내기"
+                        accessibilityLabel={t("family.critical.048")}
                       >
-                        {working ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.primaryText}>요청 보내기</Text>}
+                        {working ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.primaryText}>{t("family.critical.048")}</Text>}
                       </Pressable>
                     </>
                   )}
                 </View>
 
                 <View style={styles.sendSection}>
-                  <Text style={styles.sectionTitle}>초대코드로 초대</Text>
-                  <Text style={styles.description}>아직 Darin 계정이 없거나 카카오톡·문자로 공유할 때 사용해요.</Text>
+                  <Text style={styles.sectionTitle}>{t("family.critical.060")}</Text>
+                  <Text style={styles.description}>{t("family.critical.061")}</Text>
                   {inviteCode ? (
                     <>
                       <View style={styles.codePill}>
                         <Text style={styles.codeText}>{inviteCode}</Text>
                       </View>
                       <View style={styles.inviteActions}>
-                        <Pressable style={styles.secondaryAction} onPress={() => void copyInviteCode()} accessibilityRole="button" accessibilityLabel="초대코드 복사">
-                          <Text style={styles.secondaryText}>코드 복사</Text>
+                        <Pressable style={styles.secondaryAction} onPress={() => void copyInviteCode()} accessibilityRole="button" accessibilityLabel={t("family.critical.062")}>
+                          <Text style={styles.secondaryText}>{t("family.critical.062")}</Text>
                         </Pressable>
-                        <Pressable style={styles.secondaryAction} onPress={() => void copyInviteLink()} accessibilityRole="button" accessibilityLabel="초대 링크 복사">
-                          <Text style={styles.secondaryText}>링크 복사</Text>
+                        <Pressable style={styles.secondaryAction} onPress={() => void copyInviteLink()} accessibilityRole="button" accessibilityLabel={t("family.critical.063")}>
+                          <Text style={styles.secondaryText}>{t("family.critical.063")}</Text>
                         </Pressable>
-                        <Pressable style={styles.primaryAction} onPress={() => void shareInviteCode()} accessibilityRole="button" accessibilityLabel="초대코드 공유" accessibilityHint="카카오톡, 문자 또는 다른 앱으로 공유합니다">
-                          <Text style={styles.primaryText}>공유</Text>
+                        <Pressable style={styles.primaryAction} onPress={() => void shareInviteCode()} accessibilityRole="button" accessibilityLabel={t("family.critical.064")} accessibilityHint={t("family.critical.065")}>
+                          <Text style={styles.primaryText}>{t("family.critical.064")}</Text>
                         </Pressable>
                       </View>
                     </>
@@ -465,25 +464,25 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                       onPress={() => void createInviteCode()}
                       disabled={creatingCode}
                       accessibilityRole="button"
-                      accessibilityLabel="초대코드 만들기"
+                      accessibilityLabel={t("family.critical.066")}
                     >
-                      {creatingCode ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.secondaryText}>초대코드 만들기</Text>}
+                      {creatingCode ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.secondaryText}>{t("family.critical.066")}</Text>}
                     </Pressable>
                   )}
                 </View>
 
                 {pendingOutgoing.length ? (
                   <View style={styles.sendSection}>
-                    <Text style={styles.sectionTitle}>보낸 요청</Text>
+                    <Text style={styles.sectionTitle}>{t("family.critical.067")}</Text>
                     {pendingOutgoing.map((item) => (
                       <View key={item.id} style={styles.personRow}>
                         <View style={styles.personAvatar}>
                           <BabyLogIcon kind={item.requestType === "family" ? "family" : "handshake"} size={18} color={colors.amberText} />
                         </View>
                         <View style={styles.friendCopy}>
-                          <Text style={styles.person}>{item.title}</Text>
-                          <Text style={styles.nickname}>{item.body}</Text>
-                          <Text style={styles.permissionHint}>{item.relation} · {item.roleLabel} · 수락 대기</Text>
+                          <Text style={styles.person}>{inviteRequestTitle(t, item.title)}</Text>
+                          <Text style={styles.nickname}>{inviteRequestBody(t, item.body)}</Text>
+                          <Text style={styles.permissionHint}>{t("family.critical.068", { relation: storedRelationshipLabel(t, item.relation), role: storedFamilyRoleLabel(t, item.roleLabel) })}</Text>
                         </View>
                       </View>
                     ))}
@@ -492,15 +491,15 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                   </>
                 ) : (
                   <>
-                    <Text style={styles.sectionTitle}>요청 보내기</Text>
-                    <Text style={styles.description}>초대는 아기 관리자만 보낼 수 있어요. 받은 요청은 요청 받기에서 확인하고 수락할 수 있어요.</Text>
+                    <Text style={styles.sectionTitle}>{t("family.critical.048")}</Text>
+                    <Text style={styles.description}>{t("family.critical.069")}</Text>
                     <Pressable
                       style={styles.secondary}
                       onPress={() => setActiveTab("enter")}
                       accessibilityRole="button"
-                      accessibilityLabel="요청 받기 보기"
+                      accessibilityLabel={t("family.critical.070")}
                     >
-                      <Text style={styles.secondaryText}>요청 받기 보기</Text>
+                      <Text style={styles.secondaryText}>{t("family.critical.070")}</Text>
                     </Pressable>
                   </>
                 )}
@@ -509,8 +508,8 @@ export function FamilyShareScreen({ navigation, route }: Props) {
 
             {activeTab === "enter" ? (
               <View style={styles.tabBody}>
-                <Text style={styles.sectionTitle}>받은 요청</Text>
-                <Text style={styles.description}>대기 중인 요청을 여기서 수락하거나 거절해요. 알림은 입구예요.</Text>
+                <Text style={styles.sectionTitle}>{t("family.critical.071")}</Text>
+                <Text style={styles.description}>{t("family.critical.072")}</Text>
                 {incoming.length ? incoming.map((item) => (
                   <View key={item.id} style={styles.requestCard}>
                     <View style={styles.previewCard}>
@@ -518,9 +517,9 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                         <BabyLogIcon kind={item.requestType === "family" ? "family" : "handshake"} size={18} color={colors.amberText} />
                       </View>
                       <View style={styles.friendCopy}>
-                        <Text style={styles.person}>{item.title}</Text>
-                        <Text style={styles.nickname}>{item.body}</Text>
-                        <Text style={styles.permissionHint}>{item.relation} · {item.roleLabel}</Text>
+                        <Text style={styles.person}>{inviteRequestTitle(t, item.title)}</Text>
+                        <Text style={styles.nickname}>{inviteRequestBody(t, item.body)}</Text>
+                        <Text style={styles.permissionHint}>{storedRelationshipLabel(t, item.relation)} · {storedFamilyRoleLabel(t, item.roleLabel)}</Text>
                       </View>
                     </View>
                     <View style={styles.inviteActions}>
@@ -529,39 +528,39 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                         disabled={respondingId === item.id}
                         onPress={() => void respondToRequest(item, false)}
                         accessibilityRole="button"
-                        accessibilityLabel="거절"
+                        accessibilityLabel={t("family.critical.073")}
                       >
-                        <Text style={styles.declineText}>거절</Text>
+                        <Text style={styles.declineText}>{t("family.critical.073")}</Text>
                       </Pressable>
                       <Pressable
                         style={[styles.acceptButton, respondingId === item.id && styles.disabled]}
                         disabled={respondingId === item.id}
                         onPress={() => void respondToRequest(item, true)}
                         accessibilityRole="button"
-                        accessibilityLabel="수락"
+                        accessibilityLabel={t("family.critical.074")}
                       >
-                        {respondingId === item.id ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.acceptText}>수락</Text>}
+                        {respondingId === item.id ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.acceptText}>{t("family.critical.074")}</Text>}
                       </Pressable>
                     </View>
                   </View>
                 )) : (
                   <View style={styles.emptyGroup}>
-                    <Text style={styles.empty}>받은 요청이 없어요.</Text>
-                    <Text style={styles.empty}>새 요청이 오면 알림과 여기에 같이 보여요.</Text>
+                    <Text style={styles.empty}>{t("family.critical.075")}</Text>
+                    <Text style={styles.empty}>{t("family.critical.076")}</Text>
                     <Pressable
                       style={styles.secondary}
                       onPress={() => navigation.navigate("NotificationCenter")}
                       accessibilityRole="button"
-                      accessibilityLabel="알림 열기"
+                      accessibilityLabel={t("family.critical.077")}
                     >
-                      <Text style={styles.secondaryText}>알림 열기</Text>
+                      <Text style={styles.secondaryText}>{t("family.critical.077")}</Text>
                     </Pressable>
                   </View>
                 )}
 
                 <View style={styles.sendSection}>
-                  <Text style={styles.sectionTitle}>초대코드 입력</Text>
-                  <Text style={styles.description}>공유받은 코드를 서버에서 확인한 뒤 초대를 수락해요.</Text>
+                  <Text style={styles.sectionTitle}>{t("family.critical.078")}</Text>
+                  <Text style={styles.description}>{t("family.critical.079")}</Text>
                   <TextInput
                     style={styles.input}
                     value={enteredCode}
@@ -570,29 +569,29 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                       setCodePreview(null);
                       setCodeError("");
                     }}
-                    placeholder="예: DARIN-8F3K2Q"
+                    placeholder={t("family.critical.080")}
                     placeholderTextColor={colors.faint}
                     autoCapitalize="characters"
                     autoCorrect={false}
                     returnKeyType="done"
                     onSubmitEditing={() => void previewEnteredCode()}
-                    accessibilityLabel="초대코드"
+                    accessibilityLabel={t("family.critical.078")}
                   />
                   {codeError ? <Text style={styles.error} accessibilityRole="alert">{codeError}</Text> : null}
                   {codePreview ? (
                     <View style={styles.requestCard}>
-                      <Text style={styles.person}>{codePreview.inviteType === "family" ? "가족 초대" : "친구 초대"}</Text>
-                      {codePreview.babyName ? <Text style={styles.nickname}>아기 · {codePreview.babyName}</Text> : null}
-                      <Text style={styles.nickname}>초대한 사람 · {codePreview.inviterName}</Text>
-                      <Text style={styles.permissionHint}>{codePreview.inviteType === "family" ? "가족 권한으로 연결돼요." : "친구 공개 순간만 볼 수 있어요."}</Text>
+                      <Text style={styles.person}>{codePreview.inviteType === "family" ? t("family.critical.009") : t("family.critical.010")}</Text>
+                      {codePreview.babyName ? <Text style={styles.nickname}>{t("family.critical.081", { name: codePreview.babyName })}</Text> : null}
+                      <Text style={styles.nickname}>{t("family.critical.082", { name: codePreview.inviterName })}</Text>
+                      <Text style={styles.permissionHint}>{codePreview.inviteType === "family" ? t("family.critical.083") : t("family.critical.012")}</Text>
                       <Pressable
                         style={[styles.primary, codeWorking && styles.disabled]}
                         disabled={codeWorking}
                         onPress={() => void acceptEnteredCode()}
                         accessibilityRole="button"
-                        accessibilityLabel="초대 수락"
+                        accessibilityLabel={t("family.critical.084")}
                       >
-                        {codeWorking ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.primaryText}>초대 수락</Text>}
+                        {codeWorking ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.primaryText}>{t("family.critical.084")}</Text>}
                       </Pressable>
                     </View>
                   ) : (
@@ -601,9 +600,9 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                       disabled={!enteredCode.trim() || codeWorking}
                       onPress={() => void previewEnteredCode()}
                       accessibilityRole="button"
-                      accessibilityLabel="초대코드 확인"
+                      accessibilityLabel={t("family.critical.085")}
                     >
-                      {codeWorking ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.secondaryText}>코드 확인</Text>}
+                      {codeWorking ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.secondaryText}>{t("family.critical.085")}</Text>}
                     </Pressable>
                   )}
                 </View>
@@ -612,24 +611,24 @@ export function FamilyShareScreen({ navigation, route }: Props) {
 
             {activeTab === "people" ? (
               <View style={styles.tabBody}>
-                <Text style={styles.sectionTitle}>연결된 사람</Text>
-                <Text style={styles.permissionHint}>친구는 친구 공개 순간만 볼 수 있어요. 기록, 일기, 성장책은 가족에게만 공유돼요.</Text>
+                <Text style={styles.sectionTitle}>{t("family.critical.050")}</Text>
+                <Text style={styles.permissionHint}>{t("family.critical.086")}</Text>
 
                 <View style={styles.peopleSection}>
-                  <Text style={styles.peopleTitle}>가족</Text>
+                  <Text style={styles.peopleTitle}>{t("family.critical.087")}</Text>
                   {activeFamily.length ? activeFamily.map((member) => (
                     <View key={member.id} style={styles.personRow}>
                       <Avatar name={member.name} uri={member.avatarUrl} />
                       <View style={styles.friendCopy}>
                         <Text style={styles.person}>{member.name}</Text>
-                        <Text style={styles.nickname}>{member.realName ? `${member.realName} · ` : ""}{member.relationshipLabel ?? "가족"} · {FAMILY_ROLE_LABELS[member.role]}</Text>
+                        <Text style={styles.nickname}>{member.realName ? `${member.realName} · ` : ""}{storedRelationshipLabel(t, member.relationshipLabel ?? "가족")} · {t(familyRoleMessageKey(member.role))}</Text>
                       </View>
                     </View>
-                  )) : <Text style={styles.empty}>아직 초대된 가족이 없어요.</Text>}
+                  )) : <Text style={styles.empty}>{t("family.critical.046")}</Text>}
                 </View>
 
                 <View style={styles.peopleSection}>
-                  <Text style={styles.peopleTitle}>친구</Text>
+                  <Text style={styles.peopleTitle}>{t("family.critical.088")}</Text>
                   {friends.length ? friends.map((friend) => (
                     <View key={friend.membershipId} style={styles.personRow}>
                       <Avatar name={friend.displayName} />
@@ -640,8 +639,8 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                     </View>
                   )) : (
                     <View style={styles.emptyGroup}>
-                      <Text style={styles.empty}>아직 연결된 친구가 없어요.</Text>
-                      <Text style={styles.empty}>친구를 초대해 추억을 함께 나눠보세요.</Text>
+                      <Text style={styles.empty}>{t("family.critical.089")}</Text>
+                      <Text style={styles.empty}>{t("family.critical.090")}</Text>
                     </View>
                   )}
                 </View>

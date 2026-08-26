@@ -45,11 +45,29 @@ export function formatDurationMinutes(totalMinutes: number, locale: Locale): str
   const minutes = Math.max(0, Math.round(totalMinutes));
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  if (locale === "ko") return hours ? `${hours}시간 ${rest}분` : `${rest}분`;
-  if (locale === "ja") return hours ? `${hours}時間${rest}分` : `${rest}分`;
-  if (locale === "zh-CN") return hours ? `${hours}小时${rest}分钟` : `${rest}分钟`;
-  if (locale === "es") return hours ? `${hours} h ${rest} min` : `${rest} min`;
-  return hours ? `${hours} hr ${rest} min` : `${rest} min`;
+  if (locale === "ko") {
+    if (!hours) return `${rest}분`;
+    if (!rest) return `${hours}시간`;
+    return `${hours}시간 ${rest}분`;
+  }
+  if (locale === "ja") {
+    if (!hours) return `${rest}分`;
+    if (!rest) return `${hours}時間`;
+    return `${hours}時間${rest}分`;
+  }
+  if (locale === "zh-CN") {
+    if (!hours) return `${rest}分钟`;
+    if (!rest) return `${hours}小时`;
+    return `${hours}小时${rest}分钟`;
+  }
+  if (locale === "es") {
+    if (!hours) return `${rest} min`;
+    if (!rest) return `${hours} h`;
+    return `${hours} h ${rest} min`;
+  }
+  if (!hours) return `${rest} min`;
+  if (!rest) return `${hours} hr`;
+  return `${hours} hr ${rest} min`;
 }
 
 export function formatUnitValue(value: number, unit: string, locale: Locale): string {

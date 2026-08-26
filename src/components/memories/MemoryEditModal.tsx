@@ -22,6 +22,8 @@ import { colors, radius } from "../../theme";
 import { BabyLogIcon } from "../babylog/BabyLogIcon";
 import { MemoryPeoplePicker } from "./MemoryPeoplePicker";
 import { MemoryPrivacyPicker } from "./MemoryPrivacyPicker";
+import { useLanguage } from "../../LanguageContext";
+import { caughtErrorMessage } from "../../utils/familyDisplay";
 
 const toggle = (list: string[], id: string) => list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
 const MAX_MEMORY_PHOTOS = 5;
@@ -42,6 +44,7 @@ export function MemoryEditModal({
   onSaved: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const [caption, setCaption] = useState("");
   const [privacy, setPrivacy] = useState<MemoryPrivacyType>("family_circle");
   const [taggedIds, setTaggedIds] = useState<string[]>([]);
@@ -66,17 +69,17 @@ export function MemoryEditModal({
     setError("");
     void Promise.all(bundle.media.map(async (media) => ({ mediaId: media.id, uri: await MemoriesRepository.createSignedUrl(media.storagePath) })))
       .then((photos) => { setExistingPhotos(photos); setMediaReady(true); })
-      .catch(() => setError("기존 사진을 불러오지 못했어요. 화면을 닫고 다시 시도해 주세요."));
-  }, [bundle, visible]);
+      .catch(() => setError(t("memory.critical.114")));
+  }, [bundle, t, visible]);
 
   const pickImages = async () => {
     setError("");
     const remaining = MAX_MEMORY_PHOTOS - existingPhotos.length - newImages.length;
-    if (remaining <= 0) return setError("사진을 더 추가하려면 먼저 한 장을 삭제해 주세요.");
+    if (remaining <= 0) return setError(t("memory.critical.097"));
     try {
       const permission = await ImagePicker.getMediaLibraryPermissionsAsync();
       const resolvedPermission = permission.granted ? permission : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!resolvedPermission.granted) return setError("사진을 선택하려면 설정에서 사진 보관함 접근을 허용해 주세요.");
+      if (!resolvedPermission.granted) return setError(t("memory.critical.098"));
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsMultipleSelection: true,
@@ -86,14 +89,14 @@ export function MemoryEditModal({
         quality: 0.9,
       });
       if (result.canceled) return;
-      if (result.assets.some((asset) => asset.fileSize !== undefined && asset.fileSize > 25 * 1024 * 1024)) return setError("사진은 25MB 이하만 올릴 수 있어요.");
+      if (result.assets.some((asset) => asset.fileSize !== undefined && asset.fileSize > 25 * 1024 * 1024)) return setError(t("memory.critical.115"));
       setNewImages((current) => [
         ...current,
         ...result.assets.slice(0, remaining).filter((asset) => !current.some((item) => item.uri === asset.uri)).map((asset) => ({ uri: asset.uri, width: asset.width, height: asset.height, fileSize: asset.fileSize, mimeType: asset.mimeType })),
       ].slice(0, remaining + current.length));
     } catch (cause) {
       if (__DEV__) console.warn("[memory-edit-photo-picker] open failed", cause instanceof Error ? cause.name : "unknown");
-      setError("iCloud 사진이라면 사진 앱에서 원본을 먼저 열어 다운로드한 뒤 다시 선택해 주세요.");
+      setError(t("memory.critical.099"));
     }
   };
 
@@ -106,18 +109,18 @@ export function MemoryEditModal({
 
   const closeSafely = () => {
     if (saving) return;
-    Alert.alert("수정을 닫을까요?", "저장하지 않은 변경은 사라져요.", [
-      { text: "계속 수정", style: "cancel" },
-      { text: "닫기", style: "destructive", onPress: onClose },
+    Alert.alert(t("memory.critical.108"), t("memory.critical.109"), [
+      { text: t("memory.critical.110"), style: "cancel" },
+      { text: t("memory.critical.067"), style: "destructive", onPress: onClose },
     ]);
   };
 
   const save = async () => {
     if (saving) return;
-    if (!mediaReady) return setError("사진을 불러온 뒤 다시 시도해 주세요.");
-    if (existingPhotos.length + newImages.length === 0) return setError("사진을 한 장 이상 추가해 주세요.");
-    if (privacy === "tagged_family" && taggedIds.length === 0) return setError("가족을 한 명 이상 태그해주세요.");
-    if (privacy === "selected_people" && selectedIds.length === 0) return setError("사진을 볼 가족을 한 명 이상 선택해주세요.");
+    if (!mediaReady) return setError(t("memory.critical.111"));
+    if (existingPhotos.length + newImages.length === 0) return setError(t("memory.critical.112"));
+    if (privacy === "tagged_family" && taggedIds.length === 0) return setError(t("memory.critical.101"));
+    if (privacy === "selected_people" && selectedIds.length === 0) return setError(t("memory.critical.102"));
     setSaving(true);
     setError("");
     try {
@@ -137,7 +140,7 @@ export function MemoryEditModal({
       onSaved();
       onClose();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "수정 내용을 저장하지 못했어요.");
+      setError(caughtErrorMessage(t, cause, "memory.critical.113"));
     } finally {
       setSaving(false);
     }
@@ -151,10 +154,10 @@ export function MemoryEditModal({
         keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
       >
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
-          <Pressable style={styles.action} onPress={closeSafely} disabled={saving}><Text style={styles.cancel}>취소</Text></Pressable>
-          <Text style={styles.title}>추억 수정</Text>
+          <Pressable style={styles.action} onPress={closeSafely} disabled={saving}><Text style={styles.cancel}>{t("memory.critical.083")}</Text></Pressable>
+          <Text style={styles.title}>{t("memory.critical.105")}</Text>
           <Pressable style={styles.action} onPress={() => void save()} disabled={saving}>
-            {saving ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.save}>저장</Text>}
+            {saving ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.save}>{t("memory.critical.106")}</Text>}
           </Pressable>
         </View>
         <ScrollView
@@ -163,14 +166,14 @@ export function MemoryEditModal({
           keyboardDismissMode="interactive"
         >
           <View style={styles.field}>
-            <Text style={styles.label}>사진</Text>
-            <Text style={styles.photoGuide}>선택한 사진 {existingPhotos.length + newImages.length}장 · 지금은 사진만, 최대 5장까지 추가할 수 있어요.</Text>
+            <Text style={styles.label}>{t("memory.critical.107")}</Text>
+            <Text style={styles.photoGuide}>{t("memory.critical.088", { count: existingPhotos.length + newImages.length })}</Text>
             {!mediaReady ? <ActivityIndicator color={colors.amberText} /> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
               {existingPhotos.map((photo, index) => (
                 <View key={photo.mediaId} style={styles.photoThumbWrap}>
                   <Image source={{ uri: photo.uri }} style={styles.photoThumb} contentFit="cover" />
-                  {index === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>대표</Text></View> : null}
-                  <Pressable style={styles.photoRemove} onPress={() => setExistingPhotos((current) => current.filter((item) => item.mediaId !== photo.mediaId))} accessibilityRole="button" accessibilityLabel={`기존 사진 ${index + 1} 삭제`}>
+                  {index === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>{t("memory.critical.085")}</Text></View> : null}
+                  <Pressable style={styles.photoRemove} onPress={() => setExistingPhotos((current) => current.filter((item) => item.mediaId !== photo.mediaId))} accessibilityRole="button" accessibilityLabel={t("memory.critical.116", { count: index + 1 })}>
                     <BabyLogIcon kind="trash" size={16} color={colors.onDark} strokeWidth={2.2} />
                   </Pressable>
                 </View>
@@ -179,26 +182,26 @@ export function MemoryEditModal({
                 const position = existingPhotos.length + index;
                 return <View key={`${image.uri}-${index}`} style={styles.photoThumbWrap}>
                   <Image source={{ uri: image.uri }} style={styles.photoThumb} contentFit="cover" />
-                  {position === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>대표</Text></View> : null}
-                  <Pressable style={styles.photoRemove} onPress={() => setNewImages((current) => current.filter((_, photoIndex) => photoIndex !== index))} accessibilityRole="button" accessibilityLabel={`새 사진 ${index + 1} 삭제`}>
+                  {position === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>{t("memory.critical.085")}</Text></View> : null}
+                  <Pressable style={styles.photoRemove} onPress={() => setNewImages((current) => current.filter((_, photoIndex) => photoIndex !== index))} accessibilityRole="button" accessibilityLabel={t("memory.critical.117", { count: index + 1 })}>
                     <BabyLogIcon kind="trash" size={16} color={colors.onDark} strokeWidth={2.2} />
                   </Pressable>
                 </View>;
               })}
               {existingPhotos.length + newImages.length < MAX_MEMORY_PHOTOS ? (
-                <Pressable style={styles.photoAddTile} onPress={() => void pickImages()} accessibilityRole="button" accessibilityLabel="사진 추가">
+                <Pressable style={styles.photoAddTile} onPress={() => void pickImages()} accessibilityRole="button" accessibilityLabel={t("memory.critical.086")}>
                   <BabyLogIcon kind="new" size={22} color={colors.amberText} strokeWidth={2.2} />
-                  <Text style={styles.photoAddText}>사진 추가</Text>
+                  <Text style={styles.photoAddText}>{t("memory.critical.086")}</Text>
                 </Pressable>
               ) : null}
             </ScrollView>}
           </View>
           <View style={styles.field}>
-            <Text style={styles.label}>짧은 이야기</Text>
+            <Text style={styles.label}>{t("memory.critical.089")}</Text>
             <TextInput style={styles.caption} value={caption} onChangeText={setCaption} multiline maxLength={1200} textAlignVertical="top" />
             <Text style={styles.counter}>{caption.length}/1200</Text>
           </View>
-          <View style={styles.field}><Text style={styles.label}>공개 범위</Text><MemoryPrivacyPicker value={privacy} onChange={setPrivacy} /></View>
+          <View style={styles.field}><Text style={styles.label}>{t("memory.critical.073")}</Text><MemoryPrivacyPicker value={privacy} onChange={setPrivacy} /></View>
           <View style={styles.field}>
             <MemoryPeoplePicker
               members={familyMembers}

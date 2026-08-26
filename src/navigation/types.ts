@@ -27,5 +27,5 @@ export type RootStackParamList = {
   NotificationCenter: undefined;
   SettingsDetail: { page: SettingsDetailPage };
   GrowthRecords: undefined;
-  MemoryDetail: { memoryPostId: string };
+  MemoryDetail: { memoryPostId: string; source?: "family" | "friend" | "notification" };
 };

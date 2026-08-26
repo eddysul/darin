@@ -9,8 +9,9 @@
  * 서버 경로는 AI 상담과 같은 /chat 을 쓴다. OpenAI 키는 클라이언트에 두지 않는다.
  */
 import { callOpenAI } from "../api/openaiChat";
+import type { Locale } from "../i18n";
 import type { WeeklyFeatureTable } from "./weeklyFeatureTable";
-import { SYSTEM_PROMPT, describeTable, validateNarrative } from "./weeklyNarrativePrompt";
+import { narrativeSystemPrompt, describeTable, validateNarrative } from "./weeklyNarrativePrompt";
 
 export type WeeklyNarrative = {
   headline: string;
@@ -26,12 +27,13 @@ export type WeeklyNarrative = {
 export async function buildWeeklyNarrative(
   table: WeeklyFeatureTable,
   fallback: WeeklyNarrative,
+  locale: Locale = "ko",
 ): Promise<WeeklyNarrative> {
   if (!table.metrics.length) return fallback;
   try {
     const reply = await callOpenAI(
       [{ role: "user", content: describeTable(table) }],
-      SYSTEM_PROMPT,
+      narrativeSystemPrompt(locale),
       320,
     );
     if (!validateNarrative(reply, table)) return fallback;

@@ -3,7 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 
 const root = path.resolve("src");
-const excluded = new Set(["i18n.ts", "i18nCoreMessages.ts", "i18nRecordDetailMessages.ts", "i18nDiaryCriticalMessages.ts", "i18nSettingsCriticalMessages.ts", "i18nGrowthCriticalMessages.ts", "i18nReportCriticalMessages.ts", "i18nConsultCriticalMessages.ts"]);
+const excluded = new Set(["i18n.ts", "i18nCoreMessages.ts", "i18nRecordDetailMessages.ts", "i18nDiaryCriticalMessages.ts", "i18nSettingsCriticalMessages.ts", "i18nGrowthCriticalMessages.ts", "i18nReportCriticalMessages.ts", "i18nConsultCriticalMessages.ts", "i18nFamilyCriticalMessages.ts", "i18nMemoriesCriticalMessages.ts", "i18nStickerCriticalMessages.ts", "i18nNoticeCriticalMessages.ts", "i18nPickerCriticalMessages.ts", "i18nInsightCriticalMessages.ts", "i18nChromeCriticalMessages.ts", "i18nQaCriticalMessages.ts"]);
 const korean = /[가-힣]/;
 
 type Finding = { file: string; strings: number; group: string };

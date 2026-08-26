@@ -12,6 +12,7 @@ import { isPregnancyStage } from "../../utils/childDisplay";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { useLanguage } from "../../LanguageContext";
 import type { MessageKey } from "../../i18n";
+import { caughtErrorMessage } from "../../utils/familyDisplay";
 
 function babyAgeLabel(baby: Pick<BabyRow, "birth_date" | "child_status">, t: (key: MessageKey, params?: Record<string, string | number>) => string): string {
   if (isPregnancyStage({ childStatus: baby.child_status, birthDate: baby.birth_date ?? undefined })) {
@@ -93,7 +94,7 @@ export function BabySwitcher({ compact = false, variant = "default" }: { compact
                             if (!selected) throw new Error(t("home.switcher.accessError"));
                             setOpen(false);
                           })
-                          .catch((cause) => setError(cause instanceof Error ? cause.message : t("home.switcher.error")))
+                          .catch((cause) => setError(caughtErrorMessage(t, cause, "home.switcher.error")))
                           .finally(() => setBusy(false));
                       }}
                     >

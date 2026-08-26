@@ -9,13 +9,23 @@ import { NotificationRepository } from "../repositories/NotificationRepository";
 import { FamilyRepository } from "../repositories/FamilyRepository";
 import { getNotificationQaSeed, type NotificationItem } from "../data/notificationQaSeed";
 import { canAccessCareReminderUi, canShowNotificationEvent } from "../config/featureFlags";
+import { useLanguage } from "../LanguageContext";
+import { familyErrorMessage } from "../utils/familyDisplay";
+import { notificationBodyLabel, notificationTitleLabel } from "../utils/noticeDisplay";
 
 type Props = NativeStackScreenProps<RootStackParamList, "NotificationCenter">;
 type Filter = "all" | "request" | "family" | "summary" | "event";
 type RequestStatus = "pending" | "accepted" | "declined" | "expired" | "processed";
 type CenterItem = NotificationItem & { requestId?: string; requestStatus?: RequestStatus };
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
-const FILTERS: Array<{ key: Filter; label: string }> = [{ key: "all", label: "전체" }, { key: "request", label: "요청" }, { key: "family", label: "가족" }, { key: "summary", label: "요약" }, { key: "event", label: "이벤트" }];
+const FILTER_KEYS: Filter[] = ["all", "request", "family", "summary", "event"];
+const FILTER_LABEL: Record<Filter, "notice.critical.001" | "notice.critical.002" | "notice.critical.003" | "notice.critical.004" | "notice.critical.005"> = {
+  all: "notice.critical.001",
+  request: "notice.critical.002",
+  family: "notice.critical.003",
+  summary: "notice.critical.004",
+  event: "notice.critical.005",
+};
 
 function periodFor(value: string): CenterItem["period"] {
   const age = Date.now() - new Date(value).getTime();
@@ -34,6 +44,7 @@ function centerTypeFor(eventType: string): CenterItem["type"] {
       return "weekly_summary";
     case "diary_reminder":
     case "feeding_reminder":
+    case "sleep_reminder":
     case "reminder":
       return "reminder";
     case "family_joined":
@@ -96,7 +107,8 @@ function stringData(item: CenterItem, key: string): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-export function NotificationCenterScreen({ navigation }: Props) {
+export function NotificationCenterScreen({ navigation, friendOnly = false }: Props & { friendOnly?: boolean }) {
+  const { t } = useLanguage();
   const [filter, setFilter] = useState<Filter>("all");
   const [items, setItems] = useState<CenterItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,6 +153,10 @@ export function NotificationCenterScreen({ navigation }: Props) {
   const open = (item: CenterItem) => {
     markRead(item);
     if (item.type === "invite_request") {
+      if (friendOnly) {
+        navigation.navigate("MainTabs", { screen: "Memories" });
+        return;
+      }
       navigation.navigate("FamilyShare", { tab: "enter" });
       return;
     }
@@ -149,8 +165,13 @@ export function NotificationCenterScreen({ navigation }: Props) {
     const diaryEntryId = stringData(item, "diaryEntryId");
     const logId = stringData(item, "logId");
 
+    if (friendOnly && !memoryPostId && route !== "memory") {
+      navigation.navigate("MainTabs", { screen: "Memories" });
+      return;
+    }
+
     if (memoryPostId || route === "memory") {
-      if (memoryPostId) navigation.navigate("MemoryDetail", { memoryPostId });
+      if (memoryPostId) navigation.navigate("MemoryDetail", { memoryPostId, source: friendOnly ? "friend" : "notification" });
       else navigation.navigate("MainTabs", { screen: "Memories" });
       return;
     }
@@ -187,7 +208,7 @@ export function NotificationCenterScreen({ navigation }: Props) {
   const respond = async (item: CenterItem, accept: boolean) => {
     if (responding) return;
     if (!item.requestId) {
-      Alert.alert("QA 샘플 알림", "실제 초대 요청에서 수락과 거절을 확인할 수 있어요.");
+      Alert.alert(t("notice.critical.028"), t("notice.critical.029"));
       return;
     }
     setResponding(item.id);
@@ -196,40 +217,41 @@ export function NotificationCenterScreen({ navigation }: Props) {
       setItems((current) => current.map((currentItem) => currentItem.id === item.id
         ? { ...currentItem, isRead: true, requestStatus: accept ? "accepted" : "declined" }
         : currentItem));
-      Alert.alert(accept ? "요청을 수락했어요" : "요청을 거절했어요", accept ? "공유 멤버 연결이 완료되었어요." : "요청을 거절했어요.");
+      Alert.alert(accept ? t("notice.critical.023") : t("notice.critical.024"), accept ? t("notice.critical.025") : t("notice.critical.024"));
     } catch (cause) {
-      Alert.alert("요청을 처리하지 못했어요", cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요.");
+      Alert.alert(t("notice.critical.026"), cause instanceof Error ? familyErrorMessage(t, cause.message) : t("notice.critical.027"));
     } finally {
       setResponding(null);
     }
   };
   return <ScrollView style={styles.root} contentContainerStyle={styles.content}>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>{FILTERS.map((item) => <Pressable key={item.key} style={[styles.filter, filter === item.key && styles.filterActive]} onPress={() => setFilter(item.key)}><Text style={[styles.filterText, filter === item.key && styles.filterTextActive]}>{item.label}</Text></Pressable>)}</ScrollView>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>{FILTER_KEYS.map((key) => <Pressable key={key} style={[styles.filter, filter === key && styles.filterActive]} onPress={() => setFilter(key)}><Text style={[styles.filterText, filter === key && styles.filterTextActive]}>{t(FILTER_LABEL[key])}</Text></Pressable>)}</ScrollView>
     {loading && !items.length ? (
-      <View style={styles.empty}><ActivityIndicator color={colors.amberText} /><Text style={styles.emptyText}>알림을 불러오는 중이에요.</Text></View>
+      <View style={styles.empty}><ActivityIndicator color={colors.amberText} /><Text style={styles.emptyText}>{t("notice.critical.009")}</Text></View>
     ) : loadFailed ? (
       <View style={styles.empty}>
         <BabyLogIcon kind="alert" size={26} color={colors.muted} />
-        <Text style={styles.emptyTitle}>알림을 불러오지 못했어요</Text>
-        <Text style={styles.emptyText}>네트워크 상태를 확인한 뒤 다시 시도해 주세요.</Text>
+        <Text style={styles.emptyTitle}>{t("notice.critical.010")}</Text>
+        <Text style={styles.emptyText}>{t("notice.critical.011")}</Text>
         <Pressable style={styles.retryButton} onPress={() => void load()} accessibilityRole="button">
-          <Text style={styles.retryText}>다시 시도</Text>
+          <Text style={styles.retryText}>{t("notice.critical.012")}</Text>
         </Pressable>
       </View>
     ) : (
       <>
-        <Section title="오늘" items={visible.filter((item) => item.period === "today")} open={open} respond={respond} responding={responding} />
-        <Section title="이번 주" items={visible.filter((item) => item.period === "week")} open={open} respond={respond} responding={responding} />
-        <Section title="이전 알림" items={visible.filter((item) => item.period === "older")} open={open} respond={respond} responding={responding} />
-        {!visible.length ? <View style={styles.empty}><BabyLogIcon kind="bell" size={26} color={colors.faint} /><Text style={styles.emptyTitle}>새 알림이 없어요</Text><Text style={styles.emptyText}>가족 초대, 공유 기록, 요약과 리마인더가 여기에 모여요.</Text></View> : null}
+        <Section title={t("notice.critical.006")} items={visible.filter((item) => item.period === "today")} open={open} respond={respond} responding={responding} t={t} />
+        <Section title={t("notice.critical.007")} items={visible.filter((item) => item.period === "week")} open={open} respond={respond} responding={responding} t={t} />
+        <Section title={t("notice.critical.008")} items={visible.filter((item) => item.period === "older")} open={open} respond={respond} responding={responding} t={t} />
+        {!visible.length ? <View style={styles.empty}><BabyLogIcon kind="bell" size={26} color={colors.faint} /><Text style={styles.emptyTitle}>{t("notice.critical.013")}</Text><Text style={styles.emptyText}>{t("notice.critical.014")}</Text></View> : null}
       </>
     )}
-    <Pressable style={styles.settingsRow} onPress={() => navigation.navigate("SettingsHome")}><View style={styles.settingsIcon}><BabyLogIcon kind="settings" size={18} color={colors.muted} /></View><Text style={styles.settingsText}>알림 설정</Text><BabyLogIcon kind="chevron" size={18} color={colors.faint} /></Pressable>
+    {!friendOnly ? <Pressable style={styles.settingsRow} onPress={() => navigation.navigate("SettingsHome")}><View style={styles.settingsIcon}><BabyLogIcon kind="settings" size={18} color={colors.muted} /></View><Text style={styles.settingsText}>{t("notice.critical.015")}</Text><BabyLogIcon kind="chevron" size={18} color={colors.faint} /></Pressable> : null}
   </ScrollView>;
 }
 
-function Section({ title, items, open, respond, responding }: { title: string; items: CenterItem[]; open: (item: CenterItem) => void; respond: (item: CenterItem, accept: boolean) => void; responding: string | null }) {
-  return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{items.length ? items.map((item) => <View key={item.id} style={[styles.card, !item.isRead && styles.unreadCard]}><Pressable style={styles.cardMain} onPress={() => open(item)}><View style={styles.cardIcon}><BabyLogIcon kind={item.type === "invite_request" ? "family" : "bell"} size={18} color={colors.muted} /></View><View style={styles.cardCopy}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.cardBody}>{item.body}</Text>{item.type === "invite_request" && item.requestStatus && item.requestStatus !== "pending" ? <Text style={styles.requestStatus}>{item.requestStatus === "accepted" ? "수락됨" : item.requestStatus === "declined" ? "거절됨" : item.requestStatus === "expired" ? "만료됨" : "처리 완료"}</Text> : null}</View>{!item.isRead ? <View style={styles.unreadDot} /> : null}</Pressable>{item.type === "invite_request" && item.requestStatus === "pending" ? <View style={styles.inviteActions}><Pressable style={styles.declineButton} disabled={responding === item.id} onPress={() => void respond(item, false)}><Text style={styles.declineText}>거절</Text></Pressable><Pressable style={styles.acceptButton} disabled={responding === item.id} onPress={() => void respond(item, true)}><Text style={styles.acceptText}>수락</Text></Pressable></View> : null}</View>) : <Text style={styles.sectionEmpty}>알림이 없어요</Text>}</View>;
+function Section({ title, items, open, respond, responding, t }: { title: string; items: CenterItem[]; open: (item: CenterItem) => void; respond: (item: CenterItem, accept: boolean) => void; responding: string | null; t: ReturnType<typeof useLanguage>["t"] }) {
+  const statusLabel = (status: RequestStatus) => status === "accepted" ? t("notice.critical.017") : status === "declined" ? t("notice.critical.018") : status === "expired" ? t("notice.critical.019") : t("notice.critical.020");
+  return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{items.length ? items.map((item) => <View key={item.id} style={[styles.card, !item.isRead && styles.unreadCard]}><Pressable style={styles.cardMain} onPress={() => open(item)}><View style={styles.cardIcon}><BabyLogIcon kind={item.type === "invite_request" ? "family" : "bell"} size={18} color={colors.muted} /></View><View style={styles.cardCopy}><Text style={styles.cardTitle}>{notificationTitleLabel(t, item.title)}</Text><Text style={styles.cardBody}>{notificationBodyLabel(t, item.body)}</Text>{item.type === "invite_request" && item.requestStatus && item.requestStatus !== "pending" ? <Text style={styles.requestStatus}>{statusLabel(item.requestStatus)}</Text> : null}</View>{!item.isRead ? <View style={styles.unreadDot} /> : null}</Pressable>{item.type === "invite_request" && item.requestStatus === "pending" ? <View style={styles.inviteActions}><Pressable style={styles.declineButton} disabled={responding === item.id} onPress={() => void respond(item, false)}><Text style={styles.declineText}>{t("notice.critical.021")}</Text></Pressable><Pressable style={styles.acceptButton} disabled={responding === item.id} onPress={() => void respond(item, true)}><Text style={styles.acceptText}>{t("notice.critical.022")}</Text></Pressable></View> : null}</View>) : <Text style={styles.sectionEmpty}>{t("notice.critical.016")}</Text>}</View>;
 }
 
 const styles = StyleSheet.create({

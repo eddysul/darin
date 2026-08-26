@@ -12,6 +12,7 @@ import {
 } from "../../components/settings/AppSettingsModal";
 import { authProviderFlags } from "../../config/authProviders";
 import { AuthRepository } from "../../repositories/AuthRepository";
+import { localizedErrorMessage } from "../../utils/familyDisplay";
 import { colors } from "../../theme";
 import { OnboardingShell } from "./OnboardingShell";
 
@@ -83,7 +84,7 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
       setSocialError(
         /provider is not enabled|unsupported provider/i.test(message)
           ? t("auth.social.providerDisabled", { provider: "Apple" })
-          : message,
+          : localizedErrorMessage(t, message),
       );
     } finally {
       setSocialBusy(null);

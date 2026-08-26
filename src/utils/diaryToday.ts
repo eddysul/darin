@@ -5,6 +5,7 @@ import type { TodaySummary } from "./reportAggregates";
 import { buildCareLogDailySummary } from "./diaryMomentSuggestions";
 import { formatDateKey } from "./dateKey";
 import { DIARY_PHOTO_ONLY_COMMENT, diaryHasMilestone } from "./diaryModel";
+import type { Translate } from "./recordDisplay";
 
 export type DiaryComposeTarget =
   | { kind: "edit"; entry: DiaryEntry }
@@ -47,19 +48,24 @@ export function resolveDiaryComposeTarget(input: {
 export function buildDiaryNotificationCopy(input: {
   babyName: string;
   summary: TodaySummary;
+  t?: Translate;
 }): { title: string; body: string } {
-  const { babyName, summary } = input;
+  const { babyName, summary, t } = input;
   if (summary.totalCount === 0) {
     return {
-      title: "오늘 하루 어땠나요?",
-      body: `자기 전에 ${babyName}와의 순간을 남겨보세요 ✍️`,
+      title: t ? t("diary.reminder.previewTitle") : "오늘 하루 어땠나요?",
+      body: t
+        ? t("diary.reminder.previewBody", { babyName })
+        : `자기 전에 ${babyName}와의 순간을 남겨보세요 ✍️`,
     };
   }
-  const snap = buildCareLogDailySummary(summary)
-    .replace(/^오늘은 /, "")
-    .replace(/가 기록되었어요\.$/, "가 기록됐어요.");
+  const snap = t
+    ? buildCareLogDailySummary(summary, [], t)
+    : buildCareLogDailySummary(summary)
+        .replace(/^오늘은 /, "")
+        .replace(/가 기록되었어요\.$/, "가 기록됐어요.");
   return {
-    title: "오늘의 육아일기를 남겨볼까요?",
+    title: t ? t("diary.suggestion.notifTitle") : "오늘의 육아일기를 남겨볼까요?",
     body: snap.endsWith(".") ? snap : `${snap}.`,
   };
 }
@@ -104,16 +110,18 @@ export type DiaryMonthSection = {
   entries: DiaryEntry[];
 };
 
-export function diaryMonthLabel(monthKey: string): string {
+export function diaryMonthLabel(monthKey: string, t?: Translate): string {
   const [year, month] = monthKey.split("-");
   const y = Number(year);
   const m = Number(month);
-  if (!Number.isFinite(y) || !Number.isFinite(m)) return "날짜 없음";
-  return `${y}년 ${m}월`;
+  if (!Number.isFinite(y) || !Number.isFinite(m)) {
+    return t ? t("diary.screen.unknownDate") : "날짜 없음";
+  }
+  return t ? t("diary.screen.monthLabel", { year: y, month: m }) : `${y}년 ${m}월`;
 }
 
 /** Keeps newest-first order; starts a section when the calendar month changes. */
-export function groupDiariesByMonth(entries: DiaryEntry[]): DiaryMonthSection[] {
+export function groupDiariesByMonth(entries: DiaryEntry[], t?: Translate): DiaryMonthSection[] {
   const groups: DiaryMonthSection[] = [];
   const indexByKey = new Map<string, number>();
   for (const entry of entries) {
@@ -123,7 +131,11 @@ export function groupDiariesByMonth(entries: DiaryEntry[]): DiaryMonthSection[] 
       indexByKey.set(monthKey, groups.length);
       groups.push({
         monthKey,
-        label: monthKey === "unknown" ? "날짜 없음" : diaryMonthLabel(monthKey),
+        label: monthKey === "unknown"
+          ? t
+            ? t("diary.screen.unknownDate")
+            : "날짜 없음"
+          : diaryMonthLabel(monthKey, t),
         entries: [entry],
       });
     } else {

@@ -120,7 +120,7 @@ const rows = [
   ["119","{babyName}가 {text}","{babyName}: {text}","{babyName}：{text}","{babyName} — {text}","{babyName}：{text}"],
   ["120","생후 {months}개월","{months} months old","生後{months}か月","{months} meses","出生{months}个月"],
   ["121","자세히 보기: {headline}","View details: {headline}","詳しく見る：{headline}","Ver detalles: {headline}","查看详情：{headline}"],
-  ["122","{babyName}가 ","{babyName} ","{babyName}が","{babyName}: ","{babyName}"],
+  ["122","{babyName}가 ","{babyName} had ","{babyName}が","{babyName} tuvo ","{babyName}有"],
   ["123","흥미로운 발견 {count}가지가 있어요","{count} notable patterns found","気になる傾向が{count}件あります","Hay {count} patrones destacados","发现{count}个值得关注的规律"],
   ["124","{babyName}의 월령에 맞는 발달 놀이 팁을 알려줘","Suggest development play for {babyName}’s age","{babyName}の月齢に合う発達あそびを教えて","Sugiere juegos de desarrollo para la edad de {babyName}","请推荐适合{babyName}月龄的发育游戏"],
   ["125","{count}회","{count} times","{count}回","{count} veces","{count}次"],

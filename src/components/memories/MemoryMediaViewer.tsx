@@ -3,6 +3,7 @@ import { Animated, Pressable, ScrollView, StyleSheet, Vibration, View } from "re
 import { Image } from "expo-image";
 import { BabyLogIcon } from "../babylog/BabyLogIcon";
 import { useReduceMotion } from "../../hooks/useReduceMotion";
+import { useLanguage } from "../../LanguageContext";
 import type { MemoryMedia } from "../../types/memory";
 import { colors } from "../../theme";
 
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export function MemoryMediaViewer({ media, imageUrls = [], onDoubleTap }: Props) {
+  const { t } = useLanguage();
   const lastTapRef = useRef(0);
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
@@ -71,10 +73,10 @@ export function MemoryMediaViewer({ media, imageUrls = [], onDoubleTap }: Props)
               accessibilityRole="image"
               accessibilityLabel={
                 imageUrls.length > 1
-                  ? `추억 사진 ${index + 1} / ${imageUrls.length}`
-                  : "추억 사진"
+                  ? t("memory.critical.149", { current: index + 1, total: imageUrls.length })
+                  : t("memory.critical.150")
               }
-              accessibilityHint={onDoubleTap ? "두 번 연속 탭하면 좋아요를 남겨요" : undefined}
+              accessibilityHint={onDoubleTap ? t("memory.critical.151") : undefined}
             >
               <Image source={{ uri: url }} style={StyleSheet.absoluteFill} contentFit="contain" transition={reduceMotion ? 0 : 150} />
             </Pressable>

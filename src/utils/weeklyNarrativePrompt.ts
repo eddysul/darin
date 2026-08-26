@@ -5,12 +5,14 @@
  * 검증 규칙을 스크립트로 돌려볼 수 있다. 안전장치는 테스트할 수 있어야 한다.
  */
 import type { WeeklyFeatureTable } from "./weeklyFeatureTable";
+import type { Locale } from "../i18n";
+import { aiOutputLanguageInstruction } from "./aiLocale";
 
 /**
  * 프롬프트나 출력 형식이 바뀌면 올린다.
  * 캐시는 이 값이 다르면 무시한다. 안 그러면 같은 주 동안 옛 형식 문장이 계속 나온다.
  */
-export const NARRATIVE_VERSION = 3;
+export const NARRATIVE_VERSION = 4;
 
 export const SYSTEM_PROMPT = `너는 육아 기록 앱의 주간 리포트 카드를 쓴다. 아래 규칙을 반드시 지켜라.
 
@@ -51,7 +53,13 @@ export const SYSTEM_PROMPT = `너는 육아 기록 앱의 주간 리포트 카�
 [출력 형식]
 첫 줄에 headline, 빈 줄, 그다음 body. 다른 말은 붙이지 마라.`;
 
-/** 조언·예측·판단으로 읽히는 표현. 하나라도 있으면 폐기한다. 발견 문장도 같은 규칙을 쓴다. */
+export function narrativeSystemPrompt(locale: Locale): string {
+  return `${SYSTEM_PROMPT}
+
+[Language]
+${aiOutputLanguageInstruction(locale)}`;
+}
+
 export const BANNED_PHRASES = [
   // 명령·권유. 서술형 리포트에 "~세요"로 끝나는 문장은 나올 이유가 없다.
   "세요", "권장", "추천", "하는 게 좋",

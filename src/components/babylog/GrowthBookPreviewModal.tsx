@@ -41,8 +41,8 @@ export function GrowthBookPreviewModal({
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
   const pages = useMemo(
-    () => buildGrowthBookPages({ babyName, entries, edit }),
-    [babyName, entries, edit],
+    () => buildGrowthBookPages({ babyName, entries, edit, t }),
+    [babyName, entries, edit, t],
   );
 
   useEffect(() => {

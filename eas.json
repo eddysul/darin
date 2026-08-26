@@ -23,7 +23,7 @@
       "env": {
         "EXPO_PUBLIC_FEATURE_ENV": "qa",
         "EXPO_PUBLIC_FEATURE_PROFILE": "internal",
-        "EXPO_PUBLIC_INTERNAL_FEATURES": "feedingReminder,careReminderServer,multilingualPicker,englishSupport,experimentalNotifications"
+        "EXPO_PUBLIC_INTERNAL_FEATURES": "feedingReminder,sleepReminder,careReminderServer,multilingualPicker,englishSupport,fiveLanguageSupport,experimentalNotifications"
       }
     }
   },

@@ -39,14 +39,14 @@ export async function requestReminderPermission(): Promise<ReminderPermissionSta
   }
 }
 
-export async function sendDiaryNotificationPreview(babyName: string): Promise<boolean> {
+export async function sendDiaryNotificationPreview(copy: { title: string; body: string }): Promise<boolean> {
   const permission = await requestReminderPermission();
   if (permission !== "granted") return false;
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "오늘 하루 어땠나요?",
-        body: `자기 전 ${babyName}와의 순간을 남겨보세요.`,
+        title: copy.title,
+        body: copy.body,
         data: { route: "diary", source: "notification", date: "today", openCompose: true },
       },
       trigger: null,

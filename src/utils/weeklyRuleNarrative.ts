@@ -8,6 +8,16 @@
  * 문장은 열거하지 않고 조합한다. 지표를 늘려도 문구를 새로 쓰지 않아도 되게.
  * 판단어("잘", "충분히")와 권유("~해보세요")는 쓰지 않는다. 앱이 아이를 평가하지 않는다.
  */
+import type { Locale } from "../i18n";
+import {
+  formatClockReading,
+  formatWeeklyAmount,
+  narrativeChangeKey,
+  narrativeSubjectKey,
+  weekdayMessageKey,
+  weeklyMetricLabel,
+} from "./insightDisplay";
+import type { Translate } from "./recordDisplay";
 import type { WeeklyFeatureTable, WeeklyMetric } from "./weeklyFeatureTable";
 
 export type RuleNarrative = {
@@ -83,32 +93,19 @@ const PRIORITY = [
   "sleepCount",
 ];
 
-function formatValue(metric: WeeklyMetric, value: number): string {
-  const rounded = Math.round(value);
-  if (metric.unit !== "분") return `${rounded}${metric.unit}`;
-  if (rounded < 60) return `${rounded}분`;
-  const h = Math.floor(rounded / 60);
-  const m = rounded % 60;
-  return m ? `${h}시간 ${m}분` : `${h}시간`;
-}
-
-/** 시각 지표는 평균을 "오후 6시 30분"처럼 읽어준다. */
-function formatClockValue(value: number): string {
-  const total = Math.round(value) % 1440;
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  const isPm = h >= 12;
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return m ? `${isPm ? "오후" : "오전"} ${hour12}시 ${m}분` : `${isPm ? "오후" : "오전"} ${hour12}시`;
+function formatValue(metric: WeeklyMetric, value: number, t: Translate, locale: Locale): string {
+  return formatWeeklyAmount(metric.key, metric.unit, value, t, locale);
 }
 
 const CLOCK_METRICS = ["firstFeedMinutes", "lastFeedMinutes", "bathMinutes"];
 
 const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
 
-function weekdayOf(dateKey: string): string {
+function weekdayOf(dateKey: string, t: Translate, locale: Locale): string {
   const [year, month, day] = dateKey.split("-").map(Number);
-  return WEEKDAY[new Date(year, month - 1, day).getDay()] ?? "";
+  const index = new Date(year, month - 1, day).getDay();
+  if (locale === "ko") return WEEKDAY[index] ?? "";
+  return t(weekdayMessageKey(index));
 }
 
 /**
@@ -121,6 +118,8 @@ function findShape(
   metric: WeeklyMetric,
   up: boolean,
   dateKeys: string[],
+  t: Translate,
+  locale: Locale,
 ): { kind: "single" | "since"; weekday: string } | null {
   const base = metric.lastWeek!.avg;
   const flags = metric.daily.map((value) => (value === null ? null : up ? value > base : value < base));
@@ -128,7 +127,7 @@ function findShape(
 
   const hits = flags.filter((flag) => flag === true).length;
   if (hits === 1) {
-    return { kind: "single", weekday: weekdayOf(dateKeys[flags.indexOf(true)]) };
+    return { kind: "single", weekday: weekdayOf(dateKeys[flags.indexOf(true)], t, locale) };
   }
 
   // 마지막 날부터 거꾸로 몇 날이 연속인지
@@ -142,10 +141,10 @@ function findShape(
   const tail = metric.daily.slice(start).filter((v): v is number => v !== null);
   if (!head.length || !tail.length) return null;
   const separated = up ? Math.min(...tail) > Math.max(...head) : Math.max(...tail) < Math.min(...head);
-  return separated ? { kind: "since", weekday: weekdayOf(dateKeys[start]) } : null;
+  return separated ? { kind: "since", weekday: weekdayOf(dateKeys[start], t, locale) } : null;
 }
 
-export function buildRuleNarrative(table: WeeklyFeatureTable): RuleNarrative {
+export function buildRuleNarrative(table: WeeklyFeatureTable, t: Translate, locale: Locale): RuleNarrative {
   const comparable = table.metrics.filter(
     (metric) => metric.lastWeek !== null && metric.changeRatio !== null && PHRASE[metric.key],
   );
@@ -155,7 +154,7 @@ export function buildRuleNarrative(table: WeeklyFeatureTable): RuleNarrative {
   for (const metric of comparable) {
     if (Math.abs(metric.changeRatio!) < CHANGE_RATIO) continue;
     // 2.4회 → 2.9회 처럼 표기하면 "2회 → 2회" 가 되는 지표는 헤드라인으로 쓸 수 없다.
-    if (formatValue(metric, metric.lastWeek!.avg) === formatValue(metric, metric.thisWeek.avg)) continue;
+    if (formatValue(metric, metric.lastWeek!.avg, t, locale) === formatValue(metric, metric.thisWeek.avg, t, locale)) continue;
     if (!lead) {
       lead = metric;
       continue;
@@ -170,45 +169,55 @@ export function buildRuleNarrative(table: WeeklyFeatureTable): RuleNarrative {
   if (lead) {
     const up = lead.changeRatio! > 0;
     const phrase = PHRASE[lead.key];
-    const past = pastForm(up ? phrase.riseStem : phrase.fallStem);
-
-    // 지표 둘이 같은 주에 움직였다는 건 둘이 관계있다는 근거가 아니다.
-    // 그래서 헤드라인은 지표 하나만 말한다. 훅은 "언제부터인가"에서 가져온다.
-    const shape = findShape(lead, up, table.meta.dateKeys);
+    const subjectKey = narrativeSubjectKey(lead.key);
+    const changeKey = narrativeChangeKey(lead.key, up);
+    const subject = subjectKey ? t(subjectKey) : weeklyMetricLabel(lead.key, t);
+    const shape = findShape(lead, up, table.meta.dateKeys, t, locale);
     let headline: string;
-    if (shape?.kind === "since") {
-      headline = `${withParticle(phrase.subject, "이", "가")} ${shape.weekday}요일부터 부쩍 ${past}`;
+    if (locale === "ko") {
+      const past = pastForm(up ? phrase.riseStem : phrase.fallStem);
+      if (shape?.kind === "since") {
+        headline = `${withParticle(subject, "이", "가")} ${shape.weekday}요일부터 부쩍 ${past}`;
+      } else if (shape?.kind === "single") {
+        headline = `${withParticle(subject, "은", "는")} ${shape.weekday}요일 하루만 달랐어요`;
+      } else {
+        headline = changeKey ? t(changeKey) : phrase[up ? "up" : "down"];
+      }
+    } else if (shape?.kind === "since") {
+      headline = t("insight.critical.093", { subject, weekday: shape.weekday });
     } else if (shape?.kind === "single") {
-      headline = `${withParticle(phrase.subject, "은", "는")} ${shape.weekday}요일 하루만 달랐어요`;
+      headline = t("insight.critical.094", { subject, weekday: shape.weekday });
     } else {
-      headline = phrase[up ? "up" : "down"];
+      headline = changeKey ? t(changeKey) : subject;
     }
 
-    // 앞뒤 값을 화살표로 붙여둔다. 카드가 이 구간만 굵게 그린다.
-    const before = formatValue(lead, lead.lastWeek!.avg);
-    const after = formatValue(lead, lead.thisWeek.avg);
+    const before = formatValue(lead, lead.lastWeek!.avg, t, locale);
+    const after = formatValue(lead, lead.thisWeek.avg, t, locale);
     return {
       headline,
-      body:
-        `하루 평균 ${before} → ${withParticle(after, "으로", "로")} ` +
-        `${up ? "늘었어요" : "줄었어요"}.`,
+      body: locale === "ko"
+        ? `하루 평균 ${before} → ${withParticle(after, "으로", "로")} ${up ? "늘었어요" : "줄었어요"}.`
+        : t("insight.critical.095", { before, after }),
     };
   }
 
-  // 뚜렷한 변화가 없을 때. 지금 리듬을 한 문장으로 흘려 쓴다.
   const shown = PRIORITY.map((key) => table.metrics.find((metric) => metric.key === key))
     .filter((metric): metric is WeeklyMetric => Boolean(metric))
     .slice(0, 3);
   if (!shown.length) {
     return { headline: "", body: "" };
   }
-  const parts = shown.map((metric) =>
-    CLOCK_METRICS.includes(metric.key)
-      ? `${metric.label} ${formatClockValue(metric.thisWeek.avg)}`
-      : `${metric.label} ${formatValue(metric, metric.thisWeek.avg)}`,
-  );
+  const parts = shown.map((metric) => {
+    const label = weeklyMetricLabel(metric.key, t);
+    const value = CLOCK_METRICS.includes(metric.key)
+      ? formatClockReading(metric.thisWeek.avg, locale)
+      : formatValue(metric, metric.thisWeek.avg, t, locale);
+    return `${label} ${value}`;
+  });
   return {
-    headline: table.meta.hasPreviousWeek ? "지난주와 비슷한 흐름이에요" : "요즘은 이렇게 지내고 있어요",
-    body: `하루 평균 ${withParticle(parts.join(", "), "이에요", "예요")}.`,
+    headline: table.meta.hasPreviousWeek ? t("insight.critical.096") : t("insight.critical.097"),
+    body: locale === "ko"
+      ? `하루 평균 ${withParticle(parts.join(", "), "이에요", "예요")}.`
+      : t("insight.critical.098", { parts: parts.join(", ") }),
   };
 }

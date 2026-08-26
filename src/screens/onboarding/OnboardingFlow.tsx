@@ -18,6 +18,8 @@ import type { RelationshipLabel } from "../../types/growthBook";
 import { PROFILE_RELATION_OPTIONS } from "../../types/profileSettings";
 import { useLanguage } from "../../LanguageContext";
 import type { MessageKey } from "../../i18n";
+import { isLocaleAvailable } from "../../config/featureFlags";
+import { storedFamilyRoleLabel, storedRelationshipLabel, localizedErrorMessage, caughtErrorMessage } from "../../utils/familyDisplay";
 import type { InviteType } from "../../types/database";
 import { FamilyRepository, type DarinInviteRequestView } from "../../repositories/FamilyRepository";
 import { ProfileRepository } from "../../repositories/ProfileRepository";
@@ -190,7 +192,7 @@ export function OnboardingFlow({
       setInviteError("");
       setStep("invite-confirm");
     } catch (cause) {
-      setInviteError(cause instanceof Error ? cause.message : t("onboardingFlow.error.invitePreview"));
+      setInviteError(caughtErrorMessage(t, cause, "onboardingFlow.error.invitePreview"));
     }
   }, [inviteCode, t]);
 
@@ -211,7 +213,7 @@ export function OnboardingFlow({
       setMyDarinId(profile?.darin_id?.trim() ?? "");
     } catch (cause) {
       setIncomingRequests([]);
-      setRequestError(cause instanceof Error ? cause.message : t("onboardingFlow.error.requestsLoad"));
+      setRequestError(caughtErrorMessage(t, cause, "onboardingFlow.error.requestsLoad"));
     } finally {
       setRequestsLoading(false);
     }
@@ -236,7 +238,7 @@ export function OnboardingFlow({
         myName: setup.parent.parentName.trim(),
       });
     } catch (cause) {
-      setRequestError(cause instanceof Error ? cause.message : t("onboardingFlow.error.requestAccept"));
+      setRequestError(caughtErrorMessage(t, cause, "onboardingFlow.error.requestAccept"));
     } finally {
       setRespondingId(null);
     }
@@ -250,7 +252,7 @@ export function OnboardingFlow({
       await FamilyRepository.respondToDarinIdInviteRequest(item.id, false);
       await loadIncomingRequests();
     } catch (cause) {
-      setRequestError(cause instanceof Error ? cause.message : t("onboardingFlow.error.requestDecline"));
+      setRequestError(caughtErrorMessage(t, cause, "onboardingFlow.error.requestDecline"));
     } finally {
       setRespondingId(null);
     }
@@ -287,7 +289,7 @@ export function OnboardingFlow({
     } catch (error) {
       Alert.alert(
         t("onboardingFlow.photo.errorTitle"),
-        error instanceof Error ? error.message : t("onboardingFlow.error.retry"),
+        error instanceof Error ? localizedErrorMessage(t, error.message) : t("onboardingFlow.error.retry"),
       );
     }
   };
@@ -333,10 +335,9 @@ export function OnboardingFlow({
         </OnboardingField>
         <OnboardingField label={t("onboardingFlow.languageLabel")}>
           <OnboardingOptionRow
-            options={[
-              { value: "ko", label: t("onboardingFlow.language.ko") },
-              { value: "en", label: "English" },
-            ]}
+            options={(["ko", "en", "ja", "es", "zh-CN"] as PreferredLanguage[])
+              .filter((value) => isLocaleAvailable(value))
+              .map((value) => ({ value, label: t(`onboardingFlow.language.${value}` as MessageKey) }))}
             value={setup.parent.preferredLanguage}
             onChange={(v) => setParent("preferredLanguage", v as PreferredLanguage)}
           />
@@ -404,7 +405,7 @@ export function OnboardingFlow({
             <View key={item.id} style={styles.requestCard}>
               <Text style={styles.requestTitle}>{t(`onboardingFlow.requests.${item.requestType}Title` as MessageKey)}</Text>
               <Text style={styles.requestBody}>{t("onboardingFlow.requests.received")}</Text>
-              <Text style={styles.hint}>{t("onboardingFlow.requests.meta", { relation: item.relation, role: item.roleLabel })}</Text>
+              <Text style={styles.hint}>{t("onboardingFlow.requests.meta", { relation: storedRelationshipLabel(t, item.relation), role: storedFamilyRoleLabel(t, item.roleLabel) })}</Text>
               <View style={styles.requestActions}>
                 <Pressable
                   style={styles.declineButton}

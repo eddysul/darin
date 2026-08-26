@@ -78,6 +78,7 @@ const rows = [
   ["077","AI 참고 중 · 오늘 {today}개 · 7일 {week}개","AI context · {today} today · {week} in 7 days","AI参照中・今日{today}件・7日間{week}件","Contexto de IA · {today} hoy · {week} en 7 días","AI参考中 · 今日{today}条 · 7天{week}条"],
   ["078","{question}, 이미 물어본 질문","{question}, already asked","{question}、質問済み","{question}, ya preguntada","{question}，已提问"],
   ["079","{babyName}에 대해 물어보세요...","Ask about {babyName}…","{babyName}について質問してください…","Pregunta sobre {babyName}…","询问关于{babyName}的问题…"],
+  ["080","안녕하세요! 기록을 참고해 답할게요. 무엇이든 편하게 물어보세요.","Hi! I'll answer using the records. Ask anything you'd like.","こんにちは！記録を参考にお答えします。何でも気軽に聞いてください。","¡Hola! Responderé con base en los registros. Pregunta lo que quieras.","你好！我会参考记录来回答。有什么都可以问我。"],
 ] as const;
 type ConsultId=typeof rows[number][0]; export type ConsultCriticalKey=`consult.critical.${ConsultId}`;
 function resource(index:1|2|3|4|5):{[K in ConsultCriticalKey]:string}{return Object.fromEntries(rows.map(r=>[`consult.critical.${r[0]}`,r[index]])) as {[K in ConsultCriticalKey]:string};}

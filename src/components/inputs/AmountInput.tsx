@@ -1,4 +1,6 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useLanguage } from "../../LanguageContext";
+import { storedRecordValueLabel } from "../../utils/recordDisplay";
 import { colors, radius } from "../../theme";
 
 export const CUSTOM_AMOUNT_UNIT = "기타";
@@ -35,6 +37,7 @@ export function AmountInput({
   onChangeCustomUnit?: (unit: string) => void;
   error?: string;
 }) {
+  const { t } = useLanguage();
   const options = allowCustomUnit ? [...unitOptions, CUSTOM_AMOUNT_UNIT] : [...unitOptions];
   return (
     <View style={styles.block}>
@@ -44,13 +47,13 @@ export function AmountInput({
         value={value}
         onChangeText={(next) => onChangeValue(sanitizeAmountInput(next))}
         keyboardType="decimal-pad"
-        placeholder="직접 입력"
+        placeholder={t("chrome.critical.036")}
         placeholderTextColor={colors.faint}
       />
       <View style={styles.chips}>
         {options.map((option) => (
           <Pressable key={option} style={[styles.chip, unit === option && styles.chipSelected]} onPress={() => onChangeUnit(unit === option ? "" : option)}>
-            <Text style={[styles.chipText, unit === option && styles.chipTextSelected]}>{option}</Text>
+            <Text style={[styles.chipText, unit === option && styles.chipTextSelected]}>{storedRecordValueLabel(t, option)}</Text>
           </Pressable>
         ))}
       </View>
@@ -60,7 +63,7 @@ export function AmountInput({
           value={customUnit ?? ""}
           onChangeText={onChangeCustomUnit}
           maxLength={16}
-          placeholder="단위를 입력해 주세요"
+          placeholder={t("chrome.critical.037")}
           placeholderTextColor={colors.faint}
         />
       ) : null}

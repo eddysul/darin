@@ -32,6 +32,13 @@ export const FAMILY_ROLE_LABELS: Record<FamilyRole, string> = {
   caregiver: "기록 가능",
 };
 
+export function familyRoleMessageKey(role: FamilyRole) {
+  if (role === "owner") return "family.critical.001" as const;
+  if (role === "admin") return "family.critical.002" as const;
+  if (role === "viewer") return "family.critical.004" as const;
+  return "family.critical.003" as const;
+}
+
 export const FAMILY_STATUS_LABELS: Record<FamilyMemberStatus, string> = {
   pending: "초대 대기",
   active: "공유 중",

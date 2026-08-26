@@ -7,6 +7,7 @@ import {
   markDiaryServerMigrationComplete,
 } from "./diaryServerMigrationStore";
 import { isValidLocalDataScope, type LocalDataScope } from "./scopedLocalStorage";
+import { devWarn } from "./devLog";
 
 export type DiaryBootstrapResult = {
   usedServer: boolean;
@@ -79,7 +80,7 @@ export async function bootstrapDiaryFromServer(
     };
   } catch (error) {
     const message = errorMessage(error);
-    console.warn("[supabase] diary bootstrap failed:", message);
+    devWarn("[supabase] diary bootstrap failed:", message);
     return { ...empty, error: message };
   }
 }
@@ -92,11 +93,11 @@ export async function syncDiaryCreate(
   try {
     const result = await DiaryRepository.createWithPhotos(scope.babyId, entry);
     if (result.photoUploadFailed > 0) {
-      console.warn(`[supabase] ${result.photoUploadFailed} diary photo upload(s) failed; text was preserved.`);
+      devWarn(`[supabase] ${result.photoUploadFailed} diary photo upload(s) failed; text was preserved.`);
     }
     return result.entry;
   } catch (error) {
-    console.warn("[supabase] diary create failed:", errorMessage(error));
+    devWarn("[supabase] diary create failed:", errorMessage(error));
     return null;
   }
 }
@@ -109,11 +110,11 @@ export async function syncDiaryUpdate(
   try {
     const result = await DiaryRepository.updateWithPhotos(scope.babyId, entry);
     if (result.photoUploadFailed > 0) {
-      console.warn(`[supabase] ${result.photoUploadFailed} diary photo upload(s) failed; text was preserved.`);
+      devWarn(`[supabase] ${result.photoUploadFailed} diary photo upload(s) failed; text was preserved.`);
     }
     return result.entry;
   } catch (error) {
-    console.warn("[supabase] diary update failed:", errorMessage(error));
+    devWarn("[supabase] diary update failed:", errorMessage(error));
     return null;
   }
 }
@@ -127,7 +128,7 @@ export async function syncDiaryDelete(
     await DiaryRepository.softDelete(diaryEntryId);
     return true;
   } catch (error) {
-    console.warn("[supabase] diary delete failed:", errorMessage(error));
+    devWarn("[supabase] diary delete failed:", errorMessage(error));
     return false;
   }
 }

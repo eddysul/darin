@@ -14,12 +14,11 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { BabySticker, BabyStickerDraft, StickerCutoutMode } from "../../types/babySticker";
+import type { BabySticker, BabyStickerDraft, StickerBorderStyle, StickerCutoutMode, StickerShadowStyle, StickerSpeechBubbleType, StickerTemplateId } from "../../types/babySticker";
 import {
   STICKER_BORDER_OPTIONS,
   STICKER_BUBBLE_OPTIONS,
   STICKER_SHADOW_OPTIONS,
-  STICKER_SUGGESTED_PHRASES,
   STICKER_TEMPLATE_OPTIONS,
   defaultStickerDraft,
 } from "../../types/babySticker";
@@ -28,7 +27,7 @@ import {
   DEFAULT_CIRCLE_CROP,
   STICKER_CUTOUT_MODE_OPTIONS,
   createStickerCutout,
-  explainStickerCutoutError,
+  stickerCutoutErrorKey,
   isPersonCutoutSupported,
   type CircularCutoutCrop,
 } from "../../utils/babyStickerCutout";
@@ -39,6 +38,62 @@ import { BabyLogIcon } from "./BabyLogIcon";
 import { BabyStickerFromModel, BabyStickerView } from "./BabyStickerView";
 import { StickerCirclePositioner } from "./StickerCirclePositioner";
 import { useBabyLog } from "../../context/BabyLogContext";
+import { useLanguage } from "../../LanguageContext";
+import { createT } from "../../i18n";
+import type { StickerCriticalKey } from "../../i18nStickerCriticalMessages";
+
+type Translate = ReturnType<typeof createT>;
+
+const TEMPLATE_COPY: Record<StickerTemplateId, StickerCriticalKey> = {
+  portrait: "sticker.critical.077",
+  hello: "sticker.critical.078",
+  huh: "sticker.critical.079",
+  wow: "sticker.critical.080",
+  yummy: "sticker.critical.081",
+  sleepy: "sticker.critical.082",
+  cry: "sticker.critical.083",
+  daze: "sticker.critical.084",
+  heart: "sticker.critical.085",
+  giggle: "sticker.critical.086",
+  like: "sticker.critical.087",
+  pout: "sticker.critical.088",
+  squeal: "sticker.critical.089",
+  why: "sticker.critical.090",
+  oops: "sticker.critical.091",
+  bite: "sticker.critical.092",
+  cute: "sticker.critical.093",
+};
+
+const SUGGESTED_PHRASE_KEYS: StickerCriticalKey[] = [
+  "sticker.critical.078",
+  "sticker.critical.079",
+  "sticker.critical.080",
+  "sticker.critical.081",
+  "sticker.critical.082",
+  "sticker.critical.083",
+  "sticker.critical.084",
+  "sticker.critical.085",
+  "sticker.critical.086",
+  "sticker.critical.087",
+  "sticker.critical.088",
+  "sticker.critical.089",
+  "sticker.critical.090",
+  "sticker.critical.091",
+  "sticker.critical.092",
+  "sticker.critical.093",
+];
+
+function borderCopy(value: StickerBorderStyle): StickerCriticalKey {
+  return value === "whiteThick" ? "sticker.critical.073" : "sticker.critical.072";
+}
+
+function shadowCopy(value: StickerShadowStyle): StickerCriticalKey {
+  return value === "soft" ? "sticker.critical.074" : "sticker.critical.072";
+}
+
+function bubbleCopy(value: StickerSpeechBubbleType): StickerCriticalKey {
+  return value === "round" ? "sticker.critical.076" : "sticker.critical.075";
+}
 
 type Mode = "vault" | "pickPhoto" | "position" | "cutting" | "decorate";
 
@@ -48,33 +103,33 @@ function isLibraryAllowed(
   return status.granted || status.accessPrivileges === "limited";
 }
 
-async function ensureLibraryPermission(): Promise<boolean> {
+async function ensureLibraryPermission(t: Translate): Promise<boolean> {
   const current = await ImagePicker.getMediaLibraryPermissionsAsync();
   const resolved = isLibraryAllowed(current)
     ? current
     : await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (isLibraryAllowed(resolved)) return true;
   Alert.alert(
-    "사진 접근 권한이 필요해요",
-    "설정에서 사진 접근을 허용한 뒤 다시 시도해 주세요.",
+    t("sticker.critical.025"),
+    t("sticker.critical.026"),
     [
-      { text: "취소", style: "cancel" },
-      { text: "설정 열기", onPress: () => void Linking.openSettings() },
+      { text: t("sticker.critical.010"), style: "cancel" },
+      { text: t("sticker.critical.029"), onPress: () => void Linking.openSettings() },
     ],
   );
   return false;
 }
 
-async function ensureCameraPermission(): Promise<boolean> {
+async function ensureCameraPermission(t: Translate): Promise<boolean> {
   const current = await ImagePicker.getCameraPermissionsAsync();
   const resolved = current.granted ? current : await ImagePicker.requestCameraPermissionsAsync();
   if (resolved.granted) return true;
   Alert.alert(
-    "카메라 접근 권한이 필요해요",
-    "설정에서 카메라 접근을 허용한 뒤 다시 시도해 주세요.",
+    t("sticker.critical.027"),
+    t("sticker.critical.028"),
     [
-      { text: "취소", style: "cancel" },
-      { text: "설정 열기", onPress: () => void Linking.openSettings() },
+      { text: t("sticker.critical.010"), style: "cancel" },
+      { text: t("sticker.critical.029"), onPress: () => void Linking.openSettings() },
     ],
   );
   return false;
@@ -113,12 +168,13 @@ export function BabyStickerVaultModal({
   startInCreate = false,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const { localDataScope } = useBabyLog();
   const resolvedBabyId = babyId || localDataScope?.babyId;
   const [mode, setMode] = useState<Mode>("vault");
   const [draft, setDraft] = useState<BabyStickerDraft | null>(null);
   const [cutoutError, setCutoutError] = useState(false);
-  const [cutoutErrorReason, setCutoutErrorReason] = useState<string | null>(null);
+  const [cutoutErrorReason, setCutoutErrorReason] = useState<StickerCriticalKey | null>(null);
   const [pendingOriginal, setPendingOriginal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [seedPhrase, setSeedPhrase] = useState<string | null>(null);
@@ -155,17 +211,17 @@ export function BabyStickerVaultModal({
   const title =
     mode === "vault"
       ? pickMode
-        ? "스티커 선택"
-        : "내 아기 스티커"
+        ? t("sticker.critical.002")
+        : t("sticker.critical.001")
       : mode === "pickPhoto"
-        ? "스티커 만들기"
+        ? t("sticker.critical.003")
         : mode === "position"
-          ? "위치 맞추기"
+          ? t("sticker.critical.004")
           : mode === "cutting"
             ? cutoutMode === "personCutout"
-              ? "인물 컷아웃"
-              : "둥근 사각형 스티커"
-              : "스티커 꾸미기";
+              ? t("sticker.critical.005")
+              : t("sticker.critical.006")
+              : t("sticker.critical.007");
 
   const startCreate = (phrase?: string) => {
     setDraft(null);
@@ -214,7 +270,7 @@ export function BabyStickerVaultModal({
       applyDraftFromCutout(originalUri, result.uri, result.mode);
     } catch (error) {
       if (__DEV__) console.warn("[sticker-cutout]", error);
-      setCutoutErrorReason(explainStickerCutoutError(error));
+      setCutoutErrorReason(stickerCutoutErrorKey(error));
       setCutoutError(true);
     }
   };
@@ -246,15 +302,15 @@ export function BabyStickerVaultModal({
 
   const importPickedUri = async (sourceUri: string): Promise<string | null> => {
     if (!resolvedBabyId) {
-      Alert.alert("아기를 먼저 선택해 주세요", "스티커는 아기별로 보관돼요.");
+      Alert.alert(t("sticker.critical.013"), t("sticker.critical.014"));
       return null;
     }
     try {
       return await persistStickerAsset(sourceUri, resolvedBabyId, "original", createId());
     } catch {
       Alert.alert(
-        "사진을 불러오지 못했어요",
-        "시뮬레이터의 iCloud/FileProvider 사진이거나, 원본이 기기에 없을 수 있어요. 사진 앱에 저장한 로컬 사진을 골라 주세요.",
+        t("sticker.critical.015"),
+        t("sticker.critical.016"),
       );
       return null;
     }
@@ -262,7 +318,7 @@ export function BabyStickerVaultModal({
 
   const pickFromLibrary = async () => {
     try {
-      if (!(await ensureLibraryPermission())) return;
+      if (!(await ensureLibraryPermission(t))) return;
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         quality: 0.85,
@@ -277,15 +333,15 @@ export function BabyStickerVaultModal({
     } catch (error) {
       if (__DEV__) console.warn("[sticker-photo-picker] library failed", error instanceof Error ? error.name : "unknown");
       Alert.alert(
-        "사진을 불러오지 못했어요",
-        "시뮬레이터에서는 iCloud 사진이 열리지 않을 수 있어요. 사진 앱에 넣은 로컬 사진을 골라 주세요.",
+        t("sticker.critical.015"),
+        t("sticker.critical.017"),
       );
     }
   };
 
   const pickFromCamera = async () => {
     try {
-      if (!(await ensureCameraPermission())) return;
+      if (!(await ensureCameraPermission(t))) return;
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
         quality: 0.85,
@@ -297,17 +353,17 @@ export function BabyStickerVaultModal({
       await afterPickedLocal(localUri);
     } catch (error) {
       if (__DEV__) console.warn("[sticker-photo-picker] camera failed", error instanceof Error ? error.name : "unknown");
-      Alert.alert("사진을 찍지 못했어요", "잠시 후 다시 시도해 주세요.");
+      Alert.alert(t("sticker.critical.018"), t("sticker.critical.019"));
     }
   };
 
   const persistAndSave = async () => {
     if (!draft) return;
     if (!resolvedBabyId) {
-      Alert.alert("아기를 먼저 선택해 주세요", "스티커는 아기별로 보관돼요.");
+      Alert.alert(t("sticker.critical.013"), t("sticker.critical.014"));
       return;
     }
-    const label = draft.label.trim() || `${babyName} 스티커`;
+    const label = draft.label.trim() || t("sticker.critical.020", { babyName });
     setSaving(true);
     try {
       const id = createId();
@@ -342,15 +398,15 @@ export function BabyStickerVaultModal({
       } catch (error) {
         if (error instanceof Error && error.message.includes("현재 선택된")) throw error;
         Alert.alert(
-          "보관함에 저장했어요",
-          "이 기기 보관함에는 들어갔어요. 서버 동기화는 연결되면 다시 시도해요.",
+          t("sticker.critical.021"),
+          t("sticker.critical.022"),
         );
       }
       setMode("vault");
       setDraft(null);
       if (pickMode && synced) onPickSticker?.(sticker);
     } catch {
-      Alert.alert("스티커를 저장하지 못했어요", "사진을 다시 선택한 뒤 저장해 주세요.");
+      Alert.alert(t("sticker.critical.023"), t("sticker.critical.024"));
     } finally {
       setSaving(false);
     }
@@ -414,9 +470,9 @@ export function BabyStickerVaultModal({
             hitSlop={10}
             style={styles.headerBtnHit}
             accessibilityRole="button"
-            accessibilityLabel={mode === "vault" || (mode === "pickPhoto" && startInCreate) ? "닫기" : "뒤로"}
+            accessibilityLabel={mode === "vault" || (mode === "pickPhoto" && startInCreate) ? t("sticker.critical.008") : t("sticker.critical.009")}
           >
-            <Text style={styles.headerBtn}>{mode === "vault" || (mode === "pickPhoto" && startInCreate) ? "닫기" : "뒤로"}</Text>
+            <Text style={styles.headerBtn}>{mode === "vault" || (mode === "pickPhoto" && startInCreate) ? t("sticker.critical.008") : t("sticker.critical.009")}</Text>
           </Pressable>
           <Text style={styles.headerTitle}>{title}</Text>
           {mode === "position" || mode === "decorate" ? (
@@ -426,11 +482,11 @@ export function BabyStickerVaultModal({
               hitSlop={10}
               style={[styles.headerBtnHit, styles.headerCancelHit, saving && styles.headerBtnDisabled]}
               accessibilityRole="button"
-              accessibilityLabel="스티커 만들기 취소"
-              accessibilityHint="저장하지 않고 스티커 만들기를 종료합니다"
+              accessibilityLabel={t("sticker.critical.011")}
+              accessibilityHint={t("sticker.critical.012")}
               accessibilityState={{ disabled: saving }}
             >
-              <Text style={[styles.headerBtn, styles.headerCancelText]}>취소</Text>
+              <Text style={[styles.headerBtn, styles.headerCancelText]}>{t("sticker.critical.010")}</Text>
             </Pressable>
           ) : (
             <View style={styles.headerSpacer} />
@@ -445,10 +501,10 @@ export function BabyStickerVaultModal({
             onCreate={startCreate}
             onPick={(sticker) => onPickSticker?.(sticker)}
             onDelete={(sticker) => {
-              Alert.alert("스티커 삭제", `"${sticker.label}"을(를) 삭제할까요?`, [
-                { text: "취소", style: "cancel" },
+              Alert.alert(t("sticker.critical.030"), t("sticker.critical.031", { label: sticker.label }), [
+                { text: t("sticker.critical.010"), style: "cancel" },
                 {
-                  text: "삭제",
+                  text: t("sticker.critical.032"),
                   style: "destructive",
                   onPress: () => {
                     void deleteStickerAssets([
@@ -468,11 +524,13 @@ export function BabyStickerVaultModal({
 
         {mode === "pickPhoto" ? (
           <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}>
-            <Text style={styles.label}>스티커 만들기 방식</Text>
+            <Text style={styles.label}>{t("sticker.critical.033")}</Text>
             <View style={styles.modeRow}>
               {STICKER_CUTOUT_MODE_OPTIONS.map((option) => {
                   const locked = Boolean(option.iosOnly && Platform.OS !== "ios");
                   const selected = cutoutMode === option.value;
+                  const label = option.value === "personCutout" ? t("sticker.critical.005") : t("sticker.critical.102");
+                  const hint = option.value === "personCutout" ? t("sticker.critical.104") : t("sticker.critical.103");
                   return (
                     <Pressable
                       key={option.value}
@@ -482,13 +540,13 @@ export function BabyStickerVaultModal({
                         setCutoutMode(option.value);
                       }}
                       accessibilityRole="button"
-                      accessibilityLabel={option.label}
-                      accessibilityHint={locked ? "iOS에서만 사용할 수 있어요" : option.hint}
+                      accessibilityLabel={label}
+                      accessibilityHint={locked ? t("sticker.critical.034") : hint}
                       accessibilityState={{ selected, disabled: locked }}
                     >
-                      <Text style={[styles.modeTitle, selected && styles.modeTitleActive]}>{option.label}</Text>
+                      <Text style={[styles.modeTitle, selected && styles.modeTitleActive]}>{label}</Text>
                       <Text style={styles.modeHint}>
-                        {locked ? "iOS에서만 배경을 지울 수 있어요" : option.hint}
+                        {locked ? t("sticker.critical.035") : hint}
                       </Text>
                     </Pressable>
                   );
@@ -497,27 +555,27 @@ export function BabyStickerVaultModal({
             {cutoutMode === "personCutout" ? (
               <Text style={styles.hint}>
                 {personCutoutSupported
-                  ? "사진을 고르면 이 기기에서 배경을 지우고 아기만 남겨요. 사진은 서버로 보내지 않아요."
-                  : "인물 컷아웃 모듈을 이 실행에서 찾지 못했어요. 앱을 다시 빌드한 뒤 시도해 주세요. 실패하면 둥근 사각형으로 이어갈 수 있어요."}
+                  ? t("sticker.critical.036")
+                  : t("sticker.critical.037")}
               </Text>
             ) : (
-              <Text style={styles.hint}>사진을 고른 뒤 원하는 위치로 움직여 맞춰요. 저장한 스티커는 이 기기 보관함과 계정에 남겨요.</Text>
+              <Text style={styles.hint}>{t("sticker.critical.038")}</Text>
             )}
             <Pressable
               style={styles.primaryBtn}
               onPress={() => void pickFromLibrary()}
               accessibilityRole="button"
-              accessibilityLabel="갤러리에서 선택"
+              accessibilityLabel={t("sticker.critical.039")}
             >
-              <Text style={styles.primaryBtnText}>갤러리에서 선택</Text>
+              <Text style={styles.primaryBtnText}>{t("sticker.critical.039")}</Text>
             </Pressable>
             <Pressable
               style={styles.secondaryBtn}
               onPress={() => void pickFromCamera()}
               accessibilityRole="button"
-              accessibilityLabel="카메라로 촬영"
+              accessibilityLabel={t("sticker.critical.040")}
             >
-              <Text style={styles.secondaryBtnText}>카메라로 촬영</Text>
+              <Text style={styles.secondaryBtnText}>{t("sticker.critical.040")}</Text>
             </Pressable>
           </ScrollView>
         ) : null}
@@ -538,18 +596,18 @@ export function BabyStickerVaultModal({
           <View style={[styles.content, styles.centerBlock, { paddingBottom: insets.bottom + 28 }]}>
             {cutoutError ? (
               <>
-                <Text style={styles.errorTitle}>스티커 만들기에 실패했어요.</Text>
+                <Text style={styles.errorTitle}>{t("sticker.critical.041")}</Text>
                 <Text style={styles.hint}>
-                  {cutoutErrorReason ?? "다시 시도하거나 둥근 사각형 방식으로 계속할 수 있어요."}
+                  {t(cutoutErrorReason ?? "sticker.critical.042")}
                 </Text>
                 <Pressable
                   style={styles.primaryBtn}
                   onPress={() => pendingOriginal && void runCutout(pendingOriginal, cutoutMode)}
                 >
-                  <Text style={styles.primaryBtnText}>다시 시도</Text>
+                  <Text style={styles.primaryBtnText}>{t("sticker.critical.043")}</Text>
                 </Pressable>
                 <Pressable style={styles.secondaryBtn} onPress={continueAsRoundedRect}>
-                  <Text style={styles.secondaryBtnText}>둥근 사각형으로 계속</Text>
+                  <Text style={styles.secondaryBtnText}>{t("sticker.critical.044")}</Text>
                 </Pressable>
               </>
             ) : (
@@ -557,10 +615,10 @@ export function BabyStickerVaultModal({
                 <ActivityIndicator color={colors.amberText} size="large" />
                 <Text style={[styles.hint, { marginTop: 16, textAlign: "center" }]}>
                   {cutoutMode === "personCutout"
-                    ? "기기에서 인물을 찾아 배경을 지우는 중이에요..."
-                    : "둥근 사각형 스티커를 만드는 중이에요..."}
+                    ? t("sticker.critical.045")
+                    : t("sticker.critical.046")}
                 </Text>
-                <Text style={styles.mockNote}>온디바이스 처리 · 사진은 서버로 전송되지 않아요</Text>
+                <Text style={styles.mockNote}>{t("sticker.critical.047")}</Text>
               </>
             )}
           </View>
@@ -610,6 +668,7 @@ function VaultHome({
   onDelete: (sticker: BabySticker) => void;
   onApplyPhrase: (phrase: string) => void;
 }) {
+  const { t } = useLanguage();
   const [preview, setPreview] = useState<BabySticker | null>(null);
   const sorted = useMemo(
     () => [...stickers].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -621,9 +680,9 @@ function VaultHome({
     <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 28 }]}>
       {sorted.length === 0 ? (
         <EmptyState
-          title="아직 만든 스티커가 없어요."
-          body={pickMode ? "아기 사진으로 스티커를 만들면 이 페이지에 붙일 수 있어요." : "아기 사진으로 귀여운 스티커를 만들어보세요."}
-          ctaLabel="첫 스티커 만들기"
+          title={t("sticker.critical.048")}
+          body={pickMode ? t("sticker.critical.049") : t("sticker.critical.050")}
+          ctaLabel={t("sticker.critical.051")}
           onPressCta={onCreate}
         />
       ) : (
@@ -632,12 +691,12 @@ function VaultHome({
         style={styles.primaryBtn}
         onPress={onCreate}
         accessibilityRole="button"
-        accessibilityLabel="새 스티커 만들기"
+        accessibilityLabel={t("sticker.critical.052")}
       >
         <BabyLogIcon kind="new" size={18} color={colors.amberDark} strokeWidth={2.2} />
-        <Text style={styles.primaryBtnText}>새 스티커 만들기</Text>
+        <Text style={styles.primaryBtnText}>{t("sticker.critical.052")}</Text>
       </Pressable>
-      <Text style={styles.sectionTitle}>내 스티커</Text>
+      <Text style={styles.sectionTitle}>{t("sticker.critical.053")}</Text>
         <View style={styles.grid}>
           {sorted.map((sticker) => (
             <Pressable
@@ -646,7 +705,7 @@ function VaultHome({
               onPress={() => (pickMode ? onPick(sticker) : setPreview(sticker))}
               onLongPress={() => onDelete(sticker)}
               accessibilityRole="button"
-              accessibilityLabel={pickMode ? `${sticker.label} 선택` : `${sticker.label} 다시 보기`}
+              accessibilityLabel={pickMode ? t("sticker.critical.054", { label: sticker.label }) : t("sticker.critical.055", { label: sticker.label })}
             >
               <View style={styles.cardStickerPreview}>
                 <BabyStickerFromModel sticker={sticker} size={88} />
@@ -659,12 +718,12 @@ function VaultHome({
                   style={styles.deleteBtn}
                   onPress={() => onDelete(sticker)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${sticker.label} 삭제`}
+                  accessibilityLabel={t("sticker.critical.056", { label: sticker.label })}
                 >
-                  <Text style={styles.deleteLink}>삭제</Text>
+                  <Text style={styles.deleteLink}>{t("sticker.critical.032")}</Text>
                 </Pressable>
               ) : (
-                <Text style={styles.pickHint}>탭해서 선택</Text>
+                <Text style={styles.pickHint}>{t("sticker.critical.057")}</Text>
               )}
             </Pressable>
           ))}
@@ -674,11 +733,11 @@ function VaultHome({
 
       {!pickMode ? (
         <>
-          <Text style={[styles.sectionTitle, { marginTop: 18 }]}>추천 한마디</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 18 }]}>{t("sticker.critical.058")}</Text>
           <View style={styles.phraseRow}>
-            {STICKER_SUGGESTED_PHRASES.slice(0, 4).map((phrase) => (
-              <Pressable key={phrase} style={styles.phraseChip} onPress={() => onApplyPhrase(phrase)}>
-                <Text style={styles.phraseText}>{phrase}</Text>
+            {SUGGESTED_PHRASE_KEYS.slice(0, 4).map((key) => (
+              <Pressable key={key} style={styles.phraseChip} onPress={() => onApplyPhrase(t(key))}>
+                <Text style={styles.phraseText}>{t(key)}</Text>
               </Pressable>
             ))}
           </View>
@@ -694,7 +753,7 @@ function VaultHome({
               <BabyStickerFromModel sticker={preview} size={168} />
             </View>
             <Pressable style={styles.primaryBtn} onPress={() => setPreview(null)}>
-              <Text style={styles.primaryBtnText}>닫기</Text>
+              <Text style={styles.primaryBtnText}>{t("sticker.critical.008")}</Text>
             </Pressable>
             <Pressable
               style={styles.secondaryBtn}
@@ -704,7 +763,7 @@ function VaultHome({
                 onDelete(target);
               }}
             >
-              <Text style={[styles.secondaryBtnText, styles.deleteLink]}>삭제</Text>
+              <Text style={[styles.secondaryBtnText, styles.deleteLink]}>{t("sticker.critical.032")}</Text>
             </Pressable>
           </View>
         </View>
@@ -730,6 +789,7 @@ function DecorateStep({
   saving: boolean;
   onSave: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <ScrollView
       contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 28 }]}
@@ -753,19 +813,19 @@ function DecorateStep({
             onPress={onReposition}
             hitSlop={10}
             accessibilityRole="button"
-            accessibilityLabel="사진 위치 조정"
-            accessibilityHint="사진에서 스티커로 보이는 위치를 다시 조정합니다"
+            accessibilityLabel={t("sticker.critical.059")}
+            accessibilityHint={t("sticker.critical.060")}
           >
             <BabyLogIcon kind="edit" size={13} color={colors.muted} />
-            <Text style={styles.repositionBtnText}>사진 위치 조정</Text>
+            <Text style={styles.repositionBtnText}>{t("sticker.critical.059")}</Text>
           </Pressable>
         ) : null}
       </View>
 
-      <Text style={styles.hint}>같은 사진으로 한마디만 바꿔 하나씩 저장할 수 있어요.</Text>
+      <Text style={styles.hint}>{t("sticker.critical.061")}</Text>
       <OptionRow
-        label="이모티콘 한마디"
-        options={STICKER_TEMPLATE_OPTIONS}
+        label={t("sticker.critical.062")}
+        options={STICKER_TEMPLATE_OPTIONS.map((item) => ({ value: item.value, label: t(TEMPLATE_COPY[item.value]) }))}
         value={draft.templateId}
         onChange={(templateId) => {
           const option = STICKER_TEMPLATE_OPTIONS.find((item) => item.value === templateId);
@@ -773,62 +833,65 @@ function DecorateStep({
             ...draft,
             stickerType: templateId === "portrait" ? "faceCrop" : "faceTemplate",
             templateId,
-            text: option?.defaultPhrase ?? "",
+            text: templateId === "portrait" ? "" : t(TEMPLATE_COPY[templateId]),
             speechBubbleType: option?.speechBubbleType ?? "none",
           });
         }}
       />
 
       <OptionRow
-        label="테두리"
-        options={STICKER_BORDER_OPTIONS}
+        label={t("sticker.critical.063")}
+        options={STICKER_BORDER_OPTIONS.map((item) => ({ value: item.value, label: t(borderCopy(item.value)) }))}
         value={draft.borderStyle}
         onChange={(borderStyle) => onChange({ ...draft, borderStyle })}
       />
       <OptionRow
-        label="그림자"
-        options={STICKER_SHADOW_OPTIONS}
+        label={t("sticker.critical.064")}
+        options={STICKER_SHADOW_OPTIONS.map((item) => ({ value: item.value, label: t(shadowCopy(item.value)) }))}
         value={draft.shadowStyle}
         onChange={(shadowStyle) => onChange({ ...draft, shadowStyle })}
       />
       <OptionRow
-        label="말풍선"
-        options={STICKER_BUBBLE_OPTIONS}
+        label={t("sticker.critical.065")}
+        options={STICKER_BUBBLE_OPTIONS.map((item) => ({ value: item.value, label: t(bubbleCopy(item.value)) }))}
         value={draft.speechBubbleType}
         onChange={(speechBubbleType) => onChange({ ...draft, speechBubbleType })}
       />
 
-      <Text style={styles.label}>짧은 텍스트</Text>
+      <Text style={styles.label}>{t("sticker.critical.066")}</Text>
       <TextInput
         style={styles.input}
         value={draft.text}
         onChangeText={(text) => onChange({ ...draft, text })}
-        placeholder="스티커에 넣을 한마디"
+        placeholder={t("sticker.critical.067")}
         placeholderTextColor={colors.faint}
       />
       <View style={styles.phraseRow}>
-        {STICKER_SUGGESTED_PHRASES.map((phrase) => (
+        {SUGGESTED_PHRASE_KEYS.map((key) => {
+          const phrase = t(key);
+          return (
           <Pressable
-            key={phrase}
+            key={key}
             style={[styles.phraseChip, draft.text === phrase && styles.phraseChipActive]}
             onPress={() => onChange({ ...draft, text: phrase, speechBubbleType: "round" })}
           >
             <Text style={styles.phraseText}>{phrase}</Text>
           </Pressable>
-        ))}
+          );
+        })}
       </View>
 
-      <Text style={styles.label}>스티커 이름</Text>
+      <Text style={styles.label}>{t("sticker.critical.068")}</Text>
       <TextInput
         style={styles.input}
         value={draft.label}
         onChangeText={(label) => onChange({ ...draft, label })}
-        placeholder={`예: ${babyName} 웃는 스티커`}
+        placeholder={t("sticker.critical.069", { babyName })}
         placeholderTextColor={colors.faint}
       />
 
       <Pressable style={[styles.primaryBtn, saving && styles.disabled]} disabled={saving} onPress={onSave}>
-        <Text style={styles.primaryBtnText}>{saving ? "저장 중…" : "스티커 저장"}</Text>
+        <Text style={styles.primaryBtnText}>{saving ? t("sticker.critical.070") : t("sticker.critical.071")}</Text>
       </Pressable>
     </ScrollView>
   );

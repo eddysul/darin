@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from "react-native";
+import { useLanguage } from "../../LanguageContext";
 import { colors } from "../../theme";
 
 type Props = {
@@ -10,7 +11,9 @@ type Props = {
   onDismiss: () => void;
 };
 
-export function RecordCreatedToast({ visible, title, body = "탭해서 수정", onPress, onDismiss }: Props) {
+export function RecordCreatedToast({ visible, title, body, onPress, onDismiss }: Props) {
+  const { t } = useLanguage();
+  const resolvedBody = body ?? t("record.screen.tapEdit");
   useEffect(() => {
     if (!visible) return;
     const t = setTimeout(onDismiss, 5000);
@@ -31,11 +34,11 @@ export function RecordCreatedToast({ visible, title, body = "탭해서 수정", 
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLiveRegion="polite"
-      accessibilityLabel={`${title}. ${body}`}
+      accessibilityLabel={`${title}. ${resolvedBody}`}
     >
       <View style={styles.body}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.cta}>{body} →</Text>
+        <Text style={styles.cta}>{resolvedBody} →</Text>
       </View>
     </Pressable>
   );

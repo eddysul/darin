@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useLanguage } from "../../LanguageContext";
 import { colors } from "../../theme";
 
 type Props = {
@@ -15,15 +16,16 @@ export function ExpandableSectionHeader({
   expanded,
   canExpand,
   onToggle,
-  expandLabel = "전체 보기 ›",
-  collapseLabel = "접기",
+  expandLabel,
+  collapseLabel,
 }: Props) {
+  const { t } = useLanguage();
   return (
     <View style={styles.header}>
       <Text style={styles.title}>{title}</Text>
       {canExpand && (
         <Pressable onPress={onToggle} hitSlop={8}>
-          <Text style={styles.action}>{expanded ? collapseLabel : expandLabel}</Text>
+          <Text style={styles.action}>{expanded ? collapseLabel ?? t("chrome.critical.030") : expandLabel ?? t("chrome.critical.029")}</Text>
         </Pressable>
       )}
     </View>

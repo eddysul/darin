@@ -47,6 +47,23 @@ function rowToDisplay(
 }
 
 export const ProfileRepository = {
+  async listVisibleDisplayProfiles(userIds: string[]): Promise<DisplayProfile[]> {
+    const ids = [...new Set(userIds.filter(Boolean))];
+    if (!ids.length) return [];
+    const sb = requireSupabase();
+    const { data, error } = await sb
+      .from("profiles")
+      .select("id,display_name,nickname,avatar_storage_path,default_relation")
+      .in("id", ids);
+    if (error) throw error;
+    return Promise.all((data ?? []).map(async (row) => rowToDisplay(
+      row,
+      row.avatar_storage_path
+        ? await this.createProfileAvatarSignedUrl(row.avatar_storage_path).catch(() => undefined)
+        : undefined,
+    )));
+  },
+
   async getMyProfile(): Promise<ProfileRow | null> {
     const sb = requireSupabase();
     const user = await AuthRepository.getUser();

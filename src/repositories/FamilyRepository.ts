@@ -306,11 +306,19 @@ export const FamilyRepository = {
   },
 
   async respondToDarinIdInviteRequest(requestId: string, accept: boolean) {
-    const { data, error } = await requireSupabase().rpc("respond_darin_id_invite_request", {
+    const sb = requireSupabase();
+    const { data, error } = await sb.rpc("respond_darin_id_invite_request", {
       p_request_id: requestId,
       p_accept: accept,
     });
     if (error) throw mapDarinInviteError(error);
+    // The RPC result is authoritative. Push delivery is best-effort; the in-app
+    // response event already exists even when the Function is offline.
+    void sb.functions.invoke("send-push-notification", {
+      body: { action: "sendInviteResponse", targetId: requestId },
+    }).then((push) => {
+      if (push.error) console.warn("invite response push delivery failed", push.error);
+    }).catch((pushError) => console.warn("invite response push delivery failed", pushError));
     return data?.[0] ?? null;
   },
 

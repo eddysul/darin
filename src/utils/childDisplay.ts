@@ -1,8 +1,15 @@
 import type { ChildProfile, ParentProfile, PostpartumStatus } from "../types/careSetup";
 import type { DiaryEntry } from "../types/babyLog";
-import type { Locale } from "../i18n";
+import { createT, type Locale, type MessageKey } from "../i18n";
 import type { BabyAgeFormat } from "../types/appSettings";
 import { formatLocalizedDate } from "./localeFormat";
+
+const POSTPARTUM_KEYS: Record<PostpartumStatus, MessageKey> = {
+  pregnant: "onboardingFlow.postpartum.pregnant",
+  expecting: "onboardingFlow.postpartum.expecting",
+  postpartum: "onboardingFlow.postpartum.postpartum",
+  not_applicable: "onboardingFlow.postpartum.not_applicable",
+};
 
 const ageCopy: Record<Locale, {
   pregnant: (weeks: number, days: number) => string;
@@ -136,10 +143,11 @@ export function formatDiaryStageLabel(
 export function diaryStageLabel(
   entry: Pick<DiaryEntry, "dateKey" | "stageLabelSnapshot">,
   child: Pick<ChildProfile, "birthDate" | "dueDate">,
+  locale: Locale = "ko",
 ): string | null {
   const frozen = entry.stageLabelSnapshot?.trim();
   if (frozen) return frozen;
-  return formatDiaryStageLabel(child, entry.dateKey);
+  return formatDiaryStageLabel(child, entry.dateKey, locale);
 }
 
 /** Compact, non-abbreviated age label used in the record header. */
@@ -182,47 +190,41 @@ export function formatBabyAge(child: ChildProfile, format: BabyAgeFormat, locale
 }
 
 export function buildBabyDisplay(child: ChildProfile, locale: Locale = "ko") {
-  const name = child.childName.trim() || (locale === "ko" ? "아기" : "Baby");
+  const t = createT(locale);
+  const name = child.childName.trim() || t("diary.reminder.babyFallback");
   const emoji = isPregnancyStage(child) ? "🤰" : child.childStatus === "newborn" ? "👶" : "🧒";
 
   if (isPregnancyStage(child) && child.dueDate) {
     const gestational = formatGestationalAge(child.dueDate, new Date(), locale);
     const countdown = formatDueCountdown(child.dueDate, new Date(), locale);
     const dueLabel = formatDateLabel(child.dueDate, locale);
-    const badge = gestational ?? (locale === "ko" ? `출산 예정 · ${dueLabel}` : `Due · ${dueLabel}`);
-    const birthMeta = [gestational, countdown].filter(Boolean).join(" · ") || (locale === "ko" ? `예정일 ${dueLabel}` : `Due date ${dueLabel}`);
+    const badge = gestational ?? t("chrome.critical.047", { date: dueLabel });
+    const birthMeta = [gestational, countdown].filter(Boolean).join(" · ") || t("chrome.critical.048", { date: dueLabel });
     return { babyName: name, babyEmoji: emoji, babyBadge: badge, babyBirthMeta: birthMeta };
   }
 
   const ageDays = computeChildAgeDays(child);
   if (ageDays != null) {
     const postnatal = formatPostnatalAge(child.birthDate, new Date(), locale);
-    const badge = postnatal ?? (locale === "ko" ? `생후 ${ageDays}일 · D+${ageDays}` : `Day ${ageDays} · D+${ageDays}`);
-    const birthMeta =
-      locale === "ko"
-        ? `${child.birthDate ? formatDateLabel(child.birthDate, locale) + " 출생 · " : ""}${postnatal ?? `생후 ${ageDays}일`}`
-        : `${child.birthDate ? "Born " + formatDateLabel(child.birthDate, locale) + " · " : ""}${postnatal ?? `Day ${ageDays}`}`;
+    const badge = postnatal ?? t("chrome.critical.049", { days: ageDays });
+    const ageFallback = postnatal ?? t("chrome.critical.051", { days: ageDays });
+    const birthMeta = child.birthDate
+      ? t("chrome.critical.050", { date: formatDateLabel(child.birthDate, locale), age: ageFallback })
+      : ageFallback;
     return { babyName: name, babyEmoji: emoji, babyBadge: badge, babyBirthMeta: birthMeta };
   }
 
   if (child.dueDate) {
-    const dueLabel = formatDateLabel(child.dueDate, locale);
-    const badge = locale === "ko" ? `예정일 ${dueLabel}` : `Due ${dueLabel}`;
+    const badge = t("chrome.critical.048", { date: formatDateLabel(child.dueDate, locale) });
     return { babyName: name, babyEmoji: emoji, babyBadge: badge, babyBirthMeta: badge };
   }
 
   const statusLabel =
     child.childStatus === "infant"
-      ? locale === "ko"
-        ? "영아"
-        : "Infant"
+      ? t("chrome.critical.052")
       : child.childStatus === "newborn"
-        ? locale === "ko"
-          ? "신생아"
-          : "Newborn"
-        : locale === "ko"
-          ? "출산 전"
-          : "Unborn";
+        ? t("chrome.critical.053")
+        : t("chrome.critical.054");
 
   return {
     babyName: name,
@@ -233,19 +235,7 @@ export function buildBabyDisplay(child: ChildProfile, locale: Locale = "ko") {
 }
 
 export function postpartumStatusLabel(status: PostpartumStatus, locale: Locale): string {
-  const ko: Record<PostpartumStatus, string> = {
-    pregnant: "임신 중",
-    expecting: "출산 예정",
-    postpartum: "산후",
-    not_applicable: "해당 없음",
-  };
-  const en: Record<PostpartumStatus, string> = {
-    pregnant: "Pregnant",
-    expecting: "Expecting",
-    postpartum: "Postpartum",
-    not_applicable: "Not applicable",
-  };
-  return locale === "ko" ? ko[status] : en[status];
+  return createT(locale)(POSTPARTUM_KEYS[status]);
 }
 
 export function buildProfileContextBlock(

@@ -6,7 +6,7 @@ import { resolveLogCategory } from "./resolveLogCategory";
 import { getAppSettings } from "./appSettingsStore";
 import { formatTemperature, formatVolume } from "./measurementFormat";
 import { diaperTypeLabel } from "./diaperLog";
-import { recordCategoryLabel, storedRecordValueLabel, type Translate } from "./recordDisplay";
+import { customCategoryDisplayLabel, recordCategoryLabel, storedRecordValueLabel, type Translate } from "./recordDisplay";
 import { createT } from "../i18n";
 
 const defaultRecordTranslate = createT("ko");
@@ -65,9 +65,12 @@ export function formatTimelineLabel(
     if (entry.cat === "doctor") return entry.title ? `${label} · ${entry.title}` : label;
     if (entry.cat === "play" && entry.details) return `${label} · ${entry.details}`;
     if (entry.cat === "other") return entry.title || t("record.timeline.other");
+    const meta = formatLogMeta(entry, customCategories, t);
+    return meta === t("record.timeline.recorded") ? label : `${label} · ${meta}`;
   }
   const meta = formatLogMeta(entry, customCategories, t);
-  return meta === t("record.timeline.recorded") ? c.label : `${c.label} · ${meta}`;
+  const categoryLabel = customCategoryDisplayLabel(t, c);
+  return meta === t("record.timeline.recorded") ? categoryLabel : `${categoryLabel} · ${meta}`;
 }
 
 export function formatTimelineSubtitle(entry: BabyLogEntry, t: Translate = defaultRecordTranslate): string | null {

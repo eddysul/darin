@@ -15,7 +15,7 @@ import type { BabyLogEntry } from "../../types/babyLog";
 import { rankQuickActions } from "../../utils/quickCategoryRanking";
 import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { useLanguage } from "../../LanguageContext";
-import { recordCategoryLabel } from "../../utils/recordDisplay";
+import { customCategoryDisplayLabel, recordCategoryLabel } from "../../utils/recordDisplay";
 
 export type { OneTouchAction } from "../../constants/quickRecordActions";
 
@@ -196,6 +196,7 @@ function CustomCategoryTile({
   onInteractionChange?: (active: boolean) => void;
 }) {
   const { t } = useLanguage();
+  const displayLabel = customCategoryDisplayLabel(t, category);
   return (
     <Pressable
       disabled={disabled}
@@ -210,7 +211,7 @@ function CustomCategoryTile({
       onPressOut={() => onInteractionChange?.(false)}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={t("record.grid.categoryRecord", { label: category.label })}
+      accessibilityLabel={t("record.grid.categoryRecord", { label: displayLabel })}
     >
       <View style={[styles.iconWrap, { backgroundColor: `${category.color}18` }]}>
         <CustomTemplateIcon
@@ -220,7 +221,7 @@ function CustomCategoryTile({
           strokeWidth={1.8}
         />
       </View>
-      <Text style={styles.label} numberOfLines={2}>{category.label}</Text>
+      <Text style={styles.label} numberOfLines={2}>{displayLabel}</Text>
     </Pressable>
   );
 }

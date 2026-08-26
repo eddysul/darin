@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import * as Notifications from "expo-notifications";
 import { Alert, Linking, StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppProvider } from "./src/context/AppContext";
 import { AppSettingsProvider } from "./src/context/AppSettingsContext";
 import { useAppSettings } from "./src/context/AppSettingsContext";
@@ -51,6 +52,7 @@ import {
 import { WebAppShell } from "./src/components/WebAppShell";
 import { colors } from "./src/theme";
 import { resolvePostSplashPhase } from "./src/utils/appStartup";
+import { familyErrorMessage } from "./src/utils/familyDisplay";
 import { isBabyProfileComplete, isUserProfileComplete, resolveAuthenticatedRoute } from "./src/utils/profileCompletion";
 import { getSupabaseSync, hydrateSupabaseSync } from "./src/utils/supabaseSyncStore";
 import {
@@ -66,6 +68,7 @@ import { FamilyRepository } from "./src/repositories/FamilyRepository";
 import { BabyProfileRepository } from "./src/repositories/BabyProfileRepository";
 import { ProfileRepository } from "./src/repositories/ProfileRepository";
 import { NotificationRepository } from "./src/repositories/NotificationRepository";
+import { MemoriesRepository } from "./src/repositories/MemoriesRepository";
 import {
   getTermsAccepted,
   hydrateTermsAccepted,
@@ -134,26 +137,29 @@ function onboardingChildFromBaby(baby: BabyRow): Partial<CareSetup["child"]> {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <WebAppShell>
-        <AppSettingsProvider>
-          <LanguageProvider>
-            <AppProvider>
-              <BabyLogProvider>
-                <VoiceRecordingProvider>
-                  <RootApp />
-                </VoiceRecordingProvider>
-              </BabyLogProvider>
-            </AppProvider>
-          </LanguageProvider>
-        </AppSettingsProvider>
-      </WebAppShell>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <SafeAreaProvider>
+        <WebAppShell>
+          <AppSettingsProvider>
+            <LanguageProvider>
+              <AppProvider>
+                <BabyLogProvider>
+                  <VoiceRecordingProvider>
+                    <RootApp />
+                  </VoiceRecordingProvider>
+                </BabyLogProvider>
+              </AppProvider>
+            </LanguageProvider>
+          </AppSettingsProvider>
+        </WebAppShell>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
-function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile | null }) {
+function MainNavigator({ onboardingProfile, friendOnly }: { onboardingProfile: UserProfile | null; friendOnly: boolean }) {
   const { setProfile } = useApp();
+  const { t } = useLanguage();
   const { localDataScope } = useBabyLog();
   const pendingNotificationRoute = useRef<Record<string, unknown> | null>(null);
 
@@ -162,9 +168,9 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
   }, [onboardingProfile, setProfile]);
 
   useEffect(() => {
-    if (!localDataScope?.userId) return;
+    if (!friendOnly && !localDataScope?.userId) return;
     void registerCurrentPushToken();
-  }, [localDataScope?.userId]);
+  }, [friendOnly, localDataScope?.userId]);
 
   const openNotificationRoute = useCallback((data: Record<string, unknown>) => {
     if (!navigationRef.isReady()) {
@@ -180,7 +186,14 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
       void NotificationRepository.markInAppEventRead(data.eventId).catch(() => undefined);
     }
     if (data.route === "memory" && typeof data.memoryPostId === "string") {
-      navigationRef.navigate("MemoryDetail", { memoryPostId: data.memoryPostId });
+      navigationRef.navigate("MemoryDetail", {
+        memoryPostId: data.memoryPostId,
+        source: friendOnly ? "friend" : "notification",
+      });
+      return;
+    }
+    if (friendOnly) {
+      navigationRef.navigate("NotificationCenter");
       return;
     }
     if (data.route === "growth_book") {
@@ -220,7 +233,7 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
             date: typeof data.date === "string" ? data.date : undefined,
           },
     });
-  }, []);
+  }, [friendOnly]);
 
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -234,7 +247,15 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
 
   const linking: LinkingOptions<RootStackParamList> = {
     prefixes: ["knanny://", "exp://"],
-    config: {
+    config: friendOnly ? {
+      screens: {
+        MainTabs: {
+          screens: {
+            Memories: "memories",
+          },
+        },
+      },
+    } : {
       screens: {
         MainTabs: {
           screens: {
@@ -277,28 +298,36 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
           contentStyle: { backgroundColor: colors.background },
         }}
       >
-        <RootStack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
-        <RootStack.Screen name="Consult" component={ConsultScreen} options={{ headerShown: false }} />
-        <RootStack.Screen name="BabyProfile" component={BabyProfileScreen} options={{ title: "아기 프로필" }} />
-        <RootStack.Screen name="FamilyShare" component={FamilyShareScreen} options={{ title: "가족·친구 초대" }} />
-        <RootStack.Screen name="MyProfile" component={MyProfileScreen} options={{ title: "내 프로필" }} />
-        <RootStack.Screen name="SettingsHome" component={SettingsHomeScreen} options={{ title: "설정" }} />
-        <RootStack.Screen name="NotificationCenter" component={NotificationCenterScreen} options={{ title: "알림" }} />
-        <RootStack.Screen
-          name="SettingsDetail"
-          options={({ route }) => ({ title: SETTINGS_PAGE_TITLES[route.params.page] })}
-        >
-          {({ route, navigation }) => (
-            <AppSettingsModal
-              page={route.params.page}
-              embedded
-              onClose={() => navigation.goBack()}
-              onOpenMyProfile={() => navigation.navigate("MyProfile")}
-            />
-          )}
+        <RootStack.Screen name="MainTabs" options={{ headerShown: false }}>
+          {() => <MainTabs friendOnly={friendOnly} />}
         </RootStack.Screen>
-        <RootStack.Screen name="GrowthRecords" component={GrowthRecordsManagerScreen} options={{ title: "성장 기록 관리" }} />
-        <RootStack.Screen name="MemoryDetail" component={MemoryDetailScreen} options={{ title: "추억" }} />
+        {!friendOnly ? (
+          <>
+            <RootStack.Screen name="Consult" component={ConsultScreen} options={{ headerShown: false }} />
+            <RootStack.Screen name="BabyProfile" component={BabyProfileScreen} options={{ title: t("babyProfile.title.profile") }} />
+            <RootStack.Screen name="FamilyShare" component={FamilyShareScreen} options={{ title: t("babyProfile.family.invite") }} />
+            <RootStack.Screen name="MyProfile" component={MyProfileScreen} options={{ title: t("babyProfile.myProfile") }} />
+            <RootStack.Screen name="SettingsHome" component={SettingsHomeScreen} options={{ title: t("chrome.critical.035") }} />
+            <RootStack.Screen
+              name="SettingsDetail"
+              options={({ route }) => ({ title: t(SETTINGS_PAGE_TITLES[route.params.page]) })}
+            >
+              {({ route, navigation }) => (
+                <AppSettingsModal
+                  page={route.params.page}
+                  embedded
+                  onClose={() => navigation.goBack()}
+                  onOpenMyProfile={() => navigation.navigate("MyProfile")}
+                />
+              )}
+            </RootStack.Screen>
+            <RootStack.Screen name="GrowthRecords" component={GrowthRecordsManagerScreen} options={{ title: t("growth.critical.116") }} />
+          </>
+        ) : null}
+        <RootStack.Screen name="NotificationCenter" options={{ title: t("chrome.critical.034") }}>
+          {(props) => <NotificationCenterScreen {...props} friendOnly={friendOnly} />}
+        </RootStack.Screen>
+        <RootStack.Screen name="MemoryDetail" component={MemoryDetailScreen} options={{ title: t("memory.critical.001") }} />
       </RootStack.Navigator>
     </NavigationContainer>
   );
@@ -308,7 +337,7 @@ function RootApp() {
   const { careSetup, careSetupReady, hasSavedCareSetup, setProfile, setCareSetup, resetCareSetup, clearSession } =
     useApp();
   const { applyOwnerFromSetup, prepareForLogout, rehydrateFromServer } = useBabyLog();
-  const { setLocale } = useLanguage();
+  const { setLocale, t } = useLanguage();
   const { setSettings } = useAppSettings();
   const [phase, setPhase] = useState<AppPhase>("splash");
   const [onboardingProfile, setOnboardingProfile] = useState<UserProfile | null>(null);
@@ -324,6 +353,7 @@ function RootApp() {
   const [onboardingRelation, setOnboardingRelation] = useState<RelationshipLabel | undefined>();
   const [onboardingInviteCode, setOnboardingInviteCode] = useState("");
   const [onboardingStartsWithBaby, setOnboardingStartsWithBaby] = useState(false);
+  const [friendOnly, setFriendOnly] = useState(false);
   const [onboardingInitialChild, setOnboardingInitialChild] = useState<Partial<CareSetup["child"]>>();
   const [onboardingExistingBabyId, setOnboardingExistingBabyId] = useState<string | null>(null);
   const [startupError, setStartupError] = useState<string | null>(null);
@@ -371,7 +401,7 @@ function RootApp() {
         if (!result) return;
         if (result.status === "cancelled") return;
         if (result.status === "error") {
-          Alert.alert("인증을 완료하지 못했어요", "로그인을 다시 시도해주세요.");
+          Alert.alert(t("chrome.critical.015"), t("chrome.critical.016"));
           return;
         }
         setHasAuthSession(true);
@@ -381,7 +411,7 @@ function RootApp() {
         }
       } catch (error) {
         if (__DEV__) console.warn("[Auth] Callback handling crashed", error);
-        Alert.alert("인증 링크를 열지 못했어요", "링크를 다시 요청해주세요.");
+        Alert.alert(t("chrome.critical.017"), t("chrome.critical.018"));
       }
     };
     void Linking.getInitialURL().then((url) => {
@@ -392,7 +422,7 @@ function RootApp() {
       active = false;
       subscription.remove();
     };
-  }, []);
+  }, [t]);
 
   const applyParentSetup = useCallback(
     (setup: CareSetup) => {
@@ -522,7 +552,9 @@ function RootApp() {
       }
     }
 
-    const profile = await ProfileRepository.getMyProfile().catch(() => null);
+    // A query failure is not equivalent to a missing profile. Let startup retry
+    // instead of routing an existing account into first-time profile setup.
+    const profile = await ProfileRepository.getMyProfile();
     const profileComplete = isUserProfileComplete(profile);
     const providerName = authProfileName(session.user, input?.name);
     const localIdentity = await DarinIdentityRepository.get(session.user.id).catch(() => null);
@@ -555,6 +587,15 @@ function RootApp() {
     }
 
     const babies = await BabyRepository.listMyBabies();
+    if (!babies.length && !validPendingCode) {
+      const friendContexts = await MemoriesRepository.listMyFriendMemoryContexts().catch(() => []);
+      if (friendContexts.length) {
+        setFriendOnly(true);
+        setPhase("main");
+        return;
+      }
+    }
+    setFriendOnly(false);
     await hydrateSupabaseSync();
     const sync = getSupabaseSync();
     // A cold start carries no explicit hint. Without the last-active pointer a
@@ -605,12 +646,12 @@ function RootApp() {
           setPhase("main");
           return;
         }
-        setStartupError("네트워크를 확인한 뒤 다시 시도해 주세요.");
+        setStartupError(t("family.critical.101"));
       })
       .finally(() => {
         setStartupRoutingBusy(false);
       });
-  }, [hasSavedCareSetup, routeAuthenticatedSession]);
+  }, [hasSavedCareSetup, routeAuthenticatedSession, t]);
 
   useEffect(() => {
     if (phase !== "splash") return;
@@ -639,7 +680,7 @@ function RootApp() {
             setPhase("main");
             return;
           }
-          setStartupError("네트워크를 확인한 뒤 다시 시도해 주세요.");
+          setStartupError(t("family.critical.101"));
         })
         .finally(() => {
           setStartupRoutingBusy(false);
@@ -659,6 +700,7 @@ function RootApp() {
     hasAuthSession,
     hasSavedCareSetup,
     routeAuthenticatedSession,
+    t,
   ]);
 
   const handleTermsAccept = useCallback((marketingOptIn: boolean) => {
@@ -693,7 +735,7 @@ function RootApp() {
             preferredBabyId: result.babyId,
           });
         } catch (cause) {
-          Alert.alert("참여하지 못했어요", cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요.");
+          Alert.alert(t("chrome.critical.019"), cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.043"));
         }
         return;
       }
@@ -710,15 +752,15 @@ function RootApp() {
           await clearPendingInvite();
           await rehydrateFromServer();
         } catch (cause) {
-          Alert.alert("초대를 수락하지 못했어요", cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요.");
+          Alert.alert(t("family.critical.035"), cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.043"));
           return;
         }
         if (result.inviteType !== "family") {
           Alert.alert(
-            "초대 수락 완료",
+            t("family.critical.036"),
             result.inviteType === "baby_friend"
-              ? "친구 공개 순간에 연결됐어요."
-              : "친구로 연결됐어요.",
+              ? t("family.critical.038")
+              : t("chrome.critical.020"),
           );
         }
         await routeAuthenticatedSession({
@@ -742,25 +784,25 @@ function RootApp() {
         await restoreWorkspace(baby, result.setup.parent.parentName);
         if (avatarUploadFailed) {
           Alert.alert(
-            "아기 정보는 저장했어요",
-            "사진은 올리지 못했어요. 아기 프로필에서 다시 추가해 주세요.",
+            t("chrome.critical.021"),
+            t("chrome.critical.022"),
           );
         }
       } catch (cause) {
         Alert.alert(
-          "아기 프로필을 저장하지 못했어요",
-          cause instanceof Error ? cause.message : "잠시 후 다시 시도해 주세요.",
+          t("babyProfile.error.save"),
+          cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.043"),
         );
       }
     },
-    [onboardingExistingBabyId, rehydrateFromServer, restoreWorkspace, routeAuthenticatedSession],
+    [onboardingExistingBabyId, rehydrateFromServer, restoreWorkspace, routeAuthenticatedSession, t],
   );
 
   return (
     <LogoutProvider onLogout={handleLogout}>
       <View style={styles.root}>
         <StatusBar style="dark" />
-        {phase === "main" && <MainNavigator onboardingProfile={onboardingProfile} />}
+        {phase === "main" && <MainNavigator onboardingProfile={onboardingProfile} friendOnly={friendOnly} />}
         {phase === "splash" && (
           <SplashScreen
             onComplete={handleSplashComplete}
@@ -795,5 +837,6 @@ function RootApp() {
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: { flex: 1 },
   root: { flex: 1, backgroundColor: colors.background },
 });

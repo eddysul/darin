@@ -32,7 +32,7 @@ import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
 import type { RelationshipLabel } from "../types/growthBook";
 import { presentAvatarPicker } from "../utils/profileAvatarPicker";
 import { colors, radius } from "../theme";
-import { FAMILY_ROLE_LABELS } from "../types/family";
+import { FAMILY_ROLE_LABELS, familyRoleMessageKey } from "../types/family";
 import {
   getVisibleAppLanguageOptions,
   RESIDENCE_COUNTRY_OPTIONS,
@@ -44,6 +44,8 @@ import {
 } from "../types/profilePreferences";
 import { canShowLanguagePicker } from "../config/featureFlags";
 import { formatDateKey } from "../utils/dateKey";
+import { localizedErrorMessage, storedRelationshipLabel } from "../utils/familyDisplay";
+import type { MessageKey } from "../i18n";
 
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 
@@ -109,7 +111,7 @@ export function MyProfileScreen() {
         if (mine?.relationship_label) setRelation(mine.relationship_label as RelationshipLabel);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("settings.critical.003"));
+      setError(cause instanceof Error ? localizedErrorMessage(t, cause.message) : t("settings.critical.003"));
     } finally {
       setLoading(false);
     }
@@ -180,7 +182,7 @@ export function MyProfileScreen() {
       setAvatarUrl(next.avatarUrl);
       await rehydrateFromServer().catch(() => undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("settings.critical.006"));
+      setError(cause instanceof Error ? localizedErrorMessage(t, cause.message) : t("settings.critical.006"));
     } finally {
       setSaving(false);
     }
@@ -189,6 +191,7 @@ export function MyProfileScreen() {
   const pickAvatar = () => {
     presentAvatarPicker({
       hasAvatar: Boolean(avatarUrl),
+      t,
       onPick: (avatar) => {
         setSaving(true);
         setError("");
@@ -202,7 +205,7 @@ export function MyProfileScreen() {
             setCareSetup(nextSetup);
             applyOwnerFromSetup(nextSetup);
           })
-          .catch((cause) => setError(cause instanceof Error ? cause.message : t("settings.critical.007")))
+          .catch((cause) => setError(cause instanceof Error ? localizedErrorMessage(t, cause.message) : t("settings.critical.007")))
           .finally(() => setSaving(false));
       },
       onClear: () => {
@@ -220,7 +223,7 @@ export function MyProfileScreen() {
               parent: { ...careSetup.parent, avatarUri: undefined, parentName: next.displayName },
             });
           })
-          .catch((cause) => setError(cause instanceof Error ? cause.message : t("settings.critical.006")))
+          .catch((cause) => setError(cause instanceof Error ? localizedErrorMessage(t, cause.message) : t("settings.critical.006")))
           .finally(() => setSaving(false));
       },
     });
@@ -256,7 +259,7 @@ export function MyProfileScreen() {
               const active = relation === option;
               return (
                 <Pressable key={option} style={[styles.chip, active && styles.chipActive]} onPress={() => setRelation(option)}>
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{option}</Text>
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{storedRelationshipLabel(t, option)}</Text>
                 </Pressable>
               );
             })}
@@ -265,7 +268,7 @@ export function MyProfileScreen() {
           <View style={styles.chips}>
             {RESIDENCE_COUNTRY_OPTIONS.map((option) => (
               <Pressable key={option.value} style={[styles.chip, residenceCountry === option.value && styles.chipActive]} onPress={() => setResidenceCountry(option.value)}>
-                <Text style={[styles.chipText, residenceCountry === option.value && styles.chipTextActive]}>{option.label}</Text>
+                <Text style={[styles.chipText, residenceCountry === option.value && styles.chipTextActive]}>{t(`profileSetup.country.${option.value.toLowerCase()}` as MessageKey)}</Text>
               </Pressable>
             ))}
           </View>
@@ -275,7 +278,7 @@ export function MyProfileScreen() {
               <View style={styles.chips}>
                 {getVisibleAppLanguageOptions().map((option) => (
                   <Pressable key={option.value} style={[styles.chip, preferredLanguage === option.value && styles.chipActive, option.disabled && styles.chipDisabled]} onPress={() => setPreferredLanguage(option.value)} disabled={option.disabled} accessibilityState={{ disabled: option.disabled, selected: preferredLanguage === option.value }}>
-                    <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>{option.label}</Text>
+                    <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>{t(`profileSetup.language.${option.value}` as MessageKey)}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -294,7 +297,7 @@ export function MyProfileScreen() {
           <Text style={styles.metaLabel}>{t("settings.critical.027")}</Text>
           <Text style={styles.metaValue}>{provider}</Text>
           <Text style={styles.metaLabel}>{t("settings.critical.028")}</Text>
-          <Text style={styles.metaValue}>{FAMILY_ROLE_LABELS[myFamilyRole]}</Text>
+          <Text style={styles.metaValue}>{t(familyRoleMessageKey(myFamilyRole))}</Text>
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}

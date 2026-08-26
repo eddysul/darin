@@ -5,6 +5,7 @@ export type GrowthBookStickerPdfPosition = {
   leftPercent: number;
   topPercent: number;
   widthPercent: number;
+  rotation: number;
   zIndex: number;
 };
 
@@ -70,6 +71,7 @@ export function growthBookStickerPdfPosition(
     leftPercent: clamp(sticker.xRatio, 0, 1 - widthRatio) * 100,
     topPercent: clamp(sticker.yRatio, 0, Math.max(0, 1 - heightRatio)) * 100,
     widthPercent: widthRatio * 100,
+    rotation: Number.isFinite(sticker.rotation) ? sticker.rotation ?? 0 : 0,
     zIndex: sticker.zIndex,
   };
 }

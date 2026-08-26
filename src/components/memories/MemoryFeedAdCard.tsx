@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "../babylog/BabyLogIcon";
 import { colors, radius } from "../../theme";
 import type { MemoryFeedAd } from "./memoryFeedAds";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   ad: MemoryFeedAd;
@@ -12,6 +13,7 @@ type Props = {
 
 export const MemoryFeedAdCard = memo(function MemoryFeedAdCard({ ad, onHide }: Props) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const [infoOpen, setInfoOpen] = useState(false);
 
   return (
@@ -25,19 +27,19 @@ export const MemoryFeedAdCard = memo(function MemoryFeedAdCard({ ad, onHide }: P
           <Pressable
             onPress={() => setInfoOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel="광고 안내 보기"
+            accessibilityLabel={t("memory.critical.160")}
             hitSlop={6}
           >
-            <Text style={styles.sponsored}>광고 · 예시</Text>
+            <Text style={styles.sponsored}>{t("memory.critical.161")}</Text>
           </Pressable>
         </View>
         <Pressable
           style={({ pressed }) => [styles.hideButton, pressed && styles.pressed]}
           onPress={onHide}
           accessibilityRole="button"
-          accessibilityLabel={`${ad.advertiser} 광고 숨기기`}
+          accessibilityLabel={t("memory.critical.162", { advertiser: ad.advertiser })}
         >
-          <Text style={styles.hideText}>숨기기</Text>
+          <Text style={styles.hideText}>{t("memory.critical.163")}</Text>
         </Pressable>
       </View>
 
@@ -45,13 +47,13 @@ export const MemoryFeedAdCard = memo(function MemoryFeedAdCard({ ad, onHide }: P
         style={styles.creative}
         onPress={() => setInfoOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel={`${ad.advertiser} 광고, ${ad.headline}`}
+        accessibilityLabel={t("memory.critical.164", { advertiser: ad.advertiser, headline: ad.headline })}
       >
         <View style={styles.creativeBadge}>
           <Text style={styles.creativeBadgeText}>{ad.categoryLabel}</Text>
         </View>
         <BabyLogIcon kind={ad.icon} size={42} color={colors.amberText} />
-        <Text style={styles.creativeHint}>나중에 브랜드 사진이 들어와요</Text>
+        <Text style={styles.creativeHint}>{t("memory.critical.165")}</Text>
       </Pressable>
 
       <View style={styles.body}>
@@ -70,11 +72,11 @@ export const MemoryFeedAdCard = memo(function MemoryFeedAdCard({ ad, onHide }: P
 
       <Modal visible={infoOpen} transparent animationType="fade" onRequestClose={() => setInfoOpen(false)}>
         <View style={styles.overlay}>
-          <Pressable style={styles.backdrop} onPress={() => setInfoOpen(false)} accessibilityRole="button" accessibilityLabel="닫기" />
+          <Pressable style={styles.backdrop} onPress={() => setInfoOpen(false)} accessibilityRole="button" accessibilityLabel={t("memory.critical.067")} />
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <Text style={styles.sheetTitle}>이 자리는 광고 예시예요</Text>
+            <Text style={styles.sheetTitle}>{t("memory.critical.166")}</Text>
             <Text style={styles.sheetBody}>
-              지금은 실제 광고가 아닙니다. 나중에 육아 브랜드 광고가 추억 사이에 이렇게 들어와요. 광고는 항상 ‘광고’로 표시하고, 숨기면 이 기기에서 잠시 보이지 않게 할 수 있어요.
+              {t("memory.critical.167")}
             </Text>
             <View style={styles.sheetActions}>
               <Pressable
@@ -84,17 +86,17 @@ export const MemoryFeedAdCard = memo(function MemoryFeedAdCard({ ad, onHide }: P
                   onHide();
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="이 광고 숨기기"
+                accessibilityLabel={t("memory.critical.168")}
               >
-                <Text style={styles.sheetSecondaryText}>숨기기</Text>
+                <Text style={styles.sheetSecondaryText}>{t("memory.critical.163")}</Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.sheetPrimary, pressed && styles.pressed]}
                 onPress={() => setInfoOpen(false)}
                 accessibilityRole="button"
-                accessibilityLabel="확인"
+                accessibilityLabel={t("memory.critical.169")}
               >
-                <Text style={styles.sheetPrimaryText}>확인</Text>
+                <Text style={styles.sheetPrimaryText}>{t("memory.critical.169")}</Text>
               </Pressable>
             </View>
           </View>

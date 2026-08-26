@@ -51,7 +51,7 @@ import {
   RECORD_VALUE,
   STARTER_FOOD_INGREDIENTS,
 } from "../../constants/recordInternalValues";
-import { recordCategoryLabel, storedRecordValueLabel } from "../../utils/recordDisplay";
+import { customCategoryDisplayLabel, recordCategoryLabel, storedRecordValueLabel } from "../../utils/recordDisplay";
 
 function normalizeDiaperChip(value: string): string {
   return value === RECORD_VALUE.diaperLegacyBoth || value === RECORD_VALUE.diaperLegacyBothSpaced ? RECORD_VALUE.diaperBoth : value;
@@ -705,7 +705,7 @@ export function RecordDetailSheet({
           <View style={[styles.dot, { backgroundColor: c.color }]} />
           <LogCategoryIcon categoryKey={effectiveCat} customCategories={customCategories} size={18} />
           <Text style={styles.title}>
-            {t("record.detail.logTitle", { label: builtinId ? recordCategoryLabel(t, builtinId) : c.label, action: t(isEdit ? "record.detail.edit" : "record.detail.add") })}
+            {t("record.detail.logTitle", { label: builtinId ? recordCategoryLabel(t, builtinId) : customCategoryDisplayLabel(t, c), action: t(isEdit ? "record.detail.edit" : "record.detail.add") })}
           </Text>
           {sessionLabel ? <Text style={styles.sessionBadge}>{sessionLabel}</Text> : null}
         </View>
@@ -827,7 +827,7 @@ export function RecordDetailSheet({
                         setSelectedIngredients((current) => selected ? current.filter((item) => item !== name) : [...current, name]);
                       }}
                     >
-                      <Text style={[styles.ingredientName, selected && styles.ingredientNameSelected]}>{name}</Text>
+                      <Text style={[styles.ingredientName, selected && styles.ingredientNameSelected]}>{storedRecordValueLabel(t, name)}</Text>
                       <Text style={[styles.ingredientHistory, selected && styles.ingredientHistorySelected]}>{history.count ? t("record.detail.previousCount", { count: history.count }) : t("record.detail.firstLog")}</Text>
                     </Pressable>
                   );
@@ -877,7 +877,7 @@ export function RecordDetailSheet({
                 const history = ingredientHistory(name);
                 return (
                   <View key={`history-${name}`} style={styles.historyRow}>
-                    <Text style={styles.historyName}>{name}</Text>
+                    <Text style={styles.historyName}>{storedRecordValueLabel(t, name)}</Text>
                     <Text style={styles.historyText}>
                       {history.count === 0 ? t("record.detail.firstIngredient") : t("record.detail.ingredientHistory", { count: history.count, date: formatIngredientDate(history.lastDate), memo: history.hasMemo ? t("record.detail.hasMemo") : "" })}
                     </Text>
@@ -1185,7 +1185,7 @@ export function RecordDetailSheet({
               ) : null}
               {c.amount ? (
                 <>
-                  <Text style={styles.fieldLabel}>{builtinId === "pregWeight" ? t("record.detail.weightKg") : builtinId === "pregBp" ? t("record.detail.bloodPressure") : t("record.detail.amountWithUnit", { unit: c.amount })}</Text>
+                  <Text style={styles.fieldLabel}>{builtinId === "pregWeight" ? t("record.detail.weightKg") : builtinId === "pregBp" ? t("record.detail.bloodPressure") : t("record.detail.amountWithUnit", { unit: storedRecordValueLabel(t, c.amount ?? "") })}</Text>
                   <TextInput
                     style={styles.input}
                     value={amount}
@@ -1207,7 +1207,7 @@ export function RecordDetailSheet({
               ) : null}
               {c.amount ? (
                 <>
-                  <Text style={styles.fieldLabel}>{t("record.detail.amountWithUnit", { unit: c.amount })}</Text>
+                  <Text style={styles.fieldLabel}>{t("record.detail.amountWithUnit", { unit: storedRecordValueLabel(t, c.amount ?? "") })}</Text>
                   <TextInput
                     style={styles.input}
                     value={amount}

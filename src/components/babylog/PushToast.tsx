@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "./BabyLogIcon";
+import { useLanguage } from "../../LanguageContext";
 import { colors } from "../../theme";
 
 type Props = {
@@ -14,12 +15,16 @@ type Props = {
 
 export function PushToast({
   visible,
-  title = "오늘 하루 어땠나요?",
-  body = "자기 전에 일기를 남겨보세요 ✍️",
+  title,
+  body,
   onPress,
   onDismiss,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
+  const resolvedTitle = title ?? t("diary.reminder.previewTitle");
+  const resolvedBody = body ?? t("diary.reminder.previewBody", { babyName: t("diary.reminder.babyFallback") });
+  const cta = t("chrome.critical.011");
 
   useEffect(() => {
     if (!visible) return;
@@ -35,22 +40,22 @@ export function PushToast({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLiveRegion="polite"
-      accessibilityLabel={`${title}. ${body}. 탭해서 오늘 일기 쓰기`}
+      accessibilityLabel={`${resolvedTitle}. ${resolvedBody}. ${cta}`}
     >
       <BabyLogIcon kind="bell" size={20} color={colors.accentOnDark} />
       <View style={styles.body}>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.title}>{resolvedTitle}</Text>
         <Text style={styles.sub} numberOfLines={2}>
-          {body}
+          {resolvedBody}
         </Text>
-        <Text style={styles.cta}>탭해서 오늘 일기 쓰기 →</Text>
+        <Text style={styles.cta}>{cta} →</Text>
       </View>
       <Pressable
         style={styles.close}
         onPress={onDismiss}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel="알림 닫기"
+        accessibilityLabel={t("chrome.critical.012")}
       >
         <Text style={styles.closeText}>✕</Text>
       </Pressable>

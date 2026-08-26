@@ -60,6 +60,8 @@ export type AppSettings = {
     feedingDeliveryRestoreEnabled: boolean;
     sleepEnabled: boolean;
     sleepIntervalMinutes: number;
+    sleepDeliveryEnabled: boolean;
+    sleepDeliveryRestoreEnabled: boolean;
   };
   growthBook: {
     showDates: boolean;
@@ -121,6 +123,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     feedingDeliveryRestoreEnabled: false,
     sleepEnabled: false,
     sleepIntervalMinutes: 120,
+    sleepDeliveryEnabled: false,
+    sleepDeliveryRestoreEnabled: false,
   },
   growthBook: {
     showDates: true,

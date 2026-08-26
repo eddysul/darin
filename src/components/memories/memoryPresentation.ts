@@ -1,8 +1,9 @@
 import type { MiscIconKey } from "../babylog/BabyLogIcon";
+import type { MemoryCriticalKey } from "../../i18nMemoriesCriticalMessages";
 import type { MemoryPrivacyType } from "../../types/memory";
 
 export type MemoryPrivacyPresentation = {
-  label: string;
+  labelKey: MemoryCriticalKey;
   icon: MiscIconKey;
   accent: string;
   soft: string;
@@ -10,31 +11,31 @@ export type MemoryPrivacyPresentation = {
 
 const PRESENTATION: Record<MemoryPrivacyType, MemoryPrivacyPresentation> = {
   family_circle: {
-    label: "가족 공개",
+    labelKey: "memory.critical.056",
     icon: "family",
     accent: "#5E9E8C",
     soft: "#EAF5F1",
   },
   friend_circle: {
-    label: "친구 공개",
+    labelKey: "memory.critical.058",
     icon: "handshake",
     accent: "#6795B5",
     soft: "#E9F3F9",
   },
   only_me: {
-    label: "나만 보기",
+    labelKey: "memory.critical.060",
     icon: "lock",
     accent: "#8B75B8",
     soft: "#F1ECF8",
   },
   tagged_family: {
-    label: "가족 공개",
+    labelKey: "memory.critical.056",
     icon: "family",
     accent: "#5E9E8C",
     soft: "#EAF5F1",
   },
   selected_people: {
-    label: "가족 공개",
+    labelKey: "memory.critical.056",
     icon: "family",
     accent: "#5E9E8C",
     soft: "#EAF5F1",
@@ -43,4 +44,8 @@ const PRESENTATION: Record<MemoryPrivacyType, MemoryPrivacyPresentation> = {
 
 export function memoryPrivacyPresentation(privacyType: MemoryPrivacyType): MemoryPrivacyPresentation {
   return PRESENTATION[privacyType];
+}
+
+export function memoryPrivacyMessageKey(value: MemoryPrivacyType): MemoryCriticalKey {
+  return PRESENTATION[value]?.labelKey ?? "memory.critical.056";
 }

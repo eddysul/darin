@@ -1,9 +1,14 @@
 node_modules
 dist
 .expo
+supabase/.temp/
 .cursor/
 .DS_Store
 **/.DS_Store
+__pycache__/
+*.py[cod]
+*.bak
+*.tmp
 http:/
 *.local
 .env

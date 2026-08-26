@@ -50,7 +50,7 @@ export function GrowthBookVaultModal({
   onOpenEditor,
   onGoToDiary,
 }: Props) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const { babyStickers } = useBabyLog();
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -62,7 +62,10 @@ export function GrowthBookVaultModal({
   const photoCount = useMemo(() => growthBookPhotoCount(sorted, edit), [edit, sorted]);
   const pageEstimate = estimateGrowthBookPageCount(sorted.length);
   const canRead = sorted.length > 0;
-  const coverTitle = edit?.coverTitle?.trim() || t("growth.critical.139", { babyName });
+  const storedCover = edit?.coverTitle?.trim();
+  const coverTitle = !storedCover || storedCover === `${babyName}의 성장책`
+    ? t("growth.critical.139", { babyName })
+    : storedCover;
   const coverRange = edit?.coverDateRange?.trim() ?? "";
   const coverPhoto = resolveGrowthBookCoverPhoto(sorted, edit);
   const letterCount = edit?.letters?.length ?? 0;
@@ -82,7 +85,7 @@ export function GrowthBookVaultModal({
   };
 
   const runPdfCreate = async () => {
-    await createGrowthBookPdf({ babyName, entries: sorted, edit, stickers: babyStickers });
+    await createGrowthBookPdf({ babyName, entries: sorted, edit, stickers: babyStickers, t, locale });
   };
 
   const confirmRemove = (entry: DiaryEntry) => {
@@ -198,7 +201,7 @@ export function GrowthBookVaultModal({
               </Pressable>
 
               {sorted.map((entry, index) => {
-                const milestone = diaryMilestoneLabel(entry);
+                const milestone = diaryMilestoneLabel(entry, t);
                 const pageEdit = resolvePageEdit(entry.id, entry, edit);
                 const pagePhotos = resolvePagePhotos(entry, pageEdit);
                 const photo = pagePhotos[0] ?? diaryPrimaryPhoto(entry);
@@ -232,7 +235,7 @@ export function GrowthBookVaultModal({
                           <DiaryStampPair skyId={entry.weatherStamp} moodId={entry.moodStamp} size="sm" />
                         </View>
                         <Text style={styles.comment} numberOfLines={2}>
-                          {milestone ?? diaryDisplayComment(entry)}
+                          {milestone ?? diaryDisplayComment(entry, t)}
                         </Text>
                         {milestone ? <Text style={styles.tag}>{milestone}</Text> : null}
                         <View style={styles.metaRow}>

@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "拍摄宝宝照片需要访问相机。";
+"NSMicrophoneUsageDescription" = "添加语音照护记录需要访问麦克风。";
+"NSPhotoLibraryUsageDescription" = "添加宝宝、日记和成长册图片需要访问照片。";

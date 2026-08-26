@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { colors, fontScaleCap } from "../../theme";
+import { useLanguage } from "../../LanguageContext";
 
 const CAREGIVER_TONES = [colors.amber, "#7c83fd", "#5CB87A", "#c98a54"] as const;
 
@@ -13,14 +14,15 @@ type Props = {
 
 export function SharedCaregiversRow({ onPress, size = "md", label }: Props) {
   const { familyMembers } = useBabyLog();
+  const { t } = useLanguage();
   const avatarSize = size === "sm" ? 20 : 22;
   const overlap = size === "sm" ? -6 : -7;
   const names = familyMembers.slice(0, 3).map((m) => m.name);
   const resolved =
     label ??
     (names.length
-      ? `${names.join(" · ")}${familyMembers.length > 3 ? " 외" : ""}와 공유 중`
-      : "가족과 공유 중");
+      ? t(familyMembers.length > 3 ? "chrome.critical.028" : "chrome.critical.027", { names: names.join(" · ") })
+      : t("chrome.critical.026"));
 
   return (
     <Pressable style={[styles.row, size === "sm" && styles.rowSm]} onPress={onPress}>

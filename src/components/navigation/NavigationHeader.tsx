@@ -2,6 +2,7 @@ import { ChevronLeft } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../../theme";
+import { useLanguage } from "../../LanguageContext";
 
 type Props = {
   title: string;
@@ -24,6 +25,7 @@ export function NavigationHeader({
   includeSafeArea = true,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const modalActions = Boolean(leftLabel || rightLabel);
 
   return (
@@ -35,14 +37,14 @@ export function NavigationHeader({
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={leftLabel ?? "이전 화면으로 돌아가기"}
+        accessibilityLabel={leftLabel ?? t("chrome.critical.023")}
         onPress={onBack}
         disabled={!onBack}
         style={styles.sideButton}
         hitSlop={10}
       >
         {modalActions ? (
-          <Text style={styles.leftLabel}>{leftLabel ?? "취소"}</Text>
+          <Text style={styles.leftLabel}>{leftLabel ?? t("common.cancel")}</Text>
         ) : onBack ? (
           <ChevronLeft size={27} color={colors.text} strokeWidth={2.2} />
         ) : null}

@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "Camera access is needed to take baby photos.";
+"NSMicrophoneUsageDescription" = "Microphone access is needed to add voice care logs.";
+"NSPhotoLibraryUsageDescription" = "Photo access is needed to add baby, diary, and growth book images.";

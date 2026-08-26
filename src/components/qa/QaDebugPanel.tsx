@@ -9,6 +9,7 @@ import {
 } from "../../utils/qaDebug";
 import { EMPTY_QA_FAULT_STATE, type QaFaultState } from "../../utils/qaFaults";
 import { colors } from "../../theme";
+import { useLanguage } from "../../LanguageContext";
 
 export function QaDebugPanel({ trigger = "floating" }: { trigger?: "floating" | "menu" }) {
   return __DEV__ ? <QaDebugPanelDev trigger={trigger} /> : null;
@@ -16,10 +17,11 @@ export function QaDebugPanel({ trigger = "floating" }: { trigger?: "floating" | 
 
 function QaDebugPanelDev({ trigger }: { trigger: "floating" | "menu" }) {
   const { qaDebug } = useBabyLog();
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("DEV 전용 · 운영 빌드에는 표시되지 않음");
+  const [status, setStatus] = useState<string | null>(null);
   const [faults, setFaults] = useState<QaFaultState>(EMPTY_QA_FAULT_STATE);
 
   useEffect(() => {
@@ -36,7 +38,7 @@ function QaDebugPanelDev({ trigger }: { trigger: "floating" | "menu" }) {
       setStatus(success);
       if (closeAfter) setOpen(false);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "QA 작업에 실패했어요.");
+      setStatus(error instanceof Error ? error.message : t("qa.critical.002"));
     } finally {
       setBusy(false);
     }
@@ -49,7 +51,7 @@ function QaDebugPanelDev({ trigger }: { trigger: "floating" | "menu" }) {
       {trigger === "floating" ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="QA Debug 열기"
+          accessibilityLabel={t("qa.critical.003")}
           style={[styles.fab, { bottom: insets.bottom + 74 }]}
           onPress={() => setOpen(true)}
         >
@@ -59,8 +61,8 @@ function QaDebugPanelDev({ trigger }: { trigger: "floating" | "menu" }) {
         <Pressable accessibilityRole="button" style={styles.menuTrigger} onPress={() => setOpen(true)}>
           <View style={styles.menuBadge}><Text style={styles.menuBadgeText}>DEV</Text></View>
           <View style={styles.menuBody}>
-            <Text style={styles.menuTitle}>QA Debug 메뉴</Text>
-            <Text style={styles.menuSubtitle}>장애 주입·데모 데이터·백업 복원</Text>
+            <Text style={styles.menuTitle}>{t("qa.critical.004")}</Text>
+            <Text style={styles.menuSubtitle}>{t("qa.critical.005")}</Text>
           </View>
           <Text style={styles.menuChevron}>›</Text>
         </Pressable>
@@ -74,74 +76,74 @@ function QaDebugPanelDev({ trigger }: { trigger: "floating" | "menu" }) {
                 <Text style={styles.eyebrow}>DEVELOPMENT ONLY</Text>
                 <Text style={styles.title}>QA Debug</Text>
               </View>
-              <Pressable accessibilityLabel="QA Debug 닫기" onPress={() => setOpen(false)}>
-                <Text style={styles.close}>닫기</Text>
+              <Pressable accessibilityLabel={t("qa.critical.006")} onPress={() => setOpen(false)}>
+                <Text style={styles.close}>{t("diary.compose.close")}</Text>
               </Pressable>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
-              <Text style={styles.section}>장애 주입 · 다음 1회</Text>
+              <Text style={styles.section}>{t("qa.critical.007")}</Text>
               <DebugButton
-                label={`다음 AI 요청 1회 실패시키기${faults.ai ? " · 준비됨" : ""}`}
+                label={`${t("qa.critical.008")}${faults.ai ? t("qa.critical.009") : ""}`}
                 disabled={busy}
                 onPress={() =>
-                  void run("다음 AI 요청이 1회 실패합니다.", () => armQaFaultOnce("ai"))
+                  void run(t("qa.critical.010"), () => armQaFaultOnce("ai"))
                 }
               />
               <DebugButton
-                label={`다음 저장 1회 실패시키기${faults.storageWrite ? " · 준비됨" : ""}`}
+                label={`${t("qa.critical.011")}${faults.storageWrite ? t("qa.critical.009") : ""}`}
                 disabled={busy}
                 onPress={() =>
-                  void run("다음 저장이 1회 실패합니다.", () => armQaFaultOnce("storageWrite"))
+                  void run(t("qa.critical.012"), () => armQaFaultOnce("storageWrite"))
                 }
               />
               <DebugButton
-                label={`다음 불러오기 1회 실패시키기${faults.storageRead ? " · 준비됨" : ""}`}
+                label={`${t("qa.critical.013")}${faults.storageRead ? t("qa.critical.009") : ""}`}
                 disabled={busy}
                 onPress={() =>
                   void run(
-                    "다음 앱 재시작/hydrate에서 불러오기가 1회 실패합니다.",
+                    t("qa.critical.014"),
                     () => armQaFaultOnce("storageRead"),
                   )
                 }
               />
 
-              <Text style={styles.section}>데이터 상태</Text>
+              <Text style={styles.section}>{t("qa.critical.015")}</Text>
               <DebugButton
-                label="현재 로컬 데이터 백업"
+                label={t("qa.critical.016")}
                 disabled={busy}
-                onPress={() => void run("현재 로컬 데이터를 QA backup key에 저장했습니다.", qaDebug.backupCurrentData)}
+                onPress={() => void run(t("qa.critical.017"), qaDebug.backupCurrentData)}
               />
               <DebugButton
-                label="데모 데이터 채우기 (한눈에)"
+                label={t("qa.critical.018")}
                 disabled={busy}
                 onPress={() =>
-                  void run("한눈에 탭 데모 데이터를 채웠습니다.", qaDebug.fillDemoData, true)
+                  void run(t("qa.critical.019"), qaDebug.fillDemoData, true)
                 }
               />
               <DebugButton
-                label="QA용 빈 데이터로 전환"
+                label={t("qa.critical.020")}
                 disabled={busy}
                 danger
-                onPress={() => void run("QA용 빈 데이터로 전환했습니다.", qaDebug.useEmptyData, true)}
+                onPress={() => void run(t("qa.critical.021"), qaDebug.useEmptyData, true)}
               />
               <DebugButton
-                label="샘플 데이터 복원"
+                label={t("qa.critical.022")}
                 disabled={busy}
-                onPress={() => void run("샘플 데이터를 복원했습니다.", qaDebug.restoreSampleData, true)}
+                onPress={() => void run(t("qa.critical.023"), qaDebug.restoreSampleData, true)}
               />
               <DebugButton
-                label="백업 데이터 복원"
+                label={t("qa.critical.024")}
                 disabled={busy}
-                onPress={() => void run("백업 데이터를 복원했습니다.", qaDebug.restoreBackupData, true)}
+                onPress={() => void run(t("qa.critical.025"), qaDebug.restoreBackupData, true)}
               />
               <DebugButton
-                label="QA 상담 테스트 기록 정리"
+                label={t("qa.critical.026")}
                 disabled={busy}
-                onPress={() => void run("QA로 시작하는 상담 테스트 턴을 정리했습니다.", qaDebug.removeQaChatTurns)}
+                onPress={() => void run(t("qa.critical.027"), qaDebug.removeQaChatTurns)}
               />
 
-              <Text accessibilityLiveRegion="polite" style={styles.status}>{status}</Text>
+              <Text accessibilityLiveRegion="polite" style={styles.status}>{status ?? t("qa.critical.001")}</Text>
             </ScrollView>
           </View>
         </View>

@@ -10,9 +10,11 @@
  */
 import type { Insight } from "./careInsights";
 import { BANNED_PHRASES } from "./weeklyNarrativePrompt";
+import type { Locale } from "../i18n";
+import { aiOutputLanguageInstruction } from "./aiLocale";
 
 /** 프롬프트나 출력 형식이 바뀌면 올린다. 캐시가 이 값으로 옛 문장을 걸러낸다. */
-export const INSIGHT_PHRASE_VERSION = 1;
+export const INSIGHT_PHRASE_VERSION = 2;
 
 export const INSIGHT_SYSTEM_PROMPT = `너는 육아 기록 앱이 찾아낸 관계를 부모가 읽기 좋은 한 문장으로 다듬는다.
 
@@ -38,22 +40,38 @@ export const INSIGHT_SYSTEM_PROMPT = `너는 육아 기록 앱이 찾아낸 관�
 1. ...
 2. ...`;
 
+export function insightSystemPrompt(locale: Locale): string {
+  return `${INSIGHT_SYSTEM_PROMPT}
+
+[Language]
+${aiOutputLanguageInstruction(locale)}`;
+}
+
 /** 발견 하나를 가리키는 키. 캐시와 응답 짝맞춤에 쓴다. */
 export function insightKey(insight: Insight): string {
   return `${insight.input}-${insight.output}`;
 }
 
 /** AI 에게 줄 입력. 원본 기록은 나가지 않고 이미 만들어진 문장과 조각만 나간다. */
-export function describeInsights(insights: Insight[]): string {
+export function describeInsights(
+  insights: Insight[],
+  localized?: Array<{ lead: string; gapText: string; tail: string; bucketLabel: string; valueLabel: string }>,
+): string {
   return insights
     .map((insight, index) => {
+      const copy = localized?.[index];
+      const lead = copy?.lead ?? insight.lead;
+      const gapText = copy?.gapText ?? insight.gapText;
+      const tail = copy?.tail ?? insight.tail;
       const dist = insight.distribution;
+      const bucketLabel = copy?.bucketLabel ?? dist.bucketLabel;
+      const valueLabel = copy?.valueLabel ?? dist.valueLabel;
       return [
         `관계 ${index + 1}`,
-        `- 우리 문장: ${insight.lead}${insight.gapText} ${insight.tail}`,
-        `- 기준: ${dist.bucketLabel}`,
-        `- 결과: ${dist.valueLabel}`,
-        `- 차이: ${insight.gapText}`,
+        `- 우리 문장: ${lead}${gapText} ${tail}`,
+        `- 기준: ${bucketLabel}`,
+        `- 결과: ${valueLabel}`,
+        `- 차이: ${gapText}`,
         `- 관측: ${dist.totalDays}일`,
       ].join("\n");
     })
@@ -72,7 +90,7 @@ function numbersIn(text: string): string[] {
 export function validateInsightPhrase(text: string, insight: Insight): boolean {
   const line = text.trim();
   // 35자 내외를 시켰으니 60자를 넘으면 지시를 벗어난 것이다. 한 줄에 안 들어간다.
-  if (!line || line.length > 60) return false;
+  if (!line || line.length > 140) return false;
   for (const word of BANNED_PHRASES) {
     if (line.includes(word)) return false;
   }

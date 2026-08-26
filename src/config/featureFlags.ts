@@ -22,12 +22,12 @@ type FeatureDefinition = {
  * Change a status to beta/ready only after its release audit is complete.
  */
 export const FEATURE_FLAGS = {
-  feedingReminder: { status: "dev_only", qaStatus: "internal_test", dependsOn: ["careReminderServer"] },
-  sleepReminder: { status: "hidden" },
-  multilingualPicker: { status: "dev_only", qaStatus: "internal_test" },
-  englishSupport: { status: "dev_only", qaStatus: "internal_test" },
-  fiveLanguageSupport: { status: "hidden" },
-  careReminderServer: { status: "dev_only", qaStatus: "internal_test" },
+  feedingReminder: { status: "beta", qaStatus: "internal_test", dependsOn: ["careReminderServer"] },
+  sleepReminder: { status: "beta", qaStatus: "internal_test", dependsOn: ["careReminderServer"] },
+  multilingualPicker: { status: "ready", qaStatus: "internal_test" },
+  englishSupport: { status: "ready", qaStatus: "internal_test" },
+  fiveLanguageSupport: { status: "ready", qaStatus: "internal_test" },
+  careReminderServer: { status: "beta", qaStatus: "internal_test" },
   experimentalNotifications: { status: "dev_only", qaStatus: "internal_test" },
 } as const satisfies Record<FeatureName, FeatureDefinition>;
 
@@ -106,7 +106,8 @@ export function canAccessCareReminderUi(
   environment: FeatureEnvironment = currentFeatureEnvironment(),
   qaAllowlist: ReadonlySet<FeatureName> = internalFeatureAllowlist(),
 ): boolean {
-  return isFeatureVisible("feedingReminder", environment, qaAllowlist);
+  return isFeatureVisible("feedingReminder", environment, qaAllowlist)
+    || isFeatureVisible("sleepReminder", environment, qaAllowlist);
 }
 
 export function canShowNotificationEvent(

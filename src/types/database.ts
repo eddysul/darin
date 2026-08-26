@@ -46,6 +46,7 @@ export type NotificationEventType =
   | "reminder"
   | "event"
   | "feeding_reminder"
+  | "sleep_reminder"
   | "test";
 export type NotificationEventStatus = "pending" | "sent" | "failed" | "skipped";
 export type NotificationDeliveryStatus =
@@ -824,6 +825,10 @@ export type Database = {
       list_baby_memory_friends: {
         Args: { p_baby_id: string };
         Returns: Array<{ membership_id: string; user_id: string; display_name: string; nickname: string | null; status: MemoryFriendStatus }>;
+      };
+      list_my_friend_memory_contexts: {
+        Args: Record<string, never>;
+        Returns: Array<{ baby_id: string; baby_name: string; avatar_storage_path: string | null; latest_post_at: string | null }>;
       };
       add_darin_friend_to_baby: {
         Args: { p_baby_id: string; p_friend_user_id: string };

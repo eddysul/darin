@@ -6,6 +6,7 @@ import { CareLogRepository } from "../repositories/CareLogRepository";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { detectLocalCareLogMigrationCandidates } from "./careLogsMigration";
 import { getEffectiveCareSetup, loadCareSetup } from "./careSetupStore";
+import { devLog, devWarn } from "./devLog";
 import {
   getSupabaseSync,
   hydrateSupabaseSync,
@@ -59,7 +60,7 @@ export async function ensureCareLogBabyId(): Promise<string | null> {
     const bound = await bindBaby(setup);
     return bound.babyId;
   } catch (e) {
-    console.warn("[supabase] ensureCareLogBabyId failed:", errMsg(e));
+    devWarn("[supabase] ensureCareLogBabyId failed:", errMsg(e));
     return null;
   }
 }
@@ -124,7 +125,7 @@ export async function bootstrapCareLogsFromServer(opts: {
     };
   } catch (e) {
     const message = errMsg(e);
-    console.warn("[supabase] bootstrap failed:", message);
+    devWarn("[supabase] bootstrap failed:", message);
     return {
       usedServer: false,
       babyId: getSupabaseSync().babyId,
@@ -137,20 +138,20 @@ export async function bootstrapCareLogsFromServer(opts: {
 
 export async function syncCareLogCreate(entry: BabyLogEntry, babyIdOverride?: string): Promise<BabyLogEntry | null> {
   if (!isSupabaseConfigured()) {
-    console.warn("[supabase] skip create: not configured");
+    devWarn("[supabase] skip create: not configured");
     return null;
   }
   const babyId = babyIdOverride ?? await ensureCareLogBabyId();
   if (!babyId) {
-    console.warn("[supabase] skip create: no babyId (auth/bootstrap failed)");
+    devWarn("[supabase] skip create: no babyId (auth/bootstrap failed)");
     return null;
   }
   try {
     const remote = await CareLogRepository.createCareLog(babyId, entry, { notifyFamily: true });
-    console.log("[supabase] care_log synced", remote.id, remote.cat);
+    devLog("[supabase] care_log synced", remote.id, remote.cat);
     return remote;
   } catch (e) {
-    console.warn("[supabase] createCareLog failed:", errMsg(e));
+    devWarn("[supabase] createCareLog failed:", errMsg(e));
     return null;
   }
 }
@@ -165,10 +166,10 @@ export async function syncCareLogUpdate(
   if (!babyId) return null;
   try {
     const remote = await CareLogRepository.updateCareLog(babyId, id, entry);
-    console.log("[supabase] care_log updated", remote.id);
+    devLog("[supabase] care_log updated", remote.id);
     return remote;
   } catch (e) {
-    console.warn("[supabase] updateCareLog failed:", errMsg(e));
+    devWarn("[supabase] updateCareLog failed:", errMsg(e));
     return null;
   }
 }
@@ -179,10 +180,10 @@ export async function syncCareLogDelete(id: string, babyIdOverride?: string): Pr
   if (!babyId) return false;
   try {
     await CareLogRepository.deleteCareLog(babyId, id);
-    console.log("[supabase] care_log deleted", id);
+    devLog("[supabase] care_log deleted", id);
     return true;
   } catch (e) {
-    console.warn("[supabase] deleteCareLog failed:", errMsg(e));
+    devWarn("[supabase] deleteCareLog failed:", errMsg(e));
     return false;
   }
 }

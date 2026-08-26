@@ -1,19 +1,22 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { MemoryPrivacyType } from "../../types/memory";
+import { useLanguage } from "../../LanguageContext";
+import type { MemoryCriticalKey } from "../../i18nMemoriesCriticalMessages";
 import { colors, radius } from "../../theme";
+import { memoryPrivacyMessageKey } from "./memoryPresentation";
 
 export const MEMORY_PRIVACY_OPTIONS: Array<{
   value: MemoryPrivacyType;
-  label: string;
-  description: string;
+  labelKey: MemoryCriticalKey;
+  descriptionKey: MemoryCriticalKey;
 }> = [
-  { value: "family_circle", label: "가족 공개", description: "함께 기록하는 가족만 볼 수 있어요." },
-  { value: "friend_circle", label: "친구 공개", description: "연결된 친구가 볼 수 있어요." },
-  { value: "only_me", label: "나만 보기", description: "나만 볼 수 있어요." },
+  { value: "family_circle", labelKey: "memory.critical.056", descriptionKey: "memory.critical.074" },
+  { value: "friend_circle", labelKey: "memory.critical.058", descriptionKey: "memory.critical.075" },
+  { value: "only_me", labelKey: "memory.critical.060", descriptionKey: "memory.critical.076" },
 ];
 
-export function memoryPrivacyLabel(value: MemoryPrivacyType): string {
-  return MEMORY_PRIVACY_OPTIONS.find((item) => item.value === value)?.label ?? "가족 공개";
+export function memoryPrivacyLabelKey(value: MemoryPrivacyType): MemoryCriticalKey {
+  return memoryPrivacyMessageKey(value);
 }
 
 export function MemoryPrivacyPicker({
@@ -23,6 +26,7 @@ export function MemoryPrivacyPicker({
   value: MemoryPrivacyType;
   onChange: (value: MemoryPrivacyType) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <View style={styles.list}>
       {MEMORY_PRIVACY_OPTIONS.map((option) => {
@@ -40,8 +44,8 @@ export function MemoryPrivacyPicker({
           >
             <View style={[styles.radio, active && styles.radioActive]}>{active ? <View style={styles.dot} /> : null}</View>
             <View style={styles.copy}>
-              <Text style={styles.label}>{option.label}</Text>
-              <Text style={styles.description}>{option.description}</Text>
+              <Text style={styles.label}>{t(option.labelKey)}</Text>
+              <Text style={styles.description}>{t(option.descriptionKey)}</Text>
             </View>
           </Pressable>
         );

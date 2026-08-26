@@ -3,6 +3,7 @@ import { AuthRepository } from "../repositories/AuthRepository";
 import { GrowthRecordRepository } from "../repositories/GrowthRecordRepository";
 import type { GrowthRecord, GrowthRecordDraft } from "../types/growthRecord";
 import { ensureCareLogBabyId } from "./careLogServerSync";
+import { devLog, devWarn } from "./devLog";
 import {
   isGrowthRecordsMigrationComplete,
   markGrowthRecordsMigrationComplete,
@@ -59,7 +60,7 @@ export async function bootstrapGrowthRecordsFromServer(localRecords: GrowthRecor
     return { usedServer: true, records: remote, migrated, migrationFailed };
   } catch (error) {
     const message = errMsg(error);
-    console.warn("[supabase] growth_records bootstrap failed:", message);
+    devWarn("[supabase] growth_records bootstrap failed:", message);
     return { usedServer: false, records: null, migrated: 0, migrationFailed: 0, error: message };
   }
 }
@@ -70,10 +71,10 @@ export async function syncGrowthRecordCreate(record: GrowthRecord, babyIdOverrid
   if (!babyId) return null;
   try {
     const remote = await GrowthRecordRepository.create(babyId, record);
-    console.log("[supabase] growth_record synced", remote.id);
+    devLog("[supabase] growth_record synced", remote.id);
     return remote;
   } catch (error) {
-    console.warn("[supabase] growth_record create failed:", errMsg(error));
+    devWarn("[supabase] growth_record create failed:", errMsg(error));
     return null;
   }
 }
@@ -84,10 +85,10 @@ export async function syncGrowthRecordUpdate(id: string, draft: GrowthRecordDraf
   if (!babyId) return null;
   try {
     const remote = await GrowthRecordRepository.update(babyId, id, draft);
-    console.log("[supabase] growth_record updated", remote.id);
+    devLog("[supabase] growth_record updated", remote.id);
     return remote;
   } catch (error) {
-    console.warn("[supabase] growth_record update failed:", errMsg(error));
+    devWarn("[supabase] growth_record update failed:", errMsg(error));
     return null;
   }
 }
@@ -98,10 +99,10 @@ export async function syncGrowthRecordDelete(id: string, babyIdOverride?: string
   if (!babyId) return false;
   try {
     await GrowthRecordRepository.delete(babyId, id);
-    console.log("[supabase] growth_record deleted", id);
+    devLog("[supabase] growth_record deleted", id);
     return true;
   } catch (error) {
-    console.warn("[supabase] growth_record delete failed:", errMsg(error));
+    devWarn("[supabase] growth_record delete failed:", errMsg(error));
     return false;
   }
 }

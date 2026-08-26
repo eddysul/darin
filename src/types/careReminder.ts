@@ -46,11 +46,13 @@ export type CareReminderState = {
   processingStartedAt: string | null;
 };
 
-export type FeedingReminderBundle = {
+export type CareReminderBundle = {
   setting: CareReminderSetting | null;
   preference: CareReminderMemberPreference | null;
   state: CareReminderState | null;
 };
+
+export type FeedingReminderBundle = CareReminderBundle;
 
 export const DEFAULT_FEEDING_REMINDER_SETTING = {
   reminderType: "feeding" as const,
@@ -58,4 +60,12 @@ export const DEFAULT_FEEDING_REMINDER_SETTING = {
   mode: "custom" as const,
   intervalMinutes: 180,
   includedLogTypes: ["breast", "formula", "storedMilk"],
+};
+
+export const DEFAULT_SLEEP_REMINDER_SETTING = {
+  reminderType: "sleep" as const,
+  enabled: false,
+  mode: "custom" as const,
+  intervalMinutes: 180,
+  includedLogTypes: ["sleep"],
 };

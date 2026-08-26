@@ -12,6 +12,14 @@ import type { BabyLogEntry } from "../../types/babyLog";
 import { colors, radius } from "../../theme";
 import { useLanguage } from "../../LanguageContext";
 import type { ReportCriticalKey } from "../../i18nReportCriticalMessages";
+import {
+  chartCategoryLabel,
+  formatPeriodRange,
+  formatWeeklyAmount,
+  localizeInsight,
+  stripDayLabel,
+  weeklyMetricLabel,
+} from "../../utils/insightDisplay";
 
 type Props = {
   visible: boolean;
@@ -44,42 +52,35 @@ const CLOCK_KEYS = ["firstFeedMinutes", "lastFeedMinutes", "bathMinutes"];
 const STRIP_HEIGHT = 380;
 
 /** 값 자체를 읽는 방식. 시각 지표는 시계로 읽는다. */
-function formatMetric(metric: WeeklyMetric, value: number, t: ReturnType<typeof useLanguage>["t"]): string {
-  const rounded = Math.round(value);
-  if (CLOCK_KEYS.includes(metric.key)) {
-    const h = Math.floor(rounded / 60) % 24;
-    return `${h}:${String(rounded % 60).padStart(2, "0")}`;
-  }
-  return formatAmount(metric, rounded, t);
+function formatMetric(metric: WeeklyMetric, value: number, t: ReturnType<typeof useLanguage>["t"], locale: ReturnType<typeof useLanguage>["locale"]): string {
+  return formatWeeklyAmount(metric.key, metric.unit, value, t, locale);
 }
 
 /** 두 값의 차이. 시각 지표라도 차이는 시계가 아니라 길이로 읽어야 한다. */
-function formatGap(metric: WeeklyMetric, value: number, t: ReturnType<typeof useLanguage>["t"]): string {
-  return formatAmount(metric, Math.round(value), t);
+function formatGap(metric: WeeklyMetric, value: number, t: ReturnType<typeof useLanguage>["t"], locale: ReturnType<typeof useLanguage>["locale"]): string {
+  if (CLOCK_KEYS.includes(metric.key)) {
+    return formatWeeklyAmount("sleepMinutes", "minutes", value, t, locale);
+  }
+  return formatAmount(metric, Math.round(value), t, locale);
 }
 
-function formatAmount(metric: WeeklyMetric, rounded: number, t: ReturnType<typeof useLanguage>["t"]): string {
-  if (metric.unit !== "\uBD84") return `${rounded}${metric.unit}`;
-  if (rounded < 60) return t("report.critical.114", { count: rounded });
-  const h = Math.floor(rounded / 60);
-  const m = rounded % 60;
-  return m ? t("report.critical.115", { hours: h, minutes: m }) : t("report.critical.116", { hours: h });
+function formatAmount(metric: WeeklyMetric, rounded: number, t: ReturnType<typeof useLanguage>["t"], locale: ReturnType<typeof useLanguage>["locale"]): string {
+  return formatWeeklyAmount(metric.key, metric.unit, rounded, t, locale);
 }
 
 /** 평균 밑에 붙는 줄. 지난주 평균과 이번 주 최소~최대를 같이 보여준다. */
-function subLine(metric: WeeklyMetric, t: ReturnType<typeof useLanguage>["t"]): string {
+function subLine(metric: WeeklyMetric, t: ReturnType<typeof useLanguage>["t"], locale: ReturnType<typeof useLanguage>["locale"]): string {
   const range =
     metric.thisWeek.min === metric.thisWeek.max
       ? ""
-      : t("report.critical.117", { min: formatMetric(metric, metric.thisWeek.min, t), max: formatMetric(metric, metric.thisWeek.max, t) });
-  const previous = metric.lastWeek ? t("report.critical.118", { value: formatMetric(metric, metric.lastWeek.avg, t) }) : t("report.critical.100");
+      : t("report.critical.117", { min: formatMetric(metric, metric.thisWeek.min, t, locale), max: formatMetric(metric, metric.thisWeek.max, t, locale) });
+  const previous = metric.lastWeek ? t("report.critical.118", { value: formatMetric(metric, metric.lastWeek.avg, t, locale) }) : t("report.critical.100");
   return range ? `${previous} · ${range}` : previous;
 }
 
 function MetricRow({ metric }: { metric: WeeklyMetric }) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const gap = metric.lastWeek !== null ? Math.abs(metric.thisWeek.avg - metric.lastWeek.avg) : 0;
-  // 시각은 자정 기준 분이라 비율이 항상 작게 나온다. 한 시간이 당겨져도 5%다.
   const changed =
     metric.lastWeek === null
       ? false
@@ -91,19 +92,19 @@ function MetricRow({ metric }: { metric: WeeklyMetric }) {
   return (
     <View style={styles.row}>
       <View style={styles.rowMain}>
-        <Text style={styles.rowLabel}>{metric.label}</Text>
-        <Text style={styles.rowValue}>{formatMetric(metric, metric.thisWeek.avg, t)}</Text>
+        <Text style={styles.rowLabel}>{weeklyMetricLabel(metric.key, t)}</Text>
+        <Text style={styles.rowValue}>{formatMetric(metric, metric.thisWeek.avg, t, locale)}</Text>
         {metric.lastWeek === null ? (
           <Text style={styles.badgeFlat}>{t("report.critical.101")}</Text>
         ) : changed ? (
           <Text style={[styles.badge, up ? styles.badgeUp : styles.badgeDown]}>
-            {up ? "▲" : "▼"} {formatGap(metric, gap, t)}
+            {up ? "▲" : "▼"} {formatGap(metric, gap, t, locale)}
           </Text>
         ) : (
           <Text style={styles.badgeFlat}>{t("report.critical.102")}</Text>
         )}
       </View>
-      <Text style={styles.rowSub}>{subLine(metric, t)}</Text>
+      <Text style={styles.rowSub}>{subLine(metric, t, locale)}</Text>
     </View>
   );
 }
@@ -123,13 +124,14 @@ function FindLine({
   phrase?: string;
   babyName: string;
 }) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   if (!phrase) {
+    const copy = localizeInsight(insight, t, locale);
     return (
       <Text style={styles.findHeadline}>
-        {insight.lead}
+        {copy.lead}
         {babyName ? t("report.critical.122", { babyName }) : ""}
-        <Text style={styles.findGap}>{insight.gapText}</Text> {insight.tail}
+        <Text style={styles.findGap}>{copy.gapText}</Text> {copy.tail}
       </Text>
     );
   }
@@ -154,7 +156,7 @@ export function WeeklyReportSheet({
   babyName,
   onClose,
 }: Props) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [openInsight, setOpenInsight] = useState<Insight | null>(null);
   const strip = useMemo(() => buildWeekStrip(logs), [logs]);
@@ -188,7 +190,7 @@ export function WeeklyReportSheet({
 
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text style={styles.period}>
-              {table.meta.periodLabel}
+              {formatPeriodRange(table.meta.dateKeys, t)}
               {table.meta.ageMonths !== null ? ` · ${t("report.critical.120", { months: table.meta.ageMonths })}` : ""}
             </Text>
             <Text style={styles.title}>{t("report.critical.105")}</Text>
@@ -210,7 +212,7 @@ export function WeeklyReportSheet({
                 <View style={styles.stripDays}>
                   <View style={styles.axisSpacer} />
                   {strip.days.map((day) => (
-                    <Text key={day.dateKey} style={styles.stripDay}>{day.label}</Text>
+                    <Text key={day.dateKey} style={styles.stripDay}>{stripDayLabel(day.dateKey, t)}</Text>
                   ))}
                 </View>
 
@@ -263,7 +265,7 @@ export function WeeklyReportSheet({
                   {strip.legend.map((item) => (
                     <View key={item.key} style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                      <Text style={styles.legendText}>{item.label}</Text>
+                      <Text style={styles.legendText}>{chartCategoryLabel(item.key, t)}</Text>
                     </View>
                   ))}
                 </View>
@@ -285,7 +287,7 @@ export function WeeklyReportSheet({
                     style={[styles.findRow, index > 0 && styles.findRowNext]}
                     onPress={() => setOpenInsight(item)}
                     accessibilityRole="button"
-                    accessibilityLabel={t("report.critical.121", { headline: item.headline })}
+                    accessibilityLabel={t("report.critical.121", { headline: insightPhrases[insightKey(item)] ?? localizeInsight(item, t, locale).headline })}
                   >
                     <FindLine
                       insight={item}

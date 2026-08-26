@@ -386,6 +386,7 @@ export function BabyProfileScreen() {
     }
     presentAvatarPicker({
       hasAvatar: Boolean(avatarUrl),
+      t,
       onPick: (avatar) => {
         if (isCreating) {
           setPendingAvatar(avatar);

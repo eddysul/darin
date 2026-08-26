@@ -1,6 +1,8 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "../babylog/BabyLogIcon";
+import { useLanguage } from "../../LanguageContext";
+import type { MemoryCriticalKey } from "../../i18nMemoriesCriticalMessages";
 import { colors, radius } from "../../theme";
 
 export type MemoryViewFilter = "all" | "family_circle" | "friend_circle" | "only_me" | "tagged" | "saved";
@@ -8,19 +10,19 @@ export type MemoryWhoFilter = "all" | "family" | string;
 
 export const MEMORY_VIEW_FILTERS: Array<{
   key: MemoryViewFilter;
-  label: string;
-  description: string;
+  labelKey: MemoryCriticalKey;
+  descriptionKey: MemoryCriticalKey;
 }> = [
-  { key: "all", label: "모든 순간", description: "공개 범위와 관계없이 모두 보여요." },
-  { key: "family_circle", label: "가족 공개", description: "가족과 나눈 순간만 보여요." },
-  { key: "friend_circle", label: "친구 공개", description: "친구에게 연 순간만 보여요." },
-  { key: "only_me", label: "나만 보기", description: "혼자 간직한 순간만 보여요." },
-  { key: "tagged", label: "태그됨", description: "내가 태그된 순간만 보여요." },
-  { key: "saved", label: "저장됨", description: "다시 보려고 담아 둔 순간만 보여요." },
+  { key: "all", labelKey: "memory.critical.054", descriptionKey: "memory.critical.055" },
+  { key: "family_circle", labelKey: "memory.critical.056", descriptionKey: "memory.critical.057" },
+  { key: "friend_circle", labelKey: "memory.critical.058", descriptionKey: "memory.critical.059" },
+  { key: "only_me", labelKey: "memory.critical.060", descriptionKey: "memory.critical.061" },
+  { key: "tagged", labelKey: "memory.critical.062", descriptionKey: "memory.critical.063" },
+  { key: "saved", labelKey: "memory.critical.064", descriptionKey: "memory.critical.065" },
 ];
 
-export function memoryViewFilterLabel(value: MemoryViewFilter): string {
-  return MEMORY_VIEW_FILTERS.find((item) => item.key === value)?.label ?? "보기";
+export function memoryViewFilterMessageKey(value: MemoryViewFilter): MemoryCriticalKey {
+  return MEMORY_VIEW_FILTERS.find((item) => item.key === value)?.labelKey ?? "memory.critical.013";
 }
 
 function OptionRow({
@@ -69,27 +71,28 @@ export function MemoryViewFilterSheet({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const showWho = babies.length > 1;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="보기 닫기" />
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t("memory.critical.068")} />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text style={styles.title}>어떤 순간을 볼까요</Text>
-            <Pressable style={styles.close} onPress={onClose} accessibilityRole="button" accessibilityLabel="닫기">
-              <Text style={styles.closeText}>닫기</Text>
+            <Text style={styles.title}>{t("memory.critical.066")}</Text>
+            <Pressable style={styles.close} onPress={onClose} accessibilityRole="button" accessibilityLabel={t("memory.critical.067")}>
+              <Text style={styles.closeText}>{t("memory.critical.067")}</Text>
             </Pressable>
           </View>
           <ScrollView style={styles.scroller} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
             {showWho ? (
               <>
-                <Text style={styles.section}>누구의 순간</Text>
+                <Text style={styles.section}>{t("memory.critical.069")}</Text>
                 <OptionRow
-                  label="전체"
-                  description="모든 아이의 순간이 함께 보여요."
+                  label={t("memory.critical.011")}
+                  description={t("memory.critical.070")}
                   active={whoValue === "all"}
                   onPress={() => {
                     onChangeWho("all");
@@ -97,8 +100,8 @@ export function MemoryViewFilterSheet({
                   }}
                 />
                 <OptionRow
-                  label="가족 순간"
-                  description="온 가족이 함께한 순간만 보여요."
+                  label={t("memory.critical.012")}
+                  description={t("memory.critical.071")}
                   active={whoValue === "family"}
                   onPress={() => {
                     onChangeWho("family");
@@ -109,7 +112,7 @@ export function MemoryViewFilterSheet({
                   <OptionRow
                     key={baby.id}
                     label={baby.name}
-                    description={`${baby.name}의 순간만 보여요.`}
+                    description={t("memory.critical.072", { name: baby.name })}
                     active={whoValue === baby.id}
                     onPress={() => {
                       onChangeWho(baby.id);
@@ -119,12 +122,12 @@ export function MemoryViewFilterSheet({
                 ))}
               </>
             ) : null}
-            <Text style={[styles.section, showWho && styles.sectionSpaced]}>공개 범위</Text>
+            <Text style={[styles.section, showWho && styles.sectionSpaced]}>{t("memory.critical.073")}</Text>
             {MEMORY_VIEW_FILTERS.map((option) => (
               <OptionRow
                 key={option.key}
-                label={option.label}
-                description={option.description}
+                label={t(option.labelKey)}
+                description={t(option.descriptionKey)}
                 active={option.key === value}
                 onPress={() => {
                   onChange(option.key);

@@ -4,7 +4,7 @@ import { useAppSettings } from "../../context/AppSettingsContext";
 import { useLanguage } from "../../LanguageContext";
 import { CareReminderRepository } from "../../repositories/CareReminderRepository";
 import { colors, radius } from "../../theme";
-import type { FeedingReminderBundle } from "../../types/careReminder";
+import type { CareReminderBundle, CareReminderType } from "../../types/careReminder";
 import type { FamilyRole } from "../../types/family";
 import { getPushPermissionState, registerCurrentPushToken, requestPushPermission } from "../../utils/pushNotifications";
 import { elapsedMinutesSince, feedingReminderProgress, feedingReminderStatusKey } from "../../utils/careReminderStatus";
@@ -12,6 +12,7 @@ import { DurationPickerField, DurationPickerSheet } from "../inputs/TimePickerFi
 import { isFeatureVisible } from "../../config/featureFlags";
 
 type Props = {
+  reminderType?: CareReminderType;
   babyId: string | null;
   myRole: FamilyRole;
   active?: boolean;
@@ -21,6 +22,7 @@ type Props = {
 };
 
 export function FeedingReminderSettingsCard({
+  reminderType = "feeding",
   babyId,
   myRole,
   active = true,
@@ -28,14 +30,16 @@ export function FeedingReminderSettingsCard({
   quietHours,
   onDeliveryStateChange,
 }: Props) {
-  const feedingVisible = isFeatureVisible("feedingReminder");
+  const featureName = reminderType === "feeding" ? "feedingReminder" : "sleepReminder";
+  const reminderVisible = isFeatureVisible(featureName);
+  const copyPrefix = reminderType === "feeding" ? "diary.feedingReminder" : "diary.sleepReminder";
   const { t } = useLanguage();
   const { settings, setSettings } = useAppSettings();
   const legacySetting = useRef({
-    enabled: settings.notifications.feedingEnabled,
-    intervalMinutes: settings.notifications.feedingIntervalMinutes,
+    enabled: reminderType === "feeding" ? settings.notifications.feedingEnabled : settings.notifications.sleepEnabled,
+    intervalMinutes: reminderType === "feeding" ? settings.notifications.feedingIntervalMinutes : settings.notifications.sleepIntervalMinutes,
   });
-  const [bundle, setBundle] = useState<FeedingReminderBundle>({ setting: null, preference: null, state: null });
+  const [bundle, setBundle] = useState<CareReminderBundle>({ setting: null, preference: null, state: null });
   const [permission, setPermission] = useState<Awaited<ReturnType<typeof getPushPermissionState>>>("not_determined");
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -44,66 +48,69 @@ export function FeedingReminderSettingsCard({
   const [clock, setClock] = useState(() => new Date());
   const canEditShared = myRole === "owner" || myRole === "admin" || myRole === "editor" || myRole === "caregiver";
 
-  const cacheBundle = useCallback((next: FeedingReminderBundle) => {
+  const cacheBundle = useCallback((next: CareReminderBundle) => {
     setBundle(next);
     const sharedEnabled = next.setting?.enabled ?? false;
     const deliveryEnabled = next.preference?.deliveryEnabled ?? false;
-    setSettings((current) => ({
-      ...current,
-      notifications: {
-        ...current.notifications,
+    setSettings((current) => reminderType === "feeding" ? ({
+      ...current, notifications: { ...current.notifications,
         feedingEnabled: sharedEnabled,
         feedingIntervalMinutes: next.setting?.intervalMinutes ?? current.notifications.feedingIntervalMinutes,
         feedingDeliveryEnabled: deliveryEnabled,
         feedingDeliveryRestoreEnabled: deliveryEnabled || current.notifications.feedingDeliveryRestoreEnabled,
       },
+    }) : ({
+      ...current, notifications: { ...current.notifications,
+        sleepEnabled: sharedEnabled,
+        sleepIntervalMinutes: next.setting?.intervalMinutes ?? current.notifications.sleepIntervalMinutes,
+        sleepDeliveryEnabled: deliveryEnabled,
+        sleepDeliveryRestoreEnabled: deliveryEnabled || current.notifications.sleepDeliveryRestoreEnabled,
+      },
     }));
     onDeliveryStateChange?.(deliveryEnabled);
-  }, [onDeliveryStateChange, setSettings]);
+  }, [onDeliveryStateChange, reminderType, setSettings]);
 
   const refresh = useCallback(async () => {
-    if (!feedingVisible || !active || !babyId) return;
+    if (!reminderVisible || !active || !babyId) return;
     setLoading(true);
     setMessage("");
     try {
       const permissionState = await getPushPermissionState();
       setPermission(permissionState);
-      const next = await CareReminderRepository.migrateLegacyFeedingSetting(
-        babyId,
-        legacySetting.current.enabled,
-        legacySetting.current.intervalMinutes,
-      );
+      const next = reminderType === "feeding"
+        ? await CareReminderRepository.migrateLegacyFeedingSetting(babyId, legacySetting.current.enabled, legacySetting.current.intervalMinutes)
+        : await CareReminderRepository.migrateLegacySleepSetting(babyId, legacySetting.current.enabled, legacySetting.current.intervalMinutes);
       cacheBundle(next);
       if (next.preference?.deliveryEnabled) {
         if (permissionState === "granted") {
-          if (!(await registerCurrentPushToken())) setMessage(t("diary.feedingReminder.tokenError"));
+          if (!(await registerCurrentPushToken())) setMessage(t(`${copyPrefix}.tokenError`));
         } else {
           onDeliveryStateChange?.(false);
         }
       }
     } catch {
-      setMessage(t("diary.feedingReminder.loadError"));
+      setMessage(t(`${copyPrefix}.loadError`));
     } finally {
       setLoading(false);
     }
-  }, [active, babyId, cacheBundle, feedingVisible, onDeliveryStateChange, t]);
+  }, [active, babyId, cacheBundle, copyPrefix, onDeliveryStateChange, reminderType, reminderVisible, t]);
 
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
-    if (!feedingVisible || !active) return;
+    if (!reminderVisible || !active) return;
     const timer = setInterval(() => setClock(new Date()), 60_000);
     return () => clearInterval(timer);
-  }, [active, feedingVisible]);
+  }, [active, reminderVisible]);
 
   const ensureDeliveryReady = async () => {
     const nextPermission = await requestPushPermission();
     setPermission(nextPermission);
     if (nextPermission !== "granted") {
-      setMessage(t("diary.feedingReminder.permissionNeeded"));
+      setMessage(t(`${copyPrefix}.permissionNeeded`));
       return false;
     }
     if (!(await registerCurrentPushToken())) {
-      setMessage(t("diary.feedingReminder.tokenError"));
+      setMessage(t(`${copyPrefix}.tokenError`));
       return false;
     }
     return true;
@@ -112,7 +119,7 @@ export function FeedingReminderSettingsCard({
   const savePreference = async (deliveryEnabled: boolean, explicit = true) => {
     if (!babyId) return false;
     if (deliveryEnabled && !(await ensureDeliveryReady())) return false;
-    const preference = await CareReminderRepository.saveMyFeedingPreference(babyId, {
+    const preference = await CareReminderRepository.saveMyPreference(babyId, reminderType, {
       deliveryEnabled,
       quietHoursEnabled: bundle.preference?.quietHoursEnabled ?? false,
       quietStart: bundle.preference?.quietStart ?? null,
@@ -121,12 +128,15 @@ export function FeedingReminderSettingsCard({
     });
     const next = { ...bundle, preference };
     setBundle(next);
-    setSettings((current) => ({
-      ...current,
-      notifications: {
-        ...current.notifications,
+    setSettings((current) => reminderType === "feeding" ? ({
+      ...current, notifications: { ...current.notifications,
         feedingDeliveryEnabled: deliveryEnabled,
         feedingDeliveryRestoreEnabled: explicit ? deliveryEnabled : current.notifications.feedingDeliveryRestoreEnabled,
+      },
+    }) : ({
+      ...current, notifications: { ...current.notifications,
+        sleepDeliveryEnabled: deliveryEnabled,
+        sleepDeliveryRestoreEnabled: explicit ? deliveryEnabled : current.notifications.sleepDeliveryRestoreEnabled,
       },
     }));
     onDeliveryStateChange?.(deliveryEnabled);
@@ -134,53 +144,55 @@ export function FeedingReminderSettingsCard({
   };
 
   useEffect(() => {
-    if (!feedingVisible || !active || !babyId || !allCommand || loading) return;
+    if (!reminderVisible || !active || !babyId || !allCommand || loading) return;
     if (!allCommand.enabled && bundle.preference?.deliveryEnabled) {
-      void savePreference(false, false).catch(() => setMessage(t("diary.feedingReminder.saveError")));
+      void savePreference(false, false).catch(() => setMessage(t(`${copyPrefix}.saveError`)));
     } else if (
       allCommand.enabled
       && !bundle.preference?.deliveryEnabled
-      && settings.notifications.feedingDeliveryRestoreEnabled
+      && (reminderType === "feeding" ? settings.notifications.feedingDeliveryRestoreEnabled : settings.notifications.sleepDeliveryRestoreEnabled)
       && bundle.setting?.enabled
     ) {
-      void savePreference(true, false).catch(() => setMessage(t("diary.feedingReminder.saveError")));
+      void savePreference(true, false).catch(() => setMessage(t(`${copyPrefix}.saveError`)));
     }
     // sequence intentionally makes each explicit global-toggle action observable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allCommand?.sequence]);
 
   useEffect(() => {
-    if (!feedingVisible || !active || !babyId || !quietHours || !bundle.preference) return;
+    if (!reminderVisible || !active || !babyId || !quietHours || !bundle.preference) return;
     const current = bundle.preference;
     if (
       current.quietHoursEnabled === quietHours.enabled
       && current.quietStart === quietHours.start
       && current.quietEnd === quietHours.end
     ) return;
-    void CareReminderRepository.saveMyFeedingPreference(babyId, {
+    void CareReminderRepository.saveMyPreference(babyId, reminderType, {
       deliveryEnabled: current.deliveryEnabled,
       quietHoursEnabled: quietHours.enabled,
       quietStart: quietHours.start,
       quietEnd: quietHours.end,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     }).then((preference) => setBundle((value) => ({ ...value, preference })))
-      .catch(() => setMessage(t("diary.feedingReminder.saveError")));
-  }, [active, babyId, bundle.preference, feedingVisible, quietHours, t]);
+      .catch(() => setMessage(t(`${copyPrefix}.saveError`)));
+  }, [active, babyId, bundle.preference, copyPrefix, quietHours, reminderType, reminderVisible, t]);
 
   const toggleShared = async (enabled: boolean) => {
     if (!babyId || !canEditShared || busy) return;
     setBusy(true); setMessage("");
     try {
       if (enabled && !(await ensureDeliveryReady())) return;
-      const setting = await CareReminderRepository.saveFeedingSetting(babyId, {
+      const setting = await CareReminderRepository.saveSetting(babyId, reminderType, {
         enabled,
-        intervalMinutes: bundle.setting?.intervalMinutes ?? settings.notifications.feedingIntervalMinutes,
+        intervalMinutes: bundle.setting?.intervalMinutes ?? (reminderType === "feeding"
+          ? settings.notifications.feedingIntervalMinutes
+          : settings.notifications.sleepIntervalMinutes),
       });
-      let next: FeedingReminderBundle = { ...bundle, setting };
-      if (enabled) next = await CareReminderRepository.getFeedingBundle(babyId);
+      let next: CareReminderBundle = { ...bundle, setting };
+      if (enabled) next = await CareReminderRepository.getBundle(babyId, reminderType);
       cacheBundle(next);
     } catch {
-      setMessage(t("diary.feedingReminder.saveError"));
+      setMessage(t(`${copyPrefix}.saveError`));
     } finally { setBusy(false); }
   };
 
@@ -188,7 +200,7 @@ export function FeedingReminderSettingsCard({
     if (busy) return;
     setBusy(true); setMessage("");
     try { await savePreference(enabled); }
-    catch { setMessage(t("diary.feedingReminder.saveError")); }
+    catch { setMessage(t(`${copyPrefix}.saveError`)); }
     finally { setBusy(false); }
   };
 
@@ -197,52 +209,52 @@ export function FeedingReminderSettingsCard({
     if (!babyId || !canEditShared) return;
     setBusy(true); setMessage("");
     try {
-      const setting = await CareReminderRepository.saveFeedingSetting(babyId, {
+      const setting = await CareReminderRepository.saveSetting(babyId, reminderType, {
         enabled: bundle.setting?.enabled ?? false,
         intervalMinutes: minutes,
       });
-      cacheBundle({ ...bundle, setting, state: (await CareReminderRepository.getFeedingBundle(babyId)).state });
-    } catch { setMessage(t("diary.feedingReminder.saveError")); }
+      cacheBundle({ ...bundle, setting, state: (await CareReminderRepository.getBundle(babyId, reminderType)).state });
+    } catch { setMessage(t(`${copyPrefix}.saveError`)); }
     finally { setBusy(false); }
   };
 
-  const intervalMinutes = bundle.setting?.intervalMinutes ?? settings.notifications.feedingIntervalMinutes;
+  const intervalMinutes = bundle.setting?.intervalMinutes ?? (reminderType === "feeding" ? settings.notifications.feedingIntervalMinutes : settings.notifications.sleepIntervalMinutes);
   const progress = feedingReminderProgress(bundle.state?.lastRelevantLogAt ?? null, intervalMinutes, clock);
   const statusKey = feedingReminderStatusKey(progress);
   const elapsed = elapsedMinutesSince(bundle.state?.lastRelevantLogAt ?? null, clock);
-  const statusLabel = t(`diary.feedingReminder.status.${statusKey}`);
+  const statusLabel = t(`${copyPrefix}.status.${statusKey}`);
   const elapsedText = elapsed === null ? null : elapsed >= 60
-    ? t("diary.feedingReminder.elapsedHours", { hours: Math.floor(elapsed / 60), minutes: elapsed % 60 })
-    : t("diary.feedingReminder.elapsedMinutes", { minutes: elapsed });
+    ? t(`${copyPrefix}.elapsedHours`, { hours: Math.floor(elapsed / 60), minutes: elapsed % 60 })
+    : t(`${copyPrefix}.elapsedMinutes`, { minutes: elapsed });
 
-  if (!feedingVisible) return null;
+  if (!reminderVisible) return null;
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>{t("diary.feedingReminder.title")}</Text>
-      <Text style={styles.body}>{t("diary.feedingReminder.intro")}</Text>
-      {!babyId ? <Text style={styles.message}>{t("diary.feedingReminder.accountRequired")}</Text> : null}
+      <Text style={styles.title}>{t(`${copyPrefix}.title`)}</Text>
+      <Text style={styles.body}>{t(`${copyPrefix}.intro`)}</Text>
+      {!babyId ? <Text style={styles.message}>{t(`${copyPrefix}.accountRequired`)}</Text> : null}
       <View style={styles.switchRow}>
         <View style={styles.copy}>
-          <Text style={styles.label}>{t("diary.feedingReminder.sharedToggle")}</Text>
-          {!canEditShared ? <Text style={styles.hint}>{t("diary.feedingReminder.viewerReadOnly")}</Text> : null}
+          <Text style={styles.label}>{t(`${copyPrefix}.sharedToggle`)}</Text>
+          {!canEditShared ? <Text style={styles.hint}>{t(`${copyPrefix}.viewerReadOnly`)}</Text> : null}
         </View>
         <Switch value={bundle.setting?.enabled ?? false} onValueChange={(value) => void toggleShared(value)} disabled={!babyId || !canEditShared || busy || loading} />
       </View>
 
-      <Text style={styles.sectionTitle}>{t("diary.feedingReminder.sharedSection")}</Text>
+      <Text style={styles.sectionTitle}>{t(`${copyPrefix}.sharedSection`)}</Text>
       <DurationPickerField
-        label={t("diary.feedingReminder.interval")}
+        label={t(`${copyPrefix}.interval`)}
         valueMinutes={intervalMinutes}
         onPress={() => setPickerOpen(true)}
         disabled={!babyId || !canEditShared || busy || loading}
       />
 
-      <Text style={styles.sectionTitle}>{t("diary.feedingReminder.mySection")}</Text>
+      <Text style={styles.sectionTitle}>{t(`${copyPrefix}.mySection`)}</Text>
       <View style={styles.switchRow}>
         <View style={styles.copy}>
-          <Text style={styles.label}>{t("diary.feedingReminder.deliveryToggle")}</Text>
-          {permission !== "granted" ? <Text style={styles.permission}>{t("diary.feedingReminder.permissionNeeded")}</Text> : null}
+          <Text style={styles.label}>{t(`${copyPrefix}.deliveryToggle`)}</Text>
+          {permission !== "granted" ? <Text style={styles.permission}>{t(`${copyPrefix}.permissionNeeded`)}</Text> : null}
         </View>
         <Switch
           value={Boolean(bundle.preference?.deliveryEnabled && permission === "granted")}
@@ -254,19 +266,19 @@ export function FeedingReminderSettingsCard({
       {bundle.state?.lastRelevantLogAt ? (
         <View style={styles.statusCard}>
           <Text style={styles.statusTitle}>{statusLabel}</Text>
-          {elapsedText ? <Text style={styles.statusBody}>{t("diary.feedingReminder.lastFeed", { elapsed: elapsedText })}</Text> : null}
-          <Text style={styles.statusBody}>{t("diary.feedingReminder.intervalBasis", { minutes: intervalMinutes })}</Text>
+          {elapsedText ? <Text style={styles.statusBody}>{t(`${copyPrefix}.lastFeed`, { elapsed: elapsedText })}</Text> : null}
+          <Text style={styles.statusBody}>{t(`${copyPrefix}.intervalBasis`, { minutes: intervalMinutes })}</Text>
         </View>
       ) : null}
-      <Text style={styles.notice}>{t("diary.feedingReminder.reference")}</Text>
-      <Text style={styles.notice}>{t("diary.feedingReminder.signals")}</Text>
+      <Text style={styles.notice}>{t(`${copyPrefix}.reference`)}</Text>
+      <Text style={styles.notice}>{t(`${copyPrefix}.signals`)}</Text>
       {message ? <Text style={styles.message}>{message}</Text> : null}
-      {loading ? <Text style={styles.hint}>{t("diary.feedingReminder.loading")}</Text> : null}
+      {loading ? <Text style={styles.hint}>{t(`${copyPrefix}.loading`)}</Text> : null}
 
       <DurationPickerSheet
         visible={pickerOpen}
         valueMinutes={intervalMinutes}
-        title={t("diary.feedingReminder.interval")}
+        title={t(`${copyPrefix}.interval`)}
         minMinutes={15}
         maxMinutes={720}
         onCancel={() => setPickerOpen(false)}

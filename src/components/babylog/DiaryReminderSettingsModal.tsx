@@ -56,7 +56,7 @@ export function DiaryReminderSettingsModal({
   onTestNotification,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const displayBabyName = babyName ?? t("diary.reminder.babyFallback");
   const [draft, setDraft] = useState(value);
   const [permission, setPermission] = useState<ReminderPermissionStatus>("not_determined");
@@ -65,10 +65,12 @@ export function DiaryReminderSettingsModal({
   const [message, setMessage] = useState("");
   const [timeTarget, setTimeTarget] = useState<TimeTarget | null>(null);
   const [feedingDeliveryEnabled, setFeedingDeliveryEnabled] = useState(false);
+  const [sleepDeliveryEnabled, setSleepDeliveryEnabled] = useState(false);
   const [allCommand, setAllCommand] = useState<{ enabled: boolean; sequence: number }>();
 
   const allEnabled = draft.enabled
     || feedingDeliveryEnabled
+    || sleepDeliveryEnabled
     || Boolean(draft.familyActivityEnabled)
     || Boolean(draft.inviteActivityEnabled)
     || Boolean(draft.quietHoursEnabled);
@@ -258,7 +260,7 @@ export function DiaryReminderSettingsModal({
             <Text style={styles.detailBody}>{t("diary.reminder.whenDesc")}</Text>
             <View style={styles.selectedTimeCard}>
               <Text style={styles.selectedTimeLabel}>{t("diary.reminder.selectedTime")}</Text>
-              <Text style={styles.selectedTimeValue}>{t("diary.reminder.everyDayAt", { time: formatTimeOfDay(pickerValue) })}</Text>
+              <Text style={styles.selectedTimeValue}>{t("diary.reminder.everyDayAt", { time: formatTimeOfDay(pickerValue, "", locale) })}</Text>
             </View>
             <Pressable style={styles.timeButton} onPress={() => setTimeTarget("reminder")} disabled={busy}>
               <Text style={styles.timeButtonText}>{t("diary.reminder.setTime")}</Text>
@@ -271,6 +273,7 @@ export function DiaryReminderSettingsModal({
           </NotificationRow>
 
           <FeedingReminderSettingsCard
+            reminderType="feeding"
             babyId={babyId}
             myRole={myRole}
             active={visible}
@@ -281,6 +284,20 @@ export function DiaryReminderSettingsModal({
               end: draft.quietHoursEnd ?? "07:00",
             }}
             onDeliveryStateChange={setFeedingDeliveryEnabled}
+          />
+
+          <FeedingReminderSettingsCard
+            reminderType="sleep"
+            babyId={babyId}
+            myRole={myRole}
+            active={visible}
+            allCommand={allCommand}
+            quietHours={{
+              enabled: draft.quietHoursEnabled ?? false,
+              start: draft.quietHoursStart ?? "22:00",
+              end: draft.quietHoursEnd ?? "07:00",
+            }}
+            onDeliveryStateChange={setSleepDeliveryEnabled}
           />
 
           <NotificationRow
