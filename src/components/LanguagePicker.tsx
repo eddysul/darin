@@ -2,6 +2,7 @@ import { Check } from "lucide-react-native";
 import { Modal, Pressable, StyleSheet, Text } from "react-native";
 import { useLanguage } from "../LanguageContext";
 import type { Locale } from "../i18n";
+import { canShowLanguagePicker, isLocaleAvailable } from "../config/featureFlags";
 import { colors, radius } from "../theme";
 
 type LanguagePickerProps = {
@@ -19,13 +20,15 @@ const OPTIONS: { locale: Locale; label: string }[] = [
 
 export function LanguagePicker({ open, onClose }: LanguagePickerProps) {
   const { locale, setLocale, t } = useLanguage();
+  if (!canShowLanguagePicker()) return null;
+  const options = OPTIONS.filter(({ locale: option }) => isLocaleAvailable(option));
 
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>{t("langPicker.title")}</Text>
-          {OPTIONS.map(({ locale: opt, label }) => (
+          {options.map(({ locale: opt, label }) => (
             <Pressable
               key={opt}
               style={[styles.option, locale === opt && styles.optionActive]}

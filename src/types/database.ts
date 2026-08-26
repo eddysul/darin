@@ -48,6 +48,13 @@ export type NotificationEventType =
   | "feeding_reminder"
   | "test";
 export type NotificationEventStatus = "pending" | "sent" | "failed" | "skipped";
+export type NotificationDeliveryStatus =
+  | "sent"
+  | "skipped_quiet_hours"
+  | "skipped_no_token"
+  | "skipped_permission_or_disabled"
+  | "failed_retryable"
+  | "failed_permanent";
 
 export type CareLogPayload = {
   chip?: string;
@@ -451,6 +458,7 @@ export type NotificationEventRow = {
   data: Json;
   dedupe_key: string | null;
   status: NotificationEventStatus;
+  delivery_status: NotificationDeliveryStatus | null;
   error_message: string | null;
   sent_at: string | null;
   read_at: string | null;
@@ -474,7 +482,7 @@ export type CareReminderMemberPreferenceRow = {
 export type CareReminderStateRow = {
   id: string; baby_id: string; reminder_type: "feeding" | "sleep";
   last_relevant_log_id: string | null; last_relevant_log_at: string | null; next_due_at: string | null;
-  version: number; send_status: "scheduled" | "overdue_not_scheduled" | "sent" | "disabled" | "skipped_quiet_hours";
+  version: number; send_status: "scheduled" | "overdue_not_scheduled" | "sent" | "processed" | "disabled" | "skipped_quiet_hours";
   last_sent_for_log_id: string | null; last_sent_at: string | null;
   processing_started_at: string | null; updated_at: string;
 };

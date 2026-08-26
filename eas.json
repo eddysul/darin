@@ -8,11 +8,22 @@
       "distribution": "store",
       "environment": "production",
       "env": {
+        "EXPO_PUBLIC_FEATURE_ENV": "production",
+        "EXPO_PUBLIC_FEATURE_PROFILE": "production",
         "EXPO_PUBLIC_SHOW_GOOGLE_LOGIN": "true",
         "EXPO_PUBLIC_ENABLE_GOOGLE_LOGIN": "true"
       },
       "ios": {
         "image": "latest"
+      }
+    },
+    "qa": {
+      "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_FEATURE_ENV": "qa",
+        "EXPO_PUBLIC_FEATURE_PROFILE": "internal",
+        "EXPO_PUBLIC_INTERNAL_FEATURES": "feedingReminder,careReminderServer,multilingualPicker,englishSupport,experimentalNotifications"
       }
     }
   },

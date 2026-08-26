@@ -1,6 +1,7 @@
--- Invoke the care-reminder worker every minute. The project must have Vault
--- secrets named project_url and service_role_key before this schedule is used.
--- This keeps credentials out of migrations and client bundles.
+-- Invoke the care-reminder worker every minute. Apply this migration only after
+-- manual worker and real-device QA. Vault must contain project_url and the
+-- dedicated care_reminder_cron_secret. The service-role key stays in the Edge
+-- Function environment and is never sent in an HTTP request.
 
 create extension if not exists pg_cron with schema extensions;
 create extension if not exists pg_net with schema extensions;
@@ -22,7 +23,7 @@ select cron.schedule(
         || '/functions/v1/process-care-reminders',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key')
+        'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'care_reminder_cron_secret')
       ),
       body := '{}'::jsonb,
       timeout_milliseconds := 50000

@@ -56,6 +56,13 @@ try {
   if (viewerPreferenceError) throw viewerPreferenceError;
   pass("viewer can explicitly enable own delivery");
 
+  const { data: crossPreferenceRows, error: crossPreferenceError } = await viewer.sb
+    .from("care_reminder_member_preferences").update({ delivery_enabled: false })
+    .eq("baby_id", babyId).eq("user_id", editor.user.id).eq("reminder_type", "feeding")
+    .select("id");
+  if (crossPreferenceError || crossPreferenceRows?.length) throw new Error("viewer changed another member preference");
+  pass("member preference RLS blocks cross-user updates");
+
   const recordedAt = new Date(Date.now() + 5 * 60_000);
   const logId = crypto.randomUUID();
   const { error: logError } = await admin.sb.from("care_logs").insert({
@@ -71,6 +78,11 @@ try {
   if (Math.abs(feedAt - (recordedAt.getTime() + 10 * 60_000)) > 1000) throw new Error("duration was not applied");
   pass("formula creates scheduled state using recorded_at + duration");
 
+  const { data: stateWriteRows, error: stateWriteError } = await viewer.sb.from("care_reminder_state")
+    .update({ send_status: "sent" }).eq("id", state.id).select("id");
+  if (stateWriteError || stateWriteRows?.length) throw new Error("authenticated member changed worker-owned state");
+  pass("authenticated clients cannot mutate worker-owned state");
+
   const version = state.version;
   const { error: pumpError } = await admin.sb.from("care_logs").insert({
     baby_id: babyId, client_generated_id: `pump-${Date.now()}`, category: "pump",
@@ -82,6 +94,24 @@ try {
   if (afterPump?.version !== version) throw new Error("pump changed feeding state");
   pass("pump is excluded from feeding state");
 
+  const newerAt = new Date(recordedAt.getTime() + 2 * 60_000);
+  const newerLogId = crypto.randomUUID();
+  const { error: newerLogError } = await admin.sb.from("care_logs").insert({
+    id: newerLogId, baby_id: babyId, client_generated_id: `care-reminder-newer-${Date.now()}`,
+    category: "storedMilk", recorded_at: newerAt.toISOString(), date_key: newerAt.toISOString().slice(0, 10),
+    time_local: "12:02", payload: {}, source: "manual", created_by: admin.user.id,
+  });
+  if (newerLogError) throw newerLogError;
+  const { data: newestState } = await admin.sb.from("care_reminder_state").select("last_relevant_log_id")
+    .eq("id", state.id).single();
+  if (newestState?.last_relevant_log_id !== newerLogId) throw new Error("newest relevant feed was not selected");
+  const { error: deleteNewerError } = await admin.sb.from("care_logs").delete().eq("id", newerLogId);
+  if (deleteNewerError) throw deleteNewerError;
+  const { data: restoredState } = await admin.sb.from("care_reminder_state").select("last_relevant_log_id")
+    .eq("id", state.id).single();
+  if (restoredState?.last_relevant_log_id !== logId) throw new Error("deleting latest feed did not restore previous feed");
+  pass("deleting latest feed restores the previous relevant feed");
+
   await admin.sb.from("care_logs").update({ payload: { duration: "invalid" } }).eq("id", logId);
   const { data: fallback } = await admin.sb.from("care_reminder_state").select("last_relevant_log_at").eq("id", state.id).single();
   if (Math.abs(new Date(fallback.last_relevant_log_at).getTime() - recordedAt.getTime()) > 1000) throw new Error("invalid duration did not fall back");
@@ -92,6 +122,16 @@ try {
   const { data: overdue } = await admin.sb.from("care_reminder_state").select("send_status").eq("id", state.id).single();
   if (overdue?.send_status !== "overdue_not_scheduled") throw new Error("backdated log was scheduled immediately");
   pass("backdated log becomes overdue_not_scheduled");
+
+  const { error: disableError } = await editor.sb.from("care_reminder_settings")
+    .update({ enabled: false, updated_by: editor.user.id }).eq("id", setting.id);
+  if (disableError) throw disableError;
+  const { data: disabledState } = await admin.sb.from("care_reminder_state").select("send_status,next_due_at")
+    .eq("id", state.id).single();
+  if (disabledState?.send_status !== "disabled" || disabledState.next_due_at !== null) {
+    throw new Error("setting OFF did not disable due state");
+  }
+  pass("setting OFF removes the reminder from due processing");
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 } finally {

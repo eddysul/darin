@@ -21,7 +21,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [ready, settings.account.language]);
 
   const setLocale = useCallback((next: Locale) => {
-    setLocaleState(next);
+    setLocaleState(resolveAppLocale(next));
     setSettings((current) => current.account.language === next
       ? current
       : { ...current, account: { ...current.account, language: next } });

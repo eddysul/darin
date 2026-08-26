@@ -1,9 +1,11 @@
+import { isFeatureVisible } from "../config/featureFlags";
+
 /**
  * Local-only records for checking the Notification Center UI during development.
  * Shown only when the server list is empty. Never mixed with real events.
  * Set this to false to exercise the empty state. These are never fetched or sent.
  */
-export const ENABLE_NOTIFICATION_QA_SEED = __DEV__;
+export const ENABLE_NOTIFICATION_QA_SEED = isFeatureVisible("experimentalNotifications");
 
 export type NotificationType =
   | "invite_request"

@@ -8,6 +8,7 @@ import type { RootStackParamList } from "../navigation/types";
 import { NotificationRepository } from "../repositories/NotificationRepository";
 import { FamilyRepository } from "../repositories/FamilyRepository";
 import { getNotificationQaSeed, type NotificationItem } from "../data/notificationQaSeed";
+import { canAccessCareReminderUi, canShowNotificationEvent } from "../config/featureFlags";
 
 type Props = NativeStackScreenProps<RootStackParamList, "NotificationCenter">;
 type Filter = "all" | "request" | "family" | "summary" | "event";
@@ -109,7 +110,9 @@ export function NotificationCenterScreen({ navigation }: Props) {
         FamilyRepository.listDarinInviteRequests().catch(() => []),
       ]);
       const pendingRequestIds = new Set(pendingRequests.map((item) => item.id));
-      const mapped = events.map((event) => toItem(event, pendingRequestIds));
+      const mapped = events
+        .filter((event) => canShowNotificationEvent(event.event_type))
+        .map((event) => toItem(event, pendingRequestIds));
       setItems(mapped.length ? mapped : getNotificationQaSeed().map((item) => ({
         ...item,
         requestStatus: item.type === "invite_request" ? "pending" : undefined,
@@ -160,7 +163,8 @@ export function NotificationCenterScreen({ navigation }: Props) {
       return;
     }
     if (route === "settings" || stringData(item, "settingsPage") === "careAlerts") {
-      navigation.navigate("SettingsDetail", { page: "careAlerts" });
+      if (canAccessCareReminderUi()) navigation.navigate("SettingsDetail", { page: "careAlerts" });
+      else navigation.navigate("NotificationCenter");
       return;
     }
     if (item.type === "new_diary" || route === "diary") {

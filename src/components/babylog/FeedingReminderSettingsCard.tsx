@@ -9,6 +9,7 @@ import type { FamilyRole } from "../../types/family";
 import { getPushPermissionState, registerCurrentPushToken, requestPushPermission } from "../../utils/pushNotifications";
 import { elapsedMinutesSince, feedingReminderProgress, feedingReminderStatusKey } from "../../utils/careReminderStatus";
 import { DurationPickerField, DurationPickerSheet } from "../inputs/TimePickerFields";
+import { isFeatureVisible } from "../../config/featureFlags";
 
 type Props = {
   babyId: string | null;
@@ -27,6 +28,7 @@ export function FeedingReminderSettingsCard({
   quietHours,
   onDeliveryStateChange,
 }: Props) {
+  const feedingVisible = isFeatureVisible("feedingReminder");
   const { t } = useLanguage();
   const { settings, setSettings } = useAppSettings();
   const legacySetting = useRef({
@@ -60,7 +62,7 @@ export function FeedingReminderSettingsCard({
   }, [onDeliveryStateChange, setSettings]);
 
   const refresh = useCallback(async () => {
-    if (!active || !babyId) return;
+    if (!feedingVisible || !active || !babyId) return;
     setLoading(true);
     setMessage("");
     try {
@@ -84,14 +86,14 @@ export function FeedingReminderSettingsCard({
     } finally {
       setLoading(false);
     }
-  }, [active, babyId, cacheBundle, onDeliveryStateChange, t]);
+  }, [active, babyId, cacheBundle, feedingVisible, onDeliveryStateChange, t]);
 
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
-    if (!active) return;
+    if (!feedingVisible || !active) return;
     const timer = setInterval(() => setClock(new Date()), 60_000);
     return () => clearInterval(timer);
-  }, [active]);
+  }, [active, feedingVisible]);
 
   const ensureDeliveryReady = async () => {
     const nextPermission = await requestPushPermission();
@@ -132,7 +134,7 @@ export function FeedingReminderSettingsCard({
   };
 
   useEffect(() => {
-    if (!active || !babyId || !allCommand || loading) return;
+    if (!feedingVisible || !active || !babyId || !allCommand || loading) return;
     if (!allCommand.enabled && bundle.preference?.deliveryEnabled) {
       void savePreference(false, false).catch(() => setMessage(t("diary.feedingReminder.saveError")));
     } else if (
@@ -148,7 +150,7 @@ export function FeedingReminderSettingsCard({
   }, [allCommand?.sequence]);
 
   useEffect(() => {
-    if (!active || !babyId || !quietHours || !bundle.preference) return;
+    if (!feedingVisible || !active || !babyId || !quietHours || !bundle.preference) return;
     const current = bundle.preference;
     if (
       current.quietHoursEnabled === quietHours.enabled
@@ -163,7 +165,7 @@ export function FeedingReminderSettingsCard({
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     }).then((preference) => setBundle((value) => ({ ...value, preference })))
       .catch(() => setMessage(t("diary.feedingReminder.saveError")));
-  }, [active, babyId, bundle.preference, quietHours, t]);
+  }, [active, babyId, bundle.preference, feedingVisible, quietHours, t]);
 
   const toggleShared = async (enabled: boolean) => {
     if (!babyId || !canEditShared || busy) return;
@@ -212,6 +214,8 @@ export function FeedingReminderSettingsCard({
   const elapsedText = elapsed === null ? null : elapsed >= 60
     ? t("diary.feedingReminder.elapsedHours", { hours: Math.floor(elapsed / 60), minutes: elapsed % 60 })
     : t("diary.feedingReminder.elapsedMinutes", { minutes: elapsed });
+
+  if (!feedingVisible) return null;
 
   return (
     <View style={styles.card}>

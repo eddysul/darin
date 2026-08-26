@@ -36,12 +36,13 @@ import { colors, radius } from "../../theme";
 import { canSubmitUserProfile } from "../../utils/profileCompletion";
 import { formatDateKey } from "../../utils/dateKey";
 import {
-  APP_LANGUAGE_OPTIONS,
+  getVisibleAppLanguageOptions,
   RESIDENCE_COUNTRY_OPTIONS,
   resolveAppLocale,
   type AppLanguagePreference,
   type ResidenceCountry,
 } from "../../types/profilePreferences";
+import { canShowLanguagePicker } from "../../config/featureFlags";
 
 export type ProfileSetupInitial = {
   /** Legacy aliases are retained only to resume an older interrupted setup. */
@@ -295,23 +296,27 @@ export function ProfileSetupScreen({
             ))}
           </View>
 
-          <Text style={styles.label}>{t("profileSetup.language")} *</Text>
-          <Text style={styles.help}>{t("profileSetup.languageHelp")}</Text>
-          <View style={styles.chips}>
-            {APP_LANGUAGE_OPTIONS.map((option) => (
-              <Pressable
-                key={option.value}
-                style={[styles.chip, preferredLanguage === option.value && styles.chipActive, option.disabled && styles.chipDisabled]}
-                onPress={() => setPreferredLanguage(option.value)}
-                disabled={option.disabled}
-                accessibilityState={{ disabled: option.disabled, selected: preferredLanguage === option.value }}
-              >
-                <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>
-                  {languageLabel(option.value)}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          {canShowLanguagePicker() ? (
+            <>
+              <Text style={styles.label}>{t("profileSetup.language")} *</Text>
+              <Text style={styles.help}>{t("profileSetup.languageHelp")}</Text>
+              <View style={styles.chips}>
+                {getVisibleAppLanguageOptions().map((option) => (
+                  <Pressable
+                    key={option.value}
+                    style={[styles.chip, preferredLanguage === option.value && styles.chipActive, option.disabled && styles.chipDisabled]}
+                    onPress={() => setPreferredLanguage(option.value)}
+                    disabled={option.disabled}
+                    accessibilityState={{ disabled: option.disabled, selected: preferredLanguage === option.value }}
+                  >
+                    <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>
+                      {languageLabel(option.value)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          ) : null}
 
           <Text style={styles.label}>{t("profileSetup.birthDate")} *</Text>
           <Text style={styles.help}>{t("profileSetup.birthDateHelp")}</Text>

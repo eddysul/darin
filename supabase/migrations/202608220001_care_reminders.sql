@@ -42,7 +42,7 @@ create table if not exists public.care_reminder_state (
   next_due_at timestamptz,
   version bigint not null default 1,
   send_status text not null default 'disabled' check (send_status in (
-    'scheduled', 'overdue_not_scheduled', 'sent', 'disabled', 'skipped_quiet_hours'
+    'scheduled', 'overdue_not_scheduled', 'sent', 'processed', 'disabled', 'skipped_quiet_hours'
   )),
   last_sent_for_log_id uuid references public.care_logs (id) on delete set null,
   last_sent_at timestamptz,
@@ -51,12 +51,116 @@ create table if not exists public.care_reminder_state (
   unique (baby_id, reminder_type)
 );
 
+-- CREATE TABLE IF NOT EXISTS does not repair a partially-created table. Stop with
+-- a useful error before installing policies/functions against an incompatible
+-- shape. The forward-fix runbook describes how to repair a failed QA apply.
+do $$
+declare
+  v_table text;
+  v_required text[];
+  v_missing text[];
+begin
+  for v_table, v_required in
+    select * from (values
+      ('care_reminder_settings', array[
+        'id', 'baby_id', 'reminder_type', 'enabled', 'mode', 'interval_minutes',
+        'included_log_types', 'updated_by', 'created_at', 'updated_at'
+      ]::text[]),
+      ('care_reminder_member_preferences', array[
+        'id', 'baby_id', 'user_id', 'reminder_type', 'delivery_enabled',
+        'quiet_hours_enabled', 'quiet_start', 'quiet_end', 'timezone',
+        'user_modified_at', 'created_at', 'updated_at'
+      ]::text[]),
+      ('care_reminder_state', array[
+        'id', 'baby_id', 'reminder_type', 'last_relevant_log_id',
+        'last_relevant_log_at', 'next_due_at', 'version', 'send_status',
+        'last_sent_for_log_id', 'last_sent_at', 'processing_started_at', 'updated_at'
+      ]::text[])
+    ) expected(table_name, columns)
+  loop
+    select array_agg(required_column.name order by required_column.name) into v_missing
+    from unnest(v_required) as required_column(name)
+    where not exists (
+      select 1 from information_schema.columns c
+      where c.table_schema = 'public' and c.table_name = v_table
+        and c.column_name = required_column.name
+    );
+    if v_missing is not null then
+      raise exception 'care reminder schema is incomplete: %. Missing columns: %', v_table, v_missing;
+    end if;
+  end loop;
+
+  if not exists (
+    select 1 from pg_constraint c
+    where c.conrelid = 'public.care_reminder_settings'::regclass
+      and c.contype = 'u'
+      and pg_get_constraintdef(c.oid) = 'UNIQUE (baby_id, reminder_type)'
+  ) or not exists (
+    select 1 from pg_constraint c
+    where c.conrelid = 'public.care_reminder_member_preferences'::regclass
+      and c.contype = 'u'
+      and pg_get_constraintdef(c.oid) = 'UNIQUE (baby_id, user_id, reminder_type)'
+  ) or not exists (
+    select 1 from pg_constraint c
+    where c.conrelid = 'public.care_reminder_state'::regclass
+      and c.contype = 'u'
+      and pg_get_constraintdef(c.oid) = 'UNIQUE (baby_id, reminder_type)'
+  ) then
+    raise exception 'care reminder schema is incomplete: required unique constraints are missing';
+  end if;
+end;
+$$;
+
+-- Keep the state status constraint compatible when this migration is re-run
+-- over the pre-QA draft schema.
+alter table public.care_reminder_state
+  drop constraint if exists care_reminder_state_send_status_check;
+alter table public.care_reminder_state
+  add constraint care_reminder_state_send_status_check check (send_status in (
+    'scheduled', 'overdue_not_scheduled', 'sent', 'processed', 'disabled', 'skipped_quiet_hours'
+  ));
+
+do $$
+begin
+  if (select count(*) from pg_constraint where conrelid = 'public.care_reminder_settings'::regclass and contype = 'p') <> 1
+    or (select count(*) from pg_constraint where conrelid = 'public.care_reminder_settings'::regclass and contype = 'f') < 2
+    or (select count(*) from pg_constraint where conrelid = 'public.care_reminder_settings'::regclass and contype = 'c') < 4
+    or (select count(*) from pg_constraint where conrelid = 'public.care_reminder_member_preferences'::regclass and contype = 'p') <> 1
+    or (select count(*) from pg_constraint where conrelid = 'public.care_reminder_member_preferences'::regclass and contype = 'f') < 2
+    or (select count(*) from pg_constraint where conrelid = 'public.care_reminder_member_preferences'::regclass and contype = 'c') < 2
+    or (select count(*) from pg_constraint where conrelid = 'public.care_reminder_state'::regclass and contype = 'p') <> 1
+    or (select count(*) from pg_constraint where conrelid = 'public.care_reminder_state'::regclass and contype = 'f') < 3
+    or (select count(*) from pg_constraint where conrelid = 'public.care_reminder_state'::regclass and contype = 'c') < 2
+  then
+    raise exception 'care reminder schema is incomplete: required primary, foreign-key, or check constraints are missing';
+  end if;
+end;
+$$;
+
 create index if not exists care_reminder_state_due_idx
   on public.care_reminder_state (next_due_at)
   where reminder_type = 'feeding' and send_status = 'scheduled';
 create index if not exists care_reminder_member_delivery_idx
   on public.care_reminder_member_preferences (baby_id, reminder_type, user_id)
   where delivery_enabled;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_indexes where schemaname = 'public'
+      and indexname = 'care_reminder_state_due_idx'
+      and indexdef like '%(next_due_at)%'
+      and indexdef like '%send_status = ''scheduled''%'
+  ) or not exists (
+    select 1 from pg_indexes where schemaname = 'public'
+      and indexname = 'care_reminder_member_delivery_idx'
+      and indexdef like '%(baby_id, reminder_type, user_id)%'
+      and indexdef like '%delivery_enabled%'
+  ) then
+    raise exception 'care reminder schema is incomplete: required partial indexes are missing or incompatible';
+  end if;
+end;
+$$;
 
 drop trigger if exists care_reminder_settings_set_updated_at on public.care_reminder_settings;
 create trigger care_reminder_settings_set_updated_at before update on public.care_reminder_settings
@@ -69,26 +173,34 @@ alter table public.care_reminder_settings enable row level security;
 alter table public.care_reminder_member_preferences enable row level security;
 alter table public.care_reminder_state enable row level security;
 
+drop policy if exists care_reminder_settings_select_member on public.care_reminder_settings;
 create policy care_reminder_settings_select_member on public.care_reminder_settings
   for select to authenticated using (public.is_baby_member(baby_id));
+drop policy if exists care_reminder_settings_insert_editor on public.care_reminder_settings;
 create policy care_reminder_settings_insert_editor on public.care_reminder_settings
   for insert to authenticated with check (
     public.baby_permission(baby_id) in ('admin', 'editor') and updated_by = auth.uid()
   );
+drop policy if exists care_reminder_settings_update_editor on public.care_reminder_settings;
 create policy care_reminder_settings_update_editor on public.care_reminder_settings
   for update to authenticated using (public.baby_permission(baby_id) in ('admin', 'editor'))
   with check (public.baby_permission(baby_id) in ('admin', 'editor') and updated_by = auth.uid());
 
+drop policy if exists care_reminder_member_preferences_select_own on public.care_reminder_member_preferences;
 create policy care_reminder_member_preferences_select_own on public.care_reminder_member_preferences
   for select to authenticated using (user_id = auth.uid() and public.is_baby_member(baby_id));
+drop policy if exists care_reminder_member_preferences_insert_own on public.care_reminder_member_preferences;
 create policy care_reminder_member_preferences_insert_own on public.care_reminder_member_preferences
   for insert to authenticated with check (user_id = auth.uid() and public.is_baby_member(baby_id));
+drop policy if exists care_reminder_member_preferences_update_own on public.care_reminder_member_preferences;
 create policy care_reminder_member_preferences_update_own on public.care_reminder_member_preferences
   for update to authenticated using (user_id = auth.uid() and public.is_baby_member(baby_id))
   with check (user_id = auth.uid() and public.is_baby_member(baby_id));
+drop policy if exists care_reminder_member_preferences_delete_own on public.care_reminder_member_preferences;
 create policy care_reminder_member_preferences_delete_own on public.care_reminder_member_preferences
   for delete to authenticated using (user_id = auth.uid() and public.is_baby_member(baby_id));
 
+drop policy if exists care_reminder_state_select_member on public.care_reminder_state;
 create policy care_reminder_state_select_member on public.care_reminder_state
   for select to authenticated using (public.is_baby_member(baby_id));
 
@@ -321,9 +433,56 @@ $$;
 revoke all on function public.claim_due_care_reminders(integer) from public;
 grant execute on function public.claim_due_care_reminders(integer) to service_role;
 
-alter table public.notification_events drop constraint if exists notification_events_event_type_check;
-alter table public.notification_events add constraint notification_events_event_type_check check (event_type in (
-  'memory_comment', 'memory_reaction', 'growth_book_comment', 'growth_book_rolling_paper',
-  'family_joined', 'diary_reminder', 'invite_request', 'invite_declined', 'new_shared_log', 'new_diary',
-  'daily_summary', 'weekly_summary', 'reminder', 'event', 'test', 'feeding_reminder'
-));
+-- Recipient-level delivery outcome. The existing generic status column remains
+-- unchanged so notification-center clients keep their pending/sent/failed/skipped
+-- contract while the worker records an exact care-reminder outcome here.
+alter table public.notification_events
+  add column if not exists delivery_status text;
+alter table public.notification_events
+  drop constraint if exists notification_events_delivery_status_check;
+alter table public.notification_events
+  add constraint notification_events_delivery_status_check check (delivery_status is null or delivery_status in (
+    'sent', 'skipped_quiet_hours', 'skipped_no_token',
+    'skipped_permission_or_disabled', 'failed_retryable', 'failed_permanent'
+  ));
+
+-- Preserve both values allowed by the previous constraint and values already in
+-- use. This avoids deleting a production event type merely because no row of that
+-- type happened to exist when the migration ran.
+do $$
+declare
+  v_event_types text[];
+begin
+  select array_agg(distinct event_type order by event_type) into v_event_types
+  from (
+    select unnest(array[
+      'memory_comment', 'memory_reaction', 'growth_book_comment', 'growth_book_rolling_paper',
+      'family_joined', 'diary_reminder', 'invite_request', 'invite_declined',
+      'new_shared_log', 'new_diary', 'daily_summary', 'weekly_summary',
+      'reminder', 'event', 'test', 'feeding_reminder'
+    ]::text[]) as event_type
+    union
+    select event_type from public.notification_events
+    union
+    select (regexp_matches(
+      pg_get_constraintdef(c.oid),
+      '''([^'']+)''',
+      'g'
+    ))[1] as event_type
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public' and t.relname = 'notification_events'
+      and c.conname = 'notification_events_event_type_check'
+  ) preserved;
+
+  alter table public.notification_events
+    drop constraint if exists notification_events_event_type_check;
+  execute format(
+    'alter table public.notification_events add constraint notification_events_event_type_check check (event_type = any (%L::text[])) not valid',
+    v_event_types
+  );
+  alter table public.notification_events
+    validate constraint notification_events_event_type_check;
+end;
+$$;

@@ -73,6 +73,7 @@ import {
   saveTermsAccepted,
 } from "./src/utils/termsStore";
 import { registerCurrentPushToken, unregisterCurrentPushToken } from "./src/utils/pushNotifications";
+import { canOpenNotificationData } from "./src/config/featureFlags";
 
 type AppPhase =
   | "splash"
@@ -171,6 +172,10 @@ function MainNavigator({ onboardingProfile }: { onboardingProfile: UserProfile |
       return;
     }
     pendingNotificationRoute.current = null;
+    if (!canOpenNotificationData(data)) {
+      navigationRef.navigate("NotificationCenter");
+      return;
+    }
     if (typeof data.eventId === "string") {
       void NotificationRepository.markInAppEventRead(data.eventId).catch(() => undefined);
     }

@@ -4,6 +4,7 @@ export type CareReminderSendStatus =
   | "scheduled"
   | "overdue_not_scheduled"
   | "sent"
+  | "processed"
   | "disabled"
   | "skipped_quiet_hours";
 

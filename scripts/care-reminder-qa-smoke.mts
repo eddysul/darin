@@ -20,12 +20,23 @@ assert.match(migration, /claim_due_care_reminders/);
 assert.match(migration, /feeding_reminder/);
 
 assert.match(worker, /skipped_quiet_hours/);
+assert.match(worker, /skipped_no_token/);
+assert.match(worker, /skipped_permission_or_disabled/);
+assert.match(worker, /failed_retryable/);
+assert.match(worker, /failed_permanent/);
 assert.match(worker, /feeding_reminder:\$\{state\.baby_id\}:\$\{state\.last_relevant_log_id\}:\$\{state\.version\}:\$\{member\.user_id\}/);
 assert.doesNotMatch(worker, /member\.user_id !==/);
 assert.match(worker, /DeviceNotRegistered/);
 assert.match(worker, /delivery_enabled/);
+assert.match(worker, /current\.version !== state\.version/);
+assert.match(worker, /!setting\?\.enabled/);
+assert.match(worker, /current\.last_relevant_log_id !== state\.last_relevant_log_id/);
+assert.match(worker, /await assertCurrentDelivery\(\);\s*let deliveryStatus/);
+assert.match(worker, /AbortSignal\.timeout\(10_000\)/);
+assert.match(worker, /retryScheduled = counts\.failed_retryable > 0/);
 assert.match(schedule, /process-care-reminders-every-minute/);
-assert.match(schedule, /service_role_key/);
+assert.match(schedule, /care_reminder_cron_secret/);
+assert.doesNotMatch(schedule, /service_role_key/);
 
 const now = new Date("2026-08-22T12:00:00.000Z");
 assert.equal(feedingReminderProgress("2026-08-22T11:00:00.000Z", 180, now), 1 / 3);

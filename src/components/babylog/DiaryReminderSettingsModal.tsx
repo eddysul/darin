@@ -9,7 +9,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAppSettings } from "../../context/AppSettingsContext";
 import { NotificationRepository } from "../../repositories/NotificationRepository";
 import { AuthRepository } from "../../repositories/AuthRepository";
 import { colors, radius } from "../../theme";
@@ -59,7 +58,6 @@ export function DiaryReminderSettingsModal({
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const displayBabyName = babyName ?? t("diary.reminder.babyFallback");
-  const { setSettings } = useAppSettings();
   const [draft, setDraft] = useState(value);
   const [permission, setPermission] = useState<ReminderPermissionStatus>("not_determined");
   const [expanded, setExpanded] = useState<SectionId | null>("all");
@@ -159,13 +157,6 @@ export function DiaryReminderSettingsModal({
       return;
     }
     if (!next) await cancelDiaryReminderNotifications();
-    setSettings((current) => ({
-      ...current,
-      notifications: {
-        ...current.notifications,
-        sleepEnabled: false,
-      },
-    }));
     const nextDraft: DiaryReminderSettings = next
       ? { ...draft, enabled: true, familyActivityEnabled: true, inviteActivityEnabled: true }
       : {

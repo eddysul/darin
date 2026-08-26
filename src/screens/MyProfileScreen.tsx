@@ -34,7 +34,7 @@ import { presentAvatarPicker } from "../utils/profileAvatarPicker";
 import { colors, radius } from "../theme";
 import { FAMILY_ROLE_LABELS } from "../types/family";
 import {
-  APP_LANGUAGE_OPTIONS,
+  getVisibleAppLanguageOptions,
   RESIDENCE_COUNTRY_OPTIONS,
   isAppLanguagePreference,
   isResidenceCountry,
@@ -42,6 +42,7 @@ import {
   type AppLanguagePreference,
   type ResidenceCountry,
 } from "../types/profilePreferences";
+import { canShowLanguagePicker } from "../config/featureFlags";
 import { formatDateKey } from "../utils/dateKey";
 
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
@@ -268,14 +269,18 @@ export function MyProfileScreen() {
               </Pressable>
             ))}
           </View>
-          <Text style={styles.label}>{t("settings.critical.023")}</Text>
-          <View style={styles.chips}>
-            {APP_LANGUAGE_OPTIONS.map((option) => (
-              <Pressable key={option.value} style={[styles.chip, preferredLanguage === option.value && styles.chipActive, option.disabled && styles.chipDisabled]} onPress={() => setPreferredLanguage(option.value)} disabled={option.disabled} accessibilityState={{ disabled: option.disabled, selected: preferredLanguage === option.value }}>
-                <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>{option.label}</Text>
-              </Pressable>
-            ))}
-          </View>
+          {canShowLanguagePicker() ? (
+            <>
+              <Text style={styles.label}>{t("settings.critical.023")}</Text>
+              <View style={styles.chips}>
+                {getVisibleAppLanguageOptions().map((option) => (
+                  <Pressable key={option.value} style={[styles.chip, preferredLanguage === option.value && styles.chipActive, option.disabled && styles.chipDisabled]} onPress={() => setPreferredLanguage(option.value)} disabled={option.disabled} accessibilityState={{ disabled: option.disabled, selected: preferredLanguage === option.value }}>
+                    <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          ) : null}
           <Text style={styles.label}>{t("settings.critical.024")}</Text>
           <Pressable style={[styles.input, styles.dateInput]} onPress={() => setBirthDatePickerOpen(true)} accessibilityRole="button" accessibilityLabel={t("settings.critical.025")}>
             <Text style={[styles.dateInputText, !guardianBirthDate && styles.datePlaceholder]}>{guardianBirthDate || "YYYY-MM-DD"}</Text>
