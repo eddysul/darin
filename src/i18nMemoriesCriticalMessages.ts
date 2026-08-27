@@ -149,7 +149,7 @@ const rows = [
   ["148","실패한 사진 다시 올리기","Retry failed photo upload","失敗した写真を再アップロード","Reintentar la foto fallida","重新上传失败的照片"],
   ["149","추억 사진 {current} / {total}","Moment photo {current} / {total}","思い出の写真 {current} / {total}","Foto {current} / {total}","回忆照片 {current} / {total}"],
   ["150","추억 사진","Moment photo","思い出の写真","Foto del recuerdo","回忆照片"],
-  ["151","두 번 연속 탭하면 좋아요를 남겨요","Double-tap to like","ダブルタップでいいねできます","Toca dos veces para dar me gusta","双击即可点赞"],
+  ["151","두 손가락으로 확대하고, 두 번 탭하면 좋아요를 남겨요","Pinch to zoom; double-tap to like","ピンチで拡大、ダブルタップでいいねできます","Pellizca para ampliar; toca dos veces para dar me gusta","双指缩放，双击即可点赞"],
   ["152","가족 추억","Family moments","家族の思い出","Recuerdos familiares","家人回忆"],
   ["153","친구 공유 추억","Friend moments","友だちの思い出","Recuerdos de amigos","朋友分享的回忆"],
   ["154","보기 선택","Choose view","表示を選ぶ","Elegir vista","选择查看方式"],

@@ -60,6 +60,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [stickerVaultOpen, setStickerVaultOpen] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [mediaZoomed, setMediaZoomed] = useState(false);
   const [visibleProfiles, setVisibleProfiles] = useState<DisplayProfile[]>([]);
   const [friendBabyName, setFriendBabyName] = useState("");
   const friendView = route.params.source === "friend";
@@ -271,8 +272,18 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? undefined : "padding"} keyboardVerticalOffset={0}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-        <MemoryMediaViewer media={bundle.media} imageUrls={imageUrls} onDoubleTap={() => void likeFromDoubleTap()} />
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        scrollEnabled={!mediaZoomed}
+      >
+        <MemoryMediaViewer
+          media={bundle.media}
+          imageUrls={imageUrls}
+          onDoubleTap={() => void likeFromDoubleTap()}
+          onZoomChange={setMediaZoomed}
+        />
         {bundle.media.some((media) => media.uploadStatus === "failed") && canEdit ? (
           <Pressable
             style={styles.retryBanner}

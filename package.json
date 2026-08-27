@@ -15,6 +15,7 @@
     "qa:report": "pnpm dlx tsx scripts/report-qa-smoke.mts",
     "qa:build12": "pnpm dlx tsx scripts/build12-multibaby-qa-smoke.mts",
     "qa:build14-stickers": "pnpm dlx tsx scripts/growth-sticker-qa-smoke.mts",
+    "qa:memory-zoom": "node --experimental-strip-types scripts/memory-media-zoom-qa.mts",
     "qa:i18n": "pnpm dlx tsx scripts/i18n-qa-smoke.mts",
     "qa:i18n:critical": "pnpm dlx tsx scripts/i18n-critical-qa.mts",
     "qa:i18n:coverage": "pnpm dlx tsx scripts/i18n-production-coverage.mts",
