@@ -28,7 +28,8 @@ export type PregnancyLogCategoryId =
   | "pregBp"
   | "pregMed"
   | "pregKick"
-  | "pregHospital";
+  | "pregHospital"
+  | "contraction";
 
 export type BabyLogCategoryId = BornLogCategoryId | PregnancyLogCategoryId;
 
@@ -80,6 +81,7 @@ export const PREGNANCY_LOG_CATEGORIES: BabyLogCategory[] = [
   { id: "pregMed", label: "약/영양제", emoji: "", color: categoryColors.med, chips: ["영양제", "약", "기타"] },
   { id: "pregKick", label: "태동", emoji: "", color: categoryColors.tummy, chips: ["느꼈어요", "활발", "적음"] },
   { id: "pregHospital", label: "병원/진료", emoji: "", color: categoryColors.doctor, chips: ["검진", "진료", "초음파"] },
+  { id: "contraction", label: "진통 주기", emoji: "", color: categoryColors.temp, chips: ["약함", "보통", "강함"], duration: true },
 ];
 
 const ALL_LOG_CATEGORIES: BabyLogCategory[] = [...BABY_LOG_CATEGORIES, ...PREGNANCY_LOG_CATEGORIES];

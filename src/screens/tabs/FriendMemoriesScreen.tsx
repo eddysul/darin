@@ -9,6 +9,7 @@ import { MemoriesRepository } from "../../repositories/MemoriesRepository";
 import { ProfileRepository } from "../../repositories/ProfileRepository";
 import type { DisplayProfile } from "../../types/profileSettings";
 import type { FriendMemoryContext, MemoryCard } from "../../types/memory";
+import { memoryPrivacyPresentation } from "../../components/memories/memoryPresentation";
 import { colors, radius } from "../../theme";
 import { useLanguage } from "../../LanguageContext";
 import { formatLocalizedDate } from "../../utils/localeFormat";
@@ -101,8 +102,9 @@ export function FriendMemoriesScreen({ onOpenNotifications, onOpenDetail }: Prop
         renderItem={({ item }) => {
           const context = contextByBabyId.get(item.post.babyId);
           const author = profileById.get(item.post.authorId);
+          const privacy = memoryPrivacyPresentation(item.post.privacyType);
           return (
-            <Pressable style={styles.card} onPress={() => onOpenDetail(item.post.id)} accessibilityRole="button" accessibilityLabel={t("memory.critical.176")}>
+            <Pressable style={[styles.card, { borderColor: privacy.accent }]} onPress={() => onOpenDetail(item.post.id)} accessibilityRole="button" accessibilityLabel={t("memory.critical.176")}>
               {item.coverUrl ? <Image source={{ uri: item.coverUrl }} style={styles.photo} contentFit="cover" /> : <View style={[styles.photo, styles.photoFallback]}><BabyLogIcon kind="sparkles" size={34} color={colors.faint} /></View>}
               <View style={styles.cardBody}>
                 <View style={styles.metaRow}>
@@ -139,7 +141,7 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 27, fontWeight: "800" },
   subtitle: { color: colors.muted, fontSize: 12.5, marginTop: 3 },
   iconButton: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  card: { overflow: "hidden", borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  card: { overflow: "hidden", borderRadius: 22, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.card },
   photo: { width: "100%", aspectRatio: 4 / 3, backgroundColor: colors.cardHi },
   photoFallback: { alignItems: "center", justifyContent: "center" },
   cardBody: { padding: 14 },

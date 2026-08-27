@@ -79,6 +79,7 @@ const rows = [
   ["078","{question}, 이미 물어본 질문","{question}, already asked","{question}、質問済み","{question}, ya preguntada","{question}，已提问"],
   ["079","{babyName}에 대해 물어보세요...","Ask about {babyName}…","{babyName}について質問してください…","Pregunta sobre {babyName}…","询问关于{babyName}的问题…"],
   ["080","안녕하세요! 기록을 참고해 답할게요. 무엇이든 편하게 물어보세요.","Hi! I'll answer using the records. Ask anything you'd like.","こんにちは！記録を参考にお答えします。何でも気軽に聞いてください。","¡Hola! Responderé con base en los registros. Pregunta lo que quieras.","你好！我会参考记录来回答。有什么都可以问我。"],
+  ["081","AI 상담","AI consult","AI相談","Consulta IA","AI咨询"],
 ] as const;
 type ConsultId=typeof rows[number][0]; export type ConsultCriticalKey=`consult.critical.${ConsultId}`;
 function resource(index:1|2|3|4|5):{[K in ConsultCriticalKey]:string}{return Object.fromEntries(rows.map(r=>[`consult.critical.${r[0]}`,r[index]])) as {[K in ConsultCriticalKey]:string};}

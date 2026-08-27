@@ -7,6 +7,7 @@ import { getAppSettings } from "./appSettingsStore";
 import { formatTemperature, formatVolume } from "./measurementFormat";
 import { diaperTypeLabel } from "./diaperLog";
 import { customCategoryDisplayLabel, recordCategoryLabel, storedRecordValueLabel, type Translate } from "./recordDisplay";
+import { contractionIntensityLabel, formatContractionSpan } from "./contractionLog";
 import { createT } from "../i18n";
 
 const defaultRecordTranslate = createT("ko");
@@ -51,6 +52,14 @@ export function formatTimelineLabel(
       if (entry.duration) return t("record.timeline.labelDuration", { label, duration: t("record.timeline.minutes", { count: entry.duration }) });
       return t("record.timeline.sleepStart");
     }
+    if (entry.cat === "contraction") {
+      const parts = [label];
+      if (entry.durationSeconds != null) parts.push(`${t("record.contraction.duration")} ${formatContractionSpan(t, entry.durationSeconds)}`);
+      if (entry.intervalSeconds != null) parts.push(`${t("record.contraction.interval")} ${formatContractionSpan(t, entry.intervalSeconds)}`);
+      else parts.push(t("record.contraction.first"));
+      if (entry.chip) parts.push(contractionIntensityLabel(t, entry.chip));
+      return parts.join(" · ");
+    }
     if (entry.cat === "diaper") {
       const parts = [label];
       const typeLabel = diaperTypeLabel(entry);
@@ -77,9 +86,9 @@ export function formatTimelineSubtitle(entry: BabyLogEntry, t: Translate = defau
   const parts = [
     entry.burped === "yes" ? t("record.timeline.burped") : entry.burped === "no" ? t("record.timeline.notBurped") : null,
     entry.spitUp === "yes" ? t("record.timeline.spitUp") : entry.spitUp === "no" ? t("record.timeline.noSpitUp") : null,
-    entry.supplement ? t("record.timeline.supplement", { value: entry.supplement }) : null,
-    entry.feedingNote || null,
-    entry.notes || null,
+    entry.supplement ? t("record.timeline.supplement", { value: storedRecordValueLabel(t, entry.supplement) }) : null,
+    entry.feedingNote ? storedRecordValueLabel(t, entry.feedingNote) : null,
+    entry.notes ? storedRecordValueLabel(t, entry.notes) : null,
   ].filter(Boolean) as string[];
   if (!parts.length) return null;
   const text = parts.join(" · ");

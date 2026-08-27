@@ -4,8 +4,10 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "rea
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { DiaryEntry } from "../../types/babyLog";
 import type { GrowthBookEdit } from "../../types/growthBook";
+import { isDefaultGrowthBookCoverTitle } from "../../types/growthBook";
 import {
   diaryDisplayComment,
+  diaryDisplayDate,
   diaryMilestoneLabel,
   diaryPrimaryPhoto,
   sortGrowthBookEntries,
@@ -63,9 +65,9 @@ export function GrowthBookVaultModal({
   const pageEstimate = estimateGrowthBookPageCount(sorted.length);
   const canRead = sorted.length > 0;
   const storedCover = edit?.coverTitle?.trim();
-  const coverTitle = !storedCover || storedCover === `${babyName}의 성장책`
+  const coverTitle = isDefaultGrowthBookCoverTitle(storedCover, babyName)
     ? t("growth.critical.139", { babyName })
-    : storedCover;
+    : storedCover!;
   const coverRange = edit?.coverDateRange?.trim() ?? "";
   const coverPhoto = resolveGrowthBookCoverPhoto(sorted, edit);
   const letterCount = edit?.letters?.length ?? 0;
@@ -214,7 +216,7 @@ export function GrowthBookVaultModal({
                     style={styles.card}
                     onPress={() => openPreviewAt(index + 1)}
                     accessibilityRole="button"
-                    accessibilityLabel={t("growth.critical.140", { date: entry.date })}
+                    accessibilityLabel={t("growth.critical.140", { date: diaryDisplayDate(entry, locale) })}
                   >
                     <View style={styles.cardContent}>
                       <Text style={styles.index}>{pageNumber}</Text>
@@ -231,7 +233,7 @@ export function GrowthBookVaultModal({
                       )}
                       <View style={styles.body}>
                         <View style={styles.dateRow}>
-                          <Text style={styles.date} numberOfLines={1}>{entry.date}</Text>
+                          <Text style={styles.date} numberOfLines={1}>{diaryDisplayDate(entry, locale)}</Text>
                           <DiaryStampPair skyId={entry.weatherStamp} moodId={entry.moodStamp} size="sm" />
                         </View>
                         <Text style={styles.comment} numberOfLines={2}>

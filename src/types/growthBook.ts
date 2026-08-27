@@ -210,6 +210,24 @@ export function formatGrowthAuthorLabel(
   return `${relation} ${name}`.trim();
 }
 
+/** Stable stored default. UI remaps via growth.critical.139. */
+export function defaultGrowthBookCoverTitleKo(babyName: string): string {
+  return `${babyName}의 성장책`;
+}
+
+export function isDefaultGrowthBookCoverTitle(
+  title: string | null | undefined,
+  babyName: string,
+): boolean {
+  const trimmed = (title ?? "").trim();
+  return !trimmed || trimmed === "의 성장책" || trimmed === defaultGrowthBookCoverTitleKo(babyName);
+}
+
+export function isDefaultGrowthBookCoverSubtitle(value: string | null | undefined): boolean {
+  const trimmed = (value ?? "").trim();
+  return !trimmed || trimmed === "성장책";
+}
+
 export function createEmptyGrowthBookEdit(input: {
   babyId: string;
   babyName: string;
@@ -218,7 +236,7 @@ export function createEmptyGrowthBookEdit(input: {
   return {
     id: `gb-${input.babyId}`,
     babyId: input.babyId,
-    coverTitle: `${input.babyName}의 성장책`,
+    coverTitle: defaultGrowthBookCoverTitleKo(input.babyName),
     coverPhotoUri: null,
     coverTemplateId: "cloud_sky",
     pageTemplateId: "basic_line",

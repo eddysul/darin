@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceMotion } from "../../hooks/useReduceMotion";
-import { colors, type } from "../../theme";
+import { colors, fontScaleCap } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { useLanguage } from "../../LanguageContext";
 
@@ -62,7 +62,17 @@ export function ConsultFab({ onPress, compact = false, hidden = false, bottomOff
         accessibilityLabel={t("consult.critical.016")}
       >
         <BabyLogIcon kind="bot" size={compact ? 22 : 25} color={colors.amberDark} strokeWidth={1.9} />
-        {compact ? null : <Text style={styles.text}>{t("consult.critical.016")}</Text>}
+        {compact ? null : (
+          <Text
+            style={styles.text}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            maxFontSizeMultiplier={fontScaleCap.chrome}
+          >
+            {t("consult.critical.081")}
+          </Text>
+        )}
       </Pressable>
     </Animated.View>
   );
@@ -93,6 +103,7 @@ const styles = StyleSheet.create({
   },
   fabLarge: {
     gap: 4,
+    overflow: "hidden",
     shadowOpacity: 0.3,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 7 },
@@ -100,8 +111,11 @@ const styles = StyleSheet.create({
   pressed: { transform: [{ scale: 0.96 }], opacity: 0.92 },
   text: {
     color: colors.amberDark,
-    fontSize: type.xs,
+    width: "86%",
+    fontSize: 11,
+    lineHeight: 13,
     fontWeight: "800",
     letterSpacing: -0.2,
+    textAlign: "center",
   },
 });

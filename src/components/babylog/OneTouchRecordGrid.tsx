@@ -8,16 +8,46 @@ import {
   type QuickRecordActionDefinition,
 } from "../../constants/quickRecordActions";
 import type { CustomCategory } from "../../types/logCategory";
-import { colors, radius, type } from "../../theme";
+import { colors, fontScaleCap, radius, type } from "../../theme";
 import { BabyLogIcon, CATEGORY_ICONS } from "./BabyLogIcon";
 import { CustomTemplateIcon } from "./CustomTemplateIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
 import { rankQuickActions } from "../../utils/quickCategoryRanking";
 import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { useLanguage } from "../../LanguageContext";
-import { customCategoryDisplayLabel, recordCategoryLabel } from "../../utils/recordDisplay";
+import { customCategoryDisplayLabel, recordCategoryCompactLabel, recordCategoryLabel } from "../../utils/recordDisplay";
 
 export type { OneTouchAction } from "../../constants/quickRecordActions";
+
+const COMPACT_TILE_MIN = 72;
+const COMPACT_TILE_MIN_DENSE = 64;
+const COMPACT_TILE_MAX = 128;
+const COMPACT_TILE_MAX_DENSE = 116;
+const COMPACT_TILE_PAD = 16;
+
+function longestToken(label: string): string {
+  return label.split(/\s+/).reduce((longest, word) => (word.length > longest.length ? word : longest), "");
+}
+
+function estimatedLabelWidth(text: string): number {
+  let width = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    if (/\s/.test(char)) width += 3;
+    else if (code > 0x2e80) width += type.xs;
+    else if (/[ilI.,:;!'’]/.test(char)) width += 4;
+    else if (/[mwMW]/.test(char)) width += 9;
+    else if (/[A-ZÁÉÍÓÚÑ]/.test(char)) width += 8;
+    else width += 7.6;
+  }
+  return width;
+}
+
+function compactTileWidth(label: string, dense = false): number {
+  const min = dense ? COMPACT_TILE_MIN_DENSE : COMPACT_TILE_MIN;
+  const max = dense ? COMPACT_TILE_MAX_DENSE : COMPACT_TILE_MAX;
+  return Math.min(max, Math.max(min, Math.ceil(estimatedLabelWidth(longestToken(label)) + COMPACT_TILE_PAD)));
+}
 
 type Props = {
   sleepActive: boolean;
@@ -157,12 +187,24 @@ export function OneTouchRecordGrid({
           ) : null}
           {canExpand ? (
             <Pressable
-              style={({ pressed }) => [styles.expandTile, compact && styles.expandTileDense, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.expandTile,
+                compact && styles.expandTileDense,
+                { width: compactTileWidth(t("record.grid.more"), compact) },
+                pressed && styles.pressed,
+              ]}
               onPress={() => setExpanded(true)}
               accessibilityRole="button"
               accessibilityLabel={t("record.grid.more")}
             >
-              <Text style={styles.expandTileLabel}>{t("record.grid.more")}</Text>
+              <Text
+                style={styles.expandTileLabel}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                {t("record.grid.more")}
+              </Text>
             </Pressable>
           ) : null}
         </ScrollView>
@@ -221,7 +263,15 @@ function CustomCategoryTile({
           strokeWidth={1.8}
         />
       </View>
-      <Text style={styles.label} numberOfLines={2}>{displayLabel}</Text>
+      <Text
+        style={styles.label}
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        maxFontSizeMultiplier={fontScaleCap.chrome}
+      >
+        {displayLabel}
+      </Text>
     </Pressable>
   );
 }
@@ -238,6 +288,7 @@ function GrowthTile({
   onPress: () => void;
 }) {
   const { t } = useLanguage();
+  const growthLabel = t("record.grid.growth");
   return (
     <Pressable
       disabled={disabled}
@@ -245,6 +296,7 @@ function GrowthTile({
         styles.button,
         compact ? styles.buttonCompact : styles.buttonExpanded,
         dense && (compact ? styles.buttonCompactDense : styles.buttonExpandedDense),
+        compact && { width: compactTileWidth(growthLabel, dense) },
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
       ]}
@@ -255,7 +307,15 @@ function GrowthTile({
       <View style={[styles.iconWrap, styles.growthIconWrap]}>
         <BabyLogIcon kind="tab" tab="report" size={24} color="#69AFA0" strokeWidth={1.8} />
       </View>
-      <Text style={styles.label}>{t("record.grid.growth")}</Text>
+      <Text
+        style={styles.label}
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        maxFontSizeMultiplier={fontScaleCap.chrome}
+      >
+        {growthLabel}
+      </Text>
     </Pressable>
   );
 }
@@ -286,8 +346,10 @@ function ActionTile({
   const { t } = useLanguage();
   const category = getCategory(action.cat);
   const displayLabel = recordCategoryLabel(t, action.cat);
+  const compactLabel = recordCategoryCompactLabel(t, action.cat);
   const activeSleep = action.id === "sleep" && sleepActive;
   const inProgress = timerActive || activeSleep;
+  const tileLabel = activeSleep ? t("record.grid.endSleepShort") : compactLabel;
   const ActionIcon = CATEGORY_ICONS[action.cat];
   const longPressedRef = useRef(false);
 
@@ -298,6 +360,7 @@ function ActionTile({
         styles.button,
         expanded ? styles.buttonExpanded : styles.buttonCompact,
         dense && (expanded ? styles.buttonExpandedDense : styles.buttonCompactDense),
+        !expanded && { width: compactTileWidth(tileLabel, dense) },
         inProgress && styles.activeButton,
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
@@ -356,8 +419,14 @@ function ActionTile({
       <View style={[styles.iconWrap, { backgroundColor: `${category.color}18` }]}>
         <ActionIcon size={24} color={category.color} strokeWidth={1.8} />
       </View>
-      <Text style={[styles.label, inProgress && styles.activeLabel]} numberOfLines={2}>
-        {activeSleep ? t("record.grid.endSleep") : displayLabel}
+      <Text
+        style={[styles.label, inProgress && styles.activeLabel]}
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        maxFontSizeMultiplier={fontScaleCap.chrome}
+      >
+        {tileLabel}
       </Text>
     </Pressable>
   );
@@ -406,9 +475,9 @@ const styles = StyleSheet.create({
     elevation: 1,
     overflow: "hidden",
   },
-  buttonCompact: { width: 72, minHeight: 86 },
+  buttonCompact: { minHeight: 86 },
   buttonExpanded: { width: "31.5%", minHeight: 90 },
-  buttonCompactDense: { width: 64, minHeight: 72 },
+  buttonCompactDense: { minHeight: 72 },
   buttonExpandedDense: { minHeight: 76 },
   pressed: { transform: [{ scale: 0.97 }], opacity: 0.82 },
   disabled: { opacity: 0.45 },
@@ -423,6 +492,8 @@ const styles = StyleSheet.create({
   },
   growthIconWrap: { backgroundColor: "#E7F5F0" },
   label: {
+    width: "100%",
+    paddingHorizontal: 2,
     fontSize: type.xs,
     lineHeight: 15,
     fontWeight: "700",
@@ -442,7 +513,6 @@ const styles = StyleSheet.create({
   },
   progressBadgeText: { color: colors.amberDark, fontSize: 8, fontWeight: "800" },
   expandTile: {
-    width: 72,
     minHeight: 86,
     borderRadius: 16,
     borderWidth: 1,
@@ -454,8 +524,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 10,
   },
-  expandTileDense: { width: 64, minHeight: 72 },
-  expandTileLabel: { fontSize: type.xs, fontWeight: "800", color: colors.amberText, textAlign: "center" },
+  expandTileDense: { minHeight: 72 },
+  expandTileLabel: {
+    width: "100%",
+    fontSize: type.xs,
+    lineHeight: 15,
+    fontWeight: "800",
+    color: colors.amberText,
+    textAlign: "center",
+  },
   collapseButton: {
     marginTop: 10,
     minHeight: 44,

@@ -34,7 +34,13 @@ import type {
   GrowthBookPageEdit,
   GrowthBookPageSticker,
 } from "../../types/growthBook";
-import { formatGrowthAuthorLabel, type PhotoLayout, type PhotoLayoutTuning } from "../../types/growthBook";
+import {
+  defaultGrowthBookCoverTitleKo,
+  formatGrowthAuthorLabel,
+  isDefaultGrowthBookCoverTitle,
+  type PhotoLayout,
+  type PhotoLayoutTuning,
+} from "../../types/growthBook";
 import {
   buildGrowthBookPageMeta,
   buildGrowthBookPaginationItems,
@@ -54,7 +60,7 @@ import {
   getPhotoLayoutSlots,
   swapPhotoOrder,
 } from "../../utils/growthBookPhotoLayouts";
-import { diaryMilestoneLabel, sortGrowthBookEntries } from "../../utils/diaryModel";
+import { diaryDisplayDate, diaryMilestoneLabel, sortGrowthBookEntries } from "../../utils/diaryModel";
 import { colors, radius } from "../../theme";
 import { BabyLogIcon, type MiscIconKey } from "./BabyLogIcon";
 import { BabyStickerVaultModal } from "./BabyStickerVaultModal";
@@ -128,7 +134,7 @@ export function GrowthBookEditorModal({
   onDismiss,
   initialDiaryId,
 }: Props) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
   const { babyStickers } = useBabyLog();
@@ -145,8 +151,8 @@ export function GrowthBookEditorModal({
     [entries],
   );
   const bookPages = useMemo(
-    () => buildGrowthBookPages({ babyName, entries: bookEntries, edit, t }),
-    [babyName, bookEntries, edit, t],
+    () => buildGrowthBookPages({ babyName, entries: bookEntries, edit, t, locale }),
+    [babyName, bookEntries, edit, t, locale],
   );
   const pageMeta = useMemo(() => buildGrowthBookPageMeta(bookPages, t), [bookPages, t]);
 
@@ -599,7 +605,10 @@ function CoverEditor({
   onPatch: (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => void;
 }) {
   const { t } = useLanguage();
-  const title = edit.coverTitle || t("growth.critical.139", { babyName });
+  const titleIsDefault = isDefaultGrowthBookCoverTitle(edit.coverTitle, babyName);
+  const title = titleIsDefault
+    ? t("growth.critical.139", { babyName })
+    : edit.coverTitle.trim();
 
   return (
     <ScrollView
@@ -629,7 +638,10 @@ function CoverEditor({
       <TextInput
         style={styles.input}
         value={title}
-        onChangeText={(text) => onPatch((prev) => ({ ...prev, coverTitle: text }))}
+        onChangeText={(text) => onPatch((prev) => ({
+          ...prev,
+          coverTitle: text.trim() ? text : defaultGrowthBookCoverTitleKo(babyName),
+        }))}
         placeholder={t("growth.critical.139", { babyName })}
         placeholderTextColor={colors.faint}
       />
@@ -677,7 +689,7 @@ function PageList({
   bottomPad: number;
   onOpen: (id: string) => void;
 }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   if (entries.length === 0) {
     return (
       <View style={[styles.content, { paddingBottom: bottomPad + 28 }]}>
@@ -704,7 +716,7 @@ function PageList({
             )}
             <View style={styles.cardCopy}>
               <Text style={styles.cardTitle} numberOfLines={1}>
-                {milestone ?? entry.date}
+                {milestone ?? diaryDisplayDate(entry, locale)}
               </Text>
               <Text style={styles.cardBody} numberOfLines={2}>
                 {t("growth.critical.022", { count: photos.length })} · {t(PHOTO_LAYOUT_MESSAGE_KEYS[pageEdit.photoLayout])} · {t("growth.critical.023", { count: pageEdit.rollingComments.length })}
@@ -743,12 +755,12 @@ function PageEditor({
   onPatch: (updater: (prev: GrowthBookEdit) => GrowthBookEdit) => void;
   onStickerPickerOpenChange?: (open: boolean) => void;
 }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const pageEdit = resolvePageEdit(entry.id, entry, edit);
   const photos = resolvePagePhotos(entry, pageEdit);
   const page = useMemo(
-    () => buildGrowthBookPages({ babyName, entries: [entry], edit, t }).find((item) => item.diaryId === entry.id),
-    [babyName, edit, entry, t],
+    () => buildGrowthBookPages({ babyName, entries: [entry], edit, t, locale }).find((item) => item.diaryId === entry.id),
+    [babyName, edit, entry, t, locale],
   );
   const [sheet, setSheet] = useState<"photo" | "layout" | "comment" | "rolling" | "template" | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
@@ -980,7 +992,7 @@ function PageEditor({
                 <Text style={styles.sheetHint}>{t("growth.critical.158")}</Text>
                 <DiaryPageStylePicker
                   value={pageEdit.pageTemplateId ?? "basic_line"}
-                  dateLabel={entry.date}
+                  dateLabel={diaryDisplayDate(entry, locale)}
                   weatherStamp={entry.weatherStamp}
                   title={page?.title}
                   body={pageEdit.pageComment ?? page?.body}

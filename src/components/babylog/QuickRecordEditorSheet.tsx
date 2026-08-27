@@ -46,7 +46,9 @@ const BORN_LINK_CATS: BabyLogCategoryId[] = [
   "other",
 ];
 
-const PREGNANCY_LINK_CATS: BabyLogCategoryId[] = PREGNANCY_LOG_CATEGORIES.map((category) => category.id);
+const PREGNANCY_LINK_CATS: BabyLogCategoryId[] = PREGNANCY_LOG_CATEGORIES
+  .map((category) => category.id)
+  .filter((id) => id !== "contraction");
 
 const VOLUME_CATS: BabyLogCategoryId[] = [
   "formula",

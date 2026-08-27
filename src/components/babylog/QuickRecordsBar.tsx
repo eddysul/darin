@@ -3,7 +3,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-n
 import type { QuickRecord } from "../../types/quickRecord";
 import { PREGNANCY_QUICK_RECORD_ACTIONS, QUICK_RECORD_ACTIONS, type OneTouchAction } from "../../constants/quickRecordActions";
 import { quickRecordsForStage } from "../../constants/defaultQuickRecords";
-import { colors, type } from "../../theme";
+import { colors, fontScaleCap, type } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import { QuickRecordEditorSheet } from "./QuickRecordEditorSheet";
@@ -128,7 +128,13 @@ export function QuickRecordsBar({
                 strokeWidth={1.8}
               />
             </View>
-            <Text style={styles.label} numberOfLines={1}>
+            <Text
+              style={styles.label}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              maxFontSizeMultiplier={fontScaleCap.chrome}
+            >
               {displayLabel}
             </Text>
           </Pressable>
@@ -215,7 +221,13 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.45 },
   iconWrap: { width: 24, height: 24, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  label: { fontSize: type.xs, fontWeight: "700", color: colors.text, maxWidth: 110 },
+  label: {
+    fontSize: type.xs,
+    lineHeight: 15,
+    fontWeight: "700",
+    color: colors.text,
+    maxWidth: 110,
+  },
   addChip: {
     minWidth: 88,
     minHeight: Platform.OS === "android" ? 48 : 44,

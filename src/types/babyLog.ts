@@ -32,6 +32,14 @@ export type BabyLogEntry = {
   amountUnit?: string;
   amountText?: string;
   duration?: string;
+  /** ISO start time for contraction records (care_logs.payload). */
+  startedAt?: string;
+  /** ISO end time for contraction records (care_logs.payload). */
+  endedAt?: string;
+  /** Contraction duration in seconds. Seconds are the source of truth. */
+  durationSeconds?: number;
+  /** Seconds from the previous contraction start to this start. Omitted on the first record. */
+  intervalSeconds?: number;
   /** Feeding/pumping detail fields stored inside the existing JSON payload. */
   feedingMethod?: "direct" | "bottle" | "mixed";
   leftDuration?: string;

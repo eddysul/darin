@@ -66,6 +66,10 @@ export type CareLogPayload = {
   amountUnit?: string;
   amountText?: string;
   duration?: string;
+  startedAt?: string;
+  endedAt?: string;
+  durationSeconds?: number;
+  intervalSeconds?: number;
   feedingMethod?: "direct" | "bottle" | "mixed";
   leftDuration?: string;
   rightDuration?: string;

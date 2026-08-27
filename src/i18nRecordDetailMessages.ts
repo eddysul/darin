@@ -187,6 +187,9 @@ export const recordDetailEn = {
   "record.detail.option.refusedFood": "Refused", "record.detail.option.armpit": "Armpit", "record.detail.option.ear": "Ear", "record.detail.option.forehead": "Forehead", "record.detail.option.oral": "Oral",
   "record.detail.option.lowFever": "Low fever", "record.detail.option.swelling": "Swelling", "record.detail.option.fussiness": "Fussiness", "record.detail.option.usual": "As usual", "record.detail.option.sleepyMore": "Sleepier than usual",
   "record.detail.option.done": "Done", "record.detail.option.notDone": "Not done",
+  "record.detail.option.stoolGold": "Golden", "record.detail.option.stoolYellow": "Yellow", "record.detail.option.stoolGreen": "Green", "record.detail.option.stoolBrown": "Brown", "record.detail.option.stoolBlack": "Black",
+  "record.detail.option.medGiven": "Taken", "record.detail.option.medPartial": "Partial", "record.detail.option.medSkipped": "Skipped", "record.detail.option.medRefused": "Not taken",
+  "record.detail.unit.drop": "drop", "record.detail.unit.packet": "packet", "record.detail.unit.tablet": "tablet", "record.detail.unit.times": "dose", "record.detail.unit.spoon": "spoon",
 } as const;
 
 export const recordDetailKo: { [K in keyof typeof recordDetailEn]: string } = {
@@ -199,6 +202,9 @@ export const recordDetailKo: { [K in keyof typeof recordDetailEn]: string } = {
   "record.detail.temperature":"체온 (°{unit})","record.detail.exampleTemperature":"예: 36.5","record.detail.measurementSite":"측정 부위 (선택)","record.detail.vaccineName":"백신 이름","record.detail.exampleVaccine":"예: B형간염, DTaP, Hib, 폐렴구균","record.detail.vaccineRound":"접종 회차","record.detail.firstDose":"1차","record.detail.secondDose":"2차","record.detail.thirdDose":"3차","record.detail.booster":"추가","record.detail.roundPlaceholder":"회차를 입력해 주세요","record.detail.vaccinationDate":"접종일","record.detail.vaccinationTime":"접종 시간","record.detail.clinicOptional":"병원 이름 (선택)","record.detail.exampleClinic":"예: 다린소아과","record.detail.doctorOptional":"의사 이름 (선택)","record.detail.doctorName":"의사 이름","record.detail.injectionSite":"접종 부위 (선택)","record.detail.aftercare":"접종 후 메모 (선택)","record.detail.nextVaccineDateOptional":"다음 접종 날짜 (선택)","record.detail.nextVaccineTimeOptional":"다음 접종 시간 (선택)","record.detail.nextVaccineReminder":"다음 접종 알림","record.detail.none":"없음","record.detail.oneDayBefore":"하루 전","record.detail.threeDaysBefore":"3일 전","record.detail.custom":"직접 설정","record.detail.selectNextVaccineFirst":"다음 접종 일정을 먼저 선택해 주세요","record.detail.nextVaccineHint":"다음 접종 날짜와 시간을 선택하면 알림 옵션을 사용할 수 있어요.","record.detail.reminderDate":"알림 날짜","record.detail.reminderTime":"알림 시간",
   "record.detail.visitType":"방문 유형","record.detail.checkup":"검진","record.detail.illness":"질환","record.detail.clinicName":"병원 이름","record.detail.exampleDoctor":"예: 김다린 선생님","record.detail.conditionName":"질환 또는 증상 이름","record.detail.checkupDetails":"검진 내용","record.detail.conditionPlaceholder":"질환명이나 증상을 입력하세요","record.detail.checkupPlaceholder":"검진 내용을 입력하세요","record.detail.cautions":"주의해야 할 점","record.detail.cautionsPlaceholder":"의료진에게 안내받은 주의사항을 기록하세요","record.detail.appointmentTime":"진료 시간","record.detail.nextAppointmentDateOptional":"다음 예약 날짜 (선택)","record.detail.nextAppointmentTimeOptional":"다음 예약 시간 (선택)","record.detail.cautionReminder":"주의사항 확인 알림","record.detail.cautionReminderHint":"다음 예약 날짜와 시간이 있을 때 알림 요청을 저장해요.","record.detail.logName":"기록 이름","record.detail.exampleOther":"예: 발진, 토함, 마사지","record.detail.titleOptional":"제목 (선택)","record.detail.memoTitle":"메모 제목","record.detail.completion":"완료 여부","record.detail.status":"상태","record.detail.weightKg":"체중 (kg)","record.detail.bloodPressure":"혈압","record.detail.amountWithUnit":"양 ({unit})","record.detail.exampleGeneric":"예: 1, 30, 150","record.detail.exampleWeight":"예: 62.4","record.detail.exampleBloodPressure":"예: 120/80","record.detail.example150":"예: 150","record.detail.content":"내용","record.detail.memo":"메모","record.detail.memoPlaceholder":"오늘 남기고 싶은 메모","record.detail.extraMemo":"추가 메모","record.detail.freeMemo":"자유롭게 메모하세요","record.detail.deleteA11y":"이 기록 삭제하기","record.detail.pickTime":"시간 선택","record.detail.nextMedicationDate":"다음 투약 날짜","record.detail.nextMedicationTime":"다음 투약 시간","record.detail.nextVaccineDate":"다음 접종 날짜","record.detail.nextVaccineTime":"다음 접종 시간","record.detail.nextAppointmentDate":"다음 예약 날짜","record.detail.nextAppointmentTime":"다음 예약 시간","record.detail.pickVaccinationDate":"접종일 선택",
   "record.detail.option.yes":"있었어요","record.detail.option.no":"없었어요","record.detail.option.burped":"했어요","record.detail.option.notBurped":"안 했어요","record.detail.option.sleepy":"졸려했어요","record.detail.option.ateWell":"잘 먹었어요","record.detail.option.ateLittle":"조금 먹었어요","record.detail.option.fussy":"보챘어요","record.detail.option.nap":"낮잠","record.detail.option.nightSleep":"밤잠","record.detail.option.urine":"소변","record.detail.option.stool":"대변","record.detail.option.both":"소변+대변","record.detail.option.small":"적음","record.detail.option.normal":"보통","record.detail.option.large":"많음","record.detail.option.loose":"묽음","record.detail.option.hard":"딱딱함","record.detail.option.diarrhea":"설사","record.detail.option.refusedFood":"거부","record.detail.option.armpit":"겨드랑이","record.detail.option.ear":"귀","record.detail.option.forehead":"이마","record.detail.option.oral":"구강","record.detail.option.lowFever":"미열","record.detail.option.swelling":"붓기","record.detail.option.fussiness":"보챔","record.detail.option.usual":"평소와 같음","record.detail.option.sleepyMore":"잠이 많음","record.detail.option.done":"완료","record.detail.option.notDone":"미완료",
+  "record.detail.option.stoolGold":"황금색","record.detail.option.stoolYellow":"노란색","record.detail.option.stoolGreen":"녹색","record.detail.option.stoolBrown":"갈색","record.detail.option.stoolBlack":"검정",
+  "record.detail.option.medGiven":"복용 완료","record.detail.option.medPartial":"일부 복용","record.detail.option.medSkipped":"건너뜀","record.detail.option.medRefused":"복용 안 함",
+  "record.detail.unit.drop":"방울","record.detail.unit.packet":"포","record.detail.unit.tablet":"정","record.detail.unit.times":"회","record.detail.unit.spoon":"스푼",
 };
 
 export const recordDetailJa: { [K in keyof typeof recordDetailEn]: string } = {
@@ -417,6 +423,20 @@ export const recordDetailJa: { [K in keyof typeof recordDetailEn]: string } = {
   "record.detail.option.sleepyMore": "いつもより眠い",
   "record.detail.option.done": "完了",
   "record.detail.option.notDone": "未完了",
+  "record.detail.option.stoolGold": "黄金色",
+  "record.detail.option.stoolYellow": "黄色",
+  "record.detail.option.stoolGreen": "緑色",
+  "record.detail.option.stoolBrown": "茶色",
+  "record.detail.option.stoolBlack": "黒色",
+  "record.detail.option.medGiven": "服用済み",
+  "record.detail.option.medPartial": "一部服用",
+  "record.detail.option.medSkipped": "スキップ",
+  "record.detail.option.medRefused": "服用せず",
+  "record.detail.unit.drop": "ドロップ",
+  "record.detail.unit.packet": "包",
+  "record.detail.unit.tablet": "錠",
+  "record.detail.unit.times": "回",
+  "record.detail.unit.spoon": "スプーン",
 };
 export const recordDetailEs: { [K in keyof typeof recordDetailEn]: string } = {
   "record.detail.deleteTitle": "Eliminar registro",
@@ -634,6 +654,20 @@ export const recordDetailEs: { [K in keyof typeof recordDetailEn]: string } = {
   "record.detail.option.sleepyMore": "Más sueño de lo habitual",
   "record.detail.option.done": "Hecho",
   "record.detail.option.notDone": "No hecho",
+  "record.detail.option.stoolGold": "Dorado",
+  "record.detail.option.stoolYellow": "Amarillo",
+  "record.detail.option.stoolGreen": "Verde",
+  "record.detail.option.stoolBrown": "Marrón",
+  "record.detail.option.stoolBlack": "Negro",
+  "record.detail.option.medGiven": "Tomada",
+  "record.detail.option.medPartial": "Parcial",
+  "record.detail.option.medSkipped": "Omitida",
+  "record.detail.option.medRefused": "No tomada",
+  "record.detail.unit.drop": "gota",
+  "record.detail.unit.packet": "sobre",
+  "record.detail.unit.tablet": "comprimido",
+  "record.detail.unit.times": "toma",
+  "record.detail.unit.spoon": "cucharada",
 };
 export const recordDetailZhCN: { [K in keyof typeof recordDetailEn]: string } = {
   "record.detail.deleteTitle": "删除记录",
@@ -851,4 +885,18 @@ export const recordDetailZhCN: { [K in keyof typeof recordDetailEn]: string } = 
   "record.detail.option.sleepyMore": "比平常更困",
   "record.detail.option.done": "完成",
   "record.detail.option.notDone": "未完成",
+  "record.detail.option.stoolGold": "金黄",
+  "record.detail.option.stoolYellow": "黄色",
+  "record.detail.option.stoolGreen": "绿色",
+  "record.detail.option.stoolBrown": "褐色",
+  "record.detail.option.stoolBlack": "黑色",
+  "record.detail.option.medGiven": "已服用",
+  "record.detail.option.medPartial": "部分服用",
+  "record.detail.option.medSkipped": "跳过",
+  "record.detail.option.medRefused": "未服用",
+  "record.detail.unit.drop": "滴",
+  "record.detail.unit.packet": "袋",
+  "record.detail.unit.tablet": "片",
+  "record.detail.unit.times": "次",
+  "record.detail.unit.spoon": "勺",
 };

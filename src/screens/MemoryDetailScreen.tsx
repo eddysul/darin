@@ -287,7 +287,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
           </Pressable>
         ) : null}
 
-        <View style={styles.postCard}>
+        <View style={[styles.postCard, { borderColor: privacy.accent }]}>
           <View style={styles.metaRow}>
             <ProfileAvatar uri={authorAvatar(bundle.post.authorId)} size={38} />
             <View style={styles.metaCopy}>
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
   retryBanner: { marginHorizontal: 16, minHeight: 44, paddingHorizontal: 14, borderRadius: radius.lg, backgroundColor: colors.dangerSoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   retryBannerText: { color: colors.dangerText, fontSize: 13, fontWeight: "700", flexShrink: 1 },
   retryBannerAction: { color: colors.dangerText, fontSize: 13, fontWeight: "800" },
-  postCard: { marginHorizontal: 16, padding: 16, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  postCard: { marginHorizontal: 16, padding: 16, borderRadius: radius.lg, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.card },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   authorAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
   metaCopy: { flex: 1 },

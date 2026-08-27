@@ -85,6 +85,7 @@ export const CATEGORY_ICONS: Record<BabyLogCategoryId, IconComponent> = {
   pregMed: Pill,
   pregKick: Baby,
   pregHospital: Stethoscope,
+  contraction: Clock,
 };
 
 export type TabIconKey = "record" | "diary" | "report" | "consult" | "mic" | "menu" | "memories";

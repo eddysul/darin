@@ -6,8 +6,9 @@ import {
 import { DEFAULT_DIARY_COVER_TEMPLATE_ID, isDiaryCoverTemplateId } from "../constants/diaryCoverTemplates";
 import { DEFAULT_DIARY_PAGE_TEMPLATE_ID, isDiaryPageTemplateId } from "../constants/diaryPageTemplates";
 import type { DiaryDraftStatus, DiaryEntry, DiarySource } from "../types/babyLog";
-import type { MessageKey } from "../i18n";
-import { formatDateKey } from "./dateKey";
+import type { Locale, MessageKey } from "../i18n";
+import { formatDateKey, parseDateKey } from "./dateKey";
+import { formatLocalizedDate } from "./localeFormat";
 import type { Translate } from "./recordDisplay";
 
 /** Stored when user saves photos without a written comment. */
@@ -25,6 +26,22 @@ const GROWTH_MOMENT_KEYS: Record<string, MessageKey> = {
 export function storedGrowthMomentLabel(t: Translate, value: string): string {
   const key = GROWTH_MOMENT_KEYS[value];
   return key ? t(key) : value;
+}
+
+/** Format a diary's calendar day in the active locale. Stored `date` is a legacy label. */
+export function diaryDisplayDate(
+  entry: Pick<DiaryEntry, "date" | "dateKey">,
+  locale: Locale,
+): string {
+  if (entry.dateKey && /^\d{4}-\d{2}-\d{2}$/.test(entry.dateKey)) {
+    return formatLocalizedDate(parseDateKey(entry.dateKey), locale, {
+      month: "long",
+      day: "numeric",
+      weekday: "short",
+    });
+  }
+  if (entry.date && entry.date !== "날짜 없음") return entry.date;
+  return "";
 }
 
 export function diaryPrimaryPhoto(entry: Pick<DiaryEntry, "photos" | "coverPhotoUri">): string | null {
@@ -140,7 +157,7 @@ export function migrateDiaryEntry(raw: unknown, fallbackBabyId = "baby-1"): Diar
   return {
     id: d.id,
     babyId: typeof d.babyId === "string" && d.babyId ? d.babyId : fallbackBabyId,
-    date: date || "날짜 없음",
+    date: date && date !== "날짜 없음" ? date : "",
     dateKey: typeof d.dateKey === "string" && d.dateKey ? d.dateKey : formatDateKey(),
     photos,
     coverStyleId: isDiaryCoverTemplateId(d.coverStyleId) ? d.coverStyleId : DEFAULT_DIARY_COVER_TEMPLATE_ID,

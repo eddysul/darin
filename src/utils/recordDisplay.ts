@@ -13,6 +13,7 @@ const CATEGORY_KEYS: Record<BabyLogCategoryId, MessageKey> = {
   pregMood: "record.category.pregMood", pregSymptom: "record.category.pregSymptom", pregWeight: "record.category.pregWeight",
   pregBp: "record.category.pregBp", pregMed: "record.category.pregMed", pregKick: "record.category.pregKick",
   pregHospital: "record.category.pregHospital",
+  contraction: "record.category.contraction",
 };
 
 const DEFAULT_QUICK_KEYS: Record<string, MessageKey> = {
@@ -49,6 +50,22 @@ const STORED_VALUE_KEYS: Record<string, MessageKey> = {
   "회/량": "record.screen.countAmount",
   "쌀미음": "chrome.critical.092", "소고기": "chrome.critical.093", "애호박": "chrome.critical.094",
   "바나나": "chrome.critical.095", "고구마": "chrome.critical.096", "사과": "chrome.critical.097",
+  "황금색": "record.detail.option.stoolGold", "노란색": "record.detail.option.stoolYellow",
+  "녹색": "record.detail.option.stoolGreen", "갈색": "record.detail.option.stoolBrown", "검정": "record.detail.option.stoolBlack",
+  "있었어요": "record.detail.option.yes", "없었어요": "record.detail.option.no",
+  "했어요": "record.detail.option.burped", "안 했어요": "record.detail.option.notBurped",
+  "방울": "record.detail.unit.drop", "포": "record.detail.unit.packet", "정": "record.detail.unit.tablet",
+  "회": "record.detail.unit.times", "스푼": "record.detail.unit.spoon",
+  "연고": "record.detail.ointment", "안약": "record.detail.eyeDrop",
+  "복용 완료": "record.detail.option.medGiven", "일부 복용": "record.detail.option.medPartial",
+  "건너뜀": "record.detail.option.medSkipped", "복용 안 함": "record.detail.option.medRefused",
+  "분유 120ml": "record.defaultQuick.formula120", "낮잠 시작": "record.defaultQuick.sleepStart",
+  "기저귀 소변": "record.defaultQuick.diaperPee", "컨디션 좋음": "record.defaultQuick.pregMoodGood",
+  "태동 느꼈어요": "record.defaultQuick.fetalMovement",
+  "약함": "record.contraction.intensityMild", "강함": "record.contraction.intensityStrong",
+  given: "record.detail.option.medGiven", partial: "record.detail.option.medPartial",
+  refused: "record.detail.option.medRefused", skipped: "record.detail.option.medSkipped",
+  drop: "record.detail.unit.drop", packet: "record.detail.unit.packet", tablet: "record.detail.unit.tablet",
 };
 
 const CUSTOM_SUGGESTION_KEYS: Record<string, MessageKey> = {
@@ -92,9 +109,44 @@ export function recordCategoryLabel(t: Translate, id: BabyLogCategoryId): string
   return t(CATEGORY_KEYS[id]);
 }
 
+const CATEGORY_SHORT_KEYS: Record<BabyLogCategoryId, MessageKey> = {
+  breast: "record.categoryShort.breast",
+  formula: "record.categoryShort.formula",
+  storedMilk: "record.categoryShort.storedMilk",
+  food: "record.categoryShort.food",
+  water: "record.categoryShort.water",
+  milk: "record.categoryShort.milk",
+  diaper: "record.categoryShort.diaper",
+  sleep: "record.categoryShort.sleep",
+  pump: "record.categoryShort.pump",
+  bath: "record.categoryShort.bath",
+  doctor: "record.categoryShort.doctor",
+  vaccination: "record.categoryShort.vaccination",
+  temp: "record.categoryShort.temp",
+  med: "record.categoryShort.med",
+  snack: "record.categoryShort.snack",
+  tummy: "record.categoryShort.tummy",
+  play: "record.categoryShort.play",
+  memo: "record.categoryShort.memo",
+  other: "record.categoryShort.other",
+  pregMood: "record.categoryShort.pregMood",
+  pregSymptom: "record.categoryShort.pregSymptom",
+  pregWeight: "record.categoryShort.pregWeight",
+  pregBp: "record.categoryShort.pregBp",
+  pregMed: "record.categoryShort.pregMed",
+  pregKick: "record.categoryShort.pregKick",
+  pregHospital: "record.categoryShort.pregHospital",
+  contraction: "record.categoryShort.contraction",
+};
+
+export function recordCategoryCompactLabel(t: Translate, id: BabyLogCategoryId): string {
+  return t(CATEGORY_SHORT_KEYS[id]);
+}
+
 export function quickRecordLabel(t: Translate, record: QuickRecord): string {
   const key = !record.isCustom ? DEFAULT_QUICK_KEYS[record.id] : undefined;
-  return key ? t(key) : record.label;
+  if (key) return t(key);
+  return storedRecordValueLabel(t, record.label);
 }
 
 export function storedRecordValueLabel(t: Translate, value: string): string {

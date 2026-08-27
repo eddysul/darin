@@ -12,6 +12,7 @@ import type {
 import { getPhotoLayoutCount, normalizePhotoLayout } from "./growthBookPhotoLayouts";
 import {
   diaryBookBody,
+  diaryDisplayDate,
   diaryMilestoneLabel,
   diaryPrimaryPhoto,
   sortGrowthBookEntries,
@@ -21,8 +22,9 @@ import {
   resolveGrowthBookLetterTemplateId,
   resolveGrowthBookPageTemplateId,
 } from "./growthBookTemplates";
-import { formatGrowthAuthorLabel } from "../types/growthBook";
+import { formatGrowthAuthorLabel, isDefaultGrowthBookCoverSubtitle, isDefaultGrowthBookCoverTitle } from "../types/growthBook";
 import type { Translate } from "./recordDisplay";
+import type { Locale } from "../i18n";
 import type { DiaryCoverTemplateId } from "../constants/diaryCoverTemplates";
 import type { DiaryPageTemplateId } from "../constants/diaryPageTemplates";
 
@@ -166,12 +168,13 @@ export function buildGrowthBookPages(input: {
   entries: DiaryEntry[];
   edit?: GrowthBookEdit | null;
   t?: Translate;
+  locale?: Locale;
 }): GrowthBookPage[] {
   const sorted = sortGrowthBookEntries(input.entries.filter((e) => e.includedInGrowthBook));
   const pages: GrowthBookPage[] = [];
   const edit = input.edit ?? null;
   const t = input.t;
-  const defaultKoCoverTitle = `${input.babyName}의 성장책`;
+  const locale = input.locale ?? "ko";
 
   const defaultCoverPhoto =
     edit?.coverPhotoUri ??
@@ -188,13 +191,13 @@ export function buildGrowthBookPages(input: {
     kind: "cover",
     pageType: "cover",
     title:
-      storedCoverTitle && storedCoverTitle !== defaultKoCoverTitle
+      storedCoverTitle && !isDefaultGrowthBookCoverTitle(storedCoverTitle, input.babyName)
         ? storedCoverTitle
         : t
           ? t("growth.critical.139", { babyName: input.babyName })
-          : storedCoverTitle || defaultKoCoverTitle,
+          : storedCoverTitle || `${input.babyName}의 성장책`,
     subtitle:
-      storedCoverSubtitle && storedCoverSubtitle !== "성장책"
+      storedCoverSubtitle && !isDefaultGrowthBookCoverSubtitle(storedCoverSubtitle)
         ? storedCoverSubtitle
         : t
           ? t("growth.critical.013")
@@ -235,7 +238,7 @@ export function buildGrowthBookPages(input: {
       photoLayout,
       photoLayoutTuning: pageEdit.photoLayoutTuning,
       layout: photoLayout,
-      dateLabel: entry.date,
+      dateLabel: diaryDisplayDate(entry, locale),
       moodStamp: entry.moodStamp,
       weatherStamp: entry.weatherStamp,
       milestone,

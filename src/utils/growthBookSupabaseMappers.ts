@@ -13,7 +13,7 @@ import type {
   GrowthBookServerPage,
   RelationshipLabel,
 } from "../types/growthBook";
-import { createEmptyGrowthBookEdit } from "../types/growthBook";
+import { createEmptyGrowthBookEdit, defaultGrowthBookCoverTitleKo, isDefaultGrowthBookCoverTitle } from "../types/growthBook";
 
 export const GROWTH_BOOK_MEDIA_REF_PREFIX = "growth-book-media://";
 
@@ -175,9 +175,9 @@ export async function growthBookRowsToEdit(input: {
   if (cover) {
     const content = record(cover.content_json);
     const savedCoverTitle = stringValue(content.coverTitle) ?? input.book.title;
-    edit.coverTitle = savedCoverTitle?.trim() && savedCoverTitle.trim() !== "의 성장책"
-      ? savedCoverTitle
-      : `${input.babyName}의 성장책`;
+    edit.coverTitle = isDefaultGrowthBookCoverTitle(savedCoverTitle, input.babyName)
+      ? defaultGrowthBookCoverTitleKo(input.babyName)
+      : savedCoverTitle!.trim();
     edit.coverSubtitle = stringValue(content.coverSubtitle);
     edit.coverDateRange = stringValue(content.coverDateRange);
     edit.coverTemplateId = stringValue(content.coverTemplateId) as GrowthBookEdit["coverTemplateId"];

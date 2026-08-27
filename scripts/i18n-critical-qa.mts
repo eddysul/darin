@@ -54,6 +54,13 @@ import {
   qaCriticalKo,
   qaCriticalZhCN,
 } from "../src/i18nQaCriticalMessages.ts";
+import {
+  contractionCriticalEn,
+  contractionCriticalEs,
+  contractionCriticalJa,
+  contractionCriticalKo,
+  contractionCriticalZhCN,
+} from "../src/i18nContractionCriticalMessages.ts";
 
 type Catalog = Record<string, string>;
 
@@ -66,6 +73,7 @@ const catalogs: Array<{ name: string; en: Catalog; locales: Record<string, Catal
   { name: "Insight", en: insightCriticalEn, locales: { ko: insightCriticalKo, ja: insightCriticalJa, es: insightCriticalEs, "zh-CN": insightCriticalZhCN } },
   { name: "Chrome", en: chromeCriticalEn, locales: { ko: chromeCriticalKo, ja: chromeCriticalJa, es: chromeCriticalEs, "zh-CN": chromeCriticalZhCN } },
   { name: "QA", en: qaCriticalEn, locales: { ko: qaCriticalKo, ja: qaCriticalJa, es: qaCriticalEs, "zh-CN": qaCriticalZhCN } },
+  { name: "Contraction", en: contractionCriticalEn, locales: { ko: contractionCriticalKo, ja: contractionCriticalJa, es: contractionCriticalEs, "zh-CN": contractionCriticalZhCN } },
 ];
 
 const placeholders = (value: string) => [...value.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]).sort().join(",");

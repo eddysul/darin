@@ -13,6 +13,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { ActiveTimerSheet } from "../../components/babylog/ActiveTimerSheet";
+import { ContractionTimerSheet } from "../../components/babylog/ContractionTimerSheet";
 import { AddCustomCategorySheet } from "../../components/babylog/AddCustomCategorySheet";
 import { ConsultFab } from "../../components/babylog/ConsultFab";
 import { ConsultPromptSheet } from "../../components/babylog/ConsultPromptSheet";
@@ -36,7 +37,7 @@ import { PREGNANCY_QUICK_ACTION_IDS } from "../../constants/quickRecordActions";
 import { isPregnancyStage } from "../../utils/childDisplay";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import type { ActiveTimer, TimerSide } from "../../types/activeTimer";
-import { formatElapsedClock, elapsedMsNow, isTimerAction } from "../../types/activeTimer";
+import { formatElapsedClock, elapsedMsNow, isBornTimer, isTimerAction } from "../../types/activeTimer";
 import type { BabyLogEntry } from "../../types/babyLog";
 import type { CustomCategory, LogCategoryKey } from "../../types/logCategory";
 import { customCategoriesForStage, customCategoryKey, isCustomCategoryKey } from "../../types/logCategory";
@@ -74,6 +75,14 @@ import { useLanguage } from "../../LanguageContext";
 import { RECORD_VALUE } from "../../constants/recordInternalValues";
 import { quickRecordLabel } from "../../utils/recordDisplay";
 import { formatDayNavLabel } from "../../utils/insightDisplay";
+import {
+  buildContractionSaveEntry,
+  contractionUpdatesAfterDelete,
+  durationSecondsOf,
+  hhmmFromIso,
+  isContractionLog,
+  siblingContractionUpdates,
+} from "../../utils/contractionLog";
 
 type Props = {
   onOpenProfile: (opts?: { convertBirth?: boolean }) => void;
@@ -93,6 +102,7 @@ const TIMER_LABEL_KEYS = {
   pump: "record.timer.pump",
   tummy: "record.timer.tummy",
   play: "record.timer.play",
+  contraction: "record.contraction.title",
 } as const;
 
 export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenConsult }: Props) {
@@ -128,6 +138,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey());
   const [activeTimers, setActiveTimers] = useState<ActiveTimer[]>([]);
   const [timerSheetId, setTimerSheetId] = useState<string | null>(null);
+  const [contractionSheetOpen, setContractionSheetOpen] = useState(false);
+  const [contractionSaving, setContractionSaving] = useState(false);
   const [timerSaving, setTimerSaving] = useState(false);
   const [timerTick, setTimerTick] = useState(0);
   const [consultPromptOpen, setConsultPromptOpen] = useState(false);
@@ -342,6 +354,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
         aftercareNotes: entry.aftercareNotes,
         vaccinationReminderSetting: entry.vaccinationReminderSetting,
         vaccinationCustomReminderAt: entry.vaccinationCustomReminderAt,
+        startedAt: entry.startedAt,
+        endedAt: entry.endedAt,
+        durationSeconds: entry.durationSeconds,
+        intervalSeconds: entry.intervalSeconds,
       });
     },
     [allowAdd, me, myFamilyRole],
@@ -364,15 +380,36 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     setTimeout(() => setHighlightId((cur) => (cur === entry.id ? null : cur)), 1800);
   };
 
+  const persistContractionSiblings = (allLogs: BabyLogEntry[], saved: BabyLogEntry) => {
+    for (const { id, entry } of siblingContractionUpdates(allLogs, saved)) {
+      updateLog(id, entry);
+    }
+  };
+
+  const persistContractionDelete = (deletedId: string) => {
+    for (const { id, entry } of contractionUpdatesAfterDelete(logs, deletedId)) {
+      updateLog(id, entry);
+    }
+  };
+
   const handleSave = (entry: Omit<BabyLogEntry, "id">, editId?: string) => {
+    const nextEntry = isContractionLog(entry) ? buildContractionSaveEntry(entry, logs, editId) : entry;
     if (editId) {
       const existing = logs.find((log) => log.id === editId);
       if (existing && canEditLog(myFamilyRole, existing.createdBy, me)) {
-        updateLog(editId, entry);
+        updateLog(editId, nextEntry);
+        if (isContractionLog(nextEntry)) persistContractionSiblings(logs, { ...nextEntry, id: editId });
       }
     } else if (allowRecord) {
-      addLog(entry);
+      const created = addLog(nextEntry);
+      if (isContractionLog(created)) persistContractionSiblings(logs, created);
     }
+  };
+
+  const handleDeleteLog = (id: string) => {
+    const existing = logs.find((entry) => entry.id === id);
+    deleteLog(id);
+    if (existing && isContractionLog(existing)) persistContractionDelete(id);
   };
 
   const addFoodIngredient = (nameInput: string, source: FoodIngredientSource): FoodIngredient | null => {
@@ -411,6 +448,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
 
   const handleOneTouch = (action: OneTouchAction) => {
     if (!allowRecord) return;
+    if (action === "contraction") {
+      setContractionSheetOpen(true);
+      return;
+    }
     if (action === "sleep" && activeSleep) {
       endActiveSleep();
       return;
@@ -468,6 +509,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
 
   const handleLongPress = (action: OneTouchAction) => {
     if (!allowRecord) return;
+    if (action === "contraction") {
+      setContractionSheetOpen(true);
+      return;
+    }
     if (longPressModeFor(action) === "timer") {
       const timerEnabled =
         action === "breastfeeding"
@@ -489,6 +534,51 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     }
     const next = longPressSheetPrefill(action, selectedDateKey);
     openSheet(next.cat ?? actionToCategory(action), next);
+  };
+
+  const startContractionTimer = () => {
+    if (!allowRecord) return;
+    const existing = activeTimers.find((timer) => timer.kind === "contraction");
+    if (existing) {
+      setContractionSheetOpen(true);
+      return;
+    }
+    const timer = createActiveTimer("contraction", "contraction", {
+      startTime: nowTime(),
+      dateKey: todayKey,
+    });
+    setActiveTimers((prev) => [...prev.filter((item) => item.kind !== "contraction"), timer]);
+    setContractionSheetOpen(true);
+  };
+
+  const handleStopContraction = async (opts: { chip?: string; notes?: string }) => {
+    const timer = activeTimers.find((item) => item.kind === "contraction");
+    if (!timer || contractionSaving) return;
+    setContractionSaving(true);
+    try {
+      const endedAt = new Date().toISOString();
+      const startedAt = timer.segmentStartedAt;
+      const draft = buildContractionSaveEntry(
+        {
+          cat: "contraction",
+          time: hhmmFromIso(startedAt) || timer.startTime,
+          dateKey: timer.dateKey,
+          startedAt,
+          endedAt,
+          durationSeconds: durationSecondsOf(startedAt, endedAt),
+          chip: opts.chip,
+          notes: opts.notes,
+          source: "manual",
+        },
+        logs,
+      );
+      const saved = addLog(draft);
+      persistContractionSiblings(logs, saved);
+      announceCreated(saved, t("record.contraction.saved"));
+      setActiveTimers((prev) => prev.filter((item) => item.id !== timer.id));
+    } finally {
+      setContractionSaving(false);
+    }
   };
 
   const patchTimer = (id: string, updater: (t: ActiveTimer) => ActiveTimer) => {
@@ -634,9 +724,11 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     : false;
 
   const toastEntry = toast ? logs.find((l) => l.id === toast.id) : null;
-  const sheetTimer = activeTimers.find((t) => t.id === timerSheetId) ?? null;
+  const sheetTimer = activeTimers.find((t) => t.id === timerSheetId && isBornTimer(t)) ?? null;
+  const contractionTimer = activeTimers.find((t) => t.kind === "contraction") ?? null;
+  const bornTimers = activeTimers.filter(isBornTimer);
   const activeTimerActions = activeTimers.map((t) => t.action);
-  const primaryTimer = activeTimers[0];
+  const primaryTimer = bornTimers[0];
   const sessionLabelFor = (cat: LogCategoryKey | null, editId?: string, dateKey?: string) => {
     if (!cat || isCustomCategoryKey(cat)) return undefined;
     const targetDate = dateKey ?? selectedDateKey;
@@ -697,6 +789,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     categoryPressing ||
     Boolean(toast) ||
     Boolean(sheetTimer) ||
+    contractionSheetOpen ||
     sheetCat !== null ||
     consultPromptOpen ||
     keyboardOpen ||
@@ -712,7 +805,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
         onPress={openEdit}
         limit={6}
         onDelete={(entry) => {
-          if (canDeleteLog(myFamilyRole, entry.createdBy, me)) deleteLog(entry.id);
+          if (canDeleteLog(myFamilyRole, entry.createdBy, me)) handleDeleteLog(entry.id);
         }}
         contentContainerStyle={[styles.content, compact && styles.contentCompact]}
         scrollProps={{
@@ -746,13 +839,28 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
         {!allowAdd && (
           <Text style={styles.viewerBanner}>{t("record.screen.readOnly")}</Text>
         )}
-        {primaryTimer ? (
+        {contractionTimer ? (
+          <View style={styles.timerBanner}>
+            <View style={styles.timerBannerIcon}><LogCategoryIcon categoryKey="contraction" customCategories={customCategories} size={18} color={colors.amberText} /></View>
+            <Pressable style={styles.timerBannerCopy} onPress={() => setContractionSheetOpen(true)}>
+              <Text style={styles.timerBannerTitle}>
+                {t("record.grid.actionInProgress", { label: t("record.contraction.title") })}
+              </Text>
+              <Text style={styles.timerBannerMeta}>
+                {[formatElapsedClock(elapsedMsNow(contractionTimer)), t("record.contraction.continue")].join(" · ")}
+              </Text>
+            </Pressable>
+            <Pressable style={styles.timerBannerAction} onPress={() => setContractionSheetOpen(true)}>
+              <Text style={styles.timerBannerActionText}>{t("record.contraction.end")}</Text>
+            </Pressable>
+          </View>
+        ) : primaryTimer ? (
           <View style={styles.timerBanner}>
             {primaryTimerCategory ? <View style={styles.timerBannerIcon}><LogCategoryIcon categoryKey={primaryTimerCategory} customCategories={customCategories} size={18} color={colors.amberText} /></View> : null}
             <Pressable style={styles.timerBannerCopy} onPress={() => setTimerSheetId(primaryTimer.id)}>
               <Text style={styles.timerBannerTitle}>
                 {t("record.grid.actionInProgress", { label: t(TIMER_LABEL_KEYS[primaryTimer.kind]) })}
-                {activeTimers.length > 1 ? ` · +${activeTimers.length - 1}` : ""}
+                {bornTimers.length > 1 ? ` · +${bornTimers.length - 1}` : ""}
               </Text>
               <Text style={styles.timerBannerMeta}>
                 {[activeSessionLabel, formatElapsedClock(elapsedMsNow(primaryTimer)), t("record.screen.continue")].filter(Boolean).join(" · ")}
@@ -807,6 +915,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
               setGrowthRecordOpen(true);
             }}
             onOpenActiveTimer={(action) => {
+              if (action === "contraction") {
+                setContractionSheetOpen(true);
+                return;
+              }
               const found = activeTimers.find((t) => t.action === action);
               if (found) {
                 setTimerSheetId(found.id);
@@ -883,7 +995,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
         onDelete={
           allowDelete
             ? (id) => {
-                deleteLog(id);
+                handleDeleteLog(id);
                 setSheetCat(null);
                 setPrefill(null);
               }
@@ -935,6 +1047,28 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
           patchTimer(sheetTimer.id, resumeTimer);
         }}
         onStop={handleStopTimer}
+      />
+
+      <ContractionTimerSheet
+        visible={contractionSheetOpen}
+        timer={contractionTimer}
+        logs={logs}
+        dateKey={selectedDateKey}
+        saving={contractionSaving}
+        onClose={() => setContractionSheetOpen(false)}
+        onStart={startContractionTimer}
+        onStop={(opts) => { void handleStopContraction(opts); }}
+        onEdit={(entry) => {
+          setContractionSheetOpen(false);
+          openEdit(entry);
+        }}
+        onDelete={
+          allowAdd
+            ? (entry) => {
+                if (canDeleteLog(myFamilyRole, entry.createdBy, me)) handleDeleteLog(entry.id);
+              }
+            : undefined
+        }
       />
 
       <GrowthRecordModal

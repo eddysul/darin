@@ -46,8 +46,9 @@ import {
   appendMomentSuggestion,
   buildCareLogDailySummary,
   buildDiaryMomentSuggestions,
+  displayCareLogSummarySnapshot,
 } from "../../utils/diaryMomentSuggestions";
-import { DIARY_PHOTO_ONLY_COMMENT, storedGrowthMomentLabel } from "../../utils/diaryModel";
+import { DIARY_PHOTO_ONLY_COMMENT, diaryDisplayDate, storedGrowthMomentLabel } from "../../utils/diaryModel";
 import { buildTodaySummary, getLogsForDay } from "../../utils/reportAggregates";
 import { colors, radius } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
@@ -91,12 +92,12 @@ export function DiaryComposeModal({
   const { locale, t } = useLanguage();
   const { logs, babyName, babyStickers, addBabySticker, deleteBabySticker, logAuthor, activeBabyId, careSetup } = useBabyLog();
   const isEdit = !!editingEntry;
-  const stageLabel = editingEntry?.stageLabelSnapshot
-    ?? formatDiaryStageLabel(
-      careSetup.child,
-      editingEntry?.dateKey ?? formatDateKey(),
-      locale,
-    );
+  const stageLabel = formatDiaryStageLabel(
+    careSetup.child,
+    editingEntry?.dateKey ?? formatDateKey(),
+    locale,
+  ) ?? editingEntry?.stageLabelSnapshot
+    ?? null;
   const stageDate = formatDottedDate(editingEntry?.dateKey ?? formatDateKey());
 
   const [notes, setNotes] = useState("");
@@ -133,17 +134,15 @@ export function DiaryComposeModal({
     () => buildCareLogDailySummary(summary, todayLogs, t),
     [summary, todayLogs, t],
   );
-  const storedSummary = useMemo(
-    () => buildCareLogDailySummary(summary, todayLogs),
-    [summary, todayLogs],
-  );
   const suggestions = useMemo(
     () => buildDiaryMomentSuggestions({ babyName, todayLogs, summary, t }),
     [babyName, todayLogs, summary, t],
   );
 
-  /** Edit keeps frozen snapshot; create shows live Care Log summary */
-  const displaySummary = isEdit ? frozenSnapshot || liveSummary : liveSummary;
+  /** Edit keeps frozen snapshot (remapped for display); create shows live Care Log summary */
+  const displaySummary = isEdit
+    ? displayCareLogSummarySnapshot(frozenSnapshot || liveSummary, t)
+    : liveSummary;
 
   const resolvedCustom = customMode ? customMilestoneTag.trim() || null : null;
   const resolvedPreset = customMode ? null : milestoneTag;
@@ -167,7 +166,7 @@ export function DiaryComposeModal({
     milestoneTag: resolvedPreset,
     customMilestoneTag: resolvedCustom,
     includedInGrowthBook: inBook,
-    careLogSummarySnapshot: isEdit ? frozenSnapshot || storedSummary : storedSummary,
+    careLogSummarySnapshot: isEdit ? frozenSnapshot || liveSummary : liveSummary,
     momentSuggestionsUsed: usedSuggestions,
   });
 
@@ -212,7 +211,7 @@ export function DiaryComposeModal({
       setCustomMode(!!d.customMilestoneTag && !d.milestoneTag);
       setInBook(d.includedInGrowthBook);
       setUsedSuggestions(d.momentSuggestionsUsed);
-      setDateLabel(editingEntry.date);
+      setDateLabel(diaryDisplayDate(editingEntry, locale));
       setFrozenSnapshot(editingEntry.careLogSummarySnapshot || undefined);
     } else if (initialDraft) {
       setNotes(initialDraft.comment === DIARY_PHOTO_ONLY_COMMENT ? "" : initialDraft.comment);
@@ -254,6 +253,15 @@ export function DiaryComposeModal({
     setReady(true);
     setPhotoError("");
   }, [visible, editingEntry, initialDraft]);
+
+  useEffect(() => {
+    if (!visible) return;
+    if (editingEntry) {
+      setDateLabel(diaryDisplayDate(editingEntry, locale));
+    } else {
+      setDateLabel(formatTodayLabel(locale));
+    }
+  }, [locale, visible, editingEntry]);
 
   useEffect(() => {
     if (photos.length === 0) {

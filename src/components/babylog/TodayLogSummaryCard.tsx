@@ -16,13 +16,14 @@ import { formatDateKey, parseDateKey } from "../../utils/dateKey";
 import { FEEDING_CATS } from "../../utils/reportAggregates";
 import { toMinutes } from "../../utils/formatLog";
 import { isCustomCategoryKey } from "../../types/logCategory";
-import { colors, radius, type } from "../../theme";
+import { colors, fontScaleCap, radius, type } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { formatTemperature, formatVolume } from "../../utils/measurementFormat";
 import { diaperCounts } from "../../utils/diaperLog";
 import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { useLanguage } from "../../LanguageContext";
 import { formatDurationMinutes, formatLocalizedDate } from "../../utils/localeFormat";
+import { formatContractionSpan, todayContractionSummary } from "../../utils/contractionLog";
 import type { MessageKey } from "../../i18n";
 
 type Props = {
@@ -123,6 +124,7 @@ export function TodayLogSummaryCard({
 
   const metrics = useMemo(() => {
     if (pregnancy) {
+      const contraction = todayContractionSummary(logs, dateKey);
       const symptomCount = countCat(logs, ["pregSymptom"]);
       const weightCount = countCat(logs, ["pregWeight"]);
       const kickCount = countCat(logs, ["pregKick"]);
@@ -131,6 +133,16 @@ export function TodayLogSummaryCard({
         .sort((a, b) => b.time.localeCompare(a.time))[0];
 
       const core: MetricCard[] = [
+        {
+          key: "contraction",
+          label: t("home.metric.contraction"),
+          value: t("home.summary.count", { count: contraction.count }),
+          detail: contraction.lastDurationSeconds == null
+            ? undefined
+            : `${t("record.contraction.lastDuration")} ${formatContractionSpan(t, contraction.lastDurationSeconds)}`,
+          recentTime: latestTime(logs, (entry) => entry.cat === "contraction"),
+          cat: "contraction",
+        },
         {
           key: "pregSymptom",
           label: t("home.metric.morningSickness"), value: t("home.summary.count", { count: symptomCount }),
@@ -175,6 +187,25 @@ export function TodayLogSummaryCard({
         { key: "pregMed", label: t("home.metric.supplement"), cats: ["pregMed"], cat: "pregMed" },
         { key: "pregHospital", label: t("home.metric.hospital"), cats: ["pregHospital"], cat: "pregHospital" },
       ];
+      if (contraction.lastIntervalSeconds != null || contraction.avgIntervalSeconds != null) {
+        extras.unshift({
+          key: "contractionInterval",
+          label: t("record.contraction.interval"),
+          cats: ["contraction"],
+          cat: "contraction",
+          detail: () => {
+            const parts = [
+              contraction.lastIntervalSeconds != null
+                ? `${t("record.contraction.lastInterval")} ${formatContractionSpan(t, contraction.lastIntervalSeconds)}`
+                : t("record.contraction.first"),
+              contraction.avgIntervalSeconds != null
+                ? `${t("record.contraction.avgInterval")} ${formatContractionSpan(t, contraction.avgIntervalSeconds)}`
+                : null,
+            ].filter(Boolean);
+            return parts.join(" · ") || undefined;
+          },
+        });
+      }
 
       const dynamic: MetricCard[] = [];
       for (const extra of extras) {
@@ -303,7 +334,7 @@ export function TodayLogSummaryCard({
     }
 
     return [...core, ...dynamic];
-  }, [locale, logs, pregnancy, t]);
+  }, [dateKey, locale, logs, pregnancy, t]);
 
   const pageCount = Math.max(1, Math.ceil(metrics.length / 3));
 
@@ -382,11 +413,22 @@ export function TodayLogSummaryCard({
               <View style={[styles.iconWrap, { backgroundColor: `${category.color}18` }]}>
                 <BabyLogIcon catId={metric.cat} size={22} color={category.color} strokeWidth={1.8} />
               </View>
-              <Text style={styles.metricLabel} numberOfLines={1}>
+              <Text
+                style={styles.metricLabel}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                maxFontSizeMultiplier={fontScaleCap.chrome}
+              >
                 {metric.label}
               </Text>
               <Text style={styles.metricValue}>{metric.value}</Text>
-              <Text style={[styles.metricDetail, !metric.detail && styles.metricDetailEmpty]}>
+              <Text
+                style={[styles.metricDetail, !metric.detail && styles.metricDetailEmpty]}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
                 {metric.detail ?? " "}
               </Text>
               <Text
@@ -493,7 +535,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  metricLabel: { marginTop: 6, fontSize: type.xs, color: colors.text, fontWeight: "700" },
+  metricLabel: {
+    marginTop: 6,
+    fontSize: type.xs,
+    lineHeight: 15,
+    color: colors.text,
+    fontWeight: "700",
+    textAlign: "center",
+    width: "100%",
+  },
   metricValue: { marginTop: 2, fontSize: type.md, color: colors.text, fontWeight: "800" },
   metricDetail: {
     marginTop: 2,

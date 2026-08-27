@@ -5,6 +5,8 @@ import type { BabyLogEntry, DiaryEntry } from "../types/babyLog";
 import type { CareSetup, DefaultFeedingMethod } from "../types/careSetup";
 import { buildBabyDisplay, buildProfileContextBlock } from "./childDisplay";
 import { formatDateKey } from "./dateKey";
+import { displayCareLogSummarySnapshot } from "./diaryMomentSuggestions";
+import { stripDayLabel } from "./insightDisplay";
 import {
   buildTodaySummary,
   formatSleepDuration,
@@ -124,6 +126,7 @@ export function buildBabyLogConsultPrompt(input: {
   locale: Locale;
   question?: string;
 }): string {
+  const t = createT(input.locale);
   const isKo = input.locale === "ko";
   const pack = buildCareContextPack(input);
   const todayKey = formatDateKey();
@@ -150,16 +153,16 @@ You may note answers are based on recent logs.`;
   const s = pack.todaySummary;
   const todayBlock = isKo
     ? `[오늘 요약 — 최근 기록 기준]
-- 수유 ${s.feedCount}회 · 수면 ${s.sleepCount}회(${formatSleepDuration(s.totalSleepMinutes)}) · 배변 ${s.diaperCount}회
+- 수유 ${s.feedCount}회 · 수면 ${s.sleepCount}회(${formatSleepDuration(s.totalSleepMinutes, t)}) · 배변 ${s.diaperCount}회
 - 전체 기록 ${s.totalCount}건`
     : `[TODAY SUMMARY]
-- Feed ${s.feedCount} · Sleep ${s.sleepCount} (${formatSleepDuration(s.totalSleepMinutes)}) · Diaper ${s.diaperCount}
+- Feed ${s.feedCount} · Sleep ${s.sleepCount} (${formatSleepDuration(s.totalSleepMinutes, t)}) · Diaper ${s.diaperCount}
 - Total events ${s.totalCount}`;
 
   const weekLines = pack.week
     .map(
       (d) =>
-        `  - ${d.dateKey} (${d.label}): feed ${d.feedingCount}, sleep ${d.sleepMinutes}m, diaper ${d.diaperCount}`,
+        `  - ${d.dateKey} (${stripDayLabel(d.dateKey, t, todayKey)}): feed ${d.feedingCount}, sleep ${d.sleepMinutes}m, diaper ${d.diaperCount}`,
     )
     .join("\n");
 
@@ -169,7 +172,7 @@ You may note answers are based on recent logs.`;
 
   const focusLogs = relevantLogs(input.logs, pack.focus, todayKey);
   const focusLines = focusLogs
-    .map((e) => `  - ${e.dateKey ?? todayKey} ${e.time} · ${formatLogMeta(e)}${e.voice ? " (voice)" : ""}`)
+    .map((e) => `  - ${e.dateKey ?? todayKey} ${e.time} · ${formatLogMeta(e, [], t)}${e.voice ? " (voice)" : ""}`)
     .join("\n");
 
   const focusBlock =
@@ -185,9 +188,9 @@ You may note answers are based on recent logs.`;
     .slice(0, 3)
     .map((d) => {
       const snapshot = d.careLogSummarySnapshot
-        ? ` [${isKo ? "육아 기록" : "Care Log"}: ${d.careLogSummarySnapshot}]`
+        ? ` [${isKo ? "육아 기록" : "Care Log"}: ${displayCareLogSummarySnapshot(d.careLogSummarySnapshot, t)}]`
         : "";
-      return `  - ${d.date}: ${d.comment}${snapshot}`;
+      return `  - ${d.dateKey || d.date}: ${d.comment}${snapshot}`;
     })
     .join("\n");
   const diaryBlock = diaryLines

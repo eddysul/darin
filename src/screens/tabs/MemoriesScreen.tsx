@@ -102,7 +102,7 @@ const MemoryFeedCard = memo(function MemoryFeedCard({
   const untitled = caption || t("memory.critical.036");
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { borderColor: privacy.accent }]}>
       <View style={styles.thumbnail}>
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -233,7 +233,6 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewSheetOpen, setViewSheetOpen] = useState(false);
   const [filter, setFilter] = useState<MemoryViewFilter>("all");
-  const [audience, setAudience] = useState<"family" | "friend">("family");
   const [babyFilter, setBabyFilter] = useState<BabyTargetFilter>("all");
   const [hiddenAdIds, setHiddenAdIds] = useState<Set<string>>(() => new Set());
   const [expandedCaptions, setExpandedCaptions] = useState<Set<string>>(() => new Set());
@@ -272,8 +271,6 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
     return ids.map((id) => babies.find((baby) => baby.id === id)?.name).filter(Boolean).join(" · ") || babyName;
   }, [babies, babyName, t, targetBabyIds]);
   const filteredCards = useMemo(() => cards.filter((card) => {
-    if (audience === "friend" && card.post.privacyType !== "friend_circle") return false;
-    if (audience === "family" && card.post.privacyType === "friend_circle") return false;
     const ids = targetBabyIds(card);
     const isFamilyMoment = card.post.isFamilyMoment || (!ids.length && babies.length > 1);
     if (babyFilter === "family" && !isFamilyMoment) return false;
@@ -288,7 +285,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
     if (filter === "only_me") return card.post.privacyType === "only_me";
     if (filter === "saved") return card.isSaved;
     return card.post.privacyType === "tagged_family" || card.tags.some((tag) => tag.taggedUserId === logAuthor.userId);
-  }), [audience, babyFilter, babies.length, cards, filter, logAuthor.userId, targetBabyIds]);
+  }), [babyFilter, babies.length, cards, filter, logAuthor.userId, targetBabyIds]);
   const emptyCopy = useMemo(() => {
     if (filter !== "all") {
       const keys = EMPTY_KEYS[filter];
@@ -522,21 +519,6 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
         </View>
       </View>
 
-      <View style={styles.audienceBar} accessibilityRole="tablist">
-        <Pressable
-          style={[styles.audienceChip, audience === "family" && styles.audienceChipActive]}
-          onPress={() => { setAudience("family"); setFilter("all"); }}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: audience === "family" }}
-        ><Text style={[styles.audienceText, audience === "family" && styles.audienceTextActive]}>{t("memory.critical.152")}</Text></Pressable>
-        <Pressable
-          style={[styles.audienceChip, audience === "friend" && styles.audienceChipActive]}
-          onPress={() => { setAudience("friend"); setFilter("friend_circle"); }}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: audience === "friend" }}
-        ><Text style={[styles.audienceText, audience === "friend" && styles.audienceTextActive]}>{t("memory.critical.153")}</Text></Pressable>
-      </View>
-
       <View style={[styles.familySection, activeFamilyMembers.length > 0 && styles.familySectionCompact]}>
         <Pressable
           style={styles.familyMain}
@@ -692,7 +674,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
       <MemoryViewFilterSheet
         visible={viewSheetOpen}
         value={filter}
-        onChange={(value) => { setFilter(value); setAudience(value === "friend_circle" ? "friend" : "family"); }}
+        onChange={setFilter}
         whoValue={babyFilter}
         onChangeWho={setBabyFilter}
         babies={babies.map((baby) => ({ id: baby.id, name: baby.name }))}
@@ -709,11 +691,6 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 27, fontWeight: "800", letterSpacing: -0.5 },
   subtitle: { color: colors.muted, fontSize: 12.5, marginTop: 2 },
   headerActions: { flexDirection: "row", gap: 8 },
-  audienceBar: { flexDirection: "row", marginHorizontal: 16, marginBottom: 10, padding: 4, borderRadius: radius.full, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.border },
-  audienceChip: { flex: 1, minHeight: 40, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
-  audienceChipActive: { backgroundColor: colors.card },
-  audienceText: { color: colors.muted, fontSize: 12.5, fontWeight: "700" },
-  audienceTextActive: { color: colors.amberText, fontWeight: "800" },
   iconButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   familySection: { marginHorizontal: 16, marginBottom: 10, padding: 13, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   familySectionCompact: { paddingVertical: 10, paddingHorizontal: 12 },
@@ -742,7 +719,7 @@ const styles = StyleSheet.create({
   secondaryButton: { minHeight: 44, marginTop: 18, paddingHorizontal: 18, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
   secondaryText: { color: colors.amberText, fontSize: 13, fontWeight: "800" },
   feed: { paddingTop: 4, gap: 14 },
-  card: { width: "auto", minWidth: 0, marginHorizontal: 16, borderRadius: 22, overflow: "hidden", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  card: { width: "auto", minWidth: 0, marginHorizontal: 16, borderRadius: 22, overflow: "hidden", backgroundColor: colors.card, borderWidth: 2, borderColor: colors.border },
   thumbnail: { width: "100%", aspectRatio: 4 / 3, backgroundColor: colors.cardHi },
   thumbnailEmpty: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   privacyBadge: { position: "absolute", left: 12, top: 12, minHeight: 28, paddingHorizontal: 9, borderRadius: radius.full, flexDirection: "row", alignItems: "center", gap: 4 },

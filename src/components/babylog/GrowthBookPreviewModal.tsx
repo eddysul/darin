@@ -35,14 +35,14 @@ export function GrowthBookPreviewModal({
   onPdfCreate,
   initialPageIndex = 0,
 }: Props) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const insets = useSafeAreaInsets();
   const { babyStickers } = useBabyLog();
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
   const pages = useMemo(
-    () => buildGrowthBookPages({ babyName, entries, edit, t }),
-    [babyName, entries, edit, t],
+    () => buildGrowthBookPages({ babyName, entries, edit, t, locale }),
+    [babyName, entries, edit, t, locale],
   );
 
   useEffect(() => {

@@ -3,6 +3,35 @@ import { resolveLogCategory } from "./resolveLogCategory";
 import { formatTemperature, formatVolume } from "./measurementFormat";
 import { storedRecordValueLabel, type Translate } from "./recordDisplay";
 
+function localizeJoined(t: Translate | undefined, value: string): string {
+  if (!t) return value;
+  return value
+    .split(" · ")
+    .map((part) => storedRecordValueLabel(t, part.trim()))
+    .join(" · ");
+}
+
+function localizeDose(
+  t: Translate | undefined,
+  entry: {
+    doseText?: string;
+    doseValue?: number | string;
+    doseUnit?: string;
+    amount?: string;
+  },
+): string | undefined {
+  if (entry.doseValue != null && entry.doseUnit) {
+    const unit = t ? storedRecordValueLabel(t, entry.doseUnit) : entry.doseUnit;
+    return `${entry.doseValue} ${unit}`;
+  }
+  const raw = entry.doseText ?? entry.amount;
+  if (!raw) return undefined;
+  if (!t) return raw;
+  const match = /^\s*(\d+(?:[.,]\d+)?)\s+(\S(?:.*\S)?)\s*$/.exec(raw);
+  if (match) return `${match[1]} ${storedRecordValueLabel(t, match[2])}`;
+  return storedRecordValueLabel(t, raw);
+}
+
 export function formatLogMeta(
   entry: {
     cat: LogCategoryKey;
@@ -53,8 +82,7 @@ export function formatLogMeta(
     if (medicationName) parts.push(medicationName);
   }
   if (entry.cat === "med") {
-    const dose = entry.doseText
-      ?? (entry.doseValue != null && entry.doseUnit ? `${entry.doseValue} ${entry.doseUnit}` : entry.amount);
+    const dose = localizeDose(t, entry);
     if (dose) parts.push(dose);
   }
   if (entry.cat === "doctor" && entry.visitType) {
@@ -72,11 +100,18 @@ export function formatLogMeta(
     } as const;
     if (entry.vaccinationRound) parts.push(roundLabels[entry.vaccinationRound]);
     if (entry.vaccinationHospitalName) parts.push(entry.vaccinationHospitalName);
-    if (entry.aftercareNotes?.length) parts.push(entry.aftercareNotes.join(", "));
+    if (entry.aftercareNotes?.length) {
+      parts.push(
+        t
+          ? entry.aftercareNotes.map((note) => storedRecordValueLabel(t, note)).join(", ")
+          : entry.aftercareNotes.join(", "),
+      );
+    }
   }
   if (entry.chip) parts.push(t ? storedRecordValueLabel(t, entry.chip) : entry.chip);
   if (entry.chip2) parts.push(t ? storedRecordValueLabel(t, entry.chip2) : entry.chip2);
   if (entry.stoolState) parts.push(t ? storedRecordValueLabel(t, entry.stoolState) : entry.stoolState);
+  if (entry.medicationStatus) parts.push(t ? storedRecordValueLabel(t, entry.medicationStatus) : entry.medicationStatus);
   if (entry.amountText && entry.cat !== "med") {
     parts.push(entry.amountText);
   } else if (entry.amount && entry.cat !== "med") {
@@ -99,12 +134,18 @@ export function formatLogMeta(
   else if (entry.leftAmount) parts.push(sideLabel("left", formatVolume(entry.leftAmount)));
   if (entry.rightAmountText) parts.push(sideLabel("right", entry.rightAmountText));
   else if (entry.rightAmount) parts.push(sideLabel("right", formatVolume(entry.rightAmount)));
-  if (entry.details) parts.push(entry.details.length > 16 ? `${entry.details.slice(0, 16)}…` : entry.details);
+  if (entry.details) {
+    const details = localizeJoined(t, entry.details);
+    parts.push(details.length > 16 ? `${details.slice(0, 16)}…` : details);
+  }
   if (entry.nextAt) parts.push(t ? t("record.timeline.next", { value: entry.nextAt }) : `다음 ${entry.nextAt}`);
   const displayNotes = entry.cat === "med" && !entry.medicationName
     ? legacyMedicationNotes.slice(1).join(" · ")
     : entry.notes;
-  if (displayNotes) parts.push(displayNotes.length > 16 ? `${displayNotes.slice(0, 16)}…` : displayNotes);
+  if (displayNotes) {
+    const notes = localizeJoined(t, displayNotes);
+    parts.push(notes.length > 16 ? `${notes.slice(0, 16)}…` : notes);
+  }
   return parts.join(" · ") || (t ? t("record.timeline.recorded") : "기록됨");
 }
 

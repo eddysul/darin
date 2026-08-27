@@ -1,5 +1,9 @@
-import type { GrowthBookEdit } from "../types/growthBook";
-import { createEmptyGrowthBookEdit } from "../types/growthBook";
+import {
+  createEmptyGrowthBookEdit,
+  defaultGrowthBookCoverTitleKo,
+  isDefaultGrowthBookCoverTitle,
+  type GrowthBookEdit,
+} from "../types/growthBook";
 import { qaStorage } from "./qaStorage";
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
@@ -134,8 +138,8 @@ export function ensureGrowthBookEdit(input: {
 }): GrowthBookEdit {
   if (input.existing && input.existing.babyId === input.babyId) {
     const coverTitle = input.existing.coverTitle.trim();
-    if (!coverTitle || coverTitle === "의 성장책") {
-      return { ...input.existing, coverTitle: `${input.babyName}의 성장책` };
+    if (isDefaultGrowthBookCoverTitle(coverTitle, input.babyName) && coverTitle !== defaultGrowthBookCoverTitleKo(input.babyName)) {
+      return { ...input.existing, coverTitle: defaultGrowthBookCoverTitleKo(input.babyName) };
     }
     return input.existing;
   }

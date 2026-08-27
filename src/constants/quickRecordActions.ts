@@ -53,6 +53,7 @@ export const QUICK_RECORD_ACTIONS: QuickRecordActionDefinition[] = [
 ];
 
 export const PREGNANCY_QUICK_RECORD_ACTIONS: QuickRecordActionDefinition[] = [
+  { id: "contraction", label: "진통 주기", cat: "contraction", core: true },
   { id: "pregMood", label: "컨디션", cat: "pregMood", core: true },
   { id: "pregSymptom", label: "입덧/증상", cat: "pregSymptom", core: true },
   { id: "pregWeight", label: "체중", cat: "pregWeight", core: true },

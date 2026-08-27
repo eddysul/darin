@@ -2,7 +2,7 @@ import type { OneTouchAction } from "../constants/quickRecordActions";
 
 export type TimerSide = "left" | "right" | "both";
 
-export type ActiveTimerKind =
+export type BornTimerKind =
   | "breastfeeding"
   | "formula"
   | "storedMilk"
@@ -10,6 +10,8 @@ export type ActiveTimerKind =
   | "pump"
   | "tummy"
   | "play";
+
+export type ActiveTimerKind = BornTimerKind | "contraction";
 
 export type ActiveTimer = {
   id: string;
@@ -41,8 +43,12 @@ export const TIMER_ACTIONS: OneTouchAction[] = [
   "play",
 ];
 
-export function isTimerAction(action: OneTouchAction): action is ActiveTimerKind {
+export function isTimerAction(action: OneTouchAction): action is BornTimerKind {
   return (TIMER_ACTIONS as string[]).includes(action);
+}
+
+export function isBornTimer(timer: ActiveTimer): timer is ActiveTimer & { kind: BornTimerKind } {
+  return timer.kind !== "contraction";
 }
 
 export function sideLabel(side?: TimerSide): string {

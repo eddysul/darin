@@ -52,6 +52,14 @@ import {
   STARTER_FOOD_INGREDIENTS,
 } from "../../constants/recordInternalValues";
 import { customCategoryDisplayLabel, recordCategoryLabel, storedRecordValueLabel } from "../../utils/recordDisplay";
+import {
+  clocksToContractionTimes,
+  CONTRACTION_INTENSITY,
+  contractionIntensityLabel,
+  durationSecondsOf,
+  formatContractionSpan,
+  hhmmFromIso,
+} from "../../utils/contractionLog";
 
 function normalizeDiaperChip(value: string): string {
   return value === RECORD_VALUE.diaperLegacyBoth || value === RECORD_VALUE.diaperLegacyBothSpaced ? RECORD_VALUE.diaperBoth : value;
@@ -347,7 +355,9 @@ export function RecordDetailSheet({
       setMedName("");
       setNotes(note);
     }
-    if (["sleep", "breast", "pump"].includes(nextCat) && prefill?.time && prefill?.duration) {
+    if (nextCat === "contraction" && prefill?.endedAt) {
+      setEndTime(hhmmFromIso(prefill.endedAt));
+    } else if (["sleep", "breast", "pump"].includes(nextCat) && prefill?.time && prefill?.duration) {
       setEndTime(minutesToHhMm(prefill.time, Number.parseInt(prefill.duration, 10) || 0));
     } else {
       setEndTime("");
@@ -494,6 +504,14 @@ export function RecordDetailSheet({
   const builtinId = isCustomCategoryKey(effectiveCat) ? null : (effectiveCat as BabyLogCategoryId);
   const pregnancyCat = builtinId ? isPregnancyLogCategoryId(builtinId) : false;
   const isEdit = Boolean(prefill?.editId);
+  const liveContraction = builtinId === "contraction" && isValidClockInput(time) && isValidClockInput(endTime)
+    ? clocksToContractionTimes(
+        prefill?.dateKey ?? new Date().toLocaleDateString("sv-SE"),
+        time,
+        endTime,
+        { startedAt: prefill?.startedAt, endedAt: prefill?.endedAt },
+      )
+    : null;
 
   const confirmDelete = () => {
     const editId = prefill?.editId;
@@ -551,6 +569,10 @@ export function RecordDetailSheet({
     }
     if ((medicationReminderEnabled || cautionReminderEnabled) && (!nextAtDate || !nextAtTime)) {
       Alert.alert(t("record.detail.reminderTitle"), t("record.detail.reminderBody"));
+      return;
+    }
+    if (builtinId === "contraction" && !isValidClockInput(endTime)) {
+      setTimeError(t("record.contraction.endRequired"));
       return;
     }
     if (builtinId === "memo" && !notes.trim()) {
@@ -612,10 +634,19 @@ export function RecordDetailSheet({
       Alert.alert(t("record.detail.babyRequiredTitle"), t("record.detail.babyRequiredBody"));
       return;
     }
+    const contractionTimes = builtinId === "contraction"
+      ? clocksToContractionTimes(
+          prefill?.dateKey ?? new Date().toLocaleDateString("sv-SE"),
+          time,
+          endTime,
+          { startedAt: prefill?.startedAt, endedAt: prefill?.endedAt },
+        )
+      : null;
     const entryToSave: Omit<BabyLogEntry, "id"> = {
         babyId: activeBabyId,
         cat: effectiveCat,
-        time,
+        time: contractionTimes?.time ?? time,
+        dateKey: contractionTimes?.dateKey ?? (builtinId === "vaccination" ? vaccinationDateKey : prefill?.dateKey),
         chip: chip || undefined,
         // The existing payload fields let us add this without a schema change:
         // amount = urine amount; chip2 = stool amount; stoolState = consistency.
@@ -629,7 +660,13 @@ export function RecordDetailSheet({
         amountValue: (LIQUID_CATEGORIES as readonly string[]).includes(effectiveCat) && amount ? amount : undefined,
         amountUnit: (LIQUID_CATEGORIES as readonly string[]).includes(effectiveCat) && amount ? resolvedAmountUnit || undefined : undefined,
         amountText: (LIQUID_CATEGORIES as readonly string[]).includes(effectiveCat) && amount && resolvedAmountUnit ? `${amount} ${resolvedAmountUnit}` : undefined,
-        duration: finalDuration || undefined,
+        duration: contractionTimes ? undefined : finalDuration || undefined,
+        startedAt: contractionTimes?.startedAt,
+        endedAt: contractionTimes?.endedAt,
+        durationSeconds: contractionTimes
+          ? durationSecondsOf(contractionTimes.startedAt, contractionTimes.endedAt)
+          : undefined,
+        intervalSeconds: builtinId === "contraction" ? prefill?.intervalSeconds : undefined,
         feedingMethod: effectiveCat === "breast" ? feedingMethod : undefined,
         leftDuration: ["breast", "pump"].includes(effectiveCat) ? leftDuration || undefined : undefined,
         rightDuration: ["breast", "pump"].includes(effectiveCat) ? rightDuration || undefined : undefined,
@@ -677,7 +714,6 @@ export function RecordDetailSheet({
         confidence: prefill?.confidence,
         flags: prefill?.flags,
         createdBy: prefill?.createdBy,
-        dateKey: builtinId === "vaccination" ? vaccinationDateKey : prefill?.dateKey,
       };
     const commit = () => {
       onSave(entryToSave, prefill?.editId);
@@ -1139,7 +1175,7 @@ export function RecordDetailSheet({
             </>
           )}
 
-          {builtinId !== "sleep" && builtinId !== "breast" && builtinId !== "pump" && builtinId !== "med" && builtinId !== "doctor" && builtinId !== "vaccination" && builtinId !== "memo" && builtinId !== "other" && !(c.isCustom && (c.inputMode ?? "memo") === "duration") && (
+          {builtinId !== "sleep" && builtinId !== "breast" && builtinId !== "pump" && builtinId !== "med" && builtinId !== "doctor" && builtinId !== "vaccination" && builtinId !== "memo" && builtinId !== "other" && builtinId !== "contraction" && !(c.isCustom && (c.inputMode ?? "memo") === "duration") && (
             <TimeOfDayPickerField label={t("record.detail.time")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
           )}
 
@@ -1174,6 +1210,41 @@ export function RecordDetailSheet({
                   <ChipRow options={[...RECORD_STORED_OPTIONS.completion]} value={chip} onChange={setChip} getLabel={storedOptionLabel} />
                 </>
               ) : null}
+            </>
+          ) : builtinId === "contraction" ? (
+            <>
+              <Text style={styles.safetyNote}>{t("record.contraction.safetyRecord")}</Text>
+              <Text style={styles.safetyNote}>{t("record.contraction.safetyContact")}</Text>
+              <TimeOfDayPickerField label={t("record.detail.startTime")} valueHHmm={time} onPress={() => setTimePickerTarget("time")} error={timeError || undefined} />
+              <TimeOfDayPickerField label={t("record.detail.endTime")} valueHHmm={endTime} onPress={() => setTimePickerTarget("end")} />
+              {endTime && isValidClockInput(time) && toMinutes(endTime) < toMinutes(time) ? (
+                <Text style={styles.overnightHint}>{t("record.detail.overnightHint")}</Text>
+              ) : null}
+              <View style={styles.calculatedRow}>
+                <View style={styles.calculatedCard}>
+                  <Text style={styles.calculatedLabel}>{t("record.contraction.duration")}</Text>
+                  <Text style={styles.calculatedValue}>
+                    {liveContraction
+                      ? formatContractionSpan(t, durationSecondsOf(liveContraction.startedAt, liveContraction.endedAt))
+                      : t("home.summary.none")}
+                  </Text>
+                </View>
+                <View style={styles.calculatedCard}>
+                  <Text style={styles.calculatedLabel}>{t("record.contraction.interval")}</Text>
+                  <Text style={styles.calculatedValue}>
+                    {prefill?.intervalSeconds == null
+                      ? t("record.contraction.first")
+                      : formatContractionSpan(t, prefill.intervalSeconds)}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.fieldLabel}>{t("record.contraction.intensity")}</Text>
+              <ChipRow
+                options={[...CONTRACTION_INTENSITY]}
+                value={chip}
+                onChange={setChip}
+                getLabel={(option) => contractionIntensityLabel(t, option)}
+              />
             </>
           ) : pregnancyCat ? (
             <>
@@ -1231,7 +1302,9 @@ export function RecordDetailSheet({
             onChangeText={setNotes}
             multiline
             placeholder={
-              builtinId === "memo" || (c.isCustom && (c.inputMode ?? "memo") === "memo")
+              builtinId === "contraction"
+                ? t("record.contraction.memoPlaceholder")
+                : builtinId === "memo" || (c.isCustom && (c.inputMode ?? "memo") === "memo")
                 ? t("record.detail.memoPlaceholder")
                 : builtinId === "food"
                   ? t("record.detail.extraMemo")
@@ -1429,6 +1502,7 @@ const styles = StyleSheet.create({
   historyName: { color: colors.text, fontSize: 11.5, fontWeight: "800" },
   historyText: { marginTop: 2, color: colors.muted, fontSize: 10.5, lineHeight: 15 },
   overnightHint: { color: colors.muted, fontSize: 11.5, lineHeight: 17, marginTop: 4 },
+  safetyNote: { color: colors.faint, fontSize: 12, lineHeight: 18, marginBottom: 6 },
   notes: { height: 64, textAlignVertical: "top" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {

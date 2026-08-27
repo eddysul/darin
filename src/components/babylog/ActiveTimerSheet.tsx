@@ -37,6 +37,7 @@ const TITLE_KEYS = {
   pump: "record.timer.pump",
   tummy: "record.timer.tummy",
   play: "record.timer.play",
+  contraction: "record.contraction.title",
 } as const;
 
 export function ActiveTimerSheet({

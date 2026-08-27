@@ -139,15 +139,15 @@ export function formatDiaryStageLabel(
   return null;
 }
 
-/** Prefer the label frozen at save; fall back for legacy rows without a snapshot. */
+/** Age on that diary day, in the current locale. Frozen Korean snapshots are display-only fallbacks. */
 export function diaryStageLabel(
   entry: Pick<DiaryEntry, "dateKey" | "stageLabelSnapshot">,
   child: Pick<ChildProfile, "birthDate" | "dueDate">,
   locale: Locale = "ko",
 ): string | null {
-  const frozen = entry.stageLabelSnapshot?.trim();
-  if (frozen) return frozen;
-  return formatDiaryStageLabel(child, entry.dateKey, locale);
+  const live = formatDiaryStageLabel(child, entry.dateKey, locale);
+  if (live) return live;
+  return entry.stageLabelSnapshot?.trim() || null;
 }
 
 /** Compact, non-abbreviated age label used in the record header. */

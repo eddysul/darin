@@ -35,6 +35,7 @@ import {
 } from "../../utils/diaryReminderStore";
 import {
   diaryDisplayComment,
+  diaryDisplayDate,
   diaryHasMilestone,
   diaryMilestoneLabel,
   diaryPhotoCount,
@@ -57,10 +58,10 @@ import {
   resolveDiaryComposeTarget,
 } from "../../utils/diaryToday";
 import { EmptyState } from "../../components/states/FeedbackStates";
-import { colors, radius, type } from "../../theme";
+import { colors, fontScaleCap, radius, type } from "../../theme";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
 import type { MainTabParamList } from "../../navigation/types";
-import { diaryStageLabel, formatDottedDate } from "../../utils/childDisplay";
+import { diaryStageLabel } from "../../utils/childDisplay";
 import { useLanguage } from "../../LanguageContext";
 import { formatLocalizedDate } from "../../utils/localeFormat";
 
@@ -490,19 +491,46 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
               )}
             </View>
             <View style={styles.bookCardLeft}>
-              <View style={styles.bookCardTitleRow}>
-                <Text style={styles.bookCardTitle}>{t("diary.screen.growthBookTitle", { babyName })}</Text>
-              </View>
-              <Text style={styles.bookCardStats}>
+              <Text
+                style={styles.bookCardTitle}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+                maxFontSizeMultiplier={fontScaleCap.chrome}
+              >
+                {t("diary.screen.growthBookTitle", { babyName })}
+              </Text>
+              <Text
+                style={styles.bookCardStats}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+                maxFontSizeMultiplier={fontScaleCap.chrome}
+              >
                 {t("diary.screen.growthBookStats", { entries: bookEntries.length, photos: bookPhotoCount, pages: estimateGrowthBookPageCount(bookEntries.length) })}
               </Text>
               {bookEntries.length === 0 ? (
-                <Text style={styles.bookCardDesc}>{t("diary.screen.growthBookEmpty")}</Text>
+                <Text
+                  style={styles.bookCardDesc}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                >
+                  {t("diary.screen.growthBookEmpty")}
+                </Text>
               ) : null}
-            </View>
-            <View style={styles.bookCardBtn}>
-              <Text style={styles.bookCardBtnText}>{t("diary.screen.openGrowthBook")}</Text>
-              <BabyLogIcon kind="chevron" size={14} color={colors.amberText} />
+              <View style={styles.bookCardBtn}>
+                <Text
+                  style={styles.bookCardBtnText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                  maxFontSizeMultiplier={fontScaleCap.chrome}
+                >
+                  {t("diary.screen.openGrowthBook")}
+                </Text>
+                <BabyLogIcon kind="chevron" size={14} color={colors.amberText} />
+              </View>
             </View>
           </Pressable>
 
@@ -513,7 +541,15 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
             accessibilityLabel={t("diary.screen.makeStickerA11y")}
           >
             <BabyLogIcon kind="baby" size={16} color={colors.amberText} />
-            <Text style={styles.stickerBtnText}>{t("diary.screen.sticker")}</Text>
+            <Text
+              style={styles.stickerBtnText}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              maxFontSizeMultiplier={fontScaleCap.chrome}
+            >
+              {t("diary.screen.sticker")}
+            </Text>
           </Pressable>
         </View>
 
@@ -524,7 +560,9 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
           accessibilityLabel={t("diary.screen.reminderSettingsA11y")}
         >
           <BabyLogIcon kind="clock" size={14} color={colors.muted} />
-          <Text style={styles.reminderHint}>{t("diary.screen.reminderSummary", { value: reminderLabel })}</Text>
+          <Text style={styles.reminderHint} numberOfLines={1}>
+            {t("diary.screen.reminderSummary", { value: reminderLabel })}
+          </Text>
           <BabyLogIcon kind="chevron" size={14} color={colors.muted} />
         </Pressable>
 
@@ -597,7 +635,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
           <DiaryCard
             entry={d}
             ageLabel={diaryStageLabel(d, careSetup.child, locale)}
-            dateLabel={formatDottedDate(d.dateKey) ?? d.date}
+            dateLabel={diaryDisplayDate(d, locale)}
             canToggleBook={canEditLog(myFamilyRole, d.createdBy, me)}
             onOpen={() => openEdit(d)}
             onToggleBook={() => toggleDiaryInGrowthBook(d.id)}
@@ -735,7 +773,7 @@ function DiaryCard({
   onOpen: () => void;
   onToggleBook: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const inBook = entry.includedInGrowthBook;
   const photo = diaryPrimaryPhoto(entry) ?? entry.photos[0] ?? null;
   const milestone = diaryMilestoneLabel(entry, t);
@@ -754,8 +792,8 @@ function DiaryCard({
         accessibilityRole="button"
         accessibilityLabel={
           milestone
-            ? t("diary.screen.milestoneEntryA11y", { date: entry.date, milestone })
-            : t("diary.screen.entryA11y", { date: entry.date })
+            ? t("diary.screen.milestoneEntryA11y", { date: dateLabel, milestone })
+            : t("diary.screen.entryA11y", { date: dateLabel })
         }
       >
         <View style={styles.thumbWrap}>
@@ -784,7 +822,7 @@ function DiaryCard({
         <View style={styles.body}>
           <View style={styles.dateRow}>
             <Text style={styles.date} numberOfLines={1}>
-              {ageLabel ? `${ageLabel} · ${dateLabel}` : entry.date}
+              {ageLabel ? `${ageLabel} · ${dateLabel}` : dateLabel || diaryDisplayDate(entry, locale)}
             </Text>
             {showPhoto && moodStamp ? (
               <DiaryMoodStamp id={moodStamp} selected size="sm" />
@@ -871,13 +909,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  bookCardLeft: { flex: 1 },
-  bookCardTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  bookCardTitle: { flexShrink: 1, fontSize: 14.5, fontWeight: "800", color: colors.text },
-  bookCardStats: { fontSize: 12.5, color: colors.muted, marginTop: 4, fontWeight: "600" },
+  bookCardLeft: { flex: 1, minWidth: 0 },
+  bookCardTitle: { fontSize: 14.5, lineHeight: 19, fontWeight: "800", color: colors.text },
+  bookCardStats: { fontSize: 12.5, lineHeight: 17, color: colors.muted, marginTop: 4, fontWeight: "600" },
   bookCardDesc: { fontSize: 12, color: colors.muted, marginTop: 4, lineHeight: 18 },
-  bookCardBtn: { flexDirection: "row", alignItems: "center", gap: 2 },
-  bookCardBtnText: { fontSize: 12.5, fontWeight: "700", color: colors.amberText },
+  bookCardBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    marginTop: 6,
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+  },
+  bookCardBtnText: { flexShrink: 1, fontSize: 12.5, fontWeight: "700", color: colors.amberText },
   bookCover: {
     width: 48,
     height: 62,
@@ -907,7 +951,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 2,
   },
-  stickerBtnText: { fontSize: 11, fontWeight: "800", color: colors.amberText },
+  stickerBtnText: { fontSize: 11, fontWeight: "800", color: colors.amberText, maxWidth: 52, textAlign: "center" },
   reminderRow: {
     minHeight: 44,
     flexDirection: "row",
