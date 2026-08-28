@@ -26,7 +26,7 @@ import { buildBabyLogConsultPrompt, buildCareContextPack } from "../../utils/bab
 import { ErrorState, LoadingState } from "../../components/states/FeedbackStates";
 import { colors } from "../../theme";
 import { consumeQaFaultOnce } from "../../utils/qaDebug";
-import { formatDateKey } from "../../utils/dateKey";
+import { formatDateKey, offsetDateKey } from "../../utils/dateKey";
 import { formatHHmm, formatTimeOfDay } from "../../utils/timePicker";
 import { openDeviceNotificationSettings, scheduleMemoReminder } from "../../utils/memoReminderNotifications";
 import { formatSleepDuration, type TodaySummary } from "../../utils/reportAggregates";
@@ -60,6 +60,7 @@ export function ConsultScreen() {
     activeBabyId,
     storageReady,
     addLogWithPersistence,
+    ensureCareLogsForRange,
   } = useBabyLog();
   const { locale, t } = useLanguage();
   const [input, setInput] = useState("");
@@ -79,6 +80,7 @@ export function ConsultScreen() {
   const historySeeded = useRef(false);
   const requestInFlightRef = useRef(false);
   const consumedInitialRef = useRef<string | null>(null);
+  const babyScopeRunRef = useRef(0);
 
   const pack = useMemo(
     () => buildCareContextPack({ careSetup, logs, diaryEntries, locale }),
@@ -89,6 +91,7 @@ export function ConsultScreen() {
 
   // Restore OpenAI turn history after the active baby's chat has hydrated.
   useEffect(() => {
+    babyScopeRunRef.current += 1;
     historySeeded.current = false;
     historyRef.current = [];
     requestInFlightRef.current = false;
@@ -112,12 +115,31 @@ export function ConsultScreen() {
     const trimmed = text.trim();
     if (!trimmed || requestInFlightRef.current) return;
 
-    if (sparse && /\uC9C4\uB2E8|\uC57D|\uBCD1\uC6D0|\uAD1C\uCC2E\uC740\uC9C0|\uC2EC\uAC01\uD55C|\uC751\uAE09/.test(trimmed) && pack.todayLogCount === 0) {
+    requestInFlightRef.current = true;
+    const requestScopeRun = babyScopeRunRef.current;
+    const todayKey = formatDateKey();
+    const recentHistory = await ensureCareLogsForRange(offsetDateKey(todayKey, -6), todayKey);
+    if (requestScopeRun !== babyScopeRunRef.current) return;
+    const promptLogs = recentHistory.complete ? recentHistory.logs : logs;
+    const currentPack = buildCareContextPack({
+      careSetup,
+      logs: promptLogs,
+      diaryEntries,
+      locale,
+      question: trimmed,
+    });
+
+    if (
+      (currentPack.todayLogCount === 0 || currentPack.weekLogCount < 3)
+      && /\uC9C4\uB2E8|\uC57D|\uBCD1\uC6D0|\uAD1C\uCC2E\uC740\uC9C0|\uC2EC\uAC01\uD55C|\uC751\uAE09/.test(trimmed)
+      && currentPack.todayLogCount === 0
+    ) {
       pushChat("user", trimmed);
       pushChat(
         "ai",
         t("consult.critical.005"),
       );
+      requestInFlightRef.current = false;
       return;
     }
 
@@ -126,16 +148,17 @@ export function ConsultScreen() {
       historyRef.current = [...historyRef.current, { role: "user", content: trimmed }];
     }
     setInput("");
-    requestInFlightRef.current = true;
     setIsTyping(true);
     scrollRef.current?.scrollToEnd({ animated: true });
 
     const prompt = buildBabyLogConsultPrompt({
       careSetup,
-      logs,
+      logs: promptLogs,
       diaryEntries,
       locale,
-      question: trimmed,
+      question: recentHistory.complete
+        ? trimmed
+        : `${trimmed}\n[Data note: recent care-log history is only partially available. Do not claim that missing events did not occur.]`,
     });
 
     try {
@@ -143,6 +166,7 @@ export function ConsultScreen() {
         throw new OpenAIChatError("QA injected one-shot AI failure", "api_error");
       }
       const reply = await callOpenAI(historyRef.current, prompt);
+      if (requestScopeRun !== babyScopeRunRef.current) return;
       historyRef.current = [...historyRef.current, { role: "assistant", content: reply }];
       pushChat("ai", reply);
       setAiError(null);
@@ -155,9 +179,11 @@ export function ConsultScreen() {
       setAiError(message);
       setFailedQuestion(trimmed);
     } finally {
-      requestInFlightRef.current = false;
-      setIsTyping(false);
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+      if (requestScopeRun === babyScopeRunRef.current) {
+        requestInFlightRef.current = false;
+        setIsTyping(false);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+      }
     }
   };
 

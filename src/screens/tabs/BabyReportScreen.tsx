@@ -12,7 +12,8 @@ import { useBabyLog } from "../../context/BabyLogContext";
 import { useConsultFabBehavior } from "../../hooks/useConsultFabBehavior";
 import type { BabyLogEntry } from "../../types/babyLog";
 import { isCustomCategoryKey } from "../../types/logCategory";
-import { formatDateKey } from "../../utils/dateKey";
+import { formatDateKey, offsetDateKey } from "../../utils/dateKey";
+import { careLogCoverageContains } from "../../utils/careLogHistory";
 import {
   buildTodaySummary,
   FEEDING_CATS,
@@ -62,7 +63,17 @@ export function BabyReportScreen({
   const { locale, t } = useLanguage();
   const { width: windowWidth } = useWindowDimensions();
   const rhythmDialSize = Math.max(232, Math.min(316, windowWidth - 68));
-  const { logs, babyName, careSetup, growthRecords, addGrowthRecord, updateGrowthRecord } = useBabyLog();
+  const {
+    logs,
+    babyName,
+    careSetup,
+    growthRecords,
+    addGrowthRecord,
+    updateGrowthRecord,
+    storageReady,
+    careLogCoverage,
+    ensureCareLogsForRange,
+  } = useBabyLog();
   const [growthModalOpen, setGrowthModalOpen] = useState(false);
   const [editingGrowthRecord, setEditingGrowthRecord] = useState<GrowthRecord | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
@@ -71,8 +82,38 @@ export function BabyReportScreen({
   );
 
   const todayKey = formatDateKey();
-  const todayLogs = useMemo(() => getLogsForDay(logs, todayKey, todayKey), [logs, todayKey]);
-  const summary = useMemo(() => buildTodaySummary(logs), [logs]);
+  const reportFromDateKey = offsetDateKey(todayKey, -14);
+  const reportRangeCovered = Boolean(
+    careLogCoverage && careLogCoverageContains(careLogCoverage, reportFromDateKey, todayKey),
+  );
+  const [reportHistoryComplete, setReportHistoryComplete] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!storageReady) {
+      setReportHistoryComplete(false);
+      return () => {
+        active = false;
+      };
+    }
+    if (reportRangeCovered) {
+      setReportHistoryComplete(true);
+      return () => {
+        active = false;
+      };
+    }
+    setReportHistoryComplete(false);
+    void ensureCareLogsForRange(reportFromDateKey, todayKey).then((result) => {
+      if (active) setReportHistoryComplete(result.complete);
+    });
+    return () => {
+      active = false;
+    };
+  }, [ensureCareLogsForRange, reportFromDateKey, reportRangeCovered, storageReady, todayKey]);
+
+  const reportLogs = reportRangeCovered || reportHistoryComplete ? logs : [];
+  const todayLogs = useMemo(() => getLogsForDay(reportLogs, todayKey, todayKey), [reportLogs, todayKey]);
+  const summary = useMemo(() => buildTodaySummary(reportLogs), [reportLogs]);
   const sortedGrowthRecords = useMemo(
     () => [...growthRecords].sort((a, b) => a.measuredAt.localeCompare(b.measuredAt)),
     [growthRecords],
@@ -81,9 +122,9 @@ export function BabyReportScreen({
     const hospital = sortedGrowthRecords.filter((record) => record.source === "hospital");
     return hospital[hospital.length - 1] ?? sortedGrowthRecords[sortedGrowthRecords.length - 1] ?? null;
   }, [sortedGrowthRecords]);
-  const insights = useMemo(() => findInsights(logs, todayKey), [logs, todayKey]);
+  const insights = useMemo(() => findInsights(reportLogs, todayKey), [reportLogs, todayKey]);
 
-  const weekTable = useMemo(() => buildWeeklyFeatureTable(logs, careSetup), [logs, careSetup]);
+  const weekTable = useMemo(() => buildWeeklyFeatureTable(reportLogs, careSetup), [reportLogs, careSetup]);
   const ruleNarrative = useMemo(() => buildRuleNarrative(weekTable, t, locale), [locale, t, weekTable]);
   const [narrative, setNarrative] = useState({ headline: "", body: "" });
 

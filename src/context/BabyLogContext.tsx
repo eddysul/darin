@@ -16,6 +16,8 @@ import {
 import { getQuickRecords, resetQuickRecordsMemory, saveQuickRecords } from "../utils/quickRecordsStore";
 import { getBabyLogs, resetBabyLogsMemory, saveBabyLogs } from "../utils/babyLogsStore";
 import {
+  fetchCareLogById,
+  fetchCareLogsByDateRange,
   syncCareLogCreate,
   syncCareLogDelete,
   syncCareLogUpdate,
@@ -120,6 +122,20 @@ import {
   resolveGrowthRecordsSnapshot,
   resolveStickerSnapshot,
 } from "./babyLogDomainHydrationService";
+import {
+  careLogCoverageContains,
+  careLogRequestMatchesScope,
+  extendCareLogCoverage,
+  filterCareLogsByDateRange,
+  mergeCareLogEntries,
+  type CareLogHistoryCoverage,
+} from "../utils/careLogHistory";
+
+export type CareLogRangeResult = {
+  logs: BabyLogEntry[];
+  complete: boolean;
+  coverage: CareLogHistoryCoverage | null;
+};
 
 type BabyLogContextValue = {
   careSetup: CareSetup;
@@ -136,6 +152,9 @@ type BabyLogContextValue = {
   quickRecords: QuickRecord[];
   setQuickRecords: (records: QuickRecord[] | ((prev: QuickRecord[]) => QuickRecord[])) => void;
   logs: BabyLogEntry[];
+  careLogCoverage: CareLogHistoryCoverage | null;
+  ensureCareLogsForRange: (fromDateKey: string, toDateKey: string) => Promise<CareLogRangeResult>;
+  ensureCareLogById: (id: string) => Promise<BabyLogEntry | null>;
   diaryEntries: DiaryEntry[];
   localDataScope: LocalDataScope | null;
   babies: BabyRow[];
@@ -206,6 +225,9 @@ const BabyLogContext = createContext<BabyLogContextValue | null>(null);
 export function BabyLogProvider({ children }: { children: ReactNode }) {
   const { careSetup, hasSavedCareSetup, setCareSetup } = useApp();
   const [logs, setLogs] = useState<BabyLogEntry[]>([]);
+  const logsRef = useRef<BabyLogEntry[]>([]);
+  const [careLogCoverage, setCareLogCoverage] = useState<CareLogHistoryCoverage | null>(null);
+  const careLogCoverageRef = useRef<CareLogHistoryCoverage | null>(null);
   const [logsHydrated, setLogsHydrated] = useState(false);
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
   const [diaryHydrated, setDiaryHydrated] = useState(false);
@@ -233,6 +255,12 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [customCategories, setCustomCategoriesState] = useState<CustomCategory[]>(getCustomCategories);
   const [quickRecords, setQuickRecordsState] = useState<QuickRecord[]>(getQuickRecords);
+  logsRef.current = logs;
+
+  const applyCareLogCoverage = useCallback((coverage: CareLogHistoryCoverage | null) => {
+    careLogCoverageRef.current = coverage;
+    setCareLogCoverage(coverage);
+  }, []);
 
   useEffect(() => subscribeStorageIssues(setStorageIssue), []);
 
@@ -271,6 +299,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setStorageReady(false);
       setDiaryEntries([]);
       setLogs([]);
+      logsRef.current = [];
+      applyCareLogCoverage(null);
       setGrowthRecords([]);
       setCautionFoods([]);
       setFamilyMembers([]);
@@ -308,8 +338,10 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       if (hydrationRun !== storageHydrationRunRef.current) return false;
       if (careLogs.logs !== null) {
         setLogs(careLogs.logs);
+        logsRef.current = careLogs.logs;
         if (careLogs.serverAuthoritative) void saveBabyLogs(careLogs.logs, scope);
       }
+      applyCareLogCoverage({ kind: "full" });
       setLogsHydrated(true);
     }
     if (diaryOk) {
@@ -380,7 +412,54 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     }
     setStorageReady(true);
     return allLoaded;
-  }, [careSetup, hasSavedCareSetup, resolveLocalDataScope]);
+  }, [applyCareLogCoverage, careSetup, hasSavedCareSetup, resolveLocalDataScope]);
+
+  const ensureCareLogsForRange = useCallback(async (
+    fromDateKey: string,
+    toDateKey: string,
+  ): Promise<CareLogRangeResult> => {
+    const from = fromDateKey <= toDateKey ? fromDateKey : toDateKey;
+    const to = fromDateKey <= toDateKey ? toDateKey : fromDateKey;
+    const cached = () => filterCareLogsByDateRange(logsRef.current, from, to);
+    const currentCoverage = careLogCoverageRef.current;
+    if (currentCoverage && careLogCoverageContains(currentCoverage, from, to)) {
+      return { logs: cached(), complete: true, coverage: currentCoverage };
+    }
+    const scope = localDataScopeRef.current;
+    if (!scope) return { logs: cached(), complete: false, coverage: currentCoverage };
+    const requestedScopeId = localDataScopeId(scope);
+    const remote = await fetchCareLogsByDateRange(scope.babyId, from, to);
+    if (!remote || !careLogRequestMatchesScope(requestedScopeId, localDataScopeRef.current)) {
+      return { logs: cached(), complete: false, coverage: careLogCoverageRef.current };
+    }
+    const merged = mergeCareLogEntries(logsRef.current, remote);
+    logsRef.current = merged;
+    setLogs(merged);
+    const requestedCoverage = { kind: "range" as const, fromDateKey: from, toDateKey: to };
+    const nextCoverage = extendCareLogCoverage(careLogCoverageRef.current, requestedCoverage);
+    applyCareLogCoverage(nextCoverage);
+    return {
+      logs: filterCareLogsByDateRange(merged, from, to),
+      complete: true,
+      coverage: requestedCoverage,
+    };
+  }, [applyCareLogCoverage]);
+
+  const ensureCareLogById = useCallback(async (id: string): Promise<BabyLogEntry | null> => {
+    const cached = logsRef.current.find((entry) => entry.id === id);
+    if (cached) return cached;
+    const scope = localDataScopeRef.current;
+    if (!scope) return null;
+    const requestedScopeId = localDataScopeId(scope);
+    const remote = await fetchCareLogById(scope.babyId, id);
+    if (!remote || !careLogRequestMatchesScope(requestedScopeId, localDataScopeRef.current)) {
+      return null;
+    }
+    const merged = mergeCareLogEntries(logsRef.current, [remote]);
+    logsRef.current = merged;
+    setLogs(merged);
+    return remote;
+  }, []);
 
   useEffect(() => {
     void hydrateStorageState();
@@ -900,6 +979,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       babyName: display.babyName,
     });
     setLogs([]);
+    logsRef.current = [];
+    applyCareLogCoverage({ kind: "full" });
     setDiaryEntries([]);
     setFamilyMembers([]);
     setGrowthBookEditState(emptyGrowthBook);
@@ -925,7 +1006,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       clearSupabaseSync(),
       isSupabaseConfigured() ? AuthRepository.signOut().catch(() => undefined) : Promise.resolve(),
     ]);
-  }, [display.babyName, localDataScope]);
+  }, [applyCareLogCoverage, display.babyName, localDataScope]);
 
   const applyOwnerFromSetup = useCallback((setup: CareSetup) => {
     const name = setup.parent.parentName.trim() || "나";
@@ -1164,6 +1245,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     resetChatHistoryMemory();
     const emptyGrowthBook = createEmptyGrowthBookEdit({ babyId: "", babyName: "" });
     setLogs([]);
+    logsRef.current = [];
+    applyCareLogCoverage(null);
     setDiaryEntries([]);
     setFamilyMembers([]);
     setGrowthBookEditState(emptyGrowthBook);
@@ -1180,7 +1263,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveGrowthRecords([], scope),
       clearSupabaseSync(),
     ]);
-  }, [careSetup.child.childName, chatHistory, diaryEntries, growthBookEdit]);
+  }, [applyCareLogCoverage, careSetup.child.childName, chatHistory, diaryEntries, growthBookEdit]);
 
   const qaDebug = useMemo<BabyLogContextValue["qaDebug"]>(() => {
     if (!__DEV__) return null;
@@ -1200,6 +1283,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         pageTemplateId: "basic_line" as const,
       };
       setLogs(sampleLogs);
+      logsRef.current = sampleLogs;
+      applyCareLogCoverage({ kind: "full" });
       setDiaryEntries(sample.diaryEntries);
       setChatHistory([DEFAULT_CHAT_GREETING]);
       setFamilyMembers(sample.familyMembers);
@@ -1227,6 +1312,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       });
       const demoLogs = seed.logs.map((log) => ({ ...log, id: createId() }));
       setLogs(demoLogs);
+      logsRef.current = demoLogs;
+      applyCareLogCoverage({ kind: "full" });
       setGrowthRecords(seed.growthRecords);
       setLogsHydrated(true);
       setGrowthRecordsHydrated(true);
@@ -1260,7 +1347,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         await saveChatHistory(next, localDataScope);
       },
     };
-  }, [careSetup, chatHistory, hydrateStorageState, localDataScope, logAuthor]);
+  }, [applyCareLogCoverage, careSetup, chatHistory, hydrateStorageState, localDataScope, logAuthor]);
 
   const value = useMemo(
     () => ({
@@ -1278,6 +1365,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       quickRecords,
       setQuickRecords,
       logs,
+      careLogCoverage,
+      ensureCareLogsForRange,
+      ensureCareLogById,
       diaryEntries,
       localDataScope,
       babies,
@@ -1340,6 +1430,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       quickRecords,
       setQuickRecords,
       logs,
+      careLogCoverage,
+      ensureCareLogsForRange,
+      ensureCareLogById,
       diaryEntries,
       localDataScope,
       babies,

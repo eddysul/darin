@@ -83,6 +83,7 @@ import {
   isContractionLog,
   siblingContractionUpdates,
 } from "../../utils/contractionLog";
+import { careLogCoverageContains } from "../../utils/careLogHistory";
 
 type Props = {
   onOpenProfile: (opts?: { convertBirth?: boolean }) => void;
@@ -112,6 +113,9 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   const { settings, ready: settingsReady } = useAppSettings();
   const {
     logs,
+    careLogCoverage,
+    ensureCareLogsForRange,
+    ensureCareLogById,
     addLog,
     addLogWithPersistence,
     updateLog,
@@ -136,6 +140,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ id: string; title: string } | null>(null);
   const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey());
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyComplete, setHistoryComplete] = useState(true);
   const [activeTimers, setActiveTimers] = useState<ActiveTimer[]>([]);
   const [timerSheetId, setTimerSheetId] = useState<string | null>(null);
   const [contractionSheetOpen, setContractionSheetOpen] = useState(false);
@@ -180,6 +186,9 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   const coreRecordActions = pregnancy ? PREGNANCY_QUICK_ACTION_IDS : settings.categories.core;
   const compact = useCompactLayout();
   const todayKey = formatDateKey();
+  const selectedDateCovered = careLogCoverage
+    ? careLogCoverageContains(careLogCoverage, selectedDateKey, selectedDateKey)
+    : false;
   const dayLogs = useMemo(
     () => getLogsForDay(logs, selectedDateKey, todayKey),
     [logs, selectedDateKey, todayKey],
@@ -192,6 +201,23 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     return Math.max(0, pumped - consumed);
   }, [logs]);
   const isViewingToday = selectedDateKey === todayKey;
+
+  useEffect(() => {
+    if (!storageReady) return;
+    if (selectedDateCovered) {
+      setHistoryLoading(false);
+      setHistoryComplete(true);
+      return;
+    }
+    let active = true;
+    setHistoryLoading(true);
+    void ensureCareLogsForRange(selectedDateKey, selectedDateKey).then((result) => {
+      if (!active) return;
+      setHistoryComplete(result.complete);
+      setHistoryLoading(false);
+    });
+    return () => { active = false; };
+  }, [ensureCareLogsForRange, selectedDateCovered, selectedDateKey, storageReady]);
   const canGoNext = selectedDateKey < todayKey;
   const canGoPrev = selectedDateKey > offsetDateKey(todayKey, -365);
   const timelineTitle = isViewingToday
@@ -366,13 +392,17 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   useEffect(() => {
     const logId = route.params?.logId;
     if (!logId || !storageReady) return;
-    const entry = logs.find((candidate) => candidate.id === logId);
-    navigation.setParams({ logId: undefined });
-    if (!entry) return;
-    if (entry.dateKey) setSelectedDateKey(entry.dateKey);
-    setHighlightId(entry.id);
-    openEdit(entry);
-  }, [logs, navigation, openEdit, route.params?.logId, storageReady]);
+    let active = true;
+    void ensureCareLogById(logId).then((entry) => {
+      if (!active) return;
+      navigation.setParams({ logId: undefined });
+      if (!entry) return;
+      if (entry.dateKey) setSelectedDateKey(entry.dateKey);
+      setHighlightId(entry.id);
+      openEdit(entry);
+    });
+    return () => { active = false; };
+  }, [ensureCareLogById, navigation, openEdit, route.params?.logId, storageReady]);
 
   const announceCreated = (entry: BabyLogEntry, title: string) => {
     setHighlightId(entry.id);
@@ -798,7 +828,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   return (
     <View style={styles.root}>
       <TodayTimeline
-        logs={storageReady ? dayLogs : []}
+        logs={storageReady && !historyLoading ? dayLogs : []}
         title={timelineTitle}
         customCategories={customCategories}
         highlightId={highlightId}
@@ -816,8 +846,13 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
           scrollEventThrottle: 16,
         }}
         listEmpty={
-          !storageReady ? (
+          !storageReady || historyLoading ? (
             <LoadingState label={t("record.screen.loading")} />
+          ) : !historyComplete ? (
+            <EmptyState
+              title={t("home.storage.loadError")}
+              body={t("home.storage.offlineError")}
+            />
           ) : (
             <EmptyState
               title={t(isViewingToday ? "record.screen.emptyToday" : "record.screen.emptyDay")}

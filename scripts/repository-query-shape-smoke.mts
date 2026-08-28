@@ -19,5 +19,9 @@ assert.match(careLogs, /\.range\(safeOffset, safeOffset \+ safeLimit - 1\)/);
 assert.match(careLogs, /page\.length < CARE_LOG_HYDRATION_PAGE_SIZE/);
 assert.match(careLogs, /offset \+= page\.length/);
 assert.match(careLogs, /mergeCareLogEntries\(\[\], logs\)/);
+assert.match(careLogs, /async getCareLogById\(babyId: string, id: string\)/);
+assert.match(careLogs, /\.eq\("baby_id", babyId\)\s*\.eq\("id", id\)/);
+assert.match(careLogs, /async getCareLogsByBabyAndDateRange/);
+assert.match(careLogs, /\.gte\("date_key", fromDateKey\)\s*\.lte\("date_key", toDateKey\)/);
 
 console.log("Repository query shape smoke passed");

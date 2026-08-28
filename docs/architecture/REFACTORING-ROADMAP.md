@@ -34,7 +34,7 @@ Completed: ko/en legacy messages and ja/es/zh legacy overrides have dedicated ca
 
 ### Phase 5 — historical CareLog loading
 
-The current context still retains all history for compatibility. Typed coverage/range/merge helpers and the no-data-loss transition contract are now in place. Next, introduce a repository-backed range-loading context method and migrate historical screens before limiting in-memory history. This must include offline-cache behavior and cannot be a silent retention change. See `CARE-LOG-HISTORY-CONTRACT.md`.
+In progress: the context now exposes repository-backed range and id loaders with coverage metadata and active-baby stale-result rejection. Record navigation/deep links, Reports, Diary, and Consult have migrated to the explicit boundary. The current context still retains all history because stored-milk balance, medication/ingredient history, contraction repair, quick-action ranking, and restored timers need dedicated contracts before limiting in-memory history. See `CARE-LOG-HISTORY-CONTRACT.md`.
 
 ### Phase 6 — repository contracts and database evidence
 

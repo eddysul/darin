@@ -1,11 +1,22 @@
 import type { BabyLogEntry } from "../types/babyLog";
-import { offsetDateKey } from "./dateKey";
+import type { LocalDataScope } from "./scopedLocalStorage";
+import { formatDateKey, offsetDateKey } from "./dateKey";
 
 export const CARE_LOG_RECENT_WINDOW_DAYS = 90;
 
 export type CareLogHistoryCoverage =
   | { kind: "full" }
   | { kind: "range"; fromDateKey: string; toDateKey: string };
+
+export function careLogRequestMatchesScope(
+  requestedScopeId: string,
+  currentScope: LocalDataScope | null,
+): boolean {
+  return Boolean(
+    currentScope
+    && `${currentScope.userId}:${currentScope.babyId}` === requestedScopeId,
+  );
+}
 
 export function recentCareLogRange(
   todayKey: string,
@@ -28,13 +39,31 @@ export function careLogCoverageContains(
   return coverage.fromDateKey <= fromDateKey && coverage.toDateKey >= toDateKey;
 }
 
+export function extendCareLogCoverage(
+  current: CareLogHistoryCoverage | null,
+  incoming: Extract<CareLogHistoryCoverage, { kind: "range" }>,
+): CareLogHistoryCoverage {
+  if (!current) return incoming;
+  if (current.kind === "full") return current;
+  const touchesCurrent = incoming.fromDateKey <= offsetDateKey(current.toDateKey, 1)
+    && incoming.toDateKey >= offsetDateKey(current.fromDateKey, -1);
+  if (!touchesCurrent) return current;
+  return {
+    kind: "range",
+    fromDateKey: incoming.fromDateKey < current.fromDateKey ? incoming.fromDateKey : current.fromDateKey,
+    toDateKey: incoming.toDateKey > current.toDateKey ? incoming.toDateKey : current.toDateKey,
+  };
+}
+
 export function filterCareLogsByDateRange(
   logs: readonly BabyLogEntry[],
   fromDateKey: string,
   toDateKey: string,
 ): BabyLogEntry[] {
   return logs.filter((entry) => {
-    const dateKey = entry.dateKey ?? "";
+    // Legacy same-day cache entries may not have dateKey. Match the app-wide
+    // report/timeline contract by treating them as today's local calendar day.
+    const dateKey = entry.dateKey ?? formatDateKey();
     return dateKey >= fromDateKey && dateKey <= toDateKey;
   });
 }

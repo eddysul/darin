@@ -97,6 +97,8 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     addBabySticker,
     deleteBabySticker,
     careSetup,
+    storageReady,
+    ensureCareLogsForRange,
   } = useBabyLog();
   const me = familyMembers.find((member) => member.isMe);
   const allowAdd = canAddLog(myFamilyRole);
@@ -125,10 +127,19 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   const diaryEntriesRef = useRef(diaryEntries);
   const persistLockRef = useRef(false);
   diaryEntriesRef.current = diaryEntries;
+  const localDataScopeKey = localDataScope ? `${localDataScope.userId}:${localDataScope.babyId}` : "local";
+  const localDataScopeKeyRef = useRef(localDataScopeKey);
+  localDataScopeKeyRef.current = localDataScopeKey;
   const draftRef = useRef(draftMemory);
   draftRef.current = draftMemory;
 
   const todayKey = formatDateKey();
+
+  useEffect(() => {
+    if (!storageReady) return;
+    void ensureCareLogsForRange(todayKey, todayKey);
+  }, [ensureCareLogsForRange, storageReady, todayKey]);
+
   const summary = useMemo(() => buildTodaySummary(logs), [logs]);
   const notifCopy = useMemo(
     () => buildDiaryNotificationCopy({ babyName, summary, t }),
@@ -144,26 +155,32 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   }, [localDataScope]);
 
   const openComposeFresh = useCallback(() => {
-    const target = resolveDiaryComposeTarget({
-      entries: diaryEntriesRef.current,
-      draft: getDiaryDraft() ?? draftRef.current,
-      dateKey: formatDateKey(),
-    });
-    if (target.kind === "edit") {
-      setEditingEntry(target.entry);
-      setInitialDraft(null);
-      setComposeReadOnly(!canEditLog(myFamilyRole, target.entry.createdBy, me));
+    void (async () => {
+      const requestScopeKey = localDataScopeKeyRef.current;
+      const dateKey = formatDateKey();
+      await ensureCareLogsForRange(dateKey, dateKey);
+      if (requestScopeKey !== localDataScopeKeyRef.current) return;
+      const target = resolveDiaryComposeTarget({
+        entries: diaryEntriesRef.current,
+        draft: getDiaryDraft() ?? draftRef.current,
+        dateKey,
+      });
+      if (target.kind === "edit") {
+        setEditingEntry(target.entry);
+        setInitialDraft(null);
+        setComposeReadOnly(!canEditLog(myFamilyRole, target.entry.createdBy, me));
+        setComposeFromPush(false);
+        setComposeOpen(true);
+        return;
+      }
+      if (!allowAdd) return;
+      setEditingEntry(null);
+      setInitialDraft(target.kind === "draft" ? draftToComposePrefill(target.draft) : null);
+      setComposeReadOnly(false);
       setComposeFromPush(false);
       setComposeOpen(true);
-      return;
-    }
-    if (!allowAdd) return;
-    setEditingEntry(null);
-    setInitialDraft(target.kind === "draft" ? draftToComposePrefill(target.draft) : null);
-    setComposeReadOnly(false);
-    setComposeFromPush(false);
-    setComposeOpen(true);
-  }, [allowAdd, me, myFamilyRole]);
+    })();
+  }, [allowAdd, ensureCareLogsForRange, me, myFamilyRole]);
 
   const requestGrowthBookEditor = useCallback((diaryId: string | null) => {
     if (Platform.OS === "ios") {
@@ -210,29 +227,34 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   }, [me, myFamilyRole]);
 
   const openFromNotification = useCallback((dateKeyArg?: string) => {
-    const key = !dateKeyArg || dateKeyArg === "today" ? formatDateKey() : dateKeyArg;
-    const target = resolveDiaryComposeTarget({
-      entries: diaryEntriesRef.current,
-      draft: getDiaryDraft() ?? draftRef.current,
-      dateKey: key,
-    });
-    if (target.kind !== "edit" && !allowAdd) return;
-    setComposeFromPush(true);
-    if (target.kind === "edit") {
-      setInitialDraft(null);
-      setEditingEntry(target.entry);
-      setComposeReadOnly(!canEditLog(myFamilyRole, target.entry.createdBy, me));
-    } else if (target.kind === "draft") {
-      setEditingEntry(null);
-      setInitialDraft(draftToComposePrefill(target.draft));
-      setComposeReadOnly(false);
-    } else {
-      setEditingEntry(null);
-      setInitialDraft(null);
-      setComposeReadOnly(false);
-    }
-    setComposeOpen(true);
-  }, [allowAdd, me, myFamilyRole]);
+    void (async () => {
+      const requestScopeKey = localDataScopeKeyRef.current;
+      const key = !dateKeyArg || dateKeyArg === "today" ? formatDateKey() : dateKeyArg;
+      await ensureCareLogsForRange(key, key);
+      if (requestScopeKey !== localDataScopeKeyRef.current) return;
+      const target = resolveDiaryComposeTarget({
+        entries: diaryEntriesRef.current,
+        draft: getDiaryDraft() ?? draftRef.current,
+        dateKey: key,
+      });
+      if (target.kind !== "edit" && !allowAdd) return;
+      setComposeFromPush(true);
+      if (target.kind === "edit") {
+        setInitialDraft(null);
+        setEditingEntry(target.entry);
+        setComposeReadOnly(!canEditLog(myFamilyRole, target.entry.createdBy, me));
+      } else if (target.kind === "draft") {
+        setEditingEntry(null);
+        setInitialDraft(draftToComposePrefill(target.draft));
+        setComposeReadOnly(false);
+      } else {
+        setEditingEntry(null);
+        setInitialDraft(null);
+        setComposeReadOnly(false);
+      }
+      setComposeOpen(true);
+    })();
+  }, [allowAdd, ensureCareLogsForRange, me, myFamilyRole]);
 
   useEffect(() => {
     const params = route.params;

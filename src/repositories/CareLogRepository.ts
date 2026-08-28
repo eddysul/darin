@@ -249,6 +249,18 @@ export const CareLogRepository = {
     return (data ?? []).map(careLogRowToEntry);
   },
 
+  async getCareLogById(babyId: string, id: string): Promise<BabyLogEntry | null> {
+    const sb = requireSupabase();
+    const { data, error } = await sb
+      .from("care_logs")
+      .select("*")
+      .eq("baby_id", babyId)
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? careLogRowToEntry(data) : null;
+  },
+
   async listCareLogsPage(
     babyId: string,
     offset: number,

@@ -187,3 +187,27 @@ export async function syncCareLogDelete(id: string, babyIdOverride?: string): Pr
     return false;
   }
 }
+
+export async function fetchCareLogsByDateRange(
+  babyId: string,
+  fromDateKey: string,
+  toDateKey: string,
+): Promise<BabyLogEntry[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    return await CareLogRepository.getCareLogsByBabyAndDateRange(babyId, fromDateKey, toDateKey);
+  } catch (e) {
+    devWarn("[supabase] care-log range fetch failed:", errMsg(e));
+    return null;
+  }
+}
+
+export async function fetchCareLogById(babyId: string, id: string): Promise<BabyLogEntry | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    return await CareLogRepository.getCareLogById(babyId, id);
+  } catch (e) {
+    devWarn("[supabase] care-log id fetch failed:", errMsg(e));
+    return null;
+  }
+}
