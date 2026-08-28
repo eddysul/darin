@@ -19,7 +19,7 @@ import { interleaveExampleFeedAds } from "../../components/memories/memoryFeedAd
 import { MemoryViewFilterSheet, memoryViewFilterMessageKey, type MemoryViewFilter } from "../../components/memories/MemoryViewFilterSheet";
 import { memoryPrivacyPresentation } from "../../components/memories/memoryPresentation";
 import { useBabyLog } from "../../context/BabyLogContext";
-import { MemoriesRepository } from "../../repositories/MemoriesRepository";
+import { MemoriesRepository, MEMORY_FEED_PAGE_SIZE } from "../../repositories/MemoriesRepository";
 import { createId } from "../../utils/id";
 import { getEagerPhoto, getLocalUriForMedia, subscribeEagerUploads } from "../../utils/eagerMediaUpload";
 import { formatLocalizedDate } from "../../utils/localeFormat";
@@ -227,6 +227,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
   const { babyName, careSetup, familyMembers, myFamilyRole, logAuthor, storageReady, babies, activeBabyId } = useBabyLog();
   const [cards, setCards] = useState<MemoryCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -242,7 +243,14 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
   const savingPostIdsRef = useRef<Set<string>>(new Set());
   const pendingPublishesRef = useRef<Map<string, PublishEagerMemoryInput>>(new Map());
   const localCoversRef = useRef<Map<string, string>>(new Map());
+  const pageOffsetsRef = useRef<Map<string, number>>(new Map());
+  const exhaustedBabyIdsRef = useRef<Set<string>>(new Set());
+  const loadingMoreRef = useRef(false);
   const babyId = activeBabyId;
+  const feedBabyIds = useMemo(
+    () => babies.length > 0 ? babies.map((baby) => baby.id) : (babyId ? [babyId] : []),
+    [babies, babyId],
+  );
   const canCreate = myFamilyRole !== "viewer";
   const serverFamilyMembers = useMemo(
     () => familyMembers.filter((member) => UUID_PATTERN.test(member.id)),
@@ -326,7 +334,12 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
     setActionError("");
     try {
       void MemoriesRepository.cleanupOrphanTempMedia();
-      const lists = await Promise.all(babies.map((baby) => MemoriesRepository.listCardsByBabyId(baby.id)));
+      const lists = await Promise.all(feedBabyIds.map((id) => MemoriesRepository.listCardsByBabyId(id, {
+        offset: 0,
+        limit: MEMORY_FEED_PAGE_SIZE,
+      })));
+      pageOffsetsRef.current = new Map(feedBabyIds.map((id, index) => [id, lists[index]?.length ?? 0]));
+      exhaustedBabyIdsRef.current = new Set(feedBabyIds.filter((id, index) => (lists[index]?.length ?? 0) < MEMORY_FEED_PAGE_SIZE));
       const unique = new Map(lists.flat().map((card) => [card.post.id, card]));
       setCards((current) => {
         const optimistic = current.filter((card) => card.isOptimistic && !unique.has(card.post.id));
@@ -347,7 +360,44 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
       setLoading(false);
       setRefreshing(false);
     }
-  }, [babies, babyId, storageReady, t]);
+  }, [babyId, feedBabyIds, storageReady, t]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current || loading || refreshing || error) return;
+    const targets = feedBabyIds.filter((id) => !exhaustedBabyIdsRef.current.has(id));
+    if (!targets.length) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const lists = await Promise.all(targets.map((id) => MemoriesRepository.listCardsByBabyId(id, {
+        offset: pageOffsetsRef.current.get(id) ?? 0,
+        limit: MEMORY_FEED_PAGE_SIZE,
+      })));
+      targets.forEach((id, index) => {
+        const count = lists[index]?.length ?? 0;
+        pageOffsetsRef.current.set(id, (pageOffsetsRef.current.get(id) ?? 0) + count);
+        if (count < MEMORY_FEED_PAGE_SIZE) exhaustedBabyIdsRef.current.add(id);
+      });
+      setCards((current) => {
+        const unique = new Map(current.map((card) => [card.post.id, card]));
+        for (const card of lists.flat()) {
+          const localCover = localCoversRef.current.get(card.post.id);
+          const coverFromMedia = card.coverMedia?.id ? getLocalUriForMedia(card.coverMedia.id) : undefined;
+          unique.set(card.post.id, {
+            ...card,
+            coverUrl: card.coverUrl ?? localCover ?? coverFromMedia,
+            hasFailedMedia: card.hasFailedMedia || card.coverMedia?.uploadStatus === "failed",
+          });
+        }
+        return [...unique.values()].sort((a, b) => b.post.createdAt.localeCompare(a.post.createdAt));
+      });
+    } catch (cause) {
+      setActionError(caughtErrorMessage(t, cause, "memory.critical.016"));
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [error, feedBabyIds, loading, refreshing, t]);
 
   // Refetch on every focus so privacy/selection changes and short-lived signed URLs refresh.
   useFocusEffect(useCallback(() => {
@@ -608,6 +658,9 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
         contentContainerStyle={[styles.feed, { paddingBottom: insets.bottom + 28 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.amber} />}
         keyboardShouldPersistTaps="handled"
+        onEndReached={() => void loadMore()}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.pageLoader} color={colors.amberText} /> : null}
         ListEmptyComponent={
           loading ? (
             <View style={styles.emptyState}><ActivityIndicator color={colors.amberText} /><Text style={styles.centerCopy}>{t("memory.critical.015")}</Text></View>
@@ -707,6 +760,7 @@ const styles = StyleSheet.create({
   filterText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   filterTextActive: { color: colors.amberDark },
   actionError: { marginHorizontal: 16, marginBottom: 8, color: colors.dangerText, backgroundColor: colors.dangerSoft, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, fontSize: 12.5, fontWeight: "700" },
+  pageLoader: { marginVertical: 20 },
   emptyState: { paddingHorizontal: 32, paddingTop: 48, paddingBottom: 28, alignItems: "center", justifyContent: "center" },
   center: { flex: 1, paddingHorizontal: 32, alignItems: "center", justifyContent: "center" },
   centerCopy: { marginTop: 9, color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center" },

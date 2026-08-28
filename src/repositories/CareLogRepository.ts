@@ -6,6 +6,8 @@ import { recordedAtFromDateKeyTime } from "../utils/supabaseMappers";
 import { AuthRepository } from "./AuthRepository";
 import { NotificationRepository } from "./NotificationRepository";
 
+export const CARE_LOG_HYDRATION_PAGE_SIZE = 500;
+
 function payloadFromEntry(entry: BabyLogEntry | Omit<BabyLogEntry, "id">): CareLogPayload {
   return {
     chip: entry.chip,
@@ -246,15 +248,36 @@ export const CareLogRepository = {
     return (data ?? []).map(careLogRowToEntry);
   },
 
-  /** Full hydrate for a baby (server is source of truth). Sorted by recorded_at. */
-  async hydrateCareLogs(babyId: string): Promise<BabyLogEntry[]> {
+  async listCareLogsPage(
+    babyId: string,
+    offset: number,
+    limit = CARE_LOG_HYDRATION_PAGE_SIZE,
+  ): Promise<BabyLogEntry[]> {
     const sb = requireSupabase();
+    const safeOffset = Math.max(0, offset);
+    const safeLimit = Math.max(1, limit);
     const { data, error } = await sb
       .from("care_logs")
       .select("*")
       .eq("baby_id", babyId)
-      .order("recorded_at", { ascending: true });
+      .order("recorded_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(safeOffset, safeOffset + safeLimit - 1);
     if (error) throw error;
     return (data ?? []).map(careLogRowToEntry);
+  },
+
+  /**
+   * Full server-authoritative hydrate in bounded requests. This avoids silently
+   * truncating accounts that exceed the Supabase API row limit while keeping
+   * the existing all-history context contract intact.
+   */
+  async hydrateCareLogs(babyId: string): Promise<BabyLogEntry[]> {
+    const logs: BabyLogEntry[] = [];
+    while (true) {
+      const page = await this.listCareLogsPage(babyId, logs.length);
+      logs.push(...page);
+      if (page.length < CARE_LOG_HYDRATION_PAGE_SIZE) return logs;
+    }
   },
 };

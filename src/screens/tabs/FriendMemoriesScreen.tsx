@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { ProfileAvatar } from "../../components/profile/ProfileAvatar";
-import { MemoriesRepository } from "../../repositories/MemoriesRepository";
+import { MemoriesRepository, MEMORY_FEED_PAGE_SIZE } from "../../repositories/MemoriesRepository";
 import { ProfileRepository } from "../../repositories/ProfileRepository";
 import type { DisplayProfile } from "../../types/profileSettings";
 import type { FriendMemoryContext, MemoryCard } from "../../types/memory";
@@ -27,16 +27,27 @@ export function FriendMemoriesScreen({ onOpenNotifications, onOpenDetail }: Prop
   const [cards, setCards] = useState<MemoryCard[]>([]);
   const [profiles, setProfiles] = useState<DisplayProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [workingIds, setWorkingIds] = useState<Set<string>>(() => new Set());
+  const pageOffsetsRef = useRef<Map<string, number>>(new Map());
+  const exhaustedBabyIdsRef = useRef<Set<string>>(new Set());
+  const loadingMoreRef = useRef(false);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
     setError("");
     try {
       const nextContexts = await MemoriesRepository.listMyFriendMemoryContexts();
-      const lists = await Promise.all(nextContexts.map((item) => MemoriesRepository.listCardsByBabyId(item.babyId)));
+      const lists = await Promise.all(nextContexts.map((item) => MemoriesRepository.listCardsByBabyId(item.babyId, {
+        offset: 0,
+        limit: MEMORY_FEED_PAGE_SIZE,
+      })));
+      pageOffsetsRef.current = new Map(nextContexts.map((item, index) => [item.babyId, lists[index]?.length ?? 0]));
+      exhaustedBabyIdsRef.current = new Set(nextContexts
+        .filter((_, index) => (lists[index]?.length ?? 0) < MEMORY_FEED_PAGE_SIZE)
+        .map((item) => item.babyId));
       const nextCards = lists.flat()
         .filter((item) => item.post.privacyType === "friend_circle" && item.post.status === "published" && !item.post.deletedAt)
         .sort((a, b) => b.post.createdAt.localeCompare(a.post.createdAt));
@@ -54,6 +65,43 @@ export function FriendMemoriesScreen({ onOpenNotifications, onOpenDetail }: Prop
       setRefreshing(false);
     }
   }, [t]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current || loading || refreshing || error) return;
+    const targets = contexts.filter((item) => !exhaustedBabyIdsRef.current.has(item.babyId));
+    if (!targets.length) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const lists = await Promise.all(targets.map((item) => MemoriesRepository.listCardsByBabyId(item.babyId, {
+        offset: pageOffsetsRef.current.get(item.babyId) ?? 0,
+        limit: MEMORY_FEED_PAGE_SIZE,
+      })));
+      targets.forEach((item, index) => {
+        const count = lists[index]?.length ?? 0;
+        pageOffsetsRef.current.set(item.babyId, (pageOffsetsRef.current.get(item.babyId) ?? 0) + count);
+        if (count < MEMORY_FEED_PAGE_SIZE) exhaustedBabyIdsRef.current.add(item.babyId);
+      });
+      const incoming = lists.flat()
+        .filter((item) => item.post.privacyType === "friend_circle" && item.post.status === "published" && !item.post.deletedAt);
+      const incomingProfiles = await ProfileRepository.listVisibleDisplayProfiles(incoming.map((item) => item.post.authorId));
+      setCards((current) => {
+        const unique = new Map(current.map((card) => [card.post.id, card]));
+        incoming.forEach((card) => unique.set(card.post.id, card));
+        return [...unique.values()].sort((a, b) => b.post.createdAt.localeCompare(a.post.createdAt));
+      });
+      setProfiles((current) => {
+        const unique = new Map(current.map((profile) => [profile.userId, profile]));
+        incomingProfiles.forEach((profile) => unique.set(profile.userId, profile));
+        return [...unique.values()];
+      });
+    } catch (cause) {
+      setError(caughtErrorMessage(t, cause, "memory.critical.177"));
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [contexts, error, loading, refreshing, t]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
@@ -81,6 +129,9 @@ export function FriendMemoriesScreen({ onOpenNotifications, onOpenDetail }: Prop
         keyExtractor={(item) => item.post.id}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 14, paddingBottom: insets.bottom + 28 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.amberText} />}
+        onEndReached={() => void loadMore()}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.pageLoader} color={colors.amberText} /> : null}
         ListHeaderComponent={(
           <View style={styles.header}>
             <View style={styles.headerCopy}>
@@ -159,6 +210,7 @@ const styles = StyleSheet.create({
   empty: { paddingHorizontal: 24, paddingTop: 90, alignItems: "center" },
   emptyTitle: { color: colors.text, fontSize: 17, fontWeight: "800", marginTop: 12, textAlign: "center" },
   emptyCopy: { color: colors.muted, fontSize: 13, lineHeight: 20, marginTop: 8, textAlign: "center" },
+  pageLoader: { marginVertical: 20 },
   retry: { minHeight: 44, marginTop: 18, paddingHorizontal: 18, borderRadius: radius.full, borderWidth: 1, borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
   retryText: { color: colors.amberText, fontWeight: "800" },
 });

@@ -89,7 +89,7 @@ import {
   syncGrowthRecordUpdate,
 } from "../utils/growthRecordServerSync";
 import { clearGrowthRecordsMigrationState } from "../utils/growthRecordsMigrationStore";
-import { formatDateKey, shiftDateKey } from "../utils/dateKey";
+import { formatDateKey } from "../utils/dateKey";
 import { actorFromFamily } from "../utils/logProvenance";
 import type { BabyLogSource } from "../types/babyLog";
 import {
@@ -130,177 +130,9 @@ import {
   removeLegacySampleFamily,
   removeLegacySampleLogs,
 } from "../utils/legacySampleData";
-
-const TODAY = formatDateKey();
-
-function migrateActorRole(role: string): FamilyRole {
-  if (role === "parent" || role === "other") return "owner";
-  if (role === "owner" || role === "admin" || role === "editor" || role === "viewer" || role === "caregiver") {
-    return role;
-  }
-  return "editor";
-}
-
-function sameLocalDataScope(left: LocalDataScope | null, right: LocalDataScope): boolean {
-  return isValidLocalDataScope(left) && localDataScopeId(left) === localDataScopeId(right);
-}
-
-function isoDaysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString();
-}
-
-function displayDateDaysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${weekdays[d.getDay()]})`;
-}
-
-const SEED_DIARY: DiaryEntry[] = [
-  {
-    id: "d1",
-    babyId: "baby-1",
-    date: displayDateDaysAgo(12),
-    dateKey: shiftDateKey(12),
-    photos: [],
-    coverStyleId: "pink_heart",
-    pageStyleId: "pink_heart",
-    coverTitle: "첫 목욕",
-    comment: "오늘 처음으로 욕조 목욕을 했는데 물을 튀기면서 엄청 좋아했어요. 목욕 후에 바로 잠들었네요.",
-    weatherStamp: "sun",
-    moodStamp: "love",
-    careLogSummarySnapshot: "오늘은 수유 6회, 수면 4시간 20분, 기저귀 5회가 기록되었어요. 추가로 목욕도 했어요.",
-    momentSuggestionsUsed: [],
-    milestoneTag: "첫 목욕",
-    customMilestoneTag: null,
-    includedInGrowthBook: true,
-    createdAt: isoDaysAgo(12),
-    updatedAt: isoDaysAgo(12),
-    source: "manual",
-    draftStatus: "saved",
-    createdBy: { userId: "m1", name: "김민지", role: "owner" },
-  },
-  {
-    id: "d2",
-    babyId: "baby-1",
-    date: displayDateDaysAgo(14),
-    dateKey: shiftDateKey(14),
-    photos: [],
-    coverStyleId: "cloud_sky",
-    pageStyleId: "blue_cloud",
-    coverTitle: "옹알이 많은 날",
-    comment: '낮에 옹알이가 부쩍 늘었어요. "아부부" 소리를 계속 내면서 웃는 모습이 너무 사랑스러웠던 하루.',
-    weatherStamp: "cloud",
-    moodStamp: "calm",
-    careLogSummarySnapshot: "오늘은 수유 5회, 수면 3시간 10분, 기저귀 4회가 기록되었어요.",
-    momentSuggestionsUsed: [],
-    milestoneTag: null,
-    customMilestoneTag: null,
-    includedInGrowthBook: true,
-    createdAt: isoDaysAgo(14),
-    updatedAt: isoDaysAgo(14),
-    source: "manual",
-    draftStatus: "saved",
-    createdBy: { userId: "m1", name: "김민지", role: "owner" },
-  },
-  {
-    id: "d3",
-    babyId: "baby-1",
-    date: displayDateDaysAgo(16),
-    dateKey: shiftDateKey(16),
-    photos: [],
-    coverStyleId: "beige_paper",
-    pageStyleId: "beige_paper",
-    coverTitle: "처음 뒤집은 날",
-    comment: "낮잠이 짧아서 저녁에 보챔이 있었어요. 수유 간격은 괜찮은 편이었습니다. 뒤집기를 처음 성공한 날!",
-    weatherStamp: "rain",
-    moodStamp: "tired",
-    careLogSummarySnapshot: "오늘은 수유 4회, 수면 2시간 40분, 기저귀 3회가 기록되었어요. 추가로 터미타임도 했어요.",
-    momentSuggestionsUsed: [],
-    milestoneTag: "처음 뒤집은 날",
-    customMilestoneTag: null,
-    includedInGrowthBook: true,
-    createdAt: isoDaysAgo(16),
-    updatedAt: isoDaysAgo(16),
-    source: "manual",
-    draftStatus: "saved",
-    createdBy: { userId: "m2", name: "이준호", role: "admin" },
-  },
-];
-
-function seedLogs(): Omit<BabyLogEntry, "id">[] {
-  const d = (ago: number) => shiftDateKey(ago);
-  const mom: BabyLogActor = { userId: "m1", name: "김민지", role: "owner" };
-  const dad: BabyLogActor = { userId: "m2", name: "이준호", role: "admin" };
-  const sitter: BabyLogActor = { userId: "m3", name: "박시터", role: "caregiver" };
-
-  return [
-    { cat: "formula", time: "14:10", amount: "80", dateKey: TODAY, createdBy: mom, source: "manual" },
-    { cat: "sleep", time: "13:20", duration: "35", dateKey: TODAY, createdBy: mom, source: "manual" },
-    { cat: "diaper", time: "12:40", chip: "소변", dateKey: TODAY, createdBy: sitter, source: "manual" },
-    { cat: "breast", time: "11:30", chip: "좌측", duration: "12", dateKey: TODAY, createdBy: mom, source: "manual" },
-    { cat: "diaper", time: "09:42", chip: "대변", chip2: "황금색", dateKey: TODAY, voice: true, source: "voice", createdBy: mom },
-    { cat: "sleep", time: "09:28", duration: "40", dateKey: TODAY, createdBy: dad, source: "manual" },
-    { cat: "diaper", time: "08:32", chip: "소변", dateKey: TODAY, createdBy: dad, source: "manual" },
-    { cat: "tummy", time: "15:00", duration: "10", dateKey: TODAY, voice: true, source: "voice", createdBy: sitter },
-    // Past days for weekly chart
-    { cat: "formula", time: "10:00", amount: "90", dateKey: d(1), createdBy: mom, source: "manual" },
-    { cat: "formula", time: "14:00", amount: "80", dateKey: d(1), createdBy: mom, source: "manual" },
-    { cat: "sleep", time: "13:00", duration: "90", dateKey: d(1), createdBy: dad, source: "manual" },
-    { cat: "diaper", time: "11:00", chip: "소변", dateKey: d(1), createdBy: sitter, source: "manual" },
-    { cat: "diaper", time: "16:00", chip: "대변", dateKey: d(1), createdBy: mom, source: "manual" },
-    { cat: "formula", time: "09:30", amount: "100", dateKey: d(2), createdBy: mom, source: "manual" },
-    { cat: "sleep", time: "12:00", duration: "60", dateKey: d(2), createdBy: mom, source: "manual" },
-    { cat: "diaper", time: "10:20", chip: "소변", dateKey: d(2), createdBy: dad, source: "manual" },
-    { cat: "breast", time: "15:10", duration: "15", dateKey: d(3), createdBy: mom, source: "manual" },
-    { cat: "sleep", time: "11:00", duration: "45", dateKey: d(3), createdBy: sitter, source: "manual" },
-    { cat: "diaper", time: "13:40", chip: "대변", dateKey: d(3), createdBy: sitter, source: "manual" },
-    { cat: "formula", time: "08:00", amount: "80", dateKey: d(4), createdBy: mom, source: "manual" },
-    { cat: "diaper", time: "09:00", chip: "소변", dateKey: d(4), createdBy: mom, source: "manual" },
-    { cat: "sleep", time: "14:00", duration: "70", dateKey: d(5), createdBy: dad, source: "manual" },
-    { cat: "formula", time: "12:30", amount: "70", dateKey: d(5), createdBy: dad, source: "manual" },
-    { cat: "diaper", time: "18:00", chip: "소변", dateKey: d(6), createdBy: mom, source: "manual" },
-    { cat: "sleep", time: "10:00", duration: "50", dateKey: d(6), createdBy: mom, source: "manual" },
-  ];
-}
-
-const SEED_FAMILY: FamilyMember[] = [
-  {
-    id: "m1",
-    emoji: "👩",
-    name: "김민지",
-    role: "owner",
-    relationshipLabel: "엄마",
-    status: "active",
-    isMe: true,
-  },
-  {
-    id: "m2",
-    emoji: "👨",
-    name: "이준호",
-    role: "admin",
-    relationshipLabel: "아빠",
-    status: "active",
-    contact: "junho@example.com",
-  },
-  {
-    id: "m3",
-    emoji: "🧑‍🍼",
-    name: "박시터",
-    role: "caregiver",
-    relationshipLabel: "시터",
-    status: "active",
-    contact: "010-1234-5678",
-  },
-];
-
-const DEFAULT_GREETING: ChatMessage = {
-  id: "greet-1",
-  role: "ai",
-  text: "안녕하세요! 기록을 참고해 답할게요. 무엇이든 편하게 물어보세요.",
-};
+import { DEFAULT_CHAT_GREETING } from "../constants/chatDefaults";
+import { migrateActorRole, sameLocalDataScope } from "./babyLogContextHelpers";
+import { useBabyLogCachePersistence } from "./useBabyLogCachePersistence";
 
 type BabyLogContextValue = {
   careSetup: CareSetup;
@@ -407,7 +239,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const [stickersHydrated, setStickersHydrated] = useState(false);
   const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>([]);
   const [growthRecordsHydrated, setGrowthRecordsHydrated] = useState(false);
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([DEFAULT_GREETING]);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([DEFAULT_CHAT_GREETING]);
   const [chatHydrated, setChatHydrated] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const [storageIssue, setStorageIssue] = useState<StorageIssue | null>(null);
@@ -490,7 +322,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setCautionFoods([]);
       setFamilyMembers([]);
       setBabyStickers([]);
-      setChatHistory([DEFAULT_GREETING]);
+      setChatHistory([DEFAULT_CHAT_GREETING]);
       setGrowthBookEditState(createEmptyGrowthBookEdit({ babyId: scope?.babyId ?? "", babyName: careSetup.child.childName }));
       resetDiaryEntriesMemory();
       resetBabyLogsMemory();
@@ -580,9 +412,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     }
     if (chatOk) {
       const storedChat = getChatHistory();
-      setChatHistory(storedChat && storedChat.length > 0 ? storedChat : [DEFAULT_GREETING]);
+      setChatHistory(storedChat && storedChat.length > 0 ? storedChat : [DEFAULT_CHAT_GREETING]);
     } else {
-      setChatHistory([DEFAULT_GREETING]);
+      setChatHistory([DEFAULT_CHAT_GREETING]);
     }
     setChatHydrated(true);
     if (familyOk) {
@@ -704,31 +536,16 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     void hydrateStorageState();
   }, [hydrateStorageState]);
 
-  useEffect(() => {
-    if (!logsHydrated) return;
-    // Cache only — server is source of truth when active.
-    void saveBabyLogs(logs, localDataScope);
-  }, [logs, logsHydrated, localDataScope]);
-
-  useEffect(() => {
-    if (!diaryHydrated) return;
-    void saveDiaryEntries(diaryEntries, localDataScope);
-  }, [diaryEntries, diaryHydrated, localDataScope]);
-
-  useEffect(() => {
-    if (!chatHydrated) return;
-    void saveChatHistory(chatHistory, localDataScope);
-  }, [chatHistory, chatHydrated, localDataScope]);
-
-  useEffect(() => {
-    if (!familyHydrated) return;
-    void saveFamilyMembers(familyMembers, localDataScope);
-  }, [familyMembers, familyHydrated, localDataScope]);
-
-  useEffect(() => {
-    if (!growthBookHydrated) return;
-    void saveGrowthBookEdit(growthBookEdit, localDataScope);
-  }, [growthBookEdit, growthBookHydrated, localDataScope]);
+  useBabyLogCachePersistence({
+    scope: localDataScope,
+    logs: { value: logs, hydrated: logsHydrated },
+    diaryEntries: { value: diaryEntries, hydrated: diaryHydrated },
+    chatHistory: { value: chatHistory, hydrated: chatHydrated },
+    familyMembers: { value: familyMembers, hydrated: familyHydrated },
+    growthBookEdit: { value: growthBookEdit, hydrated: growthBookHydrated },
+    babyStickers: { value: babyStickers, hydrated: stickersHydrated },
+    growthRecords: { value: growthRecords, hydrated: growthRecordsHydrated },
+  });
 
   useEffect(() => {
     if (!growthBookHydrated || !growthBookDirtyRef.current || !localDataScope) return;
@@ -754,16 +571,6 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     }, 500);
     return () => clearTimeout(timer);
   }, [careSetup.child.childName, diaryEntries, growthBookEdit, growthBookHydrated, localDataScope]);
-
-  useEffect(() => {
-    if (!stickersHydrated) return;
-    void saveBabyStickers(babyStickers, localDataScope);
-  }, [babyStickers, localDataScope, stickersHydrated]);
-
-  useEffect(() => {
-    if (!growthRecordsHydrated) return;
-    void saveGrowthRecords(growthRecords, localDataScope);
-  }, [growthRecords, growthRecordsHydrated, localDataScope]);
 
   const setGrowthBookEdit = useCallback(
     (edit: GrowthBookEdit | ((prev: GrowthBookEdit) => GrowthBookEdit)) => {
@@ -1516,7 +1323,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setQuickRecordsState(getQuickRecords());
     setBabies([]);
     setCautionFoods([]);
-    setChatHistory([DEFAULT_GREETING]);
+    setChatHistory([DEFAULT_CHAT_GREETING]);
     await Promise.all([
       saveBabyLogs([], scope),
       saveFamilyMembers([], scope),
@@ -1530,7 +1337,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
     const persistSamples = async () => {
       if (!(await hasQaBackup())) await backupQaData();
-      const sampleLogs = seedLogs().map((log) => ({ ...log, id: createId() }));
+      const { createLegacyBabyLogSample } = await import("../demo/legacyBabyLogSeed");
+      const sample = createLegacyBabyLogSample();
+      const sampleLogs = sample.logs.map((log) => ({ ...log, id: createId() }));
       const babyId = localDataScope?.babyId ?? "baby-1";
       const sampleBook = {
         ...createEmptyGrowthBookEdit({
@@ -1541,9 +1350,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         pageTemplateId: "basic_line" as const,
       };
       setLogs(sampleLogs);
-      setDiaryEntries(SEED_DIARY);
-      setChatHistory([DEFAULT_GREETING]);
-      setFamilyMembers(SEED_FAMILY);
+      setDiaryEntries(sample.diaryEntries);
+      setChatHistory([DEFAULT_CHAT_GREETING]);
+      setFamilyMembers(sample.familyMembers);
       setGrowthBookEditState(sampleBook);
       setLogsHydrated(true);
       setDiaryHydrated(true);
@@ -1551,9 +1360,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setFamilyHydrated(true);
       await Promise.all([
         saveBabyLogs(sampleLogs, localDataScope),
-        saveDiaryEntries(SEED_DIARY, localDataScope),
-        saveChatHistory([DEFAULT_GREETING], localDataScope),
-        saveFamilyMembers(SEED_FAMILY, localDataScope),
+        saveDiaryEntries(sample.diaryEntries, localDataScope),
+        saveChatHistory([DEFAULT_CHAT_GREETING], localDataScope),
+        saveFamilyMembers(sample.familyMembers, localDataScope),
         saveGrowthBookEdit(sampleBook, localDataScope),
       ]);
     };

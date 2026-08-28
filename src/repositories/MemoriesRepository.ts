@@ -41,6 +41,7 @@ const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 const CAPTION_MAX_LENGTH = 1200;
 const COMMENT_MAX_LENGTH = 500;
 const UPLOAD_CONCURRENCY = 3;
+export const MEMORY_FEED_PAGE_SIZE = 20;
 export const MEMORY_FEED_IMAGE_WIDTH = 800;
 export const MEMORY_DETAIL_IMAGE_WIDTH = 1400;
 /** Short TTL so revoked viewers lose access soon. Known limitation: old URLs work until expiry. */
@@ -259,14 +260,24 @@ export const MemoriesRepository = {
     return data.signedUrl;
   },
 
-  async listByBabyId(babyId: string): Promise<MemoryPost[]> {
+  async listByBabyId(
+    babyId: string,
+    options: { offset?: number; limit?: number } = {},
+  ): Promise<MemoryPost[]> {
     const sb = requireSupabase();
-    const { data, error } = await sb
+    let query = sb
       .from("memory_posts")
       .select("*")
       .eq("baby_id", babyId)
       .is("deleted_at", null)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (options.limit !== undefined) {
+      const offset = Math.max(0, options.offset ?? 0);
+      const limit = Math.max(1, options.limit);
+      query = query.range(offset, offset + limit - 1);
+    }
+    const { data, error } = await query;
     if (error) throw error;
     return (data ?? []).map(memoryPostRowToModel);
   },
@@ -684,16 +695,20 @@ export const MemoriesRepository = {
     return { post, media, tags, comments, reactions, selectedUserIds };
   },
 
-  async listCardsByBabyId(babyId: string): Promise<MemoryCard[]> {
+  async listCardsByBabyId(
+    babyId: string,
+    options: { offset?: number; limit?: number } = {},
+  ): Promise<MemoryCard[]> {
     const [posts, userId] = await Promise.all([
-      this.listByBabyId(babyId),
+      this.listByBabyId(babyId, options),
       requireUserId(),
     ]);
     if (!posts.length) return [];
     const sb = requireSupabase();
     const postIds = posts.map((post) => post.id);
     const [savesResult, mediaResult, tagsResult, commentsResult, reactionsResult] = await Promise.all([
-      sb.from("memory_saves").select("memory_post_id").eq("baby_id", babyId).eq("user_id", userId),
+      sb.from("memory_saves").select("memory_post_id")
+        .eq("baby_id", babyId).eq("user_id", userId).in("memory_post_id", postIds),
       sb.from("memory_media").select("*").in("memory_post_id", postIds).order("created_at", { ascending: true }),
       sb.from("memory_tags").select("*").in("memory_post_id", postIds).order("created_at", { ascending: true }),
       sb.from("memory_comments").select("*").in("memory_post_id", postIds)
