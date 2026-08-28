@@ -10,26 +10,22 @@ import type { QuickRecord } from "../types/quickRecord";
 import { buildBabyDisplay, formatDiaryStageLabel } from "../utils/childDisplay";
 import {
   getCustomCategories,
-  hydrateCustomCategories,
   resetCustomCategoriesMemory,
   saveCustomCategories,
 } from "../utils/customCategoriesStore";
-import { getQuickRecords, hydrateQuickRecords, resetQuickRecordsMemory, saveQuickRecords } from "../utils/quickRecordsStore";
-import { getBabyLogs, hydrateBabyLogs, resetBabyLogsMemory, saveBabyLogs } from "../utils/babyLogsStore";
+import { getQuickRecords, resetQuickRecordsMemory, saveQuickRecords } from "../utils/quickRecordsStore";
+import { getBabyLogs, resetBabyLogsMemory, saveBabyLogs } from "../utils/babyLogsStore";
 import {
-  bootstrapCareLogsFromServer,
-  ensureCareLogBabyId,
   syncCareLogCreate,
   syncCareLogDelete,
   syncCareLogUpdate,
 } from "../utils/careLogServerSync";
-import { clearSupabaseSync, getSupabaseSync, hydrateSupabaseSync, saveSupabaseSync } from "../utils/supabaseSyncStore";
+import { clearSupabaseSync, getSupabaseSync, saveSupabaseSync } from "../utils/supabaseSyncStore";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { FamilyRepository } from "../repositories/FamilyRepository";
 import { isSupabaseConfigured } from "../lib/supabase";
 import {
   getDiaryEntries,
-  hydrateDiaryEntries,
   resetDiaryEntriesMemory,
   saveDiaryEntries,
 } from "../utils/diaryStore";
@@ -41,20 +37,17 @@ import {
 } from "../utils/diaryServerSync";
 import {
   getChatHistory,
-  hydrateChatHistory,
   resetChatHistoryMemory,
   saveChatHistory,
 } from "../utils/chatHistoryStore";
 import {
   getFamilyMembers,
-  hydrateFamilyMembers,
   resetFamilyMembersMemory,
   saveFamilyMembers,
 } from "../utils/familyMembersStore";
 import {
   ensureGrowthBookEdit,
   getGrowthBookEdit,
-  hydrateGrowthBookEdit,
   resetGrowthBookEditMemory,
   saveGrowthBookEdit,
 } from "../utils/growthBookStore";
@@ -64,7 +57,6 @@ import {
 } from "../utils/growthBookServerSync";
 import {
   getBabyStickers,
-  hydrateBabyStickers,
   mergeBabyStickerLists,
   resetBabyStickersMemory,
   saveBabyStickers,
@@ -78,7 +70,6 @@ import { createEmptyGrowthBookEdit } from "../types/growthBook";
 import { createId } from "../utils/id";
 import {
   getGrowthRecords,
-  hydrateGrowthRecords,
   resetGrowthRecordsMemory,
   saveGrowthRecords,
 } from "../utils/growthRecordsStore";
@@ -99,7 +90,6 @@ import {
   saveDiaryDraft,
 } from "../utils/diaryDraftStore";
 import {
-  isValidLocalDataScope,
   localDataScopeId,
   type LocalDataScope,
 } from "../utils/scopedLocalStorage";
@@ -128,11 +118,15 @@ import {
   containsLegacySampleDiary,
   removeLegacySampleDiaries,
   removeLegacySampleFamily,
-  removeLegacySampleLogs,
 } from "../utils/legacySampleData";
 import { DEFAULT_CHAT_GREETING } from "../constants/chatDefaults";
-import { migrateActorRole, sameLocalDataScope } from "./babyLogContextHelpers";
+import { sameLocalDataScope } from "./babyLogContextHelpers";
 import { useBabyLogCachePersistence } from "./useBabyLogCachePersistence";
+import {
+  hydrateBabyLogCaches,
+  resolveBabyLogDataScope,
+  resolveHydratedCareLogs,
+} from "./babyLogHydrationService";
 
 type BabyLogContextValue = {
   careSetup: CareSetup;
@@ -252,43 +246,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const resolveLocalDataScope = useCallback(async (
     override?: LocalDataScope,
   ): Promise<LocalDataScope | null> => {
-    if (!isSupabaseConfigured()) return null;
-    const session = await AuthRepository.getSession();
-    if (!session) return null;
-
-    await hydrateSupabaseSync();
-    const sync = getSupabaseSync();
-    const accessibleBabies = await BabyRepository.listMyBabies();
-    setBabies(accessibleBabies);
-    const requested = isValidLocalDataScope(override) && override.userId === session.user.id
-      ? accessibleBabies.find((baby) => baby.id === override.babyId)
-      : null;
-    const persisted = requested ?? (sync.userId === session.user.id
-      ? accessibleBabies.find((baby) => baby.id === sync.babyId)
-      : null);
-    if (persisted) {
-      if (sync.userId !== session.user.id || sync.babyId !== persisted.id) {
-        await saveSupabaseSync({
-          userId: session.user.id,
-          babyId: persisted.id,
-          migrationCandidateCount: 0,
-          lastHydratedAt: new Date().toISOString(),
-        });
-      }
-      return { userId: session.user.id, babyId: persisted.id };
-    }
-    if (accessibleBabies[0]) {
-      await saveSupabaseSync({
-        userId: session.user.id,
-        babyId: accessibleBabies[0].id,
-        migrationCandidateCount: 0,
-        lastHydratedAt: new Date().toISOString(),
-      });
-      return { userId: session.user.id, babyId: accessibleBabies[0].id };
-    }
-    if (!hasSavedCareSetup) return null;
-    const babyId = await ensureCareLogBabyId();
-    return babyId ? { userId: session.user.id, babyId } : null;
+    const resolution = await resolveBabyLogDataScope({ override, hasSavedCareSetup });
+    setBabies(resolution.babies);
+    return resolution.scope;
   }, [hasSavedCareSetup]);
 
   const hydrateStorageState = useCallback(async (force = false, scopeOverride?: LocalDataScope) => {
@@ -340,57 +300,22 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setLocalDataScope(scope);
     }
 
-    const [customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, growthRecordsOk, syncOk] =
-      await Promise.all([
-      hydrateCustomCategories(scope, force),
-      hydrateQuickRecords(scope, force),
-      hydrateBabyLogs(scope, force),
-      hydrateDiaryEntries(scope, force),
-      hydrateChatHistory(scope, force),
-      hydrateFamilyMembers(scope, force),
-      hydrateGrowthBookEdit(scope, force),
-      hydrateBabyStickers(scope, force),
-      hydrateGrowthRecords(scope, force),
-      hydrateSupabaseSync(force),
-    ]);
+    const cache = await hydrateBabyLogCaches(scope, force);
     if (hydrationRun !== storageHydrationRunRef.current) return false;
-    void syncOk;
+    const { customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, growthRecordsOk } = cache;
 
     if (customOk) setCustomCategoriesState(getCustomCategories());
     if (quickOk) setQuickRecordsState(getQuickRecords());
     if (logsOk) {
-      const storedLogs = getBabyLogs();
-      let nextLogs: BabyLogEntry[] | null = null;
-      if (storedLogs !== null) {
-        const today = formatDateKey();
-        nextLogs = removeLegacySampleLogs(storedLogs).map((l) => ({
-          ...l,
-          dateKey: l.dateKey ?? today,
-          createdBy: l.createdBy
-            ? {
-                ...l.createdBy,
-                role: migrateActorRole(l.createdBy.role as string),
-              }
-            : l.createdBy,
-          source: l.source ?? (l.voice ? "voice" : "manual"),
-        }));
-      }
-
-      const boot = await bootstrapCareLogsFromServer({
+      const careLogs = await resolveHydratedCareLogs({
         careSetup,
         hasSavedCareSetup,
-        localLogs: nextLogs,
+        storedLogs: getBabyLogs(),
       });
       if (hydrationRun !== storageHydrationRunRef.current) return false;
-
-      if (boot.usedServer && boot.logs !== null) {
-        setLogs(boot.logs);
-        void saveBabyLogs(boot.logs, scope);
-      } else if (boot.usedServer && boot.logs === null && nextLogs !== null) {
-        // Server bound but empty — keep local cache (migration pending).
-        setLogs(nextLogs);
-      } else if (nextLogs !== null) {
-        setLogs(nextLogs);
+      if (careLogs.logs !== null) {
+        setLogs(careLogs.logs);
+        if (careLogs.serverAuthoritative) void saveBabyLogs(careLogs.logs, scope);
       }
       setLogsHydrated(true);
     }
@@ -522,8 +447,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setCautionFoods(nextCautionFoods);
       void saveCautionFoods(scope, nextCautionFoods);
     }
-    const allLoaded =
-      customOk && quickOk && logsOk && diaryOk && chatOk && familyOk && growthOk && stickersOk && growthRecordsOk;
+    const allLoaded = cache.allLoaded;
     if (!allLoaded) {
       const issue = getStorageIssue();
       if (issue) setStorageIssue(issue);

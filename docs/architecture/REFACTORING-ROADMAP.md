@@ -26,11 +26,11 @@ This document tracks codebase cleanup that is safe to complete before the next r
 
 ### Phase 3 — BabyLog hydration controller
 
-Move account/baby scope resolution, local cache hydration, and server bootstrap into a controller that returns an explicit snapshot. Keep React state application in the context so stale hydration runs can still be discarded. Split by domain (care logs, diary, family, growth, stickers) rather than creating one generic storage abstraction.
+Account/baby scope resolution, parallel cache hydration, CareLog normalization, and server bootstrap now live in `babyLogHydrationService`. React state application remains in the context so stale hydration runs can still be discarded. Remaining work is to split the diary, family, growth, and sticker snapshot application by domain rather than creating one generic storage abstraction.
 
 ### Phase 4 — i18n catalog ownership
 
-Move the remaining legacy `messages` catalog and locale overrides out of `i18n.ts`; keep `Locale`, `MessageKey`, fallback rules, and `createT` as the public boundary. Critical five-language catalogs remain independent and must continue to pass `qa:i18n:release`.
+Completed: ko/en legacy messages and ja/es/zh legacy overrides have dedicated catalog modules. `i18n.ts` now owns only `Locale`, `MessageKey`, fallback rules, and `createT`. Critical five-language catalogs remain independent and continue to pass `qa:i18n:release`.
 
 ### Phase 5 — historical CareLog loading
 
@@ -50,6 +50,7 @@ The current context still retains all history for compatibility. Introduce an ex
 - feature flag audit
 - i18n release QA
 - MVP and repository query-shape QA
+- architecture boundary QA
 - notification/care-reminder policy smokes
 - secret scan and `git diff --check`
 - guarded local iOS bundle export
