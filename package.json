@@ -20,6 +20,7 @@
     "qa:i18n:critical": "pnpm dlx tsx scripts/i18n-critical-qa.mts",
     "qa:i18n:coverage": "pnpm dlx tsx scripts/i18n-production-coverage.mts",
     "qa:i18n:audit": "node --experimental-strip-types scripts/i18n-hardcoded-audit.mts",
+    "qa:i18n:release": "pnpm dlx tsx scripts/i18n-release-readiness.mts",
     "qa:feature-flags": "node --experimental-strip-types scripts/feature-flags-audit.mts",
     "qa:care-reminders": "node --experimental-strip-types scripts/care-reminder-qa-smoke.mts",
     "qa:care-reminders:migration": "node --experimental-strip-types scripts/care-reminder-migration-rerun-smoke.mts",

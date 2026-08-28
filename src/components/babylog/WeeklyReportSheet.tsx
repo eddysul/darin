@@ -371,8 +371,8 @@ const styles = StyleSheet.create({
   findNote: { fontSize: 10.5, color: colors.faint, marginTop: 11 },
   row: { paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.border },
   rowMain: { flexDirection: "row", alignItems: "center", gap: 9 },
-  rowLabel: { flex: 1, fontSize: 12.5, fontWeight: "700", color: colors.text },
-  rowValue: { fontSize: 14, fontWeight: "800", color: colors.text },
+  rowLabel: { flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: "700", color: colors.text },
+  rowValue: { flexShrink: 1, textAlign: "right", fontSize: 14, fontWeight: "800", color: colors.text },
   rowSub: { fontSize: 10.5, color: colors.faint, marginTop: 3 },
   badge: {
     minWidth: 54,
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 10, color: colors.faint },
+  legendText: { flexShrink: 1, fontSize: 10, color: colors.faint },
   caution: { marginTop: 22, padding: 13, borderRadius: radius.md, backgroundColor: colors.cardHi },
   cautionText: { fontSize: 11.5, lineHeight: 18, color: colors.faint },
   closeBtn: {

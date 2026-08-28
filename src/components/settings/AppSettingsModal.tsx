@@ -413,7 +413,7 @@ export function AppSettingsModal({
                       }
                       setExporting(true);
                       setExportMessage("");
-                      void DataExportRepository.exportAndShare(babyId)
+                      void DataExportRepository.exportAndShare(babyId, { dialogTitle: t("settings.critical.199") })
                         .then(() => setExportMessage(t("settings.critical.204")))
                         .catch((error) => setExportMessage(error instanceof Error ? localizedErrorMessage(t, error.message) : t("settings.critical.205")))
                         .finally(() => setExporting(false));
@@ -723,7 +723,7 @@ export function AppSettingsModal({
                   }
                   setExporting(true);
                   setExportMessage("");
-                  void DataExportRepository.exportAndShare(babyId)
+                  void DataExportRepository.exportAndShare(babyId, { dialogTitle: t("settings.critical.199") })
                     .then(() => setExportMessage(t("settings.critical.204")))
                     .catch((error) => setExportMessage(error instanceof Error ? localizedErrorMessage(t, error.message) : t("settings.critical.205")))
                     .finally(() => setExporting(false));
@@ -1070,11 +1070,11 @@ const styles = StyleSheet.create({
   accordionChevron: { color: colors.muted, fontSize: 15, fontWeight: "800" },
   accordionBody: { padding: 15, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 17, backgroundColor: colors.backgroundSecondary },
   accordionParagraph: { gap: 6 },
-  primaryButton: { minHeight: 50, borderRadius: 15, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  primaryButtonText: { color: colors.amberDark, fontSize: 14, fontWeight: "800" },
-  secondaryButton: { minHeight: 48, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  primaryButton: { minHeight: 50, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 15, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
+  primaryButtonText: { flexShrink: 1, textAlign: "center", lineHeight: 20, color: colors.amberDark, fontSize: 14, fontWeight: "800" },
+  secondaryButton: { minHeight: 48, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   secondaryButtonDisabled: { opacity: 0.55 },
-  secondaryButtonText: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  secondaryButtonText: { flexShrink: 1, textAlign: "center", lineHeight: 20, color: colors.text, fontSize: 14, fontWeight: "800" },
   policyLead: { color: colors.text, fontSize: 15, lineHeight: 23, fontWeight: "700" },
   policySection: { borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 16 },
   policyTitle: { color: colors.text, fontSize: 14, fontWeight: "800", marginBottom: 7 },

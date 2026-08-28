@@ -94,7 +94,7 @@ export const DataExportRepository = {
     return sanitizeUserIdentifiers(payload, user.id) as ExportPayload;
   },
 
-  async exportAndShare(babyId: string): Promise<string> {
+  async exportAndShare(babyId: string, options: { dialogTitle: string }): Promise<string> {
     const payload = await this.buildExport(babyId);
     if (!FileSystem.cacheDirectory) throw new Error("내보내기 파일을 만들 수 없어요.");
     const date = payload.exportedAt.slice(0, 10);
@@ -103,7 +103,7 @@ export const DataExportRepository = {
       encoding: FileSystem.EncodingType.UTF8,
     });
     if (!(await Sharing.isAvailableAsync())) throw new Error("이 기기에서는 공유 기능을 사용할 수 없어요.");
-    await Sharing.shareAsync(uri, { mimeType: "application/json", dialogTitle: "Darin 데이터 내보내기" });
+    await Sharing.shareAsync(uri, { mimeType: "application/json", dialogTitle: options.dialogTitle });
     return uri;
   },
 };

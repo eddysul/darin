@@ -94,11 +94,11 @@ function stickerVisualHtml(sticker: BabySticker, sizeClass: string): string {
   return `<span class="sticker-visual ${sizeClass}${frameClass}${borderClass}${shadowClass}${shapeClass}${placementClass}"><img src="${escapeHtml(uri)}" alt="" />${decorationLayer}${bubble}</span>`;
 }
 
-function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker>, t?: Translate): string {
+function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker>, t: Translate): string {
   if (page.kind === "cover") {
     return `
       <section class="page cover">
-        <p class="eyebrow">${escapeHtml(page.subtitle ?? (t ? t("growth.critical.013") : "성장책"))}</p>
+        <p class="eyebrow">${escapeHtml(page.subtitle ?? t("growth.critical.013"))}</p>
         <h1>${escapeHtml(page.title)}</h1>
         ${
           page.photoUri
@@ -116,7 +116,7 @@ function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker
         ? letters
             .map((letter) => {
               const author = formatGrowthAuthorLabel(letter.authorRelationshipLabel, letter.authorName, t);
-              const from = t ? t("growth.critical.171", { author }) : `${author}가`;
+              const from = t("growth.critical.171", { author });
               return `
           <div class="letter-block">
             <p class="letter-from">${escapeHtml(from)}</p>
@@ -128,7 +128,7 @@ function pageHtml(page: GrowthBookPage, stickersById: Record<string, BabySticker
 
     return `
       <section class="page letter">
-        <p class="eyebrow">${escapeHtml(page.subtitle ?? (t ? t("growth.critical.010") : "마지막 편지"))}</p>
+        <p class="eyebrow">${escapeHtml(page.subtitle ?? t("growth.critical.010"))}</p>
         <h2>${escapeHtml(page.title)}</h2>
         ${letterBlocks}
       </section>`;
@@ -185,17 +185,15 @@ export function buildGrowthBookPdfHtml(input: {
   entries: DiaryEntry[];
   edit?: GrowthBookEdit | null;
   stickers?: BabySticker[];
-  t?: Translate;
-  locale?: Locale;
+  t: Translate;
+  locale: Locale;
 }): string {
   const pages = buildGrowthBookPages(input);
   const stickersById = Object.fromEntries((input.stickers ?? []).map((s) => [s.id, s]));
   const sections = pages.map((page) => pageHtml(page, stickersById, input.t)).join("\n");
-  const title = input.t
-    ? input.t("growth.critical.139", { babyName: input.babyName })
-    : `${input.babyName}의 성장책`;
+  const title = input.t("growth.critical.139", { babyName: input.babyName });
   return `<!DOCTYPE html>
-<html lang="${input.locale ?? "ko"}">
+<html lang="${input.locale}">
 <head>
   <meta charset="utf-8" />
   <title>${escapeHtml(title)}</title>
@@ -284,8 +282,8 @@ export async function createGrowthBookPdf(input: {
   entries: DiaryEntry[];
   edit?: GrowthBookEdit | null;
   stickers?: BabySticker[];
-  t?: Translate;
-  locale?: Locale;
+  t: Translate;
+  locale: Locale;
 }): Promise<{ uri: string } | null> {
   try {
     const html = buildGrowthBookPdfHtml(input);
@@ -294,27 +292,21 @@ export async function createGrowthBookPdf(input: {
     if (canShare) {
       await Sharing.shareAsync(file.uri, {
         mimeType: "application/pdf",
-        dialogTitle: input.t
-          ? input.t("chrome.critical.046", { babyName: input.babyName })
-          : `${input.babyName}의 성장책 PDF`,
+        dialogTitle: input.t("chrome.critical.046", { babyName: input.babyName }),
         UTI: "com.adobe.pdf",
       });
     } else if (Platform.OS === "ios") {
       await Print.printAsync({ html });
     } else {
       Alert.alert(
-        input.t ? input.t("chrome.critical.042") : "PDF 준비됨",
-        input.t ? input.t("chrome.critical.043", { uri: file.uri }) : `파일이 생성되었어요.\n${file.uri}`,
+        input.t("chrome.critical.042"),
+        input.t("chrome.critical.043", { uri: file.uri }),
       );
     }
     return file;
   } catch (error) {
-    const message = error instanceof Error
-      ? error.message
-      : input.t
-        ? input.t("chrome.critical.045")
-        : "알 수 없는 오류";
-    Alert.alert(input.t ? input.t("chrome.critical.044") : "PDF 만들기 실패", message);
+    // Native print errors are not localized consistently; never leak their raw language into UI.
+    Alert.alert(input.t("chrome.critical.044"), input.t("chrome.critical.045"));
     return null;
   }
 }

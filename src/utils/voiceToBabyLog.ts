@@ -13,6 +13,7 @@ export type VoiceEventDraft = {
   dateKey?: string;
   chip?: string;
   chip2?: string;
+  stoolState?: string;
   amount?: string;
   duration?: string;
   notes?: string;
@@ -47,6 +48,7 @@ function buildExtraLabel(result: Omit<VoiceEventDraft, "id" | "extraLabel" | "co
     cat: result.cat,
     chip: result.chip,
     chip2: result.chip2,
+    stoolState: result.stoolState,
     amount: result.amount,
     duration: result.duration,
   });
@@ -148,15 +150,12 @@ function inferPregnancySegment(segment: string, now = new Date()): VoiceEventDra
   if (!text) return null;
   const parsedTime = parseVoiceTime(text, now);
   const flags: BabyLogFlag[] = parsedTime.ambiguous ? ["time_ambiguous"] : [];
-  const relativeNote = parsedTime.relativeNote ? `원문 시점: ${parsedTime.relativeNote}` : undefined;
-
   if (/체중|몸무게|\d+(?:\.\d+)?\s*(?:kg|킬로)/i.test(text)) {
     return draft({
       cat: "pregWeight",
       time: parsedTime.time,
       dateKey: parsedTime.dateKey,
       amount: extractKgAmount(text),
-      notes: relativeNote,
       flags,
       confidence: 0.9,
       timeAmbiguous: parsedTime.ambiguous,
@@ -170,7 +169,6 @@ function inferPregnancySegment(segment: string, now = new Date()): VoiceEventDra
       time: parsedTime.time,
       dateKey: parsedTime.dateKey,
       amount: extractBpAmount(text),
-      notes: relativeNote,
       flags,
       confidence: 0.9,
       timeAmbiguous: parsedTime.ambiguous,
@@ -184,7 +182,7 @@ function inferPregnancySegment(segment: string, now = new Date()): VoiceEventDra
       time: parsedTime.time,
       dateKey: parsedTime.dateKey,
       chip: pregnancyKickChip(text),
-      notes: [relativeNote, text].filter(Boolean).join(" · ") || undefined,
+      notes: text,
       flags,
       confidence: 0.9,
       timeAmbiguous: parsedTime.ambiguous,
@@ -198,7 +196,7 @@ function inferPregnancySegment(segment: string, now = new Date()): VoiceEventDra
       time: parsedTime.time,
       dateKey: parsedTime.dateKey,
       chip: pregnancyHospitalChip(text),
-      notes: [relativeNote, text].filter(Boolean).join(" · ") || undefined,
+      notes: text,
       flags,
       confidence: 0.88,
       timeAmbiguous: parsedTime.ambiguous,
@@ -212,7 +210,7 @@ function inferPregnancySegment(segment: string, now = new Date()): VoiceEventDra
       time: parsedTime.time,
       dateKey: parsedTime.dateKey,
       chip: pregnancyMedChip(text),
-      notes: [relativeNote, text].filter(Boolean).join(" · ") || undefined,
+      notes: text,
       flags,
       confidence: 0.86,
       timeAmbiguous: parsedTime.ambiguous,
@@ -226,7 +224,7 @@ function inferPregnancySegment(segment: string, now = new Date()): VoiceEventDra
       time: parsedTime.time,
       dateKey: parsedTime.dateKey,
       chip: pregnancySymptomChip(text),
-      notes: [relativeNote, text].filter(Boolean).join(" · ") || undefined,
+      notes: text,
       flags,
       confidence: 0.86,
       timeAmbiguous: parsedTime.ambiguous,
@@ -240,7 +238,7 @@ function inferPregnancySegment(segment: string, now = new Date()): VoiceEventDra
       time: parsedTime.time,
       dateKey: parsedTime.dateKey,
       chip: pregnancyMoodChip(text),
-      notes: [relativeNote, text].filter(Boolean).join(" · ") || undefined,
+      notes: text,
       flags,
       confidence: 0.82,
       timeAmbiguous: parsedTime.ambiguous,
@@ -293,13 +291,8 @@ function fromCareEvent(rawTranscript: string, event: CareEvent, now = new Date()
   const parsedTime = parseVoiceTime(timeSource, now);
   const flags = detectFlags(`${rawTranscript} ${noteBits}`);
   if (parsedTime.ambiguous) flags.push("time_ambiguous");
-  if (parsedTime.relativeNote === "아까") {
-    // keep relative cue in notes
-  }
-
   const baseNotes = [
     typeof event.note === "string" ? event.note : undefined,
-    parsedTime.relativeNote ? `원문 시점: ${parsedTime.relativeNote}` : undefined,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -431,7 +424,6 @@ function inferSegment(segment: string, now = new Date()): VoiceEventDraft | null
   const parsedTime = parseVoiceTime(text, now);
   const flags = detectFlags(text);
   if (parsedTime.ambiguous) flags.push("time_ambiguous");
-  const relativeNote = parsedTime.relativeNote ? `원문 시점: ${parsedTime.relativeNote}` : undefined;
 
   // spit / burp as memo-ish flags preferably attached — also allow standalone notes
   if (/트림|토했|게웠|게움|분수토/.test(text) && !/(분유|모유|수유|먹)/.test(text)) {
@@ -453,7 +445,6 @@ function inferSegment(segment: string, now = new Date()): VoiceEventDraft | null
       time: parsedTime.time,
       dateKey: parsedTime.dateKey,
       chip: "소변",
-      notes: relativeNote,
       flags,
       confidence: 0.86,
       timeAmbiguous: parsedTime.ambiguous,
@@ -470,9 +461,7 @@ function inferSegment(segment: string, now = new Date()): VoiceEventDraft | null
       dateKey: parsedTime.dateKey,
       chip: "대변",
       chip2,
-      notes: [relativeNote, stoolState ? `상태: ${stoolState}` : undefined]
-        .filter(Boolean)
-        .join(" · ") || undefined,
+      stoolState,
       flags,
       confidence: 0.86,
       timeAmbiguous: parsedTime.ambiguous,
@@ -487,7 +476,6 @@ function inferSegment(segment: string, now = new Date()): VoiceEventDraft | null
       time: parsedTime.time,
       dateKey: parsedTime.dateKey,
       chip,
-      notes: relativeNote,
       flags,
       confidence: 0.82,
       timeAmbiguous: parsedTime.ambiguous,
@@ -501,7 +489,6 @@ function inferSegment(segment: string, now = new Date()): VoiceEventDraft | null
       time: parsedTime.time,
       dateKey: parsedTime.dateKey,
       amount: extractMlAmount(text),
-      notes: [relativeNote, flags.includes("spit_up") ? "수유 후 토함" : undefined].filter(Boolean).join(" · ") || undefined,
       flags,
       confidence: /분유|맘마|젖병/.test(text) ? 0.92 : 0.7,
       timeAmbiguous: parsedTime.ambiguous,
@@ -530,7 +517,6 @@ function inferSegment(segment: string, now = new Date()): VoiceEventDraft | null
       dateKey: parsedTime.dateKey,
       chip,
       duration,
-      notes: relativeNote,
       flags,
       confidence: 0.9,
       timeAmbiguous: parsedTime.ambiguous,
@@ -544,7 +530,6 @@ function inferSegment(segment: string, now = new Date()): VoiceEventDraft | null
       cat: "food",
       time: parsedTime.time,
       amount: g?.[1],
-      notes: relativeNote,
       flags,
       confidence: 0.85,
     });
@@ -558,7 +543,6 @@ function inferSegment(segment: string, now = new Date()): VoiceEventDraft | null
       time: start.time,
       dateKey: start.dateKey ?? parsedTime.dateKey,
       duration: span?.duration ?? parseDurationMinutes(text),
-      notes: relativeNote,
       flags: (() => {
         const f = [...flags];
         if (start.ambiguous) {
@@ -577,14 +561,13 @@ function inferSegment(segment: string, now = new Date()): VoiceEventDraft | null
       cat: "tummy",
       time: parsedTime.time,
       duration: parseDurationMinutes(text),
-      notes: relativeNote,
       flags,
       confidence: 0.8,
     });
   }
 
   if (/목욕/.test(text)) {
-    return draft({ cat: "bath", time: parsedTime.time, notes: relativeNote, flags, confidence: 0.85 });
+    return draft({ cat: "bath", time: parsedTime.time, flags, confidence: 0.85 });
   }
 
   if (/체온|열\s*났|열이/.test(text)) {
@@ -593,7 +576,6 @@ function inferSegment(segment: string, now = new Date()): VoiceEventDraft | null
       cat: "temp",
       time: parsedTime.time,
       amount: temp?.[1],
-      notes: relativeNote,
       flags,
       confidence: 0.85,
     });
@@ -614,7 +596,7 @@ function fallbackVoiceDraft(rawTranscript: string, now: Date, pregnancy: boolean
   return draft({
     cat: pregnancy ? "pregMood" : "memo",
     time: formatHhMm(now),
-    notes: rawTranscript,
+    notes: rawTranscript || undefined,
     confidence: 0.4,
     flags: ["low_confidence"],
   });
@@ -651,7 +633,7 @@ export function buildVoiceSession(
   if (!rawTranscript) {
     return {
       rawTranscript: "",
-      events: [fallbackVoiceDraft("음성 기록", now, pregnancy)],
+      events: [fallbackVoiceDraft("", now, pregnancy)],
     };
   }
 
@@ -721,6 +703,7 @@ function coalesceRelatedDiaper(events: VoiceEventDraft[]): VoiceEventDraft[] {
         ...prev,
         chip: e.chip,
         chip2: e.chip2 ?? prev.chip2,
+        stoolState: e.stoolState ?? prev.stoolState,
         notes: [prev.notes, e.notes].filter(Boolean).join(" · ") || undefined,
         confidence: Math.max(prev.confidence, e.confidence),
         extraLabel: buildExtraLabel({
@@ -728,6 +711,7 @@ function coalesceRelatedDiaper(events: VoiceEventDraft[]): VoiceEventDraft[] {
           time: prev.time,
           chip: e.chip,
           chip2: e.chip2 ?? prev.chip2,
+          stoolState: e.stoolState ?? prev.stoolState,
           amount: prev.amount,
           duration: prev.duration,
         }),
@@ -762,6 +746,7 @@ export function voiceEventToLogFields(event: VoiceEventDraft, rawTranscript: str
     dateKey: event.dateKey,
     chip: event.chip,
     chip2: event.chip2,
+    stoolState: event.stoolState,
     amount: event.amount,
     duration: event.duration,
     notes: event.notes,
@@ -779,7 +764,7 @@ export function reclassifyVoiceText(
   previous?: VoiceEventDraft | null,
   options: VoiceParseOptions = {},
 ): VoiceEventDraft {
-  const session = buildVoiceSession(text.trim() || previous?.notes || "음성 기록", [], new Date(), options);
+  const session = buildVoiceSession(text.trim() || previous?.notes || "", [], new Date(), options);
   const next = session.events[0];
   if (previous) {
     return { ...next, id: previous.id };

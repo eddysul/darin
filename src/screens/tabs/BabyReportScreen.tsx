@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
 import { AppHeader } from "../../components/babylog/AppHeader";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
@@ -60,6 +60,8 @@ export function BabyReportScreen({
   onOpenConsult,
 }: Props) {
   const { locale, t } = useLanguage();
+  const { width: windowWidth } = useWindowDimensions();
+  const rhythmDialSize = Math.max(232, Math.min(316, windowWidth - 68));
   const { logs, babyName, careSetup, growthRecords, addGrowthRecord, updateGrowthRecord } = useBabyLog();
   const [growthModalOpen, setGrowthModalOpen] = useState(false);
   const [editingGrowthRecord, setEditingGrowthRecord] = useState<GrowthRecord | null>(null);
@@ -183,7 +185,7 @@ export function BabyReportScreen({
               {hasRhythmData ? (
                 <>
                   <View style={styles.rhythmContent}>
-                    <RhythmDial series={dialSeries} />
+                    <RhythmDial series={dialSeries} displaySize={rhythmDialSize} />
                   </View>
                   <View style={styles.rhythmLegend}>
                     {dialSeries.legend.map((item) => (
@@ -442,7 +444,7 @@ function buildDialSeries(logs: BabyLogEntry[]): {
   return { arcs, dots, legend };
 }
 
-function RhythmDial({ series }: { series: ReturnType<typeof buildDialSeries> }) {
+function RhythmDial({ series, displaySize }: { series: ReturnType<typeof buildDialSeries>; displaySize: number }) {
   const { t } = useLanguage();
   const size = 316;
   const center = size / 2;
@@ -453,8 +455,8 @@ function RhythmDial({ series }: { series: ReturnType<typeof buildDialSeries> }) 
   const labelRadius = tickInner + 17;
 
   return (
-    <View style={styles.dialWrap} accessibilityLabel={t("report.critical.096")}>
-      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <View style={{ width: displaySize, height: displaySize }} accessibilityLabel={t("report.critical.096")}>
+      <Svg width={displaySize} height={displaySize} viewBox={`0 0 ${size} ${size}`}>
         <Circle cx={center} cy={center} r={trackRadius} fill="#FFFDFC" stroke={colors.border} strokeWidth={trackWidth} />
 
         {/* 매시 눈금. 3시간마다 길고 진하게 해서 시각을 짚기 쉽게 한다. */}
@@ -615,16 +617,16 @@ const styles = StyleSheet.create({
   },
   dashboardCardWarning: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
   dashboardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 13 },
-  dashboardTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  dashboardTitle: { fontSize: 15.5, fontWeight: "800", color: colors.text },
+  dashboardTitleRow: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 7 },
+  dashboardTitle: { flexShrink: 1, fontSize: 15.5, fontWeight: "800", color: colors.text },
   dashboardTitleWarning: { color: colors.dangerText },
-  dashboardCaption: { fontSize: 10.5, fontWeight: "600", color: colors.faint },
+  dashboardCaption: { maxWidth: "46%", flexShrink: 1, textAlign: "right", fontSize: 10.5, fontWeight: "600", color: colors.faint },
   dashboardEmpty: { alignItems: "center", paddingVertical: 16, paddingHorizontal: 14 },
   dashboardEmptyCompact: { paddingVertical: 12 },
   dashboardEmptyIcon: { width: 44, height: 44, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft, marginBottom: 9 },
   dashboardEmptyText: { color: colors.muted, fontSize: 12.5, lineHeight: 19, textAlign: "center" },
   dashboardEmptyBtn: { marginTop: 12, minWidth: 140, alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.amber },
-  dashboardEmptyBtnText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+  dashboardEmptyBtnText: { flexShrink: 1, textAlign: "center", lineHeight: 17, color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
   growthChartNext: { marginTop: 22, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 16 },
   growthSource: { fontSize: 10, lineHeight: 16, color: colors.faint, marginTop: 16 },
   growthEmpty: { alignItems: "center", paddingHorizontal: 12, paddingBottom: 4 },
@@ -632,7 +634,7 @@ const styles = StyleSheet.create({
   growthEmptyTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
   growthEmptyBody: { maxWidth: 300, marginTop: 6, fontSize: 11.5, lineHeight: 17, textAlign: "center", color: colors.faint },
   growthEmptyBtn: { marginTop: 13, minWidth: 150, alignItems: "center", paddingHorizontal: 18, paddingVertical: 11, borderRadius: 13, backgroundColor: colors.amber },
-  growthEmptyBtnText: { fontSize: 12.5, fontWeight: "800", color: colors.amberDark },
+  growthEmptyBtnText: { flexShrink: 1, textAlign: "center", lineHeight: 18, fontSize: 12.5, fontWeight: "800", color: colors.amberDark },
   weeklyCard: {
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -647,8 +649,10 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   weeklyTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  weeklyKicker: { fontSize: 12.5, fontWeight: "800", color: colors.muted },
+  weeklyKicker: { flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: "800", color: colors.muted },
   weeklyBadge: {
+    flexShrink: 1,
+    textAlign: "center",
     fontSize: 10.5,
     fontWeight: "800",
     color: colors.amber,
@@ -671,10 +675,9 @@ const styles = StyleSheet.create({
     paddingTop: 11,
   },
   weeklyTease: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 12 },
-  weeklyTeaseText: { fontSize: 12, fontWeight: "800", color: colors.amber },
-  weeklyMore: { fontSize: 11.5, fontWeight: "800", color: colors.amber },
+  weeklyTeaseText: { flexShrink: 1, fontSize: 12, fontWeight: "800", color: colors.amber },
+  weeklyMore: { flexShrink: 1, textAlign: "right", fontSize: 11.5, fontWeight: "800", color: colors.amber },
   rhythmContent: { alignItems: "center" },
-  dialWrap: { width: 316, height: 316 },
   rhythmLegend: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", columnGap: 14, rowGap: 7, marginTop: 8 },
   filterRow: { paddingHorizontal: 18, paddingVertical: 2, gap: 8, paddingBottom: 14 },
   filterChip: {

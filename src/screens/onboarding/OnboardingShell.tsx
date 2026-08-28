@@ -266,6 +266,7 @@ const styles = StyleSheet.create({
   optional: { color: colors.faint, fontWeight: "500" },
   optionWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   optionBtn: {
+    maxWidth: "100%",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: radius.md,
@@ -274,7 +275,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.inputBg,
   },
   optionBtnActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  optionText: { fontSize: 13, color: colors.muted, fontWeight: "600" },
+  optionText: { flexShrink: 1, textAlign: "center", lineHeight: 18, fontSize: 13, color: colors.muted, fontWeight: "600" },
   optionTextActive: { color: colors.text, fontWeight: "800" },
   footerHint: {
     fontSize: 12,
@@ -289,9 +290,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: 16,
     alignItems: "center",
+    paddingHorizontal: 16,
   },
   ctaDisabled: { opacity: 0.4 },
-  ctaText: { fontSize: 16, fontWeight: "800", color: colors.primaryForeground },
+  ctaText: { flexShrink: 1, textAlign: "center", lineHeight: 22, fontSize: 16, fontWeight: "800", color: colors.primaryForeground },
   secondaryBtn: { marginTop: 14, alignItems: "center", paddingVertical: 8 },
-  secondaryText: { fontSize: 14, fontWeight: "700", color: colors.muted },
+  secondaryText: { flexShrink: 1, textAlign: "center", lineHeight: 20, fontSize: 14, fontWeight: "700", color: colors.muted },
 });

@@ -8,6 +8,7 @@ import { MAX_PROFILE_AVATAR_BYTES } from "../types/profileSettings";
 import { requireSupabase } from "../lib/supabase";
 import { toDbRelationshipLabel } from "../utils/supabaseMappers";
 import { AuthRepository } from "./AuthRepository";
+import type { Locale } from "../i18n";
 
 const BUCKET = "profile-media";
 const SIGNED_URL_TTL_SECONDS = 180;
@@ -47,6 +48,18 @@ function rowToDisplay(
 }
 
 export const ProfileRepository = {
+  /** Keeps server-generated push copy aligned with the locale currently shown on this device. */
+  async syncPreferredLanguage(locale: Locale): Promise<void> {
+    const user = await AuthRepository.getUser();
+    if (!user) return;
+    const { error } = await requireSupabase()
+      .from("profiles")
+      .update({ preferred_language: locale, updated_at: new Date().toISOString() })
+      .eq("id", user.id)
+      .neq("preferred_language", locale);
+    if (error) throw error;
+  },
+
   async listVisibleDisplayProfiles(userIds: string[]): Promise<DisplayProfile[]> {
     const ids = [...new Set(userIds.filter(Boolean))];
     if (!ids.length) return [];

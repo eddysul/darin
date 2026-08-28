@@ -78,6 +78,7 @@ function cardSummary(event: VoiceResult, t: Translate, locale: ReturnType<typeof
   if (event.duration) bits.push(t("record.timeline.minutes", { count: event.duration }));
   if (event.chip) bits.push(storedRecordValueLabel(t, event.chip));
   if (event.chip2) bits.push(storedRecordValueLabel(t, event.chip2));
+  if (event.stoolState) bits.push(storedRecordValueLabel(t, event.stoolState));
   bits.push(formatTimeOfDay(event.time, event.time, locale));
   return bits.join(" · ");
 }

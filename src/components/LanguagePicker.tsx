@@ -79,6 +79,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   optionActive: { backgroundColor: colors.yellowSoft },
-  optionText: { fontSize: 14, fontWeight: "600", color: colors.text },
+  optionText: { flex: 1, minWidth: 0, marginRight: 8, fontSize: 14, fontWeight: "600", color: colors.text },
   optionTextActive: { color: colors.text },
 });

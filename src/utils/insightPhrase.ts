@@ -80,7 +80,7 @@ export async function buildInsightPhrases(
       insightSystemPrompt(locale),
       300,
     );
-    const phrases = parseInsightPhrases(reply, insights);
+    const phrases = parseInsightPhrases(reply, insights, locale);
     if (Object.keys(phrases).length) void saveInsightPhrases(periodLabel, phrases);
     return phrases;
   } catch {

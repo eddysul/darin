@@ -36,7 +36,7 @@ export async function buildWeeklyNarrative(
       narrativeSystemPrompt(locale),
       320,
     );
-    if (!validateNarrative(reply, table)) return fallback;
+    if (!validateNarrative(reply, table, locale)) return fallback;
 
     const [headline, ...rest] = reply.split("\n").map((line) => line.trim()).filter(Boolean);
     const body = rest.join(" ").trim();
