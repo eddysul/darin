@@ -22,15 +22,12 @@ import {
 } from "../utils/careLogServerSync";
 import { clearSupabaseSync, getSupabaseSync, saveSupabaseSync } from "../utils/supabaseSyncStore";
 import { AuthRepository } from "../repositories/AuthRepository";
-import { FamilyRepository } from "../repositories/FamilyRepository";
 import { isSupabaseConfigured } from "../lib/supabase";
 import {
-  getDiaryEntries,
   resetDiaryEntriesMemory,
   saveDiaryEntries,
 } from "../utils/diaryStore";
 import {
-  bootstrapDiaryFromServer,
   syncDiaryCreate,
   syncDiaryDelete,
   syncDiaryUpdate,
@@ -41,22 +38,17 @@ import {
   saveChatHistory,
 } from "../utils/chatHistoryStore";
 import {
-  getFamilyMembers,
   resetFamilyMembersMemory,
   saveFamilyMembers,
 } from "../utils/familyMembersStore";
 import {
-  ensureGrowthBookEdit,
-  getGrowthBookEdit,
   resetGrowthBookEditMemory,
   saveGrowthBookEdit,
 } from "../utils/growthBookStore";
 import {
-  bootstrapGrowthBookFromServer,
   syncGrowthBookEdit,
 } from "../utils/growthBookServerSync";
 import {
-  getBabyStickers,
   mergeBabyStickerLists,
   resetBabyStickersMemory,
   saveBabyStickers,
@@ -69,12 +61,10 @@ import type { GrowthRecord, GrowthRecordDraft } from "../types/growthRecord";
 import { createEmptyGrowthBookEdit } from "../types/growthBook";
 import { createId } from "../utils/id";
 import {
-  getGrowthRecords,
   resetGrowthRecordsMemory,
   saveGrowthRecords,
 } from "../utils/growthRecordsStore";
 import {
-  bootstrapGrowthRecordsFromServer,
   syncGrowthRecordCreate,
   syncGrowthRecordDelete,
   syncGrowthRecordUpdate,
@@ -97,7 +87,7 @@ import { BabyRepository, type CreateBabyInput } from "../repositories/BabyReposi
 import type { BabyRow } from "../types/database";
 import type { CautionFood, CautionFoodSource } from "../types/cautionFood";
 import { CautionFoodRepository } from "../repositories/CautionFoodRepository";
-import { loadCautionFoods, normalizeCautionFoodName, saveCautionFoods } from "../utils/cautionFoodsStore";
+import { normalizeCautionFoodName, saveCautionFoods } from "../utils/cautionFoodsStore";
 import { getDiaryReminder, saveDiaryReminder } from "../utils/diaryReminderStore";
 import { saveCareSetup } from "../utils/careSetupStore";
 import {
@@ -114,11 +104,6 @@ import {
   switchToQaEmptyData,
 } from "../utils/qaDebug";
 import { buildDemoSeed } from "../utils/demoSeed";
-import {
-  containsLegacySampleDiary,
-  removeLegacySampleDiaries,
-  removeLegacySampleFamily,
-} from "../utils/legacySampleData";
 import { DEFAULT_CHAT_GREETING } from "../constants/chatDefaults";
 import { sameLocalDataScope } from "./babyLogContextHelpers";
 import { useBabyLogCachePersistence } from "./useBabyLogCachePersistence";
@@ -127,6 +112,14 @@ import {
   resolveBabyLogDataScope,
   resolveHydratedCareLogs,
 } from "./babyLogHydrationService";
+import {
+  resolveCautionFoodsSnapshot,
+  resolveDiarySnapshot,
+  resolveFamilySnapshot,
+  resolveGrowthBookSnapshot,
+  resolveGrowthRecordsSnapshot,
+  resolveStickerSnapshot,
+} from "./babyLogDomainHydrationService";
 
 type BabyLogContextValue = {
   careSetup: CareSetup;
@@ -320,18 +313,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setLogsHydrated(true);
     }
     if (diaryOk) {
-      const storedDiary = getDiaryEntries();
-      const localDiary = storedDiary === null ? [] : removeLegacySampleDiaries(storedDiary);
-      if (storedDiary !== null && localDiary.length !== storedDiary.length) {
-        void saveDiaryEntries(localDiary, scope);
-      }
-      const boot = await bootstrapDiaryFromServer(scope, localDiary);
+      const diary = await resolveDiarySnapshot(scope);
       if (hydrationRun !== storageHydrationRunRef.current) return false;
-      if (boot.usedServer && boot.entries !== null) {
-        setDiaryEntries(boot.entries);
-        void saveDiaryEntries(boot.entries, scope);
-      } else if (storedDiary !== null) {
-        setDiaryEntries(localDiary);
+      if (diary.value !== null) {
+        setDiaryEntries(diary.value);
+        if (diary.persist) void saveDiaryEntries(diary.value, scope);
       }
       setDiaryHydrated(!!scope);
     }
@@ -343,59 +329,27 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     }
     setChatHydrated(true);
     if (familyOk) {
-      const storedFamily = getFamilyMembers();
-      if (storedFamily !== null) {
-        const cleanedFamily = removeLegacySampleFamily(storedFamily);
-        setFamilyMembers(cleanedFamily);
-        if (cleanedFamily.length !== storedFamily.length) void saveFamilyMembers(cleanedFamily, scope);
-      }
-      if (scope?.babyId && isSupabaseConfigured()) {
-        try {
-          const serverFamily = await FamilyRepository.listMembersAsFamily(scope.babyId);
-          if (hydrationRun !== storageHydrationRunRef.current) return false;
-          if (serverFamily.length) {
-            setFamilyMembers(serverFamily);
-            void saveFamilyMembers(serverFamily, scope);
-          }
-        } catch {
-          // Keep local family cache when co-member profile join is unavailable.
-        }
+      const family = await resolveFamilySnapshot(scope);
+      if (hydrationRun !== storageHydrationRunRef.current) return false;
+      if (family.value !== null) {
+        setFamilyMembers(family.value);
+        if (family.persist) void saveFamilyMembers(family.value, scope);
       }
       setFamilyHydrated(true);
     }
     if (growthOk) {
-      const storedEdit = getGrowthBookEdit();
-      const storedDiary = getDiaryEntries();
-      const localEdit = storedDiary && containsLegacySampleDiary(storedDiary)
-        ? createEmptyGrowthBookEdit({ babyId: scope?.babyId ?? "", babyName: careSetup.child.childName })
-        : ensureGrowthBookEdit({
-            babyId: scope?.babyId ?? "",
-            babyName: careSetup.child.childName,
-            existing: storedEdit,
-          });
-      const growthBookBoot = await bootstrapGrowthBookFromServer({
+      const growthBook = await resolveGrowthBookSnapshot({
         scope,
         babyName: careSetup.child.childName,
-        localEdit,
-        diaryOrder: (getDiaryEntries() ?? []).filter((entry) => entry.includedInGrowthBook).map((entry) => entry.id),
       });
       if (hydrationRun !== storageHydrationRunRef.current) return false;
-      const nextEdit = growthBookBoot.usedServer && growthBookBoot.edit ? growthBookBoot.edit : localEdit;
-      setGrowthBookEditState(nextEdit);
-      void saveGrowthBookEdit(nextEdit, scope);
-      growthBookDirtyRef.current = growthBookBoot.mediaFailed > 0;
+      setGrowthBookEditState(growthBook.edit);
+      void saveGrowthBookEdit(growthBook.edit, scope);
+      growthBookDirtyRef.current = growthBook.mediaFailed > 0;
       setGrowthBookHydrated(!!scope);
     }
     if (stickersOk) {
-      const storedStickers = getBabyStickers() ?? [];
-      let nextStickers = storedStickers;
-      if (scope) {
-        try {
-          nextStickers = await BabyStickerRepository.uploadLocalBabyStickersMigration(scope, storedStickers);
-        } catch {
-          // Keep the scoped local originals and retry migration on the next hydrate.
-        }
-      }
+      const nextStickers = await resolveStickerSnapshot(scope);
       if (hydrationRun !== storageHydrationRunRef.current) return false;
       setBabyStickers((prev) => {
         const merged = mergeBabyStickerLists(nextStickers, prev);
@@ -405,44 +359,16 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setStickersHydrated(!!scope);
     }
     if (growthRecordsOk) {
-      const storedGrowthRecords = getGrowthRecords();
-      const localGrowthRecords = storedGrowthRecords ?? [];
-      const boot = hasSavedCareSetup
-        ? await bootstrapGrowthRecordsFromServer(localGrowthRecords)
-        : { usedServer: false, records: null, migrated: 0, migrationFailed: 0 };
+      const growthRecordsSnapshot = await resolveGrowthRecordsSnapshot(hasSavedCareSetup);
       if (hydrationRun !== storageHydrationRunRef.current) return false;
-      if (boot.usedServer && boot.records !== null) {
-        setGrowthRecords(boot.records);
-        void saveGrowthRecords(boot.records, scope);
-      } else if (storedGrowthRecords !== null) {
-        setGrowthRecords(storedGrowthRecords);
+      if (growthRecordsSnapshot.value !== null) {
+        setGrowthRecords(growthRecordsSnapshot.value);
+        if (growthRecordsSnapshot.persist) void saveGrowthRecords(growthRecordsSnapshot.value, scope);
       }
       setGrowthRecordsHydrated(true);
     }
     if (scope) {
-      const localCautionFoods = await loadCautionFoods(scope);
-      let nextCautionFoods = localCautionFoods;
-      if (isSupabaseConfigured()) {
-        try {
-          const serverFoods = await CautionFoodRepository.list(scope.babyId);
-          const merged = [...serverFoods];
-          const serverNames = new Set(serverFoods.map((food) => food.normalizedFoodName));
-          for (const localFood of localCautionFoods) {
-            if (serverNames.has(localFood.normalizedFoodName)) continue;
-            try {
-              const migrated = await CautionFoodRepository.add(scope.babyId, localFood.foodName, localFood.source);
-              merged.push(migrated);
-              serverNames.add(migrated.normalizedFoodName);
-            } catch {
-              // Keep an unsynced local item visible and retry on the next hydration.
-              merged.push(localFood);
-            }
-          }
-          nextCautionFoods = merged;
-        } catch {
-          // Migration may not be applied yet; keep the baby-scoped device cache.
-        }
-      }
+      const nextCautionFoods = await resolveCautionFoodsSnapshot(scope);
       if (hydrationRun !== storageHydrationRunRef.current) return false;
       setCautionFoods(nextCautionFoods);
       void saveCautionFoods(scope, nextCautionFoods);

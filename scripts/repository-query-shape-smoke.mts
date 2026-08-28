@@ -17,5 +17,7 @@ assert.match(memories, /\.order\("created_at", \{ ascending: false \}\)\s*\.orde
 assert.match(diary, /createSignedUrls\(paths, DIARY_SIGNED_URL_TTL_SECONDS\)/);
 assert.match(careLogs, /\.range\(safeOffset, safeOffset \+ safeLimit - 1\)/);
 assert.match(careLogs, /page\.length < CARE_LOG_HYDRATION_PAGE_SIZE/);
+assert.match(careLogs, /offset \+= page\.length/);
+assert.match(careLogs, /mergeCareLogEntries\(\[\], logs\)/);
 
 console.log("Repository query shape smoke passed");

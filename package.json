@@ -27,6 +27,7 @@
     "qa:i18n:release": "pnpm dlx tsx scripts/i18n-release-readiness.mts",
     "qa:feature-flags": "node --experimental-strip-types scripts/feature-flags-audit.mts",
     "qa:care-reminders": "node --experimental-strip-types scripts/care-reminder-qa-smoke.mts",
+    "qa:care-log-history": "pnpm dlx tsx scripts/care-log-history-smoke.mts",
     "qa:care-reminders:migration": "node --experimental-strip-types scripts/care-reminder-migration-rerun-smoke.mts",
     "qa:care-reminders:worker-auth": "node --experimental-strip-types scripts/care-reminder-worker-auth-smoke.mts",
     "qa:care-reminders:worker-policy": "node --experimental-strip-types scripts/care-reminder-worker-policy-smoke.mts",

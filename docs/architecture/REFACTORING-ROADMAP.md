@@ -26,7 +26,7 @@ This document tracks codebase cleanup that is safe to complete before the next r
 
 ### Phase 3 — BabyLog hydration controller
 
-Account/baby scope resolution, parallel cache hydration, CareLog normalization, and server bootstrap now live in `babyLogHydrationService`. React state application remains in the context so stale hydration runs can still be discarded. Remaining work is to split the diary, family, growth, and sticker snapshot application by domain rather than creating one generic storage abstraction.
+Completed: account/baby scope resolution, parallel cache hydration, CareLog normalization, and server bootstrap live in `babyLogHydrationService`. Diary, family, GrowthBook, stickers, growth records, and caution-food hydration live in `babyLogDomainHydrationService`. React state application remains in the context so stale hydration runs can still be discarded.
 
 ### Phase 4 — i18n catalog ownership
 
@@ -34,7 +34,7 @@ Completed: ko/en legacy messages and ja/es/zh legacy overrides have dedicated ca
 
 ### Phase 5 — historical CareLog loading
 
-The current context still retains all history for compatibility. Introduce an explicit recent-window bootstrap plus repository-backed date-range loading for reports and historical screens before limiting in-memory history. This must include offline-cache behavior and cannot be a silent retention change.
+The current context still retains all history for compatibility. Typed coverage/range/merge helpers and the no-data-loss transition contract are now in place. Next, introduce a repository-backed range-loading context method and migrate historical screens before limiting in-memory history. This must include offline-cache behavior and cannot be a silent retention change. See `CARE-LOG-HISTORY-CONTRACT.md`.
 
 ### Phase 6 — repository contracts and database evidence
 
@@ -52,5 +52,6 @@ The current context still retains all history for compatibility. Introduce an ex
 - MVP and repository query-shape QA
 - architecture boundary QA
 - notification/care-reminder policy smokes
+- CareLog history contract QA
 - secret scan and `git diff --check`
 - guarded local iOS bundle export

@@ -5,6 +5,7 @@ import { requireSupabase } from "../lib/supabase";
 import { recordedAtFromDateKeyTime } from "../utils/supabaseMappers";
 import { AuthRepository } from "./AuthRepository";
 import { NotificationRepository } from "./NotificationRepository";
+import { mergeCareLogEntries } from "../utils/careLogHistory";
 
 export const CARE_LOG_HYDRATION_PAGE_SIZE = 500;
 
@@ -274,10 +275,12 @@ export const CareLogRepository = {
    */
   async hydrateCareLogs(babyId: string): Promise<BabyLogEntry[]> {
     const logs: BabyLogEntry[] = [];
+    let offset = 0;
     while (true) {
-      const page = await this.listCareLogsPage(babyId, logs.length);
+      const page = await this.listCareLogsPage(babyId, offset);
       logs.push(...page);
-      if (page.length < CARE_LOG_HYDRATION_PAGE_SIZE) return logs;
+      offset += page.length;
+      if (page.length < CARE_LOG_HYDRATION_PAGE_SIZE) return mergeCareLogEntries([], logs);
     }
   },
 };
