@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 
 const source = readFileSync("supabase/functions/send-push-notification/index.ts", "utf8");
+const sharedSource = readFileSync("supabase/functions/_shared/notificationRuntime.ts", "utf8");
 const parsed = ts.createSourceFile(
   "send-push-notification/index.ts",
   source,
@@ -21,6 +22,8 @@ assert.match(source, /error_message: "push_token_lookup_failed"/);
 assert.ok((source.match(/if \(!validTokens\.length\)/g) ?? []).length >= 2);
 assert.match(source, /validTokens\[index\]\.id/);
 assert.doesNotMatch(source, /tokens\[index\]\.id/);
-assert.ok((source.match(/AbortSignal\.timeout\(10_000\)/g) ?? []).length >= 2);
+assert.ok((source.match(/sendExpoPush\(/g) ?? []).length >= 2);
+assert.match(sharedSource, /AbortSignal\.timeout\(10_000\)/);
+assert.match(sharedSource, /DeviceNotRegistered/);
 
 console.log("push notification worker smoke passed");

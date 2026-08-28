@@ -103,6 +103,7 @@ const sources = {
   profileSetup: readFileSync("src/screens/onboarding/ProfileSetupScreen.tsx", "utf8"),
   myProfile: readFileSync("src/screens/MyProfileScreen.tsx", "utf8"),
   app: readFileSync("App.tsx", "utf8"),
+  mainNavigator: readFileSync("src/navigation/MainNavigator.tsx", "utf8"),
   notificationCenter: readFileSync("src/screens/NotificationCenterScreen.tsx", "utf8"),
   notificationSeed: readFileSync("src/data/notificationQaSeed.ts", "utf8"),
   reminderModal: readFileSync("src/components/babylog/DiaryReminderSettingsModal.tsx", "utf8"),
@@ -114,9 +115,9 @@ assert.match(sources.languagePicker, /canShowLanguagePicker\(\)/);
 assert.match(sources.languagePicker, /getVisibleAppLanguageOptions\(\)/);
 assert.match(sources.profileSetup, /canShowLanguagePicker\(\)/);
 assert.match(sources.myProfile, /canShowLanguagePicker\(\)/);
-assert.match(sources.app, /canOpenNotificationData\(data\)/);
-assert.match(sources.app, /config: friendOnly \?/);
-assert.match(sources.app, /\{!friendOnly \? \(/);
+assert.match(sources.mainNavigator, /canOpenNotificationData\(data\)/);
+assert.match(sources.mainNavigator, /config: friendOnly \?/);
+assert.match(sources.mainNavigator, /\{!friendOnly \? \(/);
 assert.doesNotMatch(sources.app, /ProfileRepository\.getMyProfile\(\)\.catch\(\(\) => null\)/);
 assert.match(sources.notificationCenter, /canShowNotificationEvent\(event\.event_type\)/);
 assert.match(sources.notificationSeed, /isFeatureVisible\("experimentalNotifications"\)/);

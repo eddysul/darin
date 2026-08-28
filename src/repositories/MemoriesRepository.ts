@@ -126,6 +126,16 @@ function normalizeCaption(caption?: string | null): string | null {
   return value || null;
 }
 
+function groupByPostId<T extends { memoryPostId: string }>(items: readonly T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const item of items) {
+    const current = grouped.get(item.memoryPostId) ?? [];
+    current.push(item);
+    grouped.set(item.memoryPostId, current);
+  }
+  return grouped;
+}
+
 async function replaceSelectedPeople(memoryPostId: string, userIds: string[]): Promise<void> {
   const sb = requireSupabase();
   const uniqueIds = [...new Set(userIds.filter(Boolean))];
@@ -675,19 +685,36 @@ export const MemoriesRepository = {
   },
 
   async listCardsByBabyId(babyId: string): Promise<MemoryCard[]> {
-    const [posts, savedPostIds, userId] = await Promise.all([
+    const [posts, userId] = await Promise.all([
       this.listByBabyId(babyId),
-      this.listSavedPostIds(babyId),
       requireUserId(),
     ]);
-    const saved = new Set(savedPostIds);
+    if (!posts.length) return [];
+    const sb = requireSupabase();
+    const postIds = posts.map((post) => post.id);
+    const [savesResult, mediaResult, tagsResult, commentsResult, reactionsResult] = await Promise.all([
+      sb.from("memory_saves").select("memory_post_id").eq("baby_id", babyId).eq("user_id", userId),
+      sb.from("memory_media").select("*").in("memory_post_id", postIds).order("created_at", { ascending: true }),
+      sb.from("memory_tags").select("*").in("memory_post_id", postIds).order("created_at", { ascending: true }),
+      sb.from("memory_comments").select("*").in("memory_post_id", postIds)
+        .is("deleted_at", null).order("created_at", { ascending: true }),
+      sb.from("memory_reactions").select("*").in("memory_post_id", postIds).order("created_at", { ascending: true }),
+    ]);
+    const firstError = savesResult.error ?? mediaResult.error ?? tagsResult.error
+      ?? commentsResult.error ?? reactionsResult.error;
+    if (firstError) throw firstError;
+
+    const saved = new Set((savesResult.data ?? []).map((row) => row.memory_post_id));
+    const mediaByPost = groupByPostId((mediaResult.data ?? []).map(memoryMediaRowToModel));
+    const tagsByPost = groupByPostId((tagsResult.data ?? []).map(memoryTagRowToModel));
+    const commentsByPost = groupByPostId((commentsResult.data ?? []).map(memoryCommentRowToModel));
+    const reactionsByPost = groupByPostId((reactionsResult.data ?? []).map(memoryReactionRowToModel));
+
     return Promise.all(posts.map(async (post) => {
-      const [media, tags, comments, reactions] = await Promise.all([
-        this.listMedia(post.id),
-        this.listTags(post.id),
-        this.listComments(post.id),
-        this.listReactions(post.id),
-      ]);
+      const media = mediaByPost.get(post.id) ?? [];
+      const tags = tagsByPost.get(post.id) ?? [];
+      const comments = commentsByPost.get(post.id) ?? [];
+      const reactions = reactionsByPost.get(post.id) ?? [];
       const coverMedia = media[0];
       const coverUrl = coverMedia?.uploadStatus === "ready"
         ? await this.createSignedUrl(coverMedia.storagePath, MEMORY_SIGNED_URL_TTL_SECONDS, { width: MEMORY_FEED_IMAGE_WIDTH }).catch(() => undefined)

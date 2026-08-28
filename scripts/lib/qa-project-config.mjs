@@ -1,7 +1,11 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
-export const QA_PROJECT_REF = "rkveopusmgleuarbcrnt";
-export const PRODUCTION_PROJECT_REF = "efipxojpdirvkeyfdfzl";
+const projectRefs = JSON.parse(
+  readFileSync(new URL("./project-refs.json", import.meta.url), "utf8"),
+);
+
+export const QA_PROJECT_REF = projectRefs.qa;
+export const PRODUCTION_PROJECT_REF = projectRefs.production;
 
 export function qaConfirmation(prefix) {
   return `${prefix}_${QA_PROJECT_REF}`;

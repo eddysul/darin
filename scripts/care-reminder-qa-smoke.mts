@@ -8,7 +8,8 @@ const migration = [
 ].join("\n");
 const worker = readFileSync("supabase/functions/process-care-reminders/index.ts", "utf8");
 const workerPolicy = readFileSync("supabase/functions/process-care-reminders/deliveryPolicy.ts", "utf8");
-const workerSources = `${worker}\n${workerPolicy}`;
+const notificationRuntime = readFileSync("supabase/functions/_shared/notificationRuntime.ts", "utf8");
+const workerSources = `${worker}\n${workerPolicy}\n${notificationRuntime}`;
 const schedule = readFileSync("supabase/migrations/202608220002_schedule_care_reminders.sql", "utf8");
 const ui = readFileSync("src/components/babylog/FeedingReminderSettingsCard.tsx", "utf8");
 
@@ -36,7 +37,7 @@ assert.match(workerSources, /failed_retryable/);
 assert.match(workerSources, /failed_permanent/);
 assert.match(worker, /const dedupeKey = `\$\{eventType\}:\$\{state\.baby_id\}:\$\{state\.last_relevant_log_id\}:\$\{state\.version\}:\$\{member\.user_id\}`/);
 assert.doesNotMatch(worker, /member\.user_id !==/);
-assert.match(worker, /DeviceNotRegistered/);
+assert.match(notificationRuntime, /DeviceNotRegistered/);
 assert.match(worker, /delivery_enabled/);
 assert.match(worker, /currentClaimMatches/);
 assert.match(workerPolicy, /current\.version === claim\.version/);
@@ -44,7 +45,7 @@ assert.match(workerPolicy, /current\.lastRelevantLogId === claim\.lastRelevantLo
 assert.match(workerPolicy, /current\.processingStartedAt === claim\.processingStartedAt/);
 assert.match(workerPolicy, /current && enabled && current\.sendStatus === "scheduled"/);
 assert.match(worker, /await assertCurrentDelivery\(\);\s*let deliveryStatus/);
-assert.match(worker, /AbortSignal\.timeout\(10_000\)/);
+assert.match(notificationRuntime, /AbortSignal\.timeout\(10_000\)/);
 assert.match(worker, /retryScheduled = counts\.failed_retryable > 0/);
 assert.match(worker, /REMINDER_COPY\[localeFor\(profile\?\.preferred_language\)\]\[state\.reminder_type\]/);
 assert.match(schedule, /process-care-reminders-every-minute/);

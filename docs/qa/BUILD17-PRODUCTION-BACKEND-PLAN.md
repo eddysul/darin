@@ -2,13 +2,15 @@
 
 이 문서는 production 상태와 남은 승인 항목을 함께 기록한다. 새 production 변경은 항상 별도 승인 후 수행한다.
 
-## Current production status (2026-08-26)
+## Current production status (verified 2026-08-28)
 
-- DB에는 `202608220001`, `202608260001`, `202608260002`와 forward-fix `202608260003`의 기능이 반영되어 있다.
-- 위 변경은 현재 `supabase_migrations.schema_migrations`에서 재현 가능한 적용 이력으로 확인되지 않는다. 다음 migration 실행 전에 별도의 history reconciliation 승인이 필요하다.
-- `process-care-reminders`, `send-push-notification`은 배포되어 있으나 이 저장소의 최신 P0 push safety patch는 아직 production에 배포하지 않았다.
-- Function secret `CARE_REMINDER_CRON_SECRET`은 존재한다. Vault의 `project_url`, `care_reminder_cron_secret`과 care reminder cron은 아직 없다.
-- 앱의 `feedingReminder`, `sleepReminder`, `careReminderServer`는 Build 17 승인에 따라 `beta`로 두어 production에 노출한다. Vault/cron과 실기기 push 검증 상태는 release checklist에서 별도로 추적한다.
+- 관련 migration version `202607310001`, `202608220001`, `202608220002`, `202608260001`~`202608260004`가 migration history에 기록되어 있다.
+- `process-care-reminders`, `send-push-notification`, `delete-account`가 production에 배포되어 있다.
+- Vault의 `project_url`, `care_reminder_cron_secret`이 존재하고 `process-care-reminders-every-minute` cron 1개가 활성 상태다.
+- 앱의 `feedingReminder`, `sleepReminder`, `careReminderServer`는 Build 17 승인에 따라 `beta`로 production에 노출된다.
+- Android 실기기 push 종단 QA는 남은 P1이다.
+
+정확한 version과 source hash는 [production deployment manifest](../operations/PRODUCTION-DEPLOYMENT-MANIFEST.md)를 기준으로 한다. 아래 내용은 배포 순서와 복구 절차를 보존하는 historical plan이다.
 
 ## Required production migrations
 

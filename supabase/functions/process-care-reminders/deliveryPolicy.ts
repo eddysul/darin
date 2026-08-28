@@ -2,6 +2,8 @@ export type DeliveryStatus = "sent" | "skipped_quiet_hours" | "skipped_no_token"
   | "skipped_permission_or_disabled" | "failed_retryable" | "failed_permanent";
 export type DeliveryCounts = Record<DeliveryStatus, number>;
 
+export { inQuietHours } from "../_shared/notificationRuntime.ts";
+
 export const emptyCounts = (): DeliveryCounts => ({
   sent: 0, skipped_quiet_hours: 0, skipped_no_token: 0,
   skipped_permission_or_disabled: 0, failed_retryable: 0, failed_permanent: 0,
@@ -11,24 +13,6 @@ export function genericEventStatus(status: DeliveryStatus): "sent" | "failed" | 
   if (status === "sent") return "sent";
   return status.startsWith("failed_") ? "failed" : "skipped";
 }
-export function inQuietHours(
-  now: Date,
-  timezone: string | null,
-  start: string | null,
-  end: string | null,
-): boolean {
-  if (!timezone || !start || !end) return false;
-  try {
-    const hm = new Intl.DateTimeFormat("en-GB", {
-      timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false,
-    }).format(now);
-    const current = Number(hm.replace(":", ""));
-    const from = Number(start.slice(0, 5).replace(":", ""));
-    const to = Number(end.slice(0, 5).replace(":", ""));
-    return from <= to ? current >= from && current < to : current >= from || current < to;
-  } catch { return false; }
-}
-
 export function unavailableTokenStatus(totalTokens: number, validActiveTokens: number): DeliveryStatus | null {
   if (validActiveTokens > 0) return null;
   return totalTokens === 0 ? "skipped_no_token" : "skipped_permission_or_disabled";

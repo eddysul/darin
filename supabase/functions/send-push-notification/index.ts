@@ -1,4 +1,11 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
+import {
+  inQuietHours,
+  isExpoPushToken,
+  localeFor,
+  sendExpoPush,
+  type SupportedLocale,
+} from "../_shared/notificationRuntime.ts";
 
 type EventType =
   | "memory_comment" | "memory_reaction" | "growth_book_comment"
@@ -16,7 +23,6 @@ type RequestBody = {
   routeData?: Record<string, unknown>;
 };
 
-type SupportedLocale = "ko" | "en" | "ja" | "es" | "zh-CN";
 type Copy = { title: string; body: string; privateBody?: string };
 const NOTIFICATION_SETTINGS_COLUMNS = [
   "invite_activity_enabled",
@@ -27,7 +33,6 @@ const NOTIFICATION_SETTINGS_COLUMNS = [
   "timezone",
   "show_preview",
 ].join(",");
-const EXPO_PUSH_TOKEN_PATTERN = /^Expo(nent)?PushToken\[[^\]]+\]$/;
 
 const COPY: Record<SupportedLocale, Record<EventType, Copy>> = {
   ko: {
@@ -82,27 +87,11 @@ const COPY: Record<SupportedLocale, Record<EventType, Copy>> = {
   },
 };
 
-function localeFor(value: unknown): SupportedLocale {
-  return value === "en" || value === "ja" || value === "es" || value === "zh-CN" ? value : "ko";
-}
-
 function json(status: number, value: unknown) {
   return new Response(JSON.stringify(value), {
     status,
     headers: { "content-type": "application/json", "access-control-allow-origin": "*" },
   });
-}
-
-function inQuietHours(now: Date, timezone: string, start: string, end: string): boolean {
-  try {
-    const hm = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
-    const current = Number(hm.replace(":", ""));
-    const from = Number(start.slice(0, 5).replace(":", ""));
-    const to = Number(end.slice(0, 5).replace(":", ""));
-    return from <= to ? current >= from && current < to : current >= from || current < to;
-  } catch {
-    return false;
-  }
 }
 
 async function sendExistingInviteResponse(
@@ -155,7 +144,7 @@ async function sendExistingInviteResponse(
   const { data: tokens, error: tokenError } = await service.from("push_tokens")
     .select("id,expo_push_token").eq("user_id", invite.sender_id).is("disabled_at", null);
   if (tokenError) return json(500, { error: tokenError.message });
-  const validTokens = (tokens ?? []).filter((token) => EXPO_PUSH_TOKEN_PATTERN.test(token.expo_push_token));
+  const validTokens = (tokens ?? []).filter((token) => isExpoPushToken(token.expo_push_token));
   if (!validTokens.length) {
     await service.from("notification_events").update({ status: "skipped", error_message: "no_active_token" }).eq("id", event.id);
     return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "skipped", reason: "no_active_token" }] });
@@ -165,23 +154,16 @@ async function sendExistingInviteResponse(
     ? COPY[localeFor(recipientProfile?.preferred_language)].test.body
     : localizedCopy.body;
   try {
-    const response = await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify(validTokens.map((token) => ({
+    const pushResult = await sendExpoPush(validTokens.map((token) => ({
         to: token.expo_push_token, sound: "default", title: localizedCopy.title, body,
         data: { ...(event.data ?? {}), eventId: event.id, eventType },
-      }))),
-      signal: AbortSignal.timeout(10_000),
-    });
-    const payload = await response.json().catch(() => null);
-    const tickets = Array.isArray(payload?.data) ? payload.data : payload?.data ? [payload.data] : [];
-    for (let index = 0; index < validTokens.length; index += 1) {
-      if (tickets[index]?.details?.error === "DeviceNotRegistered") {
+    })));
+    for (const index of pushResult.deviceNotRegisteredIndexes) {
+      if (validTokens[index]) {
         await service.from("push_tokens").update({ disabled_at: new Date().toISOString() }).eq("id", validTokens[index].id);
       }
     }
-    const ok = response.ok && tickets.some((ticket: { status?: string }) => ticket?.status === "ok");
+    const ok = pushResult.successCount > 0;
     await service.from("notification_events").update(ok
       ? { status: "sent", sent_at: new Date().toISOString(), error_message: null }
       : { status: "failed", error_message: "expo_push_rejected" }).eq("id", event.id);
@@ -317,7 +299,7 @@ Deno.serve(async (request) => {
       continue;
     }
 
-    const validTokens = tokens.filter((token) => EXPO_PUSH_TOKEN_PATTERN.test(token.expo_push_token));
+    const validTokens = tokens.filter((token) => isExpoPushToken(token.expo_push_token));
     if (!validTokens.length) {
       await service.from("notification_events").update({
         status: "skipped",
@@ -331,19 +313,13 @@ Deno.serve(async (request) => {
       data: { ...(body.routeData ?? {}), eventId: event.id },
     }));
     try {
-      const response = await fetch("https://exp.host/--/api/v2/push/send", {
-        method: "POST", headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify(messages),
-        signal: AbortSignal.timeout(10_000),
-      });
-      const payload = await response.json().catch(() => null);
-      const receipts = Array.isArray(payload?.data) ? payload.data : payload?.data ? [payload.data] : [];
-      for (let index = 0; index < receipts.length; index += 1) {
-        if (receipts[index]?.details?.error === "DeviceNotRegistered" && validTokens[index]) {
+      const pushResult = await sendExpoPush(messages);
+      for (const index of pushResult.deviceNotRegisteredIndexes) {
+        if (validTokens[index]) {
           await service.from("push_tokens").update({ disabled_at: new Date().toISOString() }).eq("id", validTokens[index].id);
         }
       }
-      const ok = response.ok && receipts.some((receipt: { status?: string }) => receipt?.status === "ok");
+      const ok = pushResult.successCount > 0;
       await service.from("notification_events").update(ok
         ? { status: "sent", sent_at: new Date().toISOString(), error_message: null }
         : { status: "failed", error_message: "expo_push_rejected" }).eq("id", event.id);

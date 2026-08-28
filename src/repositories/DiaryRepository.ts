@@ -47,16 +47,26 @@ async function requireUserId(): Promise<string> {
 
 async function signedPhotos(media: DiaryMediaRow[]): Promise<Map<string, string[]>> {
   const result = new Map<string, string[]>();
-  for (const row of media) {
-    if (row.upload_status && row.upload_status !== "ready") continue;
-    try {
-      const url = await DiaryRepository.createSignedUrl(row.storage_path);
-      const current = result.get(row.diary_entry_id) ?? [];
-      current.push(url);
-      result.set(row.diary_entry_id, current);
-    } catch {
-      // A broken or concurrently deleted photo must not hide the diary text.
-    }
+  const ready = media.filter((row) => !row.upload_status || row.upload_status === "ready");
+  const paths = [...new Set(ready.map((row) => row.storage_path))];
+  if (!paths.length) return result;
+  const { data, error } = await requireSupabase().storage
+    .from(DIARY_MEDIA_BUCKET)
+    .createSignedUrls(paths, DIARY_SIGNED_URL_TTL_SECONDS);
+  if (error) return result;
+  const urlByPath = new Map(
+    (data ?? [])
+      .filter((item): item is typeof item & { path: string; signedUrl: string } => (
+        Boolean(item.path && item.signedUrl && !item.error)
+      ))
+      .map((item) => [item.path, item.signedUrl]),
+  );
+  for (const row of ready) {
+    const url = urlByPath.get(row.storage_path);
+    if (!url) continue;
+    const current = result.get(row.diary_entry_id) ?? [];
+    current.push(url);
+    result.set(row.diary_entry_id, current);
   }
   return result;
 }

@@ -1,11 +1,17 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
+import {
+  inQuietHours,
+  isExpoPushToken,
+  localeFor,
+  sendExpoPush,
+  type SupportedLocale,
+} from "../_shared/notificationRuntime.ts";
 import {
   currentClaimMatches,
   emptyCounts,
   expoDeliveryStatus,
   finalStateStatus,
   genericEventStatus,
-  inQuietHours,
   unavailableTokenStatus,
   type DeliveryCounts,
   type DeliveryStatus,
@@ -23,7 +29,6 @@ function json(status: number, value: unknown) {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
-type SupportedLocale = "ko" | "en" | "ja" | "es" | "zh-CN";
 const REMINDER_COPY: Record<SupportedLocale, Record<"feeding" | "sleep", { title: string; body: string }>> = {
   ko: {
     feeding: { title: "수유 기록 리마인더", body: "수유 기록을 확인해볼 시간이에요. 마지막 기록을 기준으로 한 참고 알림이에요." },
@@ -46,10 +51,6 @@ const REMINDER_COPY: Record<SupportedLocale, Record<"feeding" | "sleep", { title
     sleep: { title: "睡眠记录提醒", body: "可以查看一下睡眠记录。这是根据上次记录提供的参考提醒。" },
   },
 };
-
-function localeFor(value: unknown): SupportedLocale {
-  return value === "en" || value === "ja" || value === "es" || value === "zh-CN" ? value : "ko";
-}
 
 Deno.serve(async (request) => {
   if (request.method !== "POST") return json(405, { error: "Method not allowed" });
@@ -159,7 +160,7 @@ Deno.serve(async (request) => {
           .select("id,expo_push_token,disabled_at").eq("user_id", member.user_id);
         if (tokenError) throw tokenError;
         const activeTokens = (tokens ?? []).filter((token) => token.disabled_at === null);
-        const validTokens = activeTokens.filter((token) => /^Expo(nent)?PushToken\[[^\]]+\]$/.test(token.expo_push_token));
+        const validTokens = activeTokens.filter((token) => isExpoPushToken(token.expo_push_token));
         const unavailableStatus = unavailableTokenStatus((tokens ?? []).length, validTokens.length);
         if (unavailableStatus) {
           const deliveryStatus: DeliveryStatus = unavailableStatus;
@@ -175,28 +176,19 @@ Deno.serve(async (request) => {
         let deliveryStatus: DeliveryStatus;
         let disabledTokenCount = 0;
         try {
-          const response = await fetch("https://exp.host/--/api/v2/push/send", {
-            method: "POST", headers: { "content-type": "application/json", accept: "application/json" },
-            body: JSON.stringify(validTokens.map((token) => ({
+          const pushResult = await sendExpoPush(validTokens.map((token) => ({
               to: token.expo_push_token, sound: "default", title, body,
               data: { ...eventData, eventId: event.id },
-            }))),
-            signal: AbortSignal.timeout(10_000),
-          });
-          const payload = await response.json().catch(() => null);
-          const tickets = Array.isArray(payload?.data) ? payload.data : payload?.data ? [payload.data] : [];
-          let successCount = 0;
-          for (let index = 0; index < validTokens.length; index += 1) {
-            const ticket = tickets[index];
-            if (response.ok && ticket?.status === "ok") successCount += 1;
-            if (ticket?.details?.error === "DeviceNotRegistered") {
+          })));
+          for (const index of pushResult.deviceNotRegisteredIndexes) {
+            if (validTokens[index]) {
               const { error } = await service.from("push_tokens")
                 .update({ disabled_at: new Date().toISOString() }).eq("id", validTokens[index].id);
               if (error) throw error;
               disabledTokenCount += 1;
             }
           }
-          deliveryStatus = expoDeliveryStatus(successCount, disabledTokenCount, validTokens.length);
+          deliveryStatus = expoDeliveryStatus(pushResult.successCount, disabledTokenCount, validTokens.length);
         } catch (error) {
           console.error("care reminder Expo request failed", state.id, member.user_id, error);
           deliveryStatus = "failed_retryable";
