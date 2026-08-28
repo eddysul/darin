@@ -12,12 +12,16 @@ const recordScreen = readFileSync("src/screens/tabs/RecordScreen.tsx", "utf8");
 const reportScreen = readFileSync("src/screens/tabs/BabyReportScreen.tsx", "utf8");
 const consultScreen = readFileSync("src/screens/tabs/ConsultScreen.tsx", "utf8");
 const diaryScreen = readFileSync("src/screens/tabs/DiaryScreen.tsx", "utf8");
+const recordDetailSheet = readFileSync("src/components/babylog/RecordDetailSheet.tsx", "utf8");
 
 assert.match(context, /resolveBabyLogDataScope/);
 assert.match(context, /hydrateBabyLogCaches/);
 assert.match(context, /resolveHydratedCareLogs/);
 assert.match(context, /ensureCareLogsForRange/);
 assert.match(context, /ensureCareLogById/);
+assert.match(context, /ensureCareLogsForCategories/);
+assert.match(context, /reconcileCareLogRange\(logsRef\.current, remote, from, to\)/);
+assert.match(context, /reconcileCareLogCategories\(logsRef\.current, remote, requested\)/);
 assert.match(context, /requestedScopeId/);
 assert.match(context, /careLogRequestMatchesScope\(requestedScopeId, localDataScopeRef\.current\)/);
 assert.match(context, /if \(!scope\) return \{ logs: cached\(\), complete: false/);
@@ -51,6 +55,13 @@ assert.match(localeOverrides, /"voice\.listening": "正在聆听"/);
 assert.match(recordScreen, /ensureCareLogsForRange/);
 assert.match(recordScreen, /ensureCareLogById/);
 assert.match(recordScreen, /careLogCoverageContains/);
+assert.match(recordScreen, /allowAdd && storageReady && historyComplete && !historyLoading/);
+assert.match(recordScreen, /historyResult\?\.dateKey === selectedDateKey/);
+assert.match(recordScreen, /ensureCareLogsForCategories\(\["pump", "storedMilk"\]\)/);
+assert.match(recordScreen, /ensureCareLogsForCategories\(\["contraction"\]\)/);
+assert.match(recordScreen, /contractionHistoryComplete \? logs : dayLogs/);
+assert.match(recordScreen, /linkedLogIds\.map\(\(id\) => ensureCareLogById\(id\)\)/);
+assert.match(recordScreen, /\?\? await ensureCareLogById\(timer\.linkedLogId\)/);
 assert.match(reportScreen, /ensureCareLogsForRange/);
 assert.match(reportScreen, /careLogCoverageContains/);
 assert.match(consultScreen, /ensureCareLogsForRange/);
@@ -58,5 +69,7 @@ assert.match(consultScreen, /recent care-log history is only partially available
 assert.match(consultScreen, /requestScopeRun !== babyScopeRunRef\.current/);
 assert.match(diaryScreen, /ensureCareLogsForRange/);
 assert.match(diaryScreen, /requestScopeKey !== localDataScopeKeyRef\.current/);
+assert.match(recordDetailSheet, /ensureCareLogsForCategories\(categories\)/);
+assert.match(recordDetailSheet, /categoryHistoryComplete \? logs : \[\]/);
 
 console.log("Architecture boundary smoke passed");

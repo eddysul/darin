@@ -1,4 +1,5 @@
 import type { BabyLogEntry } from "../types/babyLog";
+import type { LogCategoryKey } from "../types/logCategory";
 import type { LocalDataScope } from "./scopedLocalStorage";
 import { formatDateKey, offsetDateKey } from "./dateKey";
 
@@ -79,4 +80,32 @@ export function mergeCareLogEntries(
     const rightKey = `${right.dateKey ?? ""}T${right.time}`;
     return leftKey.localeCompare(rightKey) || left.id.localeCompare(right.id);
   });
+}
+
+/** Replace one server-authoritative date window while retaining rows outside it. */
+export function reconcileCareLogRange(
+  current: readonly BabyLogEntry[],
+  remote: readonly BabyLogEntry[],
+  fromDateKey: string,
+  toDateKey: string,
+): BabyLogEntry[] {
+  const from = fromDateKey <= toDateKey ? fromDateKey : toDateKey;
+  const to = fromDateKey <= toDateKey ? toDateKey : fromDateKey;
+  const todayKey = formatDateKey();
+  const outside = current.filter((entry) => {
+    const dateKey = entry.dateKey ?? todayKey;
+    return dateKey < from || dateKey > to;
+  });
+  return mergeCareLogEntries(outside, remote);
+}
+
+/** Replace complete category histories so remote deletions do not survive in cache. */
+export function reconcileCareLogCategories(
+  current: readonly BabyLogEntry[],
+  remote: readonly BabyLogEntry[],
+  categories: readonly LogCategoryKey[],
+): BabyLogEntry[] {
+  const categorySet = new Set(categories);
+  const outside = current.filter((entry) => !categorySet.has(entry.cat));
+  return mergeCareLogEntries(outside, remote);
 }

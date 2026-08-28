@@ -116,6 +116,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     careLogCoverage,
     ensureCareLogsForRange,
     ensureCareLogById,
+    ensureCareLogsForCategories,
     addLog,
     addLogWithPersistence,
     updateLog,
@@ -140,8 +141,10 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ id: string; title: string } | null>(null);
   const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey());
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyComplete, setHistoryComplete] = useState(true);
+  const [historyLoadingDateKey, setHistoryLoadingDateKey] = useState<string | null>(null);
+  const [historyResult, setHistoryResult] = useState<{ dateKey: string; complete: boolean } | null>(null);
+  const [inventoryHistoryComplete, setInventoryHistoryComplete] = useState(false);
+  const [contractionHistoryComplete, setContractionHistoryComplete] = useState(false);
   const [activeTimers, setActiveTimers] = useState<ActiveTimer[]>([]);
   const [timerSheetId, setTimerSheetId] = useState<string | null>(null);
   const [contractionSheetOpen, setContractionSheetOpen] = useState(false);
@@ -177,7 +180,6 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
 
   const me = familyMembers.find((m) => m.isMe);
   const allowAdd = canAddLog(myFamilyRole);
-  const allowRecord = allowAdd && storageReady;
   const pregnancy = isPregnancyStage(careSetup.child);
   const stageCustomCategories = customCategoriesForStage(customCategories, pregnancy);
   const visibleRecordActions = pregnancy
@@ -189,35 +191,75 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   const selectedDateCovered = careLogCoverage
     ? careLogCoverageContains(careLogCoverage, selectedDateKey, selectedDateKey)
     : false;
+  const historyComplete = selectedDateCovered
+    || (historyResult?.dateKey === selectedDateKey && historyResult.complete);
+  const historyLoading = storageReady
+    && !selectedDateCovered
+    && (historyLoadingDateKey === selectedDateKey || historyResult?.dateKey !== selectedDateKey);
+  const allowRecord = allowAdd && storageReady && historyComplete && !historyLoading;
   const dayLogs = useMemo(
     () => getLogsForDay(logs, selectedDateKey, todayKey),
     [logs, selectedDateKey, todayKey],
   );
   const storedMilkEstimatedAvailableMl = useMemo(() => {
+    if (!inventoryHistoryComplete) return undefined;
     const canSumVolume = (entry: BabyLogEntry) => !entry.amountUnit || entry.amountUnit === "ml" || entry.amountUnit === "oz";
     const pumped = logs.filter((entry) => entry.cat === "pump" && canSumVolume(entry)).reduce((sum, entry) => sum + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
     if (pumped <= 0) return undefined;
     const consumed = logs.filter((entry) => entry.cat === "storedMilk" && canSumVolume(entry)).reduce((sum, entry) => sum + (Number.parseFloat(entry.amount ?? "0") || 0), 0);
     return Math.max(0, pumped - consumed);
-  }, [logs]);
+  }, [inventoryHistoryComplete, logs]);
   const isViewingToday = selectedDateKey === todayKey;
 
   useEffect(() => {
     if (!storageReady) return;
     if (selectedDateCovered) {
-      setHistoryLoading(false);
-      setHistoryComplete(true);
+      setHistoryLoadingDateKey(null);
+      setHistoryResult({ dateKey: selectedDateKey, complete: true });
       return;
     }
     let active = true;
-    setHistoryLoading(true);
+    setHistoryLoadingDateKey(selectedDateKey);
     void ensureCareLogsForRange(selectedDateKey, selectedDateKey).then((result) => {
       if (!active) return;
-      setHistoryComplete(result.complete);
-      setHistoryLoading(false);
+      setHistoryResult({ dateKey: selectedDateKey, complete: result.complete });
+      setHistoryLoadingDateKey(null);
     });
     return () => { active = false; };
   }, [ensureCareLogsForRange, selectedDateCovered, selectedDateKey, storageReady]);
+
+  useEffect(() => {
+    let active = true;
+    if (!storageReady) {
+      setInventoryHistoryComplete(false);
+      return () => {
+        active = false;
+      };
+    }
+    setInventoryHistoryComplete(false);
+    void ensureCareLogsForCategories(["pump", "storedMilk"]).then((result) => {
+      if (active) setInventoryHistoryComplete(result.complete);
+    });
+    return () => {
+      active = false;
+    };
+  }, [ensureCareLogsForCategories, localDataScope, storageReady]);
+
+  useEffect(() => {
+    let active = true;
+    if (!contractionSheetOpen || !storageReady) {
+      setContractionHistoryComplete(false);
+      return () => {
+        active = false;
+      };
+    }
+    void ensureCareLogsForCategories(["contraction"]).then((result) => {
+      if (active) setContractionHistoryComplete(result.complete);
+    });
+    return () => {
+      active = false;
+    };
+  }, [contractionSheetOpen, ensureCareLogsForCategories, localDataScope, storageReady]);
   const canGoNext = selectedDateKey < todayKey;
   const canGoPrev = selectedDateKey > offsetDateKey(todayKey, -365);
   const timelineTitle = isViewingToday
@@ -249,6 +291,15 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       await hydrateActiveTimers(localDataScope);
       if (cancelled) return;
       const restored = settings.timers.restoreAfterRestart ? getActiveTimers() ?? [] : [];
+      const linkedLogIds = [...new Set(
+        restored
+          .map((timer) => timer.linkedLogId)
+          .filter((id): id is string => Boolean(id)),
+      )];
+      if (linkedLogIds.length) {
+        await Promise.all(linkedLogIds.map((id) => ensureCareLogById(id)));
+        if (cancelled) return;
+      }
       suppressedRestoredSleepId.current = settings.timers.restoreAfterRestart
         ? null
         : activeSleepRef.current?.id ?? null;
@@ -258,7 +309,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       timerRestoreInitialized.current = true;
     })();
     return () => { cancelled = true; };
-  }, [localDataScope, settingsReady, settings.timers.restoreAfterRestart]);
+  }, [ensureCareLogById, localDataScope, settingsReady, settings.timers.restoreAfterRestart]);
 
   useEffect(() => {
     if (!storageReady) return;
@@ -647,7 +698,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       let saved: BabyLogEntry | null = null;
       let title = "";
       if (timer.kind === "sleep" && timer.linkedLogId) {
-        const existing = logs.find((l) => l.id === timer.linkedLogId);
+        const existing = logs.find((l) => l.id === timer.linkedLogId)
+          ?? await ensureCareLogById(timer.linkedLogId);
         if (existing) {
           const { id, ...entry } = existing;
           saved = await updateLogWithPersistence(id, {
@@ -1087,7 +1139,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       <ContractionTimerSheet
         visible={contractionSheetOpen}
         timer={contractionTimer}
-        logs={logs}
+        logs={contractionHistoryComplete ? logs : dayLogs}
         dateKey={selectedDateKey}
         saving={contractionSaving}
         onClose={() => setContractionSheetOpen(false)}

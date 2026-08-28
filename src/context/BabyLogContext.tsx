@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { CustomCategory } from "../types/logCategory";
+import type { CustomCategory, LogCategoryKey } from "../types/logCategory";
 import type { CustomCategoryTemplate } from "../constants/customCategoryTemplates";
 import { useApp } from "./AppContext";
 import type { BabyLogActor, BabyLogEntry, ChatMessage, DiaryEntry } from "../types/babyLog";
@@ -17,6 +17,7 @@ import { getQuickRecords, resetQuickRecordsMemory, saveQuickRecords } from "../u
 import { getBabyLogs, resetBabyLogsMemory, saveBabyLogs } from "../utils/babyLogsStore";
 import {
   fetchCareLogById,
+  fetchCareLogsByCategories,
   fetchCareLogsByDateRange,
   syncCareLogCreate,
   syncCareLogDelete,
@@ -128,6 +129,8 @@ import {
   extendCareLogCoverage,
   filterCareLogsByDateRange,
   mergeCareLogEntries,
+  reconcileCareLogCategories,
+  reconcileCareLogRange,
   type CareLogHistoryCoverage,
 } from "../utils/careLogHistory";
 
@@ -135,6 +138,12 @@ export type CareLogRangeResult = {
   logs: BabyLogEntry[];
   complete: boolean;
   coverage: CareLogHistoryCoverage | null;
+};
+
+export type CareLogCategoryResult = {
+  logs: BabyLogEntry[];
+  complete: boolean;
+  categories: LogCategoryKey[];
 };
 
 type BabyLogContextValue = {
@@ -155,6 +164,7 @@ type BabyLogContextValue = {
   careLogCoverage: CareLogHistoryCoverage | null;
   ensureCareLogsForRange: (fromDateKey: string, toDateKey: string) => Promise<CareLogRangeResult>;
   ensureCareLogById: (id: string) => Promise<BabyLogEntry | null>;
+  ensureCareLogsForCategories: (categories: readonly LogCategoryKey[]) => Promise<CareLogCategoryResult>;
   diaryEntries: DiaryEntry[];
   localDataScope: LocalDataScope | null;
   babies: BabyRow[];
@@ -228,6 +238,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const logsRef = useRef<BabyLogEntry[]>([]);
   const [careLogCoverage, setCareLogCoverage] = useState<CareLogHistoryCoverage | null>(null);
   const careLogCoverageRef = useRef<CareLogHistoryCoverage | null>(null);
+  const careLogCategoryCoverageRef = useRef<Set<LogCategoryKey>>(new Set());
   const [logsHydrated, setLogsHydrated] = useState(false);
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
   const [diaryHydrated, setDiaryHydrated] = useState(false);
@@ -301,6 +312,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setLogs([]);
       logsRef.current = [];
       applyCareLogCoverage(null);
+      careLogCategoryCoverageRef.current = new Set();
       setGrowthRecords([]);
       setCautionFoods([]);
       setFamilyMembers([]);
@@ -432,7 +444,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     if (!remote || !careLogRequestMatchesScope(requestedScopeId, localDataScopeRef.current)) {
       return { logs: cached(), complete: false, coverage: careLogCoverageRef.current };
     }
-    const merged = mergeCareLogEntries(logsRef.current, remote);
+    const merged = reconcileCareLogRange(logsRef.current, remote, from, to);
     logsRef.current = merged;
     setLogs(merged);
     const requestedCoverage = { kind: "range" as const, fromDateKey: from, toDateKey: to };
@@ -459,6 +471,36 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     logsRef.current = merged;
     setLogs(merged);
     return remote;
+  }, []);
+
+  const ensureCareLogsForCategories = useCallback(async (
+    categories: readonly LogCategoryKey[],
+  ): Promise<CareLogCategoryResult> => {
+    const requested = [...new Set(categories)].sort() as LogCategoryKey[];
+    const cached = () => logsRef.current.filter((entry) => requested.includes(entry.cat));
+    if (!requested.length) return { logs: [], complete: true, categories: [] };
+    if (
+      careLogCoverageRef.current?.kind === "full"
+      || requested.every((category) => careLogCategoryCoverageRef.current.has(category))
+    ) {
+      return { logs: cached(), complete: true, categories: requested };
+    }
+    const scope = localDataScopeRef.current;
+    if (!scope) return { logs: cached(), complete: false, categories: requested };
+    const requestedScopeId = localDataScopeId(scope);
+    const remote = await fetchCareLogsByCategories(scope.babyId, requested);
+    if (!remote || !careLogRequestMatchesScope(requestedScopeId, localDataScopeRef.current)) {
+      return { logs: cached(), complete: false, categories: requested };
+    }
+    const merged = reconcileCareLogCategories(logsRef.current, remote, requested);
+    logsRef.current = merged;
+    setLogs(merged);
+    requested.forEach((category) => careLogCategoryCoverageRef.current.add(category));
+    return {
+      logs: merged.filter((entry) => requested.includes(entry.cat)),
+      complete: true,
+      categories: requested,
+    };
   }, []);
 
   useEffect(() => {
@@ -981,6 +1023,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setLogs([]);
     logsRef.current = [];
     applyCareLogCoverage({ kind: "full" });
+    careLogCategoryCoverageRef.current = new Set();
     setDiaryEntries([]);
     setFamilyMembers([]);
     setGrowthBookEditState(emptyGrowthBook);
@@ -1247,6 +1290,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setLogs([]);
     logsRef.current = [];
     applyCareLogCoverage(null);
+    careLogCategoryCoverageRef.current = new Set();
     setDiaryEntries([]);
     setFamilyMembers([]);
     setGrowthBookEditState(emptyGrowthBook);
@@ -1368,6 +1412,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       careLogCoverage,
       ensureCareLogsForRange,
       ensureCareLogById,
+      ensureCareLogsForCategories,
       diaryEntries,
       localDataScope,
       babies,
@@ -1433,6 +1478,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       careLogCoverage,
       ensureCareLogsForRange,
       ensureCareLogById,
+      ensureCareLogsForCategories,
       diaryEntries,
       localDataScope,
       babies,

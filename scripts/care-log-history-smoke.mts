@@ -6,6 +6,8 @@ import {
   extendCareLogCoverage,
   filterCareLogsByDateRange,
   mergeCareLogEntries,
+  reconcileCareLogCategories,
+  reconcileCareLogRange,
   recentCareLogRange,
 } from "../src/utils/careLogHistory.ts";
 import { formatDateKey } from "../src/utils/dateKey.ts";
@@ -54,5 +56,18 @@ assert.deepEqual(
 const merged = mergeCareLogEntries([second, old], [first, updated]);
 assert.deepEqual(merged.map((item) => item.id), ["old", "first", "second"]);
 assert.equal(merged.find((item) => item.id === "second")?.duration, "45");
+
+const deletedInRange = entry("deleted-in-range", "2026-08-27", "11:00");
+assert.deepEqual(
+  reconcileCareLogRange([old, deletedInRange, second], [updated], "2026-08-27", "2026-08-27")
+    .map((item) => item.id),
+  ["old", "second"],
+);
+const medication = { ...entry("medication", "2026-01-01", "08:00"), cat: "med" as const };
+const deletedMedication = { ...entry("deleted-medication", "2025-01-01", "08:00"), cat: "med" as const };
+assert.deepEqual(
+  reconcileCareLogCategories([old, deletedMedication], [medication], ["med"]).map((item) => item.id),
+  ["medication", "old"],
+);
 
 console.log("CareLog history contract smoke passed");

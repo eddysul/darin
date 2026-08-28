@@ -1,5 +1,6 @@
 import type { CareSetup } from "../types/careSetup";
 import type { BabyLogEntry } from "../types/babyLog";
+import type { LogCategoryKey } from "../types/logCategory";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { BabyRepository } from "../repositories/BabyRepository";
 import { CareLogRepository } from "../repositories/CareLogRepository";
@@ -208,6 +209,19 @@ export async function fetchCareLogById(babyId: string, id: string): Promise<Baby
     return await CareLogRepository.getCareLogById(babyId, id);
   } catch (e) {
     devWarn("[supabase] care-log id fetch failed:", errMsg(e));
+    return null;
+  }
+}
+
+export async function fetchCareLogsByCategories(
+  babyId: string,
+  categories: readonly LogCategoryKey[],
+): Promise<BabyLogEntry[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    return await CareLogRepository.getCareLogsByBabyAndCategories(babyId, categories);
+  } catch (e) {
+    devWarn("[supabase] care-log category fetch failed:", errMsg(e));
     return null;
   }
 }

@@ -173,7 +173,7 @@ export function RecordDetailSheet({
 }: Props) {
   const { t } = useLanguage();
   const { settings } = useAppSettings();
-  const { babyName, activeBabyId, cautionFoods } = useBabyLog();
+  const { babyName, activeBabyId, cautionFoods, ensureCareLogsForCategories } = useBabyLog();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const sheetMaxHeight = windowHeight * 0.88;
@@ -214,6 +214,7 @@ export function RecordDetailSheet({
   const [legacyDoseText, setLegacyDoseText] = useState("");
   const [doseUnitTouched, setDoseUnitTouched] = useState(false);
   const [medicationReminderEnabled, setMedicationReminderEnabled] = useState(false);
+  const [categoryHistoryComplete, setCategoryHistoryComplete] = useState(false);
   const [visitType, setVisitType] = useState<BabyLogEntry["visitType"]>();
   const [doctorName, setDoctorName] = useState("");
   const [cautions, setCautions] = useState("");
@@ -374,9 +375,39 @@ export function RecordDetailSheet({
   }, [visible, catKey, prefill, settings.units.medicationDefaultUnit, settings.units.temperature, settings.units.volume]);
 
   useEffect(() => {
+    let active = true;
+    if (!visible) {
+      setCategoryHistoryComplete(false);
+      return () => {
+        active = false;
+      };
+    }
+    const categories: LogCategoryKey[] = catKey === "med"
+      ? ["med"]
+      : catKey === "food" || catKey === "snack"
+        ? ["food", "snack"]
+        : [];
+    if (!categories.length) {
+      setCategoryHistoryComplete(true);
+      return () => {
+        active = false;
+      };
+    }
+    setCategoryHistoryComplete(false);
+    void ensureCareLogsForCategories(categories).then((result) => {
+      if (active) setCategoryHistoryComplete(result.complete);
+    });
+    return () => {
+      active = false;
+    };
+  }, [activeBabyId, catKey, ensureCareLogsForCategories, visible]);
+
+  const historyLogs = categoryHistoryComplete ? logs : [];
+
+  useEffect(() => {
     if (!visible || catKey !== "med" || prefill?.editId || doseUnitTouched || !medName.trim()) return;
     const normalizedName = medName.trim().toLocaleLowerCase();
-    const recent = [...logs]
+    const recent = [...historyLogs]
       .filter((entry) => {
         if (entry.cat !== "med") return false;
         const savedName = entry.medicationName ?? entry.notes?.split(" · ")[0];
@@ -392,7 +423,7 @@ export function RecordDetailSheet({
       setDoseUnit(CUSTOM_DOSE_UNIT);
       setCustomDoseUnit(recentDose);
     }
-  }, [catKey, doseUnitTouched, logs, medName, prefill?.editId, visible]);
+  }, [catKey, doseUnitTouched, historyLogs, medName, prefill?.editId, visible]);
 
   const computedDuration = useMemo(() => {
     if (!isValidClockInput(endTime) || !isValidClockInput(time)) return duration;
@@ -433,7 +464,7 @@ export function RecordDetailSheet({
     : legacyDoseText.trim();
   const ingredientNames = useMemo(() => {
     const all = [...STARTER_INGREDIENTS, ...foodIngredients.map((item) => item.name)];
-    for (const entry of logs) {
+    for (const entry of historyLogs) {
       if (entry.cat !== "food" && entry.cat !== "snack") continue;
       if (Array.isArray(entry.ingredients)) all.push(...entry.ingredients);
       else {
@@ -448,11 +479,11 @@ export function RecordDetailSheet({
       return (bHistory.lastDate ?? "").localeCompare(aHistory.lastDate ?? "") || bHistory.count - aHistory.count;
     });
   // History is intentionally recalculated from current care logs when the sheet opens/updates.
-  }, [foodIngredients, logs]);
+  }, [foodIngredients, historyLogs]);
 
   function ingredientHistory(name: string) {
     const key = name.toLocaleLowerCase();
-    const matches = logs.filter((entry) => {
+    const matches = historyLogs.filter((entry) => {
       if (entry.id === prefill?.editId) return false;
       if (entry.cat !== "food" && entry.cat !== "snack") return false;
       const names = Array.isArray(entry.ingredients)
