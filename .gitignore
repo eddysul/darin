@@ -3,6 +3,8 @@ dist
 .expo
 supabase/.temp/
 .cursor/
+.agents/
+skills-lock.json
 .DS_Store
 **/.DS_Store
 __pycache__/

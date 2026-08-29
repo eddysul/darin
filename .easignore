@@ -1,6 +1,8 @@
 .git/
 .github/
 .cursor/
+.agents/
+skills-lock.json
 .codex/
 .expo/
 node_modules/
