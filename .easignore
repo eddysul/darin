@@ -9,6 +9,12 @@ node_modules/
 dist/
 outputs/
 supabase/.temp/
+ios/Pods/
+ios/build/
+ios/DerivedData/
+android/.gradle/
+android/build/
+android/app/build/
 
 .env
 .env.*
