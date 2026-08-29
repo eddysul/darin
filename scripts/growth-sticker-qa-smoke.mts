@@ -240,6 +240,7 @@ assert.deepEqual(growthBookStickerPdfPosition(edit.pages.d1!.pageStickers![0]!),
   leftPercent: 25,
   topPercent: 40,
   widthPercent: 20,
+  rotation: 0,
   zIndex: 3,
 });
 assert.equal(growthBookStickerHeightFactor(sticker), 1.55);
@@ -360,7 +361,7 @@ const pageCanvasSource = readFileSync(
   "utf8",
 );
 const editorSource = readFileSync(
-  new URL("../src/components/babylog/GrowthBookEditorModal.tsx", import.meta.url),
+  new URL("../src/components/babylog/growthBookEditor/SwipeableCanvasStage.tsx", import.meta.url),
   "utf8",
 );
 const stickerViewSource = readFileSync(
@@ -434,7 +435,7 @@ assert.ok(
 assert.ok(editorSource.includes("<View {...swipeResponder.panHandlers} style={styles.canvasStage}>"), "swipe handlers must only attach to enabled preview stages");
 assert.ok(
   stickerVaultSource.includes('mode === "position" || mode === "decorate"')
-    && stickerVaultSource.includes('accessibilityLabel="스티커 만들기 취소"')
+    && stickerVaultSource.includes('accessibilityLabel={t("sticker.critical.011")}')
     && stickerVaultSource.includes("const cancelCreate = () =>"),
   "position and decorate steps must expose an explicit discard-and-cancel action",
 );

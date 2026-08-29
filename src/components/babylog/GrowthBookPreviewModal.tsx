@@ -64,7 +64,13 @@ export function GrowthBookPreviewModal({
       <LinearGradient colors={["#3D342C", "#2A241F", "#1E1A16"]} style={StyleSheet.absoluteFill} />
 
       <View style={styles.topBar}>
-        <Pressable onPress={onClose} hitSlop={10} style={styles.topBtn}>
+        <Pressable
+          onPress={onClose}
+          hitSlop={10}
+          style={styles.topBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t("growth.critical.008")}
+        >
           <Text style={styles.topBtnText}>{t("growth.critical.008")}</Text>
         </Pressable>
         <Text style={styles.topTitle}>{t("growth.critical.069")}</Text>
