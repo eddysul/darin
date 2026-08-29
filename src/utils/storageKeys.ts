@@ -2,6 +2,7 @@
 export const STORAGE_KEYS = {
   careSetup: "darin:care-setup",
   babyLogs: "darin:baby-logs",
+  careLogCacheMetadata: "darin:care-log-cache-metadata",
   diary: "darin:diary-entries",
   diaryDraft: "darin:diary-draft",
   diaryReminder: "darin:diary-reminder",
@@ -38,3 +39,9 @@ export const STORAGE_KEYS = {
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
+
+export function isDarinStorageKey(key: string): boolean {
+  return Object.values(STORAGE_KEYS).some(
+    (prefix) => key === prefix || key.startsWith(`${prefix}:`),
+  );
+}

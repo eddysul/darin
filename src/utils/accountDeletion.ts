@@ -1,5 +1,5 @@
 import { qaStorage } from "./qaStorage";
-import { STORAGE_KEYS } from "./storageKeys";
+import { isDarinStorageKey } from "./storageKeys";
 import { getSupabase, isSupabaseConfigured } from "../lib/supabase";
 
 export type AccountDeletionResult = { serverDeleted: boolean; localOnly: boolean };
@@ -38,5 +38,7 @@ export async function deleteServerAccount(confirmationText: string): Promise<Acc
 }
 
 export async function clearLocalAppData(): Promise<void> {
-  await Promise.all(Object.values(STORAGE_KEYS).map((key) => qaStorage.removeItem(key)));
+  const allKeys = await qaStorage.getAllKeys();
+  const ownedKeys = allKeys.filter(isDarinStorageKey);
+  await qaStorage.multiRemove(ownedKeys);
 }

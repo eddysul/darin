@@ -6,6 +6,13 @@ import { BabyRepository } from "../repositories/BabyRepository";
 import { CareLogRepository } from "../repositories/CareLogRepository";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { detectLocalCareLogMigrationCandidates } from "./careLogsMigration";
+import {
+  mergeCareLogEntries,
+  recentCareLogRange,
+  reconcileCareLogRange,
+  type CareLogHistoryCoverage,
+} from "./careLogHistory";
+import { formatDateKey } from "./dateKey";
 import { getEffectiveCareSetup, loadCareSetup } from "./careSetupStore";
 import { devLog, devWarn } from "./devLog";
 import {
@@ -19,6 +26,7 @@ export type CareLogBootstrapResult = {
   babyId: string | null;
   logs: BabyLogEntry[] | null;
   migrationCandidateCount: number;
+  coverage: CareLogHistoryCoverage | null;
   error?: string;
 };
 
@@ -74,6 +82,9 @@ export async function bootstrapCareLogsFromServer(opts: {
   careSetup: CareSetup;
   hasSavedCareSetup: boolean;
   localLogs: BabyLogEntry[] | null;
+  historyMode: "full" | "recent";
+  preserveMigrationCandidates: boolean;
+  knownMigrationCandidateCount: number;
 }): Promise<CareLogBootstrapResult> {
   await hydrateSupabaseSync();
 
@@ -83,6 +94,7 @@ export async function bootstrapCareLogsFromServer(opts: {
       babyId: getSupabaseSync().babyId,
       logs: null,
       migrationCandidateCount: 0,
+      coverage: null,
     };
   }
 
@@ -94,35 +106,54 @@ export async function bootstrapCareLogsFromServer(opts: {
       babyId: getSupabaseSync().babyId,
       logs: null,
       migrationCandidateCount: 0,
+      coverage: null,
     };
   }
 
   try {
     const { babyId } = await bindBaby(opts.careSetup);
-    const remote = await CareLogRepository.hydrateCareLogs(babyId);
-    const candidates = detectLocalCareLogMigrationCandidates(opts.localLogs ?? [], remote);
+    const recentCoverage = recentCareLogRange(formatDateKey());
+    const remote = opts.historyMode === "recent"
+      ? await CareLogRepository.getCareLogsByBabyAndDateRange(
+        babyId,
+        recentCoverage.fromDateKey,
+        recentCoverage.toDateKey,
+      )
+      : await CareLogRepository.hydrateCareLogs(babyId);
+    const candidates = opts.historyMode === "full" && opts.preserveMigrationCandidates
+      ? detectLocalCareLogMigrationCandidates(opts.localLogs ?? [], remote)
+      : [];
+    const previousCandidateCount = getSupabaseSync().migrationCandidateCount;
+    const migrationCandidateCount = opts.preserveMigrationCandidates
+      ? Math.max(opts.knownMigrationCandidateCount, previousCandidateCount, candidates.length)
+      : 0;
+    const coverage: CareLogHistoryCoverage = opts.historyMode === "recent"
+      ? recentCoverage
+      : { kind: "full" };
+    const logs = opts.historyMode === "recent"
+      ? reconcileCareLogRange(
+        opts.localLogs ?? [],
+        remote,
+        recentCoverage.fromDateKey,
+        recentCoverage.toDateKey,
+      )
+      : opts.preserveMigrationCandidates
+        ? mergeCareLogEntries(remote, candidates)
+        : remote;
 
     await saveSupabaseSync({
       ...getSupabaseSync(),
       babyId,
-      migrationCandidateCount: candidates.length,
+      migrationCandidateCount,
       lastHydratedAt: new Date().toISOString(),
     });
-
-    if (remote.length > 0) {
-      return {
-        usedServer: true,
-        babyId,
-        logs: remote,
-        migrationCandidateCount: candidates.length,
-      };
-    }
 
     return {
       usedServer: true,
       babyId,
-      logs: opts.localLogs,
-      migrationCandidateCount: candidates.length,
+      logs,
+      migrationCandidateCount,
+      coverage,
     };
   } catch (e) {
     const message = errMsg(e);
@@ -132,6 +163,7 @@ export async function bootstrapCareLogsFromServer(opts: {
       babyId: getSupabaseSync().babyId,
       logs: null,
       migrationCandidateCount: 0,
+      coverage: null,
       error: message,
     };
   }
@@ -203,13 +235,17 @@ export async function fetchCareLogsByDateRange(
   }
 }
 
-export async function fetchCareLogById(babyId: string, id: string): Promise<BabyLogEntry | null> {
-  if (!isSupabaseConfigured()) return null;
+export type CareLogByIdFetchResult =
+  | { status: "success"; entry: BabyLogEntry | null }
+  | { status: "failed" };
+
+export async function fetchCareLogById(babyId: string, id: string): Promise<CareLogByIdFetchResult> {
+  if (!isSupabaseConfigured()) return { status: "failed" };
   try {
-    return await CareLogRepository.getCareLogById(babyId, id);
+    return { status: "success", entry: await CareLogRepository.getCareLogById(babyId, id) };
   } catch (e) {
     devWarn("[supabase] care-log id fetch failed:", errMsg(e));
-    return null;
+    return { status: "failed" };
   }
 }
 

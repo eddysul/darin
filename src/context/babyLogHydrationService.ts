@@ -5,6 +5,14 @@ import type { BabyLogEntry } from "../types/babyLog";
 import type { CareSetup } from "../types/careSetup";
 import type { BabyRow } from "../types/database";
 import { hydrateBabyLogs } from "../utils/babyLogsStore";
+import {
+  getCareLogCacheMetadata,
+  hydrateCareLogCacheMetadata,
+} from "../utils/careLogCacheMetadataStore";
+import {
+  resolveCareLogBootstrapPolicy,
+  type CareLogHistoryCoverage,
+} from "../utils/careLogHistory";
 import { hydrateBabyStickers } from "../utils/babyStickersStore";
 import { bootstrapCareLogsFromServer, ensureCareLogBabyId } from "../utils/careLogServerSync";
 import { hydrateChatHistory } from "../utils/chatHistoryStore";
@@ -35,6 +43,7 @@ export type BabyLogCacheHydration = {
   growthOk: boolean;
   stickersOk: boolean;
   growthRecordsOk: boolean;
+  careLogMetadataOk: boolean;
   allLoaded: boolean;
 };
 
@@ -79,7 +88,7 @@ export async function hydrateBabyLogCaches(
   scope: LocalDataScope | null,
   force: boolean,
 ): Promise<BabyLogCacheHydration> {
-  const [customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, growthRecordsOk] =
+  const [customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, growthRecordsOk, careLogMetadataOk] =
     await Promise.all([
       hydrateCustomCategories(scope, force),
       hydrateQuickRecords(scope, force),
@@ -90,6 +99,7 @@ export async function hydrateBabyLogCaches(
       hydrateGrowthBookEdit(scope, force),
       hydrateBabyStickers(scope, force),
       hydrateGrowthRecords(scope, force),
+      hydrateCareLogCacheMetadata(scope),
       hydrateSupabaseSync(force),
     ]);
   return {
@@ -102,8 +112,9 @@ export async function hydrateBabyLogCaches(
     growthOk,
     stickersOk,
     growthRecordsOk,
+    careLogMetadataOk,
     allLoaded: customOk && quickOk && logsOk && diaryOk && chatOk
-      && familyOk && growthOk && stickersOk && growthRecordsOk,
+      && familyOk && growthOk && stickersOk && growthRecordsOk && careLogMetadataOk,
   };
 }
 
@@ -124,15 +135,46 @@ export async function resolveHydratedCareLogs(input: {
   careSetup: CareSetup;
   hasSavedCareSetup: boolean;
   storedLogs: BabyLogEntry[] | null;
-}): Promise<{ logs: BabyLogEntry[] | null; serverAuthoritative: boolean }> {
+}): Promise<{
+  logs: BabyLogEntry[] | null;
+  serverAuthoritative: boolean;
+  coverage: CareLogHistoryCoverage | null;
+  migrationCandidateCount: number;
+}> {
   const localLogs = normalizeCachedCareLogs(input.storedLogs);
+  const metadata = getCareLogCacheMetadata();
+  const sync = getSupabaseSync();
+  const bootstrapPolicy = resolveCareLogBootstrapPolicy({
+    coverage: metadata.coverage,
+    verifiedAt: metadata.verifiedAt,
+    migrationCandidateCount: Math.max(
+      metadata.migrationCandidateCount,
+      sync.migrationCandidateCount,
+    ),
+  });
+  const knownMigrationCandidateCount = Math.max(
+    metadata.migrationCandidateCount,
+    sync.migrationCandidateCount,
+  );
   const boot = await bootstrapCareLogsFromServer({
     careSetup: input.careSetup,
     hasSavedCareSetup: input.hasSavedCareSetup,
     localLogs,
+    ...bootstrapPolicy,
+    knownMigrationCandidateCount,
   });
   if (boot.usedServer && boot.logs !== null) {
-    return { logs: boot.logs, serverAuthoritative: true };
+    return {
+      logs: boot.logs,
+      serverAuthoritative: true,
+      coverage: boot.coverage,
+      migrationCandidateCount: boot.migrationCandidateCount,
+    };
   }
-  return { logs: localLogs, serverAuthoritative: false };
+  return {
+    logs: localLogs,
+    serverAuthoritative: false,
+    coverage: metadata.coverage,
+    migrationCandidateCount: metadata.migrationCandidateCount,
+  };
 }

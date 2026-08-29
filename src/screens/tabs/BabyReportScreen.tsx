@@ -313,7 +313,7 @@ export function BabyReportScreen({
       <WeeklyReportSheet
         visible={reportOpen}
         table={weekTable}
-        logs={logs}
+        logs={reportLogs}
         insights={insights}
         insightPhrases={insightPhrases}
         babyName={babyName}

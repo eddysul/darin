@@ -238,15 +238,24 @@ export const CareLogRepository = {
     toDateKey: string,
   ): Promise<BabyLogEntry[]> {
     const sb = requireSupabase();
-    const { data, error } = await sb
-      .from("care_logs")
-      .select("*")
-      .eq("baby_id", babyId)
-      .gte("date_key", fromDateKey)
-      .lte("date_key", toDateKey)
-      .order("recorded_at", { ascending: true });
-    if (error) throw error;
-    return (data ?? []).map(careLogRowToEntry);
+    const logs: BabyLogEntry[] = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from("care_logs")
+        .select("*")
+        .eq("baby_id", babyId)
+        .gte("date_key", fromDateKey)
+        .lte("date_key", toDateKey)
+        .order("recorded_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, offset + CARE_LOG_HYDRATION_PAGE_SIZE - 1);
+      if (error) throw error;
+      const page = (data ?? []).map(careLogRowToEntry);
+      logs.push(...page);
+      offset += page.length;
+      if (page.length < CARE_LOG_HYDRATION_PAGE_SIZE) return mergeCareLogEntries([], logs);
+    }
   },
 
   async getCareLogById(babyId: string, id: string): Promise<BabyLogEntry | null> {

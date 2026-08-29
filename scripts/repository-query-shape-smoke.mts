@@ -8,6 +8,10 @@ const listCards = memories.slice(
   memories.indexOf("async listCardsByBabyId"),
   memories.indexOf("async createMemoryWithImages"),
 );
+const dateRangeLogs = careLogs.slice(
+  careLogs.indexOf("async getCareLogsByBabyAndDateRange"),
+  careLogs.indexOf("async getCareLogById"),
+);
 
 assert.match(listCards, /\.in\("memory_post_id", postIds\)/);
 assert.doesNotMatch(listCards, /this\.list(Media|Tags|Comments|Reactions)\(post\.id\)/);
@@ -23,6 +27,9 @@ assert.match(careLogs, /async getCareLogById\(babyId: string, id: string\)/);
 assert.match(careLogs, /\.eq\("baby_id", babyId\)\s*\.eq\("id", id\)/);
 assert.match(careLogs, /async getCareLogsByBabyAndDateRange/);
 assert.match(careLogs, /\.gte\("date_key", fromDateKey\)\s*\.lte\("date_key", toDateKey\)/);
+assert.match(dateRangeLogs, /\.order\("recorded_at", \{ ascending: true \}\)\s*\.order\("id", \{ ascending: true \}\)/);
+assert.match(dateRangeLogs, /\.range\(offset, offset \+ CARE_LOG_HYDRATION_PAGE_SIZE - 1\)/);
+assert.match(dateRangeLogs, /page\.length < CARE_LOG_HYDRATION_PAGE_SIZE/);
 assert.match(careLogs, /async getCareLogsByBabyAndCategories/);
 assert.match(careLogs, /\.eq\("baby_id", babyId\)\s*\.in\("category", \[\.\.\.categories\]\)/);
 assert.match(careLogs, /offset \+ CARE_LOG_HYDRATION_PAGE_SIZE - 1/);

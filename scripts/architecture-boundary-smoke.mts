@@ -13,12 +13,17 @@ const reportScreen = readFileSync("src/screens/tabs/BabyReportScreen.tsx", "utf8
 const consultScreen = readFileSync("src/screens/tabs/ConsultScreen.tsx", "utf8");
 const diaryScreen = readFileSync("src/screens/tabs/DiaryScreen.tsx", "utf8");
 const recordDetailSheet = readFileSync("src/components/babylog/RecordDetailSheet.tsx", "utf8");
+const careLogCacheMetadata = readFileSync("src/utils/careLogCacheMetadataStore.ts", "utf8");
+const accountDeletion = readFileSync("src/utils/accountDeletion.ts", "utf8");
 
 assert.match(context, /resolveBabyLogDataScope/);
 assert.match(context, /hydrateBabyLogCaches/);
 assert.match(context, /resolveHydratedCareLogs/);
 assert.match(context, /ensureCareLogsForRange/);
 assert.match(context, /ensureCareLogById/);
+assert.match(context, /isCareLogEntryCovered/);
+assert.match(context, /if \(result\.status === "failed"\) return cached \?\? null/);
+assert.match(context, /logsRef\.current\.filter\(\(entry\) => entry\.id !== id\)/);
 assert.match(context, /ensureCareLogsForCategories/);
 assert.match(context, /reconcileCareLogRange\(logsRef\.current, remote, from, to\)/);
 assert.match(context, /reconcileCareLogCategories\(logsRef\.current, remote, requested\)/);
@@ -64,6 +69,7 @@ assert.match(recordScreen, /linkedLogIds\.map\(\(id\) => ensureCareLogById\(id\)
 assert.match(recordScreen, /\?\? await ensureCareLogById\(timer\.linkedLogId\)/);
 assert.match(reportScreen, /ensureCareLogsForRange/);
 assert.match(reportScreen, /careLogCoverageContains/);
+assert.match(reportScreen, /<WeeklyReportSheet[\s\S]*?logs=\{reportLogs\}/);
 assert.match(consultScreen, /ensureCareLogsForRange/);
 assert.match(consultScreen, /recent care-log history is only partially available/);
 assert.match(consultScreen, /requestScopeRun !== babyScopeRunRef\.current/);
@@ -71,5 +77,17 @@ assert.match(diaryScreen, /ensureCareLogsForRange/);
 assert.match(diaryScreen, /requestScopeKey !== localDataScopeKeyRef\.current/);
 assert.match(recordDetailSheet, /ensureCareLogsForCategories\(categories\)/);
 assert.match(recordDetailSheet, /categoryHistoryComplete \? logs : \[\]/);
+assert.match(careLogCacheMetadata, /scopedStorageKey\(STORAGE_KEYS\.careLogCacheMetadata, scope\)/);
+assert.match(careLogCacheMetadata, /coverage: CareLogHistoryCoverage \| null/);
+assert.match(careLogCacheMetadata, /categoryCoverage: LogCategoryKey\[\]/);
+assert.match(careLogCacheMetadata, /migrationCandidateCount: number/);
+assert.match(context, /saveCareLogCacheMetadata\(scope/);
+assert.match(context, /storedMetadata\.coverage/);
+assert.match(hydration, /resolveCareLogBootstrapPolicy/);
+assert.match(hydration, /\.\.\.bootstrapPolicy/);
+assert.match(hydration, /Math\.max\(\s*metadata\.migrationCandidateCount,/);
+assert.match(accountDeletion, /qaStorage\.getAllKeys\(\)/);
+assert.match(accountDeletion, /allKeys\.filter\(isDarinStorageKey\)/);
+assert.match(accountDeletion, /qaStorage\.multiRemove\(ownedKeys\)/);
 
 console.log("Architecture boundary smoke passed");

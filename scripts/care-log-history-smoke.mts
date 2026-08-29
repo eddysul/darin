@@ -5,12 +5,15 @@ import {
   careLogRequestMatchesScope,
   extendCareLogCoverage,
   filterCareLogsByDateRange,
+  isCareLogEntryCovered,
   mergeCareLogEntries,
   reconcileCareLogCategories,
   reconcileCareLogRange,
+  resolveCareLogBootstrapPolicy,
   recentCareLogRange,
 } from "../src/utils/careLogHistory.ts";
 import { formatDateKey } from "../src/utils/dateKey.ts";
+import { isDarinStorageKey, STORAGE_KEYS } from "../src/utils/storageKeys.ts";
 
 const range = recentCareLogRange("2026-08-28", 3);
 assert.deepEqual(range, { kind: "range", fromDateKey: "2026-08-26", toDateKey: "2026-08-28" });
@@ -26,6 +29,30 @@ assert.equal(
   false,
 );
 assert.equal(careLogRequestMatchesScope("user-a:baby-a", null), false);
+assert.deepEqual(
+  resolveCareLogBootstrapPolicy({ coverage: null, verifiedAt: null, migrationCandidateCount: 0 }),
+  { historyMode: "full", preserveMigrationCandidates: true },
+);
+assert.equal(isDarinStorageKey(STORAGE_KEYS.babyLogs), true);
+assert.equal(isDarinStorageKey(`${STORAGE_KEYS.babyLogs}:user-a:baby-a`), true);
+assert.equal(isDarinStorageKey(`${STORAGE_KEYS.babyLogs}:scoped-migration:v1:user-a:baby-a`), true);
+assert.equal(isDarinStorageKey("unrelated:third-party-key"), false);
+assert.deepEqual(
+  resolveCareLogBootstrapPolicy({
+    coverage: { kind: "full" },
+    verifiedAt: "2026-08-28T12:00:00.000Z",
+    migrationCandidateCount: 0,
+  }),
+  { historyMode: "recent", preserveMigrationCandidates: false },
+);
+assert.deepEqual(
+  resolveCareLogBootstrapPolicy({
+    coverage: { kind: "range", fromDateKey: "2026-06-01", toDateKey: "2026-08-28" },
+    verifiedAt: "2026-08-28T12:00:00.000Z",
+    migrationCandidateCount: 2,
+  }),
+  { historyMode: "full", preserveMigrationCandidates: true },
+);
 assert.deepEqual(
   extendCareLogCoverage(range, { kind: "range", fromDateKey: "2026-08-24", toDateKey: "2026-08-25" }),
   { kind: "range", fromDateKey: "2026-08-24", toDateKey: "2026-08-28" },
@@ -46,6 +73,10 @@ const old = entry("old", "2026-08-25", "09:00");
 const first = entry("first", "2026-08-26", "08:00");
 const second = entry("second", "2026-08-27", "10:00");
 const updated = { ...second, duration: "45" };
+
+assert.equal(isCareLogEntryCovered(second, range, new Set()), true);
+assert.equal(isCareLogEntryCovered(old, range, new Set()), false);
+assert.equal(isCareLogEntryCovered(old, range, new Set(["sleep"])), true);
 
 assert.deepEqual(filterCareLogsByDateRange([old, first, second], "2026-08-26", "2026-08-27").map((item) => item.id), ["first", "second"]);
 const legacyToday = { ...entry("legacy-today", formatDateKey(), "12:00"), dateKey: undefined };

@@ -25,4 +25,13 @@ export const qaStorage = {
   async removeItem(key: string): Promise<void> {
     await AsyncStorage.removeItem(key);
   },
+
+  async getAllKeys(): Promise<readonly string[]> {
+    return AsyncStorage.getAllKeys();
+  },
+
+  async multiRemove(keys: readonly string[]): Promise<void> {
+    if (!keys.length) return;
+    await AsyncStorage.multiRemove([...keys]);
+  },
 };

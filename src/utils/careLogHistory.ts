@@ -9,6 +9,24 @@ export type CareLogHistoryCoverage =
   | { kind: "full" }
   | { kind: "range"; fromDateKey: string; toDateKey: string };
 
+export type CareLogBootstrapPolicy = {
+  historyMode: "full" | "recent";
+  preserveMigrationCandidates: boolean;
+};
+
+export function resolveCareLogBootstrapPolicy(input: {
+  coverage: CareLogHistoryCoverage | null;
+  verifiedAt: string | null;
+  migrationCandidateCount: number;
+}): CareLogBootstrapPolicy {
+  const hasVerifiedCache = Boolean(input.coverage && input.verifiedAt);
+  const hasMigrationCandidates = input.migrationCandidateCount > 0;
+  return {
+    historyMode: hasVerifiedCache && !hasMigrationCandidates ? "recent" : "full",
+    preserveMigrationCandidates: !hasVerifiedCache || hasMigrationCandidates,
+  };
+}
+
 export function careLogRequestMatchesScope(
   requestedScopeId: string,
   currentScope: LocalDataScope | null,
@@ -38,6 +56,20 @@ export function careLogCoverageContains(
 ): boolean {
   if (coverage.kind === "full") return true;
   return coverage.fromDateKey <= fromDateKey && coverage.toDateKey >= toDateKey;
+}
+
+export function isCareLogEntryCovered(
+  entry: BabyLogEntry,
+  coverage: CareLogHistoryCoverage | null,
+  categoryCoverage: ReadonlySet<LogCategoryKey>,
+): boolean {
+  return coverage?.kind === "full"
+    || Boolean(
+      entry.dateKey
+      && coverage
+      && careLogCoverageContains(coverage, entry.dateKey, entry.dateKey),
+    )
+    || categoryCoverage.has(entry.cat);
 }
 
 export function extendCareLogCoverage(

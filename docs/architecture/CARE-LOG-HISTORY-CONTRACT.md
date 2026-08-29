@@ -2,11 +2,11 @@
 
 ## Current release-safe behavior
 
-`BabyLogContext.logs` is a full-history collection. Server hydration uses bounded 500-row requests and merges duplicate ids deterministically, but it deliberately continues loading every page. This preserves editing, deep links, pregnancy/contraction calculations, food and medication history, weekly reports, diary summaries, AI context, and offline cache behavior.
+The first server-authoritative hydrate for an account+baby remains a full-history, bounded 500-row-page read. It establishes scoped coverage metadata and detects legacy local migration candidates without automatically uploading or deleting them. Once that full verification exists and the candidate count is zero, subsequent startup hydrates use the most recent 90 calendar days. Cached older rows remain available but are not marked authoritative until an explicit range/category/id loader verifies them.
 
-## Target windowed behavior
+## Windowed behavior
 
-The initial authenticated bootstrap may eventually load the most recent 90 calendar days. That optimization is allowed only after every consumer that can request older data uses an explicit date-range loader.
+The authenticated bootstrap loads the most recent 90 calendar days only after the full-verification gate above passes. Every consumer that can request older data uses an explicit date-range, category, or id loader.
 
 Required contract:
 
@@ -30,10 +30,12 @@ Required contract:
 - Restored timers fetch every linked log id before activation and re-check a missing linked sleep log before stop persistence.
 - Stored-milk inventory, medication dose history, food ingredient history, and contraction history use paginated category-specific loaders; incomplete category reads never masquerade as complete history.
 - Successful range reads replace that cache window, and successful complete-category reads replace that category history. This removes rows deleted on another device instead of reviving them through an id-only merge.
+- Coverage, complete-category markers, and the verification timestamp are persisted under an account+baby scoped cache-metadata key. Logout drops memory but preserves the correct baby's offline metadata; account-data clearing removes it.
+- An id cached outside verified range/category coverage is revalidated. A successful server “not found” removes the stale cache row; a network failure retains the offline row and never pretends it was authoritatively deleted.
 - Range and id results are discarded when the active user/baby scope changes while the request is in flight.
 - Offline or failed reads return cached rows with `complete: false`; screens must not render an authoritative empty result.
 
-The initial bootstrap remains full-history. Range/category reconciliation is implemented, but the remaining blocker for a 90-day switch is startup authority metadata: offline startup and legacy unsynced local migration candidates must be distinguishable from a previously verified server window. The collapsed quick grid already ranks only the latest 30 days, so it does not require older coverage. Silently changing cache authority is not allowed.
+Accounts with legacy unsynced local migration candidates remain on full bootstrap. Candidate counts are stored per account+baby with the coverage metadata, so switching siblings cannot accidentally clear the gate. A partial server response cannot identify which missing local ids are deliberate offline-only candidates versus remote deletions outside the window, so those candidates are preserved and never auto-uploaded or auto-deleted. The collapsed quick grid already ranks only the latest 30 days, so it does not require older coverage.
 
 ## Migration sequence
 
@@ -42,7 +44,8 @@ The initial bootstrap remains full-history. Range/category reconciliation is imp
 3. Add offline and multi-baby stale-result QA (completed for the transition boundary).
 4. Add category-specific history contracts for stored milk, medication, ingredients, and contractions (completed). Quick-action ranking already has a 30-day contract.
 5. Reconcile successful range/category reads by replacement so remote deletions win (completed).
-6. Persist startup coverage/authority metadata and handle legacy unsynced migration candidates and offline startup.
-7. Only then switch bootstrap from `full` to the 90-day range.
+6. Persist startup coverage/authority metadata for offline startup (completed).
+7. Gate recent bootstrap on verified metadata and zero legacy migration candidates (completed).
+8. Provide a separate, user-reviewed resolution flow for accounts whose legacy candidate count is nonzero (remaining; those accounts safely stay full-history meanwhile).
 
 No database migration or new index is required for this contract. The existing `(baby_id, date_key)` index supports date-range reads; production index changes require QA `EXPLAIN (ANALYZE, BUFFERS)` evidence.

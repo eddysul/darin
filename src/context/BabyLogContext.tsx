@@ -16,6 +16,12 @@ import {
 import { getQuickRecords, resetQuickRecordsMemory, saveQuickRecords } from "../utils/quickRecordsStore";
 import { getBabyLogs, resetBabyLogsMemory, saveBabyLogs } from "../utils/babyLogsStore";
 import {
+  clearCareLogCacheMetadata,
+  getCareLogCacheMetadata,
+  resetCareLogCacheMetadataMemory,
+  saveCareLogCacheMetadata,
+} from "../utils/careLogCacheMetadataStore";
+import {
   fetchCareLogById,
   fetchCareLogsByCategories,
   fetchCareLogsByDateRange,
@@ -128,6 +134,7 @@ import {
   careLogRequestMatchesScope,
   extendCareLogCoverage,
   filterCareLogsByDateRange,
+  isCareLogEntryCovered,
   mergeCareLogEntries,
   reconcileCareLogCategories,
   reconcileCareLogRange,
@@ -321,6 +328,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setGrowthBookEditState(createEmptyGrowthBookEdit({ babyId: scope?.babyId ?? "", babyName: careSetup.child.childName }));
       resetDiaryEntriesMemory();
       resetBabyLogsMemory();
+      resetCareLogCacheMetadataMemory();
       resetGrowthBookEditMemory();
       resetDiaryDraftMemory();
       resetBabyStickersMemory();
@@ -353,7 +361,22 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         logsRef.current = careLogs.logs;
         if (careLogs.serverAuthoritative) void saveBabyLogs(careLogs.logs, scope);
       }
-      applyCareLogCoverage({ kind: "full" });
+      const storedMetadata = getCareLogCacheMetadata();
+      const nextCoverage = careLogs.serverAuthoritative
+        ? careLogs.coverage ?? { kind: "full" as const }
+        : storedMetadata.coverage ?? { kind: "full" as const };
+      applyCareLogCoverage(nextCoverage);
+      careLogCategoryCoverageRef.current = new Set(
+        nextCoverage.kind === "full" ? [] : storedMetadata.categoryCoverage,
+      );
+      if (careLogs.serverAuthoritative) {
+        void saveCareLogCacheMetadata(scope, {
+          coverage: nextCoverage,
+          categoryCoverage: nextCoverage.kind === "full" ? [] : storedMetadata.categoryCoverage,
+          migrationCandidateCount: careLogs.migrationCandidateCount,
+          verifiedAt: new Date().toISOString(),
+        });
+      }
       setLogsHydrated(true);
     }
     if (diaryOk) {
@@ -450,6 +473,12 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     const requestedCoverage = { kind: "range" as const, fromDateKey: from, toDateKey: to };
     const nextCoverage = extendCareLogCoverage(careLogCoverageRef.current, requestedCoverage);
     applyCareLogCoverage(nextCoverage);
+    void saveCareLogCacheMetadata(localDataScopeRef.current, {
+      coverage: nextCoverage,
+      categoryCoverage: [...careLogCategoryCoverageRef.current],
+      migrationCandidateCount: getCareLogCacheMetadata().migrationCandidateCount,
+      verifiedAt: new Date().toISOString(),
+    });
     return {
       logs: filterCareLogsByDateRange(merged, from, to),
       complete: true,
@@ -459,12 +488,29 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   const ensureCareLogById = useCallback(async (id: string): Promise<BabyLogEntry | null> => {
     const cached = logsRef.current.find((entry) => entry.id === id);
-    if (cached) return cached;
+    const cachedIsCovered = cached
+      ? isCareLogEntryCovered(
+        cached,
+        careLogCoverageRef.current,
+        careLogCategoryCoverageRef.current,
+      )
+      : false;
+    if (cachedIsCovered) return cached ?? null;
     const scope = localDataScopeRef.current;
-    if (!scope) return null;
+    if (!scope) return cached ?? null;
     const requestedScopeId = localDataScopeId(scope);
-    const remote = await fetchCareLogById(scope.babyId, id);
-    if (!remote || !careLogRequestMatchesScope(requestedScopeId, localDataScopeRef.current)) {
+    const result = await fetchCareLogById(scope.babyId, id);
+    if (!careLogRequestMatchesScope(requestedScopeId, localDataScopeRef.current)) {
+      return null;
+    }
+    if (result.status === "failed") return cached ?? null;
+    const remote = result.entry;
+    if (!remote) {
+      if (cached) {
+        const next = logsRef.current.filter((entry) => entry.id !== id);
+        logsRef.current = next;
+        setLogs(next);
+      }
       return null;
     }
     const merged = mergeCareLogEntries(logsRef.current, [remote]);
@@ -496,6 +542,12 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     logsRef.current = merged;
     setLogs(merged);
     requested.forEach((category) => careLogCategoryCoverageRef.current.add(category));
+    void saveCareLogCacheMetadata(localDataScopeRef.current, {
+      coverage: careLogCoverageRef.current,
+      categoryCoverage: [...careLogCategoryCoverageRef.current],
+      migrationCandidateCount: getCareLogCacheMetadata().migrationCandidateCount,
+      verifiedAt: new Date().toISOString(),
+    });
     return {
       logs: merged.filter((entry) => requested.includes(entry.cat)),
       complete: true,
@@ -1036,6 +1088,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setQuickRecordsState([]);
     await Promise.all([
       saveBabyLogs([], localDataScope),
+      clearCareLogCacheMetadata(localDataScope),
       saveDiaryEntries([], localDataScope),
       saveFamilyMembers([], localDataScope),
       saveGrowthBookEdit(emptyGrowthBook, localDataScope),
@@ -1278,6 +1331,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     setLocalDataScope(null);
     resetDiaryEntriesMemory();
     resetBabyLogsMemory();
+    resetCareLogCacheMetadataMemory();
     resetGrowthBookEditMemory();
     resetDiaryDraftMemory();
     resetBabyStickersMemory();

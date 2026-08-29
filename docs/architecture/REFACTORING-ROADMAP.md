@@ -34,7 +34,7 @@ Completed: ko/en legacy messages and ja/es/zh legacy overrides have dedicated ca
 
 ### Phase 5 — historical CareLog loading
 
-In progress: the context now exposes repository-backed range, id, and paginated category loaders with active-baby stale-result rejection. Record navigation/deep links, selected-day contraction repair, stored-milk inventory, medication/ingredient history, contraction history, Reports, Diary, Consult, and restored timer-linked ids have explicit boundaries. The current context still retains all history until partial authoritative server windows can reconcile safely with older offline cache rows and server-side deletions. See `CARE-LOG-HISTORY-CONTRACT.md`.
+Completed for zero-candidate accounts: the context exposes repository-backed range, id, and paginated category loaders with active-baby stale-result rejection. Record navigation/deep links, selected-day contraction repair, stored-milk inventory, medication/ingredient history, contraction history, Reports, Diary, Consult, and restored timer-linked ids have explicit boundaries. Range/category replacement and account+baby scoped coverage metadata preserve deletion and offline semantics. Startup uses a bounded 90-day window only after one full verification and while the legacy migration-candidate count is zero; candidate-bearing accounts safely remain full-history pending a separate user-reviewed resolution flow. See `CARE-LOG-HISTORY-CONTRACT.md`.
 
 ### Phase 6 — repository contracts and database evidence
 

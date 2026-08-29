@@ -20,7 +20,7 @@ import { useConsultFabBehavior } from "../../hooks/useConsultFabBehavior";
 import type { DiaryEntry } from "../../types/babyLog";
 import type { DiaryDraft, DiaryReminderSettings } from "../../types/diaryReminder";
 import { DEFAULT_DIARY_REMINDER } from "../../types/diaryReminder";
-import { formatDateKey } from "../../utils/dateKey";
+import { formatDateKey, offsetDateKey } from "../../utils/dateKey";
 import {
   clearDiaryDraft,
   getDiaryDraft,
@@ -137,7 +137,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
 
   useEffect(() => {
     if (!storageReady) return;
-    void ensureCareLogsForRange(todayKey, todayKey);
+    void ensureCareLogsForRange(offsetDateKey(todayKey, -6), todayKey);
   }, [ensureCareLogsForRange, storageReady, todayKey]);
 
   const summary = useMemo(() => buildTodaySummary(logs), [logs]);
@@ -158,7 +158,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     void (async () => {
       const requestScopeKey = localDataScopeKeyRef.current;
       const dateKey = formatDateKey();
-      await ensureCareLogsForRange(dateKey, dateKey);
+      await ensureCareLogsForRange(offsetDateKey(dateKey, -6), dateKey);
       if (requestScopeKey !== localDataScopeKeyRef.current) return;
       const target = resolveDiaryComposeTarget({
         entries: diaryEntriesRef.current,
@@ -230,7 +230,8 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     void (async () => {
       const requestScopeKey = localDataScopeKeyRef.current;
       const key = !dateKeyArg || dateKeyArg === "today" ? formatDateKey() : dateKeyArg;
-      await ensureCareLogsForRange(key, key);
+      const today = formatDateKey();
+      await ensureCareLogsForRange(offsetDateKey(today, -6), today);
       if (requestScopeKey !== localDataScopeKeyRef.current) return;
       const target = resolveDiaryComposeTarget({
         entries: diaryEntriesRef.current,
