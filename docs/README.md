@@ -14,6 +14,9 @@ Expo React Native 육아 기록 MVP 문서입니다.
 | [qa/MVP-전체-QA.md](./qa/MVP-전체-QA.md) | QA 판정·스모크·회귀 체크리스트 |
 | [operations/ENVIRONMENT-SAFETY.md](./operations/ENVIRONMENT-SAFETY.md) | QA/production 환경과 credential 경계 |
 | [operations/PRODUCTION-DEPLOYMENT-MANIFEST.md](./operations/PRODUCTION-DEPLOYMENT-MANIFEST.md) | production migration/Function/cron 상태 |
+| [architecture/REFACTORING-ROADMAP.md](./architecture/REFACTORING-ROADMAP.md) | 아키텍처 정리 단계와 release gate |
+| [architecture/CARE-LOG-HISTORY-CONTRACT.md](./architecture/CARE-LOG-HISTORY-CONTRACT.md) | CareLog full/window/cache 권위 계약 |
+| [architecture/QUERY-OPTIMIZATION-AUDIT.md](./architecture/QUERY-OPTIMIZATION-AUDIT.md) | query 축소·pagination·index 보류 근거 |
 | [archive/](./archive/) | 레거시·브랜치 비교 등 참고용 (현재 제품 기준 아님) |
 
 ## 코드 인덱스

@@ -43,7 +43,9 @@ function timeParts(value: string): [number, number] {
   return [Number.isFinite(hour) ? hour : 21, Number.isFinite(minute) ? minute : 0];
 }
 
-export function notificationSettingsFromRow(row: NotificationSettingsRow): NotificationSettings {
+type NotificationSettingsData = Omit<NotificationSettingsRow, "created_at" | "updated_at">;
+
+export function notificationSettingsFromRow(row: NotificationSettingsData): NotificationSettings {
   const [hour, minute] = timeParts(row.diary_reminder_time);
   return {
     id: row.id,

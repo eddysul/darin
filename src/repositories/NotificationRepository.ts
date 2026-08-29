@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import type { Database, PushTokenRow } from "../types/database";
+import type { Database } from "../types/database";
 import type { NotificationSettings, SendNotificationInput } from "../types/notifications";
 import { notificationSettingsFromRow } from "../types/notifications";
 import { requireSupabase } from "../lib/supabase";
@@ -8,6 +8,8 @@ import { AuthRepository } from "./AuthRepository";
 function timeValue(hour: number, minute: number): string {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
 }
+
+const NOTIFICATION_SETTINGS_SELECT = "id,user_id,baby_id,diary_reminder_enabled,diary_reminder_time,timezone,family_activity_enabled,invite_activity_enabled,quiet_hours_enabled,quiet_hours_start,quiet_hours_end,show_preview";
 
 async function requireUserId(): Promise<string> {
   const user = await AuthRepository.getUser();
@@ -21,10 +23,10 @@ export const NotificationRepository = {
     expoPushToken: string;
     appVersion?: string | null;
     buildNumber?: string | null;
-  }): Promise<PushTokenRow> {
+  }): Promise<void> {
     if (Platform.OS !== "ios" && Platform.OS !== "android") throw new Error("Push is unavailable on this platform.");
     const userId = await requireUserId();
-    const { data, error } = await requireSupabase().from("push_tokens").upsert({
+    const { error } = await requireSupabase().from("push_tokens").upsert({
       user_id: userId,
       device_id: input.deviceId,
       expo_push_token: input.expoPushToken,
@@ -33,9 +35,8 @@ export const NotificationRepository = {
       build_number: input.buildNumber ?? null,
       last_seen_at: new Date().toISOString(),
       disabled_at: null,
-    }, { onConflict: "user_id,device_id" }).select("*").single();
+    }, { onConflict: "user_id,device_id" });
     if (error) throw error;
-    return data;
   },
 
   async unregisterToken(deviceId: string): Promise<void> {
@@ -48,7 +49,7 @@ export const NotificationRepository = {
 
   async getSettings(babyId: string | null): Promise<NotificationSettings | null> {
     const userId = await requireUserId();
-    let query = requireSupabase().from("notification_settings").select("*").eq("user_id", userId);
+    let query = requireSupabase().from("notification_settings").select(NOTIFICATION_SETTINGS_SELECT).eq("user_id", userId);
     query = babyId ? query.eq("baby_id", babyId) : query.is("baby_id", null);
     const { data, error } = await query.maybeSingle();
     if (error) throw error;
@@ -76,8 +77,8 @@ export const NotificationRepository = {
     const { data: row, error: findError } = await existing.maybeSingle();
     if (findError) throw findError;
     const result = row
-      ? await sb.from("notification_settings").update(values).eq("id", row.id).select("*").single()
-      : await sb.from("notification_settings").insert(values).select("*").single();
+      ? await sb.from("notification_settings").update(values).eq("id", row.id).select(NOTIFICATION_SETTINGS_SELECT).single()
+      : await sb.from("notification_settings").insert(values).select(NOTIFICATION_SETTINGS_SELECT).single();
     if (result.error) throw result.error;
     return notificationSettingsFromRow(result.data);
   },

@@ -17,6 +17,7 @@ import { NotificationRepository } from "./NotificationRepository";
 const DIARY_MEDIA_BUCKET = "diary-media";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 export const DIARY_SIGNED_URL_TTL_SECONDS = 300;
+export const DIARY_HYDRATION_PAGE_SIZE = 100;
 
 export type DiaryWriteResult = {
   entry: DiaryEntry;
@@ -74,24 +75,33 @@ async function signedPhotos(media: DiaryMediaRow[]): Promise<Map<string, string[
 export const DiaryRepository = {
   async listByBabyId(babyId: string): Promise<DiaryEntry[]> {
     const sb = requireSupabase();
-    const { data: rows, error } = await sb
-      .from("diary_entries")
-      .select("*")
-      .eq("baby_id", babyId)
-      .is("deleted_at", null)
-      .order("entry_date", { ascending: false })
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    if (!rows?.length) return [];
-    const ids = rows.map((row) => row.id);
-    const { data: media, error: mediaError } = await sb
-      .from("diary_media")
-      .select("*")
-      .in("diary_entry_id", ids)
-      .order("created_at", { ascending: true });
-    if (mediaError) throw mediaError;
-    const photos = await signedPhotos(media ?? []);
-    return rows.map((row) => diaryEntryRowToModel(row, photos.get(row.id) ?? []));
+    const entries: DiaryEntry[] = [];
+    let offset = 0;
+    while (true) {
+      const { data: rows, error } = await sb
+        .from("diary_entries")
+        .select("*")
+        .eq("baby_id", babyId)
+        .is("deleted_at", null)
+        .order("entry_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + DIARY_HYDRATION_PAGE_SIZE - 1);
+      if (error) throw error;
+      const page = rows ?? [];
+      if (!page.length) return entries;
+      const ids = page.map((row) => row.id);
+      const { data: media, error: mediaError } = await sb
+        .from("diary_media")
+        .select("*")
+        .in("diary_entry_id", ids)
+        .order("created_at", { ascending: true });
+      if (mediaError) throw mediaError;
+      const photos = await signedPhotos(media ?? []);
+      entries.push(...page.map((row) => diaryEntryRowToModel(row, photos.get(row.id) ?? [])));
+      offset += page.length;
+      if (page.length < DIARY_HYDRATION_PAGE_SIZE) return entries;
+    }
   },
 
   async getById(diaryEntryId: string): Promise<DiaryEntry | null> {

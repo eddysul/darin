@@ -38,10 +38,9 @@ Completed for zero-candidate accounts: the context exposes repository-backed ran
 
 ### Phase 6 — repository contracts and database evidence
 
-- replace remaining broad `select("*")` calls with typed field lists where models do not require the whole row;
-- move offset-based Memories pagination to a stable `(created_at, id)` cursor if concurrent-feed churn becomes measurable;
-- run `EXPLAIN (ANALYZE, BUFFERS)` in QA before proposing any new index;
-- keep migrations forward-only and do not add indexes based solely on static code inspection.
+Completed safe code-only changes: CareLog reads use an explicit mapper projection; push-token registration and contact submission no longer request unused rows; notification settings omit timestamp columns; Diary full hydration uses deterministic 100-row pages with page-scoped media batches. Existing row mappers that consume complete models and data export intentionally retain broad selects.
+
+Deferred evidence-based changes: move offset-based Memories/Diary pagination to cursor pagination only if concurrent-feed churn is measurable, and run `EXPLAIN (ANALYZE, BUFFERS)` in QA before proposing any index. The existing CareLog `(baby_id, date_key)`, Diary `(baby_id, entry_date desc, created_at desc)`, and Memories `(baby_id, created_at desc)` indexes already match the new leading filters/orders. No migration is authorized by this refactor.
 
 ## Release gates after each phase
 

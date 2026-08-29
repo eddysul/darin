@@ -1,10 +1,10 @@
 import { Platform } from "react-native";
-import type { ContactRequestCategory, ContactRequestRow } from "../types/database";
+import type { ContactRequestCategory } from "../types/database";
 import { requireSupabase } from "../lib/supabase";
 import { AuthRepository } from "./AuthRepository";
 
 export const ContactRequestRepository = {
-  async create(input: { email?: string; category: ContactRequestCategory; message: string }): Promise<ContactRequestRow> {
+  async create(input: { email?: string; category: ContactRequestCategory; message: string }): Promise<void> {
     const user = await AuthRepository.getUser();
     if (!user) throw new Error("로그인이 필요해요.");
     const message = input.message.trim();
@@ -14,14 +14,13 @@ export const ContactRequestRepository = {
     if (email && (!/^\S+@\S+\.\S+$/.test(email) || email.length > 320)) {
       throw new Error("답변 받을 이메일을 확인해주세요.");
     }
-    const { data, error } = await requireSupabase().from("contact_requests").insert({
+    const { error } = await requireSupabase().from("contact_requests").insert({
       user_id: user.id,
       email,
       category: input.category,
       message,
       device_info: { platform: Platform.OS, version: Platform.Version },
-    }).select("*").single();
+    });
     if (error) throw error;
-    return data;
   },
 };

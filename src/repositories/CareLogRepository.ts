@@ -8,6 +8,12 @@ import { NotificationRepository } from "./NotificationRepository";
 import { mergeCareLogEntries } from "../utils/careLogHistory";
 
 export const CARE_LOG_HYDRATION_PAGE_SIZE = 500;
+export const CARE_LOG_ENTRY_SELECT = "id,category,date_key,time_local,payload,source,created_by";
+
+type CareLogEntryRow = Pick<
+  CareLogRow,
+  "id" | "category" | "date_key" | "time_local" | "payload" | "source" | "created_by"
+>;
 
 function payloadFromEntry(entry: BabyLogEntry | Omit<BabyLogEntry, "id">): CareLogPayload {
   return {
@@ -72,7 +78,7 @@ function payloadFromEntry(entry: BabyLogEntry | Omit<BabyLogEntry, "id">): CareL
   };
 }
 
-export function careLogRowToEntry(row: CareLogRow): BabyLogEntry {
+export function careLogRowToEntry(row: CareLogEntryRow): BabyLogEntry {
   const p = (row.payload ?? {}) as CareLogPayload;
   return {
     id: row.id,
@@ -186,7 +192,7 @@ export const CareLogRepository = {
     const { data, error } = await sb
       .from("care_logs")
       .upsert(insert, { onConflict: "baby_id,client_generated_id" })
-      .select("*")
+      .select(CARE_LOG_ENTRY_SELECT)
       .single();
     if (error) throw error;
     const created = careLogRowToEntry(data);
@@ -220,7 +226,7 @@ export const CareLogRepository = {
       })
       .eq("baby_id", babyId)
       .eq("id", id)
-      .select("*")
+      .select(CARE_LOG_ENTRY_SELECT)
       .single();
     if (error) throw error;
     return careLogRowToEntry(data);
@@ -243,7 +249,7 @@ export const CareLogRepository = {
     while (true) {
       const { data, error } = await sb
         .from("care_logs")
-        .select("*")
+        .select(CARE_LOG_ENTRY_SELECT)
         .eq("baby_id", babyId)
         .gte("date_key", fromDateKey)
         .lte("date_key", toDateKey)
@@ -262,7 +268,7 @@ export const CareLogRepository = {
     const sb = requireSupabase();
     const { data, error } = await sb
       .from("care_logs")
-      .select("*")
+      .select(CARE_LOG_ENTRY_SELECT)
       .eq("baby_id", babyId)
       .eq("id", id)
       .maybeSingle();
@@ -281,7 +287,7 @@ export const CareLogRepository = {
     while (true) {
       const { data, error } = await sb
         .from("care_logs")
-        .select("*")
+        .select(CARE_LOG_ENTRY_SELECT)
         .eq("baby_id", babyId)
         .in("category", [...categories])
         .order("recorded_at", { ascending: true })
@@ -305,7 +311,7 @@ export const CareLogRepository = {
     const safeLimit = Math.max(1, limit);
     const { data, error } = await sb
       .from("care_logs")
-      .select("*")
+      .select(CARE_LOG_ENTRY_SELECT)
       .eq("baby_id", babyId)
       .order("recorded_at", { ascending: true })
       .order("id", { ascending: true })
