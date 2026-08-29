@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   },
   chipSel: { backgroundColor: colors.amber, borderColor: colors.amber },
   chipText: { fontSize: 13, color: colors.muted, fontWeight: "700" },
-  chipTextSel: { color: colors.amberDark },
+  chipTextSel: { color: colors.brandCoralForeground },
   sideSplit: {
     marginTop: 10,
     textAlign: "center",
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   btnGhostText: { color: colors.muted, fontWeight: "700", fontSize: 14 },
   btnSecondary: { backgroundColor: colors.amberSoft },
   btnSecondaryText: { color: colors.text, fontWeight: "800", fontSize: 14 },
-  btnPrimary: { backgroundColor: colors.amber },
-  btnPrimaryText: { color: colors.amberDark, fontWeight: "800", fontSize: 14 },
+  btnPrimary: { backgroundColor: colors.primary },
+  btnPrimaryText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 14 },
   btnDisabled: { opacity: 0.55 },
 });

@@ -540,7 +540,7 @@ export function BabyProfileScreen() {
             <TextInput style={[styles.input, styles.note]} value={note} onChangeText={setNote} placeholder={t("babyProfile.notePlaceholder")} placeholderTextColor={colors.faint} multiline maxLength={400} />
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Pressable style={[styles.save, saving && styles.disabled]} onPress={() => void save()} disabled={saving}>
-              {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.saveText}>{t("babyProfile.addAndSelect")}</Text>}
+              {saving ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.saveText}>{t("babyProfile.addAndSelect")}</Text>}
             </Pressable>
           </View>
           ) : null}
@@ -685,7 +685,7 @@ export function BabyProfileScreen() {
               maxLength={400}
             />
             <Pressable style={[styles.save, saving && styles.disabled]} onPress={() => void save()} disabled={saving}>
-              {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.saveText}>{converting ? t("babyProfile.registerBirth") : t("babyProfile.save")}</Text>}
+              {saving ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.saveText}>{converting ? t("babyProfile.registerBirth") : t("babyProfile.save")}</Text>}
             </Pressable>
           </View>
         ) : (
@@ -939,8 +939,8 @@ const styles = StyleSheet.create({
   cautionHelp: { color: colors.faint, fontSize: 11.5, lineHeight: 17 },
   customFoodRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   customFoodInput: { flex: 1 },
-  customFoodButton: { minHeight: 46, paddingHorizontal: 16, borderRadius: radius.md, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  customFoodButtonText: { color: colors.amberDark, fontSize: 12.5, fontWeight: "800" },
+  customFoodButton: { minHeight: 46, paddingHorizontal: 16, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  customFoodButtonText: { color: colors.primaryForeground, fontSize: 12.5, fontWeight: "800" },
   customFoodItem: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 40, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: colors.backgroundSecondary },
   customFoodName: { color: colors.text, fontSize: 13, fontWeight: "700" },
   customFoodRemove: { color: colors.dangerText, fontSize: 11.5, fontWeight: "700" },
@@ -988,8 +988,8 @@ const styles = StyleSheet.create({
   invite: { minHeight: 50, borderRadius: radius.lg, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
   inviteText: { color: colors.amberText, fontWeight: "800" },
   viewerHint: { textAlign: "center", color: colors.faint, fontSize: 12.5 },
-  save: { minHeight: 48, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", marginTop: 4 },
-  saveText: { color: colors.amberDark, fontWeight: "800" },
+  save: { minHeight: 48, borderRadius: radius.full, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: 4 },
+  saveText: { color: colors.primaryForeground, fontWeight: "800" },
   disabled: { opacity: 0.55 },
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12.5 },
 });

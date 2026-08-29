@@ -28,6 +28,12 @@ import type { RootStackParamList } from "./types";
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
+const appLinkHost = process.env.EXPO_PUBLIC_APP_LINK_HOST?.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "");
+const linkingPrefixes = [
+  "knanny://",
+  "exp://",
+  ...(appLinkHost ? [`https://${appLinkHost}`] : []),
+];
 
 export function MainNavigator({
   onboardingProfile,
@@ -124,7 +130,7 @@ export function MainNavigator({
   }, [openNotificationRoute]);
 
   const linking: LinkingOptions<RootStackParamList> = {
-    prefixes: ["knanny://", "exp://"],
+    prefixes: linkingPrefixes,
     config: friendOnly ? {
       screens: {
         MainTabs: { screens: { Memories: "memories" } },
@@ -144,7 +150,6 @@ export function MainNavigator({
             Record: "record",
             Report: "report",
             Memories: "memories",
-            Mic: "mic",
           },
         },
         Consult: "consult",
@@ -206,4 +211,3 @@ export function MainNavigator({
     </NavigationContainer>
   );
 }
-

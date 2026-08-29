@@ -61,7 +61,7 @@ export function ConsultFab({ onPress, compact = false, hidden = false, bottomOff
         accessibilityRole="button"
         accessibilityLabel={t("consult.critical.016")}
       >
-        <BabyLogIcon kind="bot" size={compact ? 22 : 25} color={colors.amberDark} strokeWidth={1.9} />
+        <BabyLogIcon kind="bot" size={compact ? 22 : 25} color={colors.primaryForeground} strokeWidth={1.9} />
         {compact ? null : (
           <Text
             style={styles.text}
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   fab: {
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
   },
   pressed: { transform: [{ scale: 0.96 }], opacity: 0.92 },
   text: {
-    color: colors.amberDark,
+    color: colors.primaryForeground,
     width: "86%",
     fontSize: 11,
     lineHeight: 13,

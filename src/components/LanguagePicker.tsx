@@ -35,7 +35,8 @@ export function LanguagePicker({ open, onClose }: LanguagePickerProps) {
               key={option.value}
               style={[styles.option, selected === option.value && styles.optionActive]}
               onPress={() => choose(option.value)}
-              accessibilityRole="button"
+              accessibilityRole="radio"
+              accessibilityLabel={option.value === "system" ? t("profileSetup.language.system") : option.label}
               accessibilityState={{ selected: selected === option.value }}
             >
               <Text style={[styles.optionText, selected === option.value && styles.optionTextActive]}>
@@ -72,7 +73,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    minHeight: 44,
+    minHeight: 48,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: radius.md,

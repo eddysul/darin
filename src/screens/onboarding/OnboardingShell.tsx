@@ -13,7 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenBackground } from "../../components/ScreenBackground";
 import { useLanguage } from "../../LanguageContext";
-import { colors, radius } from "../../theme";
+import { colors, fontScaleCap, radius } from "../../theme";
 
 type Props = {
   children: ReactNode;
@@ -99,9 +99,23 @@ export function OnboardingShell({
               ) : compact ? null : (
                 <View style={styles.stepSpacer} />
               )}
-              <Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text>
+              <Text
+                style={[styles.title, compact && styles.titleCompact]}
+                maxFontSizeMultiplier={compact ? fontScaleCap.chrome : undefined}
+                lineBreakStrategyIOS="push-out"
+                textBreakStrategy="balanced"
+              >
+                {title}
+              </Text>
               {subtitle ? (
-                <Text style={[styles.subtitle, compact && styles.subtitleCompact]}>{subtitle}</Text>
+                <Text
+                  style={[styles.subtitle, compact && styles.subtitleCompact]}
+                  maxFontSizeMultiplier={compact ? fontScaleCap.chrome : undefined}
+                  lineBreakStrategyIOS="push-out"
+                  textBreakStrategy="balanced"
+                >
+                  {subtitle}
+                </Text>
               ) : null}
 
               <View style={[styles.body, compact && styles.bodyCompact]}>{children}</View>
@@ -110,11 +124,16 @@ export function OnboardingShell({
 
               {primaryLabel && onPrimary ? (
                 <Pressable
-                  style={[styles.cta, primaryDisabled && styles.ctaDisabled]}
+                  style={({ pressed }) => [
+                    styles.cta,
+                    pressed && !primaryDisabled && styles.ctaPressed,
+                    primaryDisabled && styles.ctaDisabled,
+                  ]}
                   onPress={onPrimary}
                   disabled={primaryDisabled}
                   accessibilityRole="button"
                   accessibilityLabel={primaryLabel}
+                  accessibilityState={{ disabled: primaryDisabled }}
                 >
                   <Text style={styles.ctaText}>{primaryLabel}</Text>
                 </Pressable>
@@ -292,7 +311,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
   },
-  ctaDisabled: { opacity: 0.4 },
+  ctaPressed: { backgroundColor: colors.primaryPressed },
+  ctaDisabled: { backgroundColor: colors.primaryDisabled },
   ctaText: { flexShrink: 1, textAlign: "center", lineHeight: 22, fontSize: 16, fontWeight: "800", color: colors.primaryForeground },
   secondaryBtn: { marginTop: 14, alignItems: "center", paddingVertical: 8 },
   secondaryText: { flexShrink: 1, textAlign: "center", lineHeight: 20, fontSize: 14, fontWeight: "700", color: colors.muted },

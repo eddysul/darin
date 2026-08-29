@@ -49,7 +49,7 @@ import {
 } from "../src/utils/storageIssues";
 import { resolvePostSplashPhase } from "../src/utils/appStartup";
 import { canSubmitUserProfile, isBabyProfileComplete, isUserProfileComplete, resolveAuthenticatedRoute } from "../src/utils/profileCompletion";
-import { parseInviteCodeFromUrl } from "../src/utils/inviteCode";
+import { inviteUrl, parseInviteCodeFromUrl } from "../src/utils/inviteCode";
 import { completeAuthCallback, parseAuthCallback } from "../src/utils/authCallback";
 import { formatIsoDateInput, isValidBirthDate } from "../src/utils/dateInput";
 import { formatClockInput, isValidClockInput } from "../src/utils/timeInput";
@@ -572,6 +572,9 @@ function log(
   );
   assert.equal(parseInviteCodeFromUrl("knanny://invite/DARIN-ABC123"), "DARIN-ABC123");
   assert.equal(parseInviteCodeFromUrl("knanny://invite?code=darin-xyz789"), "DARIN-XYZ789");
+  assert.equal(parseInviteCodeFromUrl("https://app.darin.example/invite/darin-web123"), "DARIN-WEB123");
+  assert.equal(inviteUrl("darin-abc123", "app.darin.example"), "https://app.darin.example/invite/DARIN-ABC123");
+  assert.equal(inviteUrl("darin-abc123", ""), "knanny://invite/DARIN-ABC123");
 }
 
 // --- Data connection: add / update / delete Care Log → derived summaries ---

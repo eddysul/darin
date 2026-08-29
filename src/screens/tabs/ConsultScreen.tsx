@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  FlatList,
   Keyboard,
   LayoutAnimation,
   Modal,
@@ -32,6 +33,7 @@ import { openDeviceNotificationSettings, scheduleMemoReminder } from "../../util
 import { formatSleepDuration, type TodaySummary } from "../../utils/reportAggregates";
 import type { RootStackParamList } from "../../navigation/types";
 import type { ConsultCriticalKey } from "../../i18nConsultCriticalMessages";
+import { useReduceMotion } from "../../hooks/useReduceMotion";
 
 const QUICK_CHIP_KEYS: ConsultCriticalKey[] = [
   "consult.critical.001",
@@ -63,6 +65,7 @@ export function ConsultScreen() {
     ensureCareLogsForRange,
   } = useBabyLog();
   const { locale, t } = useLanguage();
+  const reduceMotion = useReduceMotion();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -74,7 +77,7 @@ export function ConsultScreen() {
   const [memoToast, setMemoToast] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
   const historyRef = useRef<OpenAIMessage[]>([]);
   const historySeeded = useRef(false);
@@ -149,7 +152,7 @@ export function ConsultScreen() {
     }
     setInput("");
     setIsTyping(true);
-    scrollRef.current?.scrollToEnd({ animated: true });
+    scrollRef.current?.scrollToEnd({ animated: !reduceMotion });
 
     const prompt = buildBabyLogConsultPrompt({
       careSetup,
@@ -182,7 +185,7 @@ export function ConsultScreen() {
       if (requestScopeRun === babyScopeRunRef.current) {
         requestInFlightRef.current = false;
         setIsTyping(false);
-        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: !reduceMotion }), 50);
       }
     }
   };
@@ -213,6 +216,7 @@ export function ConsultScreen() {
 
   useEffect(() => {
     const animate = (duration?: number) => {
+      if (reduceMotion) return;
       LayoutAnimation.configureNext({
         duration: duration && duration > 0 ? duration : 250,
         update: {
@@ -223,7 +227,7 @@ export function ConsultScreen() {
     const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", (event) => {
       animate(event.duration);
       setKeyboardInset(Platform.OS === "ios" ? event.endCoordinates.height : 0);
-      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: !reduceMotion }));
     });
     const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", (event) => {
       animate(event.duration);
@@ -233,7 +237,7 @@ export function ConsultScreen() {
       show.remove();
       hide.remove();
     };
-  }, []);
+  }, [reduceMotion]);
 
   const lastAiText = useMemo(() => {
     const last = [...chatHistory].reverse().find((m) => m.role === "ai" && m.id !== "greet-1" && m.text.trim());
@@ -336,22 +340,23 @@ export function ConsultScreen() {
       ) : null}
 
       <View style={[styles.flex, { paddingBottom: keyboardInset }]}>
-        <ScrollView
+        <FlatList
           ref={scrollRef}
+          data={chatHistory}
+          keyExtractor={(message) => message.id}
           style={styles.messages}
           contentContainerStyle={styles.messagesContent}
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
           keyboardShouldPersistTaps="handled"
-        >
-          {chatHistory.map((m) =>
+          renderItem={({ item: m }) =>
             m.role === "user" ? (
               m.text ? (
-                <View key={m.id} style={[styles.bubble, styles.userBubble]}>
+                <View style={[styles.bubble, styles.userBubble]}>
                   <Text style={[styles.bubbleText, styles.userText]}>{m.text}</Text>
                 </View>
               ) : null
             ) : (
-              <View key={m.id} style={styles.aiBlock}>
+              <View style={styles.aiBlock}>
                 <View style={[styles.bubble, styles.aiBubble]}>
                   <Text style={styles.bubbleText}>{m.id === "greet-1" ? t("consult.critical.080") : m.text}</Text>
                 </View>
@@ -366,13 +371,14 @@ export function ConsultScreen() {
                   </Pressable>
                 ) : null}
               </View>
-            ),
-          )}
-          {isTyping && (
+            )
+          }
+          ListFooterComponent={<>
+          {isTyping ? (
             <View style={styles.aiBlock}>
               <LoadingState label={t("consult.critical.024")} />
             </View>
-          )}
+          ) : null}
           {aiError && !isTyping ? (
             <View style={{ marginTop: 8 }}>
               <ErrorState
@@ -385,7 +391,8 @@ export function ConsultScreen() {
               />
             </View>
           ) : null}
-        </ScrollView>
+          </>}
+        />
 
         {showChips ? (
           <ScrollView
@@ -448,7 +455,7 @@ export function ConsultScreen() {
             accessibilityRole="button"
             accessibilityLabel={t("consult.critical.029")}
           >
-            <BabyLogIcon kind="send" size={18} color={colors.amberDark} />
+            <BabyLogIcon kind="send" size={18} color={colors.primaryForeground} />
           </Pressable>
         </View>
       </View>
@@ -573,7 +580,7 @@ const styles = StyleSheet.create({
   },
   aiBlock: { alignSelf: "flex-start", maxWidth: "85%", marginBottom: 8 },
   bubbleText: { fontSize: 13.5, lineHeight: 21, color: colors.text },
-  userText: { color: colors.amberDark },
+  userText: { color: colors.brandCoralForeground },
   memoLink: {
     minHeight: Platform.OS === "android" ? 48 : 44,
     justifyContent: "center",
@@ -632,7 +639,7 @@ const styles = StyleSheet.create({
     width: Platform.OS === "android" ? 48 : 44,
     height: Platform.OS === "android" ? 48 : 44,
     borderRadius: Platform.OS === "android" ? 24 : 22,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -656,11 +663,11 @@ const styles = StyleSheet.create({
   modalBtn: {
     marginTop: 16,
     minHeight: Platform.OS === "android" ? 48 : 44,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  modalBtnText: { fontWeight: "700", color: colors.amberDark },
+  modalBtnText: { fontWeight: "700", color: colors.primaryForeground },
 });

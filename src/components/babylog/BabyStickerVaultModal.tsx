@@ -979,7 +979,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: "800", color: colors.text, marginBottom: 10, marginTop: 8 },
   primaryBtn: {
     minHeight: Platform.OS === "android" ? 48 : 44,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -989,7 +989,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 10,
   },
-  primaryBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 14.5 },
+  primaryBtnText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 14.5 },
   secondaryBtn: {
     minHeight: Platform.OS === "android" ? 48 : 44,
     borderWidth: 1,

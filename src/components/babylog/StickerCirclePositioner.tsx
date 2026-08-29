@@ -373,12 +373,12 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: "700", color: colors.text },
   primaryBtn: {
     minHeight: HIT,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  primaryBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 14.5 },
+  primaryBtnText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 14.5 },
   disabled: { opacity: 0.55 },
 });

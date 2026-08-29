@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
   selectedTimeLabel: { color: colors.faint, fontSize: 11.5, fontWeight: "700" },
   selectedTimeValue: { marginTop: 5, color: colors.text, fontSize: 19, fontWeight: "800" },
   timeButton: { minHeight: 44, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.amber },
-  timeButtonText: { color: colors.amberDark, fontSize: 14, fontWeight: "800" },
+  timeButtonText: { color: colors.brandCoralForeground, fontSize: 14, fontWeight: "800" },
   inlineSwitchRow: { minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   secondaryButton: { minHeight: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
   secondaryButtonText: { color: colors.text, fontSize: 13, fontWeight: "800" },

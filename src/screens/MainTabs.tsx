@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { BottomTabBarProps, BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
@@ -36,14 +36,14 @@ import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
   Record: "tabs.record",
   Diary: "tabs.diary",
-  Mic: "tabs.voice",
   Report: "tabs.overview",
   Memories: "tabs.memories",
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
+const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 
-const TAB_ICONS: Record<Exclude<keyof MainTabParamList, "Mic">, TabIconKey> = {
+const TAB_ICONS: Record<keyof MainTabParamList, TabIconKey> = {
   Record: "record",
   Diary: "diary",
   Report: "report",
@@ -55,10 +55,6 @@ function openConsult(
   initialQuestion?: string,
 ) {
   navigation?.navigate("Consult", initialQuestion ? { initialQuestion } : { focusInput: true });
-}
-
-function MicPlaceholder() {
-  return <View style={{ flex: 1, backgroundColor: colors.background }} />;
 }
 
 function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarProps & { friendOnly?: boolean }) {
@@ -103,14 +99,17 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
     setVoiceEventPatch(null);
   }, [allowVoice]);
 
-  const tabs: { name: keyof MainTabParamList; center?: boolean }[] = friendOnly ? [
-    { name: "Memories" },
+  const items: Array<
+    | { kind: "route"; name: keyof MainTabParamList }
+    | { kind: "micAction" }
+  > = friendOnly ? [
+    { kind: "route", name: "Memories" },
   ] : [
-    { name: "Record" },
-    { name: "Diary" },
-    { name: "Mic", center: true },
-    { name: "Report" },
-    { name: "Memories" },
+    { kind: "route", name: "Record" },
+    { kind: "route", name: "Diary" },
+    { kind: "micAction" },
+    { kind: "route", name: "Report" },
+    { kind: "route", name: "Memories" },
   ];
 
   return (
@@ -121,15 +120,11 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
             <Text style={styles.voiceNoticeText}>{voiceNotice}</Text>
           </View>
         ) : null}
-        {tabs.map(({ name, center }) => {
-          const active = state.routes[state.index]?.name === name;
-          const labelKey = TAB_LABEL_KEYS[name];
-          const label = labelKey ? t(labelKey) : "";
-
-          if (center) {
+        {items.map((item) => {
+          if (item.kind === "micAction") {
             return (
               <Pressable
-                key={name}
+                key="mic-action"
                 style={styles.tabItem}
                 accessibilityRole="button"
                 accessibilityLabel={t("home.a11y.voiceRecord")}
@@ -159,10 +154,21 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
             );
           }
 
-          const tabIcon = TAB_ICONS[name as Exclude<keyof MainTabParamList, "Mic">];
+          const { name } = item;
+          const active = state.routes[state.index]?.name === name;
+          const labelKey = TAB_LABEL_KEYS[name];
+          const label = labelKey ? t(labelKey) : "";
+          const tabIcon = TAB_ICONS[name];
 
           return (
-            <Pressable key={name} style={styles.tabItem} onPress={() => navigation.navigate(name)} accessibilityRole="button" accessibilityLabel={label}>
+            <Pressable
+              key={name}
+              style={styles.tabItem}
+              onPress={() => navigation.navigate(name)}
+              accessibilityRole="tab"
+              accessibilityLabel={label}
+              accessibilityState={{ selected: active }}
+            >
               <BabyLogIcon
                 kind="tab"
                 tab={tabIcon}
@@ -195,7 +201,6 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
           addLogs(stageEvents.map((event) => voiceResultToLog(event, rawTranscript, logAuthor)));
           setVoiceOpen(false);
           setEditingVoiceId(null);
-          navigation.navigate("Record");
         }}
         onEditEvent={(event, rawTranscript) => {
           const base = voiceResultToLog(event, rawTranscript, logAuthor);
@@ -217,7 +222,6 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
           setEditingVoiceId(null);
           setVoicePrefill(null);
           setVoiceSheetCat(pregnancyStage ? "pregMood" : "memo");
-          navigation.navigate("Record");
         }}
         eventPatch={voiceEventPatch}
         onEventPatchConsumed={() => setVoiceEventPatch(null)}
@@ -369,7 +373,7 @@ export function MainTabs({ friendOnly = false }: { friendOnly?: boolean }) {
   return (
     <>
       <Tab.Navigator
-        tabBar={(props) => <CustomTabBar {...props} friendOnly={friendOnly} />}
+        tabBar={(props) => friendOnly ? null : <CustomTabBar {...props} />}
         initialRouteName={friendOnly ? "Memories" : "Record"}
         screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}
       >
@@ -379,7 +383,6 @@ export function MainTabs({ friendOnly = false }: { friendOnly?: boolean }) {
           <>
             <Tab.Screen name="Record" component={RecordTab} />
             <Tab.Screen name="Diary" component={DiaryTab} />
-            <Tab.Screen name="Mic" component={MicPlaceholder} />
             <Tab.Screen name="Report" component={ReportTab} />
             <Tab.Screen name="Memories" component={MemoriesTab} />
           </>
@@ -421,7 +424,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -3 },
     elevation: 10,
   },
-  tabItem: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "flex-start", gap: 4, paddingHorizontal: 2 },
+  tabItem: { flex: 1, minHeight: TOUCH_MIN, alignItems: "center", justifyContent: "flex-start", gap: 4, paddingHorizontal: 2 },
   centerBtnWrap: {
     marginTop: -28,
     borderRadius: 31,

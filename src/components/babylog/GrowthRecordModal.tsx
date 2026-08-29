@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   unitBtn: { minWidth: 42, paddingVertical: 8, paddingHorizontal: 8, borderRadius: 8, alignItems: "center" },
   unitBtnActive: { backgroundColor: colors.amber },
   unitText: { fontSize: 12, fontWeight: "700", color: colors.faint },
-  unitTextActive: { color: colors.amberDark },
+  unitTextActive: { color: colors.brandCoralForeground },
   sourceRow: { flexDirection: "row", gap: 8 },
   sourceBtn: { flex: 1, alignItems: "center", paddingVertical: 11, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   sourceBtnActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", gap: 10, marginTop: 22, marginBottom: 8 },
   actionBtn: { flex: 1, alignItems: "center", paddingVertical: 13, borderRadius: 14 },
   cancelBtn: { backgroundColor: colors.card },
-  saveBtn: { backgroundColor: colors.amber },
+  saveBtn: { backgroundColor: colors.primary },
   cancelText: { fontSize: 14, fontWeight: "700", color: colors.muted },
-  saveText: { fontSize: 14, fontWeight: "800", color: colors.amberDark },
+  saveText: { fontSize: 14, fontWeight: "800", color: colors.primaryForeground },
 });

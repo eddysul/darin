@@ -759,7 +759,7 @@ function ChoiceRow({
       <Text style={styles.rowLabel}>{label}</Text>
       <View style={styles.choiceRow}>
         {options.map((option) => (
-          <Pressable key={option.value} style={[styles.choice, value === option.value && styles.choiceOn, option.disabled && styles.choiceDisabled]} onPress={() => onChange(option.value)} disabled={option.disabled} accessibilityState={{ disabled: option.disabled, selected: value === option.value }}>
+          <Pressable key={option.value} style={[styles.choice, value === option.value && styles.choiceOn, option.disabled && styles.choiceDisabled]} onPress={() => onChange(option.value)} disabled={option.disabled} accessibilityRole="radio" accessibilityLabel={option.label} accessibilityState={{ disabled: option.disabled, selected: value === option.value }}>
             <Text style={[styles.choiceText, value === option.value && styles.choiceTextOn]}>{option.label}</Text>
           </Pressable>
         ))}
@@ -926,7 +926,7 @@ const styles = StyleSheet.create({
   actionError: { color: colors.dangerText, fontSize: 12.5, fontWeight: "700", lineHeight: 18 },
   choiceBlock: { paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 9 },
   choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  choice: { minHeight: 44, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, backgroundColor: colors.backgroundSecondary },
+  choice: { minHeight: 48, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, backgroundColor: colors.backgroundSecondary },
   choiceDisabled: { opacity: 0.48 },
   choiceOn: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
   choiceText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
@@ -964,8 +964,8 @@ const styles = StyleSheet.create({
   accordionChevron: { color: colors.muted, fontSize: 15, fontWeight: "800" },
   accordionBody: { padding: 15, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 17, backgroundColor: colors.backgroundSecondary },
   accordionParagraph: { gap: 6 },
-  primaryButton: { minHeight: 50, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 15, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  primaryButtonText: { flexShrink: 1, textAlign: "center", lineHeight: 20, color: colors.amberDark, fontSize: 14, fontWeight: "800" },
+  primaryButton: { minHeight: 50, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  primaryButtonText: { flexShrink: 1, textAlign: "center", lineHeight: 20, color: colors.primaryForeground, fontSize: 14, fontWeight: "800" },
   secondaryButton: { minHeight: 48, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   secondaryButtonDisabled: { opacity: 0.55 },
   secondaryButtonText: { flexShrink: 1, textAlign: "center", lineHeight: 20, color: colors.text, fontSize: 14, fontWeight: "800" },

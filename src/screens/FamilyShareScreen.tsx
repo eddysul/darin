@@ -37,6 +37,7 @@ import {
   storedFamilyRoleLabel,
   storedRelationshipLabel,
 } from "../utils/familyDisplay";
+import { inviteUrl } from "../utils/inviteCode";
 
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 
@@ -193,13 +194,13 @@ export function FamilyShareScreen({ navigation, route }: Props) {
 
   const copyInviteLink = async () => {
     if (!inviteCode) return;
-    await Clipboard.setStringAsync(`knanny://invite/${encodeURIComponent(inviteCode)}`);
+    await Clipboard.setStringAsync(inviteUrl(inviteCode));
     Alert.alert(t("family.critical.025"), t("family.critical.026"));
   };
 
   const shareInviteCode = async () => {
     if (!inviteCode) return;
-    const inviteLink = `knanny://invite/${encodeURIComponent(inviteCode)}`;
+    const inviteLink = inviteUrl(inviteCode);
     await Share.share({
       message: t("family.critical.027", {
         babyName,
@@ -432,7 +433,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                         accessibilityRole="button"
                         accessibilityLabel={t("family.critical.048")}
                       >
-                        {working ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.primaryText}>{t("family.critical.048")}</Text>}
+                        {working ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.primaryText}>{t("family.critical.048")}</Text>}
                       </Pressable>
                     </>
                   )}
@@ -539,7 +540,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                         accessibilityRole="button"
                         accessibilityLabel={t("family.critical.074")}
                       >
-                        {respondingId === item.id ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.acceptText}>{t("family.critical.074")}</Text>}
+                        {respondingId === item.id ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.acceptText}>{t("family.critical.074")}</Text>}
                       </Pressable>
                     </View>
                   </View>
@@ -591,7 +592,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
                         accessibilityRole="button"
                         accessibilityLabel={t("family.critical.084")}
                       >
-                        {codeWorking ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.primaryText}>{t("family.critical.084")}</Text>}
+                        {codeWorking ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.primaryText}>{t("family.critical.084")}</Text>}
                       </Pressable>
                     </View>
                   ) : (
@@ -700,16 +701,16 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   chipText: { fontSize: 12, fontWeight: "700", color: colors.muted },
   chipTextActive: { color: colors.amberText },
-  primary: { minHeight: TOUCH_MIN, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
-  primaryText: { color: colors.amberDark, fontWeight: "800" },
+  primary: { minHeight: TOUCH_MIN, borderRadius: radius.full, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
+  primaryText: { color: colors.primaryForeground, fontWeight: "800" },
   sendSection: { gap: 10, marginTop: 4, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border },
   secondary: { minHeight: TOUCH_MIN, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   secondaryText: { color: colors.text, fontSize: 13, fontWeight: "800" },
   input: { width: "100%", minHeight: TOUCH_MIN, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, color: colors.text, backgroundColor: colors.cardHi, fontSize: 15 },
   previewCard: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
   requestCard: { gap: 10, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card },
-  requestButton: { minHeight: TOUCH_MIN, minWidth: 96, maxWidth: 118, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  requestButtonText: { color: colors.amberDark, fontSize: 12, fontWeight: "800", textAlign: "center" },
+  requestButton: { minHeight: TOUCH_MIN, minWidth: 96, maxWidth: 118, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  requestButtonText: { color: colors.primaryForeground, fontSize: 12, fontWeight: "800", textAlign: "center" },
   fieldLabel: { fontSize: 12, fontWeight: "800", color: colors.muted, marginTop: 2 },
   peopleSection: { gap: 9, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card },
   peopleTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
@@ -723,11 +724,11 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.48 },
   inviteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
   secondaryAction: { flex: 1, minHeight: TOUCH_MIN, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  primaryAction: { flex: 1, minHeight: TOUCH_MIN, borderRadius: radius.md, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  primaryAction: { flex: 1, minHeight: TOUCH_MIN, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   codePill: { minHeight: TOUCH_MIN, borderRadius: radius.md, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
   codeText: { fontSize: 18, fontWeight: "800", letterSpacing: 2, color: colors.text },
   declineButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.backgroundSecondary, justifyContent: "center" },
   declineText: { color: colors.muted, fontWeight: "700", fontSize: 13 },
-  acceptButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.amber, justifyContent: "center" },
-  acceptText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 },
+  acceptButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.primary, justifyContent: "center" },
+  acceptText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 13 },
 });

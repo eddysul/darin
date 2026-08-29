@@ -368,6 +368,6 @@ const styles = StyleSheet.create({
   btn: { flex: 1, borderRadius: 14, paddingVertical: 13, alignItems: "center" },
   btnGhost: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   btnGhostText: { color: colors.muted, fontWeight: "700", fontSize: 14.5 },
-  btnPrimary: { backgroundColor: colors.amber },
-  btnPrimaryText: { color: colors.amberDark, fontWeight: "800", fontSize: 14.5 },
+  btnPrimary: { backgroundColor: colors.primary },
+  btnPrimaryText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 14.5 },
 });

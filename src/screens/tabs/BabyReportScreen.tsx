@@ -496,8 +496,14 @@ function RhythmDial({ series, displaySize }: { series: ReturnType<typeof buildDi
   const labelRadius = tickInner + 17;
 
   return (
-    <View style={{ width: displaySize, height: displaySize }} accessibilityLabel={t("report.critical.096")}>
-      <Svg width={displaySize} height={displaySize} viewBox={`0 0 ${size} ${size}`}>
+    <View
+      style={{ width: displaySize, height: displaySize }}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={t("report.critical.096")}
+      accessibilityValue={{ text: series.legend.map((item) => chartCategoryLabel(item.key, t)).join(", ") }}
+    >
+      <Svg width={displaySize} height={displaySize} viewBox={`0 0 ${size} ${size}`} accessible={false}>
         <Circle cx={center} cy={center} r={trackRadius} fill="#FFFDFC" stroke={colors.border} strokeWidth={trackWidth} />
 
         {/* 매시 눈금. 3시간마다 길고 진하게 해서 시각을 짚기 쉽게 한다. */}
@@ -666,16 +672,16 @@ const styles = StyleSheet.create({
   dashboardEmptyCompact: { paddingVertical: 12 },
   dashboardEmptyIcon: { width: 44, height: 44, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft, marginBottom: 9 },
   dashboardEmptyText: { color: colors.muted, fontSize: 12.5, lineHeight: 19, textAlign: "center" },
-  dashboardEmptyBtn: { marginTop: 12, minWidth: 140, alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.amber },
-  dashboardEmptyBtnText: { flexShrink: 1, textAlign: "center", lineHeight: 17, color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+  dashboardEmptyBtn: { marginTop: 12, minWidth: 140, alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.primary },
+  dashboardEmptyBtnText: { flexShrink: 1, textAlign: "center", lineHeight: 17, color: colors.primaryForeground, fontSize: 12, fontWeight: "800" },
   growthChartNext: { marginTop: 22, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 16 },
   growthSource: { fontSize: 10, lineHeight: 16, color: colors.faint, marginTop: 16 },
   growthEmpty: { alignItems: "center", paddingHorizontal: 12, paddingBottom: 4 },
   growthEmptyIcon: { width: 48, height: 48, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#E7F5F0", marginBottom: 10 },
   growthEmptyTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
   growthEmptyBody: { maxWidth: 300, marginTop: 6, fontSize: 11.5, lineHeight: 17, textAlign: "center", color: colors.faint },
-  growthEmptyBtn: { marginTop: 13, minWidth: 150, alignItems: "center", paddingHorizontal: 18, paddingVertical: 11, borderRadius: 13, backgroundColor: colors.amber },
-  growthEmptyBtnText: { flexShrink: 1, textAlign: "center", lineHeight: 18, fontSize: 12.5, fontWeight: "800", color: colors.amberDark },
+  growthEmptyBtn: { marginTop: 13, minWidth: 150, alignItems: "center", paddingHorizontal: 18, paddingVertical: 11, borderRadius: 13, backgroundColor: colors.primary },
+  growthEmptyBtnText: { flexShrink: 1, textAlign: "center", lineHeight: 18, fontSize: 12.5, fontWeight: "800", color: colors.primaryForeground },
   weeklyCard: {
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -732,7 +738,7 @@ const styles = StyleSheet.create({
   filterChipInner: { flexDirection: "row", alignItems: "center", gap: 6 },
   filterChipActive: { backgroundColor: colors.amber, borderColor: colors.amber },
   filterChipText: { fontSize: 12.5, fontWeight: "700", color: colors.muted },
-  filterChipTextActive: { color: colors.amberDark },
+  filterChipTextActive: { color: colors.brandCoralForeground },
   aiSummary: {
     backgroundColor: colors.card,
     borderWidth: 1,

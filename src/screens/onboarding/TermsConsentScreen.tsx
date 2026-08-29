@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   boxOn: { backgroundColor: colors.amber, borderColor: colors.amber },
-  check: { color: colors.amberDark, fontSize: 14, fontWeight: "900" },
+  check: { color: colors.brandCoralForeground, fontSize: 14, fontWeight: "900" },
   label: { flex: 1, fontSize: 14, lineHeight: 21, color: colors.text, fontWeight: "600" },
   req: { color: colors.amberText, fontWeight: "800" },
   opt: { color: colors.faint, fontWeight: "700" },

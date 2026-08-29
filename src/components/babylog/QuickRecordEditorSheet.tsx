@@ -545,12 +545,12 @@ const styles = StyleSheet.create({
   switchLabel: { fontSize: 13.5, fontWeight: "700", color: colors.text },
   primary: {
     marginTop: 16,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 13,
     alignItems: "center",
   },
-  primaryText: { fontWeight: "700", color: colors.amberDark, fontSize: 14.5 },
+  primaryText: { fontWeight: "700", color: colors.primaryForeground, fontSize: 14.5 },
   disabled: { opacity: 0.45 },
   hint: { fontSize: 12, color: colors.faint, marginTop: 6 },
 });

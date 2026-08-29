@@ -1104,6 +1104,9 @@ function PageEditor({
                           <Pressable
                             style={styles.commentStickerRemove}
                             onPress={() => setCommentStickerDrafts((prev) => prev.filter((candidate) => candidate.id !== item.id))}
+                            hitSlop={14}
+                            accessibilityRole="button"
+                            accessibilityLabel={t("sticker.critical.030")}
                           >
                             <Text style={styles.commentStickerRemoveText}>×</Text>
                           </Pressable>
@@ -1163,6 +1166,9 @@ function PageEditor({
                               <Pressable
                                 style={styles.commentStickerRemove}
                                 onPress={() => setRollingStickerDraftIds((prev) => prev.filter((_, itemIndex) => itemIndex !== index))}
+                                hitSlop={14}
+                                accessibilityRole="button"
+                                accessibilityLabel={t("sticker.critical.030")}
                               >
                                 <Text style={styles.commentStickerRemoveText}>×</Text>
                               </Pressable>
@@ -1493,7 +1499,7 @@ const styles = StyleSheet.create({
   cardPrimary: { backgroundColor: colors.amber, borderColor: colors.amber },
   cardCopy: { flex: 1, minWidth: 0 },
   cardTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
-  cardTitlePrimary: { color: colors.amberDark },
+  cardTitlePrimary: { color: colors.brandCoralForeground },
   cardBody: { fontSize: 12.5, color: colors.muted, marginTop: 4, lineHeight: 18 },
   label: { fontSize: 13, fontWeight: "700", color: colors.text, marginBottom: 8 },
   sectionTitle: { fontSize: 17, fontWeight: "800", color: colors.text, marginBottom: 8 },
@@ -1530,13 +1536,13 @@ const styles = StyleSheet.create({
   },
   coverPlaceholderText: { color: colors.faint, fontWeight: "600" },
   primaryBtn: {
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
     marginTop: 8,
   },
-  primaryBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 14.5 },
+  primaryBtnText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 14.5 },
   secondaryBtn: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -1684,8 +1690,8 @@ const styles = StyleSheet.create({
   commentStickerRemove: { position: "absolute", top: 3, right: 3, zIndex: 5, elevation: 5, width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerText },
   commentStickerRemoveText: { color: "#FFF", fontSize: 14, fontWeight: "900", lineHeight: 17 },
   commentStickerEmpty: { marginTop: 8, fontSize: 11, color: colors.faint },
-  sheetPrimary: { backgroundColor: colors.amber, minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 10, marginBottom: 8 },
-  sheetPrimaryText: { color: colors.amberDark, fontWeight: "800", fontSize: 14 },
+  sheetPrimary: { backgroundColor: colors.primary, minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 10, marginBottom: 8 },
+  sheetPrimaryText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 14 },
   rollingSheetCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, marginBottom: 8 },
   rollingStickerPreviewRow: { marginTop: 6, minHeight: 34, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 4 },
   pdfCanvasWrap: { alignItems: "center", marginBottom: 12 },

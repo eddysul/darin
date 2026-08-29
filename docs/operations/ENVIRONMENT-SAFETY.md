@@ -12,7 +12,7 @@
 
 `.env*`는 `.env.example`을 제외하고 Git과 EAS archive에서 모두 제외한다. 일반 `.env`는 개발 앱 전용이며 production backend credential 보관소로 사용하지 않는다.
 
-`pnpm start`, `pnpm ios`, `pnpm android`, `pnpm web`은 `.env`를 자동 로드하지 않는다. wrapper가 `.env.qa`에서 `EXPO_PUBLIC_*`만 골라 QA project ref를 확인한 뒤 Expo를 실행하며 server-only 변수는 child process에서 제거한다.
+`pnpm start`, `pnpm ios`, `pnpm android`, `pnpm web`은 QA wrapper가 `.env.qa`에서 `EXPO_PUBLIC_*`만 골라 QA project ref를 확인한 뒤 Expo를 실행한다. server-only 변수는 child process에서 제거한다. production 로컬 검증은 의도가 드러나는 `pnpm start:production` / `pnpm ios:production` 명령만 사용하며, production project ref와 production feature profile이 아니면 즉시 차단된다.
 
 ## Build guard
 

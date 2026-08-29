@@ -47,6 +47,7 @@ function ZoomableMemoryImage({
   onDoubleTap,
   onZoomChange,
 }: ZoomableImageProps) {
+  const { t } = useLanguage();
   const scale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -55,9 +56,19 @@ function ZoomableMemoryImage({
   const startTranslateY = useSharedValue(0);
 
   const reset = () => {
-    scale.value = withSpring(1, { damping: 20, stiffness: 220 });
-    translateX.value = withSpring(0, { damping: 20, stiffness: 220 });
-    translateY.value = withSpring(0, { damping: 20, stiffness: 220 });
+    scale.value = reduceMotion ? 1 : withSpring(1, { damping: 20, stiffness: 220 });
+    translateX.value = reduceMotion ? 0 : withSpring(0, { damping: 20, stiffness: 220 });
+    translateY.value = reduceMotion ? 0 : withSpring(0, { damping: 20, stiffness: 220 });
+  };
+
+  const setAccessibleZoom = (nextScale: number) => {
+    const clamped = clampMemoryMediaZoom(nextScale);
+    scale.value = reduceMotion ? clamped : withSpring(clamped, { damping: 20, stiffness: 220 });
+    if (clamped <= 1.01) {
+      translateX.value = reduceMotion ? 0 : withSpring(0, { damping: 20, stiffness: 220 });
+      translateY.value = reduceMotion ? 0 : withSpring(0, { damping: 20, stiffness: 220 });
+    }
+    onZoomChange(clamped > 1.01);
   };
 
   useEffect(() => {
@@ -153,6 +164,16 @@ function ZoomableMemoryImage({
         accessibilityRole="image"
         accessibilityLabel={accessibilityLabel}
         accessibilityHint={accessibilityHint}
+        accessibilityActions={[
+          { name: "zoomIn", label: t("common.zoomIn") },
+          { name: "zoomOut", label: t("common.zoomOut") },
+          { name: "resetZoom", label: t("common.reset") },
+        ]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === "zoomIn") setAccessibleZoom(scale.value + 0.5);
+          if (event.nativeEvent.actionName === "zoomOut") setAccessibleZoom(scale.value - 0.5);
+          if (event.nativeEvent.actionName === "resetZoom") setAccessibleZoom(1);
+        }}
       >
         <Reanimated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
           <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="contain" transition={reduceMotion ? 0 : 150} />

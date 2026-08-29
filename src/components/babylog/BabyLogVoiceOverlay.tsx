@@ -617,7 +617,7 @@ const styles = StyleSheet.create({
   retakeBtn: { width: "100%", marginTop: 10 },
   btnGhost: { backgroundColor: colors.card },
   btnGhostText: { color: colors.muted, fontWeight: "700", fontSize: 14.5 },
-  btnPrimary: { backgroundColor: colors.amber },
-  btnPrimaryText: { color: colors.amberDark, fontWeight: "700", fontSize: 14.5 },
+  btnPrimary: { backgroundColor: colors.primary },
+  btnPrimaryText: { color: colors.primaryForeground, fontWeight: "700", fontSize: 14.5 },
   btnDisabled: { opacity: 0.45 },
 });

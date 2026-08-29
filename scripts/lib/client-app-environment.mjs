@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { QA_PROJECT_REF } from "./qa-project-config.mjs";
+import { PRODUCTION_PROJECT_REF, QA_PROJECT_REF } from "./qa-project-config.mjs";
 
 const SERVER_ONLY_KEYS = [
   "SUPABASE_SECRET_KEY",
@@ -26,7 +26,7 @@ export function parseEnvFile(source) {
   return parsed;
 }
 
-export function qaClientEnvironment(source, inherited = process.env) {
+function publicClientEnvironment(source, inherited, options) {
   const fileValues = parseEnvFile(source);
   const publicValues = Object.fromEntries(
     Object.entries(fileValues).filter(([key]) => key.startsWith("EXPO_PUBLIC_")),
@@ -37,11 +37,11 @@ export function qaClientEnvironment(source, inherited = process.env) {
   } catch {
     // Report the same safe failure below without echoing credentials.
   }
-  if (projectRef !== QA_PROJECT_REF) {
-    throw new Error(`LOCAL APP SAFETY BLOCK: .env.qa must target ${QA_PROJECT_REF}`);
+  if (projectRef !== options.expectedRef) {
+    throw new Error(options.wrongRefMessage);
   }
   if (!publicValues.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
-    throw new Error("LOCAL APP SAFETY BLOCK: QA publishable key is missing");
+    throw new Error(options.missingKeyMessage);
   }
 
   const environment = { ...inherited };
@@ -51,13 +51,41 @@ export function qaClientEnvironment(source, inherited = process.env) {
   return {
     ...environment,
     ...publicValues,
-    EXPO_PUBLIC_FEATURE_ENV: "qa",
-    EXPO_PUBLIC_FEATURE_PROFILE: "internal",
+    EXPO_PUBLIC_FEATURE_ENV: options.featureEnv,
+    EXPO_PUBLIC_FEATURE_PROFILE: options.featureProfile,
     EXPO_NO_DOTENV: "1",
+    ...(options.clearInternalFeatures ? { EXPO_PUBLIC_INTERNAL_FEATURES: "" } : {}),
+    ...(options.easProfile ? { EAS_BUILD_PROFILE: options.easProfile } : {}),
   };
+}
+
+export function qaClientEnvironment(source, inherited = process.env) {
+  return publicClientEnvironment(source, inherited, {
+    expectedRef: QA_PROJECT_REF,
+    featureEnv: "qa",
+    featureProfile: "internal",
+    missingKeyMessage: "LOCAL APP SAFETY BLOCK: QA publishable key is missing",
+    wrongRefMessage: `LOCAL APP SAFETY BLOCK: .env.qa must target ${QA_PROJECT_REF}`,
+  });
+}
+
+export function productionClientEnvironment(source, inherited = process.env) {
+  return publicClientEnvironment(source, inherited, {
+    expectedRef: PRODUCTION_PROJECT_REF,
+    featureEnv: "production",
+    featureProfile: "production",
+    easProfile: "local-production",
+    clearInternalFeatures: true,
+    missingKeyMessage: "LOCAL APP SAFETY BLOCK: production publishable key is missing",
+    wrongRefMessage: `LOCAL APP SAFETY BLOCK: .env must target ${PRODUCTION_PROJECT_REF}`,
+  });
 }
 
 export function loadQaClientEnvironment(path = ".env.qa", inherited = process.env) {
   return qaClientEnvironment(readFileSync(path, "utf8"), inherited);
+}
+
+export function loadProductionClientEnvironment(path = ".env", inherited = process.env) {
+  return productionClientEnvironment(readFileSync(path, "utf8"), inherited);
 }
 

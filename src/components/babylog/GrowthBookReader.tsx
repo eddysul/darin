@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 12,
     borderRadius: 14,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
   },
-  pdfBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 },
+  pdfBtnText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 13 },
 });

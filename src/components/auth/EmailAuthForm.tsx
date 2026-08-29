@@ -11,7 +11,8 @@ import type { User } from "@supabase/supabase-js";
 import { useLanguage } from "../../LanguageContext";
 import { AuthRepository } from "../../repositories/AuthRepository";
 import { localizedErrorMessage } from "../../utils/familyDisplay";
-import { colors } from "../../theme";
+import { colors, fontScaleCap } from "../../theme";
+import { FormField } from "../forms/FormField";
 
 export type EmailAuthMode = "login" | "signup" | "forgot" | "confirm" | "reset-password";
 
@@ -178,71 +179,97 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
 
   return (
     <View style={styles.root}>
-      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.title} maxFontSizeMultiplier={fontScaleCap.control}>{title}</Text>
       {mode === "signup" ? (
-        <Field label={t("auth.email.nameOptional")}>
-          <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={t("auth.email.nameExample")} placeholderTextColor={colors.faint} />
-        </Field>
+        <FormField fieldId="auth-name" label={t("auth.email.nameOptional")}>
+          {(a11y) => <TextInput {...a11y} style={styles.input} maxFontSizeMultiplier={fontScaleCap.control} value={name} onChangeText={setName} placeholder={t("auth.email.nameExample")} placeholderTextColor={colors.faint} autoComplete="name" textContentType="name" returnKeyType="next" />}
+        </FormField>
       ) : null}
       {mode !== "confirm" && mode !== "reset-password" ? (
-        <Field label={t("auth.email.email")}>
+        <FormField fieldId="auth-email" label={t("auth.email.email")}>
+          {(a11y) => (
           <TextInput
+            {...a11y}
             style={styles.input}
+            maxFontSizeMultiplier={fontScaleCap.control}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
             textContentType="emailAddress"
+            autoComplete="email"
+            returnKeyType="next"
             placeholder="you@example.com"
             placeholderTextColor={colors.faint}
           />
-        </Field>
+          )}
+        </FormField>
       ) : null}
       {mode === "confirm" ? (
-        <Text style={styles.body}>
+        <Text style={styles.body} maxFontSizeMultiplier={fontScaleCap.control}>
           {t("auth.email.confirmHint", { email })}
         </Text>
       ) : null}
       {mode === "login" || mode === "signup" || mode === "reset-password" ? (
-        <Field label={mode === "reset-password" ? t("auth.email.newPassword") : t("auth.email.password")}>
+        <FormField fieldId="auth-password" label={mode === "reset-password" ? t("auth.email.newPassword") : t("auth.email.password")}>
+          {(a11y) => (
           <View style={styles.passwordRow}>
             <TextInput
+              {...a11y}
               style={styles.passwordInput}
+              maxFontSizeMultiplier={fontScaleCap.control}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!passwordVisible}
               textContentType={mode === "login" ? "password" : "newPassword"}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
               autoCapitalize="none"
               placeholder={t("auth.email.passwordMin", { count: PASSWORD_MIN })}
               placeholderTextColor={colors.faint}
             />
-            <Pressable onPress={() => setPasswordVisible((value) => !value)} hitSlop={12} style={styles.visibilityBtn}>
-              <Text style={styles.visibility}>{passwordVisible ? t("auth.email.hide") : t("auth.email.show")}</Text>
+            <Pressable onPress={() => setPasswordVisible((value) => !value)} hitSlop={12} style={styles.visibilityBtn} accessibilityRole="button" accessibilityLabel={passwordVisible ? t("auth.email.hide") : t("auth.email.show")}>
+              <Text style={styles.visibility} maxFontSizeMultiplier={fontScaleCap.control}>{passwordVisible ? t("auth.email.hide") : t("auth.email.show")}</Text>
             </Pressable>
           </View>
-        </Field>
+          )}
+        </FormField>
       ) : null}
       {mode === "signup" || mode === "reset-password" ? (
-        <Field label={t("auth.email.passwordConfirm")}>
+        <FormField fieldId="auth-password-confirm" label={t("auth.email.passwordConfirm")}>
+          {(a11y) => (
           <TextInput
+            {...a11y}
             style={styles.input}
+            maxFontSizeMultiplier={fontScaleCap.control}
             value={passwordConfirm}
             onChangeText={setPasswordConfirm}
             secureTextEntry={!passwordVisible}
             textContentType="newPassword"
+            autoComplete="new-password"
             autoCapitalize="none"
             placeholder={t("auth.email.passwordAgain")}
             placeholderTextColor={colors.faint}
           />
-        </Field>
+          )}
+        </FormField>
       ) : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+      {error ? <Text style={styles.error} maxFontSizeMultiplier={fontScaleCap.control}>{error}</Text> : null}
+      {notice ? <Text style={styles.notice} maxFontSizeMultiplier={fontScaleCap.control}>{notice}</Text> : null}
 
-      <Pressable style={[styles.primary, busy && styles.disabled]} onPress={() => void submit()} disabled={busy}>
-        {busy ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.primaryText}>{buttonLabel}</Text>}
+      <Pressable
+        style={({ pressed }) => [
+          styles.primary,
+          pressed && !busy && styles.primaryPressed,
+          busy && styles.primaryDisabled,
+        ]}
+        onPress={() => void submit()}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: busy, busy }}
+      >
+        {busy ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.primaryText} maxFontSizeMultiplier={fontScaleCap.control}>{buttonLabel}</Text>}
       </Pressable>
 
       {mode === "confirm" ? (
@@ -252,14 +279,14 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
             onPress={() => void resendConfirmation()}
             disabled={busy}
           >
-            <Text style={styles.confirmActionText}>{t("auth.email.resend")}</Text>
+            <Text style={styles.confirmActionText} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.email.resend")}</Text>
           </Pressable>
           <Pressable
             style={styles.confirmAction}
             onPress={() => selectMode("login")}
             disabled={busy}
           >
-            <Text style={styles.confirmBackText}>{t("auth.email.backToLogin")}</Text>
+            <Text style={styles.confirmBackText} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.email.backToLogin")}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -267,31 +294,22 @@ export function EmailAuthForm({ onAuthenticated, recoveryMode = false, onModeCha
       {mode === "login" ? (
         <>
           <Pressable style={styles.linkButton} onPress={() => selectMode("forgot")}>
-            <Text style={styles.linkText}>{t("auth.email.forgotLink")}</Text>
+            <Text style={styles.linkText} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.email.forgotLink")}</Text>
           </Pressable>
           {/* 회원가입은 로그인 버튼과 경쟁하지 않도록 텍스트 링크로 유지 */}
           <View style={styles.signupRow}>
-            <Text style={styles.signupHint}>{t("auth.email.noAccount")}</Text>
+            <Text style={styles.signupHint} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.email.noAccount")}</Text>
             <Pressable onPress={() => selectMode("signup")} hitSlop={8}>
-              <Text style={styles.signupLink}>{t("auth.email.create")}</Text>
+              <Text style={styles.signupLink} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.email.create")}</Text>
             </Pressable>
           </View>
         </>
       ) : null}
       {mode === "signup" || mode === "forgot" ? (
         <Pressable style={styles.secondary} onPress={() => selectMode("login")}>
-          <Text style={styles.secondaryText}>{t("auth.email.backToLogin")}</Text>
+          <Text style={styles.secondaryText} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.email.backToLogin")}</Text>
         </Pressable>
       ) : null}
-    </View>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      {children}
     </View>
   );
 }
@@ -300,8 +318,6 @@ const styles = StyleSheet.create({
   root: { gap: 10, width: "100%" },
   title: { color: colors.text, fontSize: 16, fontWeight: "900", marginBottom: 2, textAlign: "left" },
   body: { color: colors.muted, fontSize: 13, lineHeight: 19 },
-  field: { gap: 6 },
-  label: { color: colors.text, fontSize: 13, fontWeight: "800" },
   input: {
     minHeight: 56,
     borderWidth: 1,
@@ -336,13 +352,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
     width: "100%",
   },
-  primaryText: { color: colors.amberDark, fontSize: 16, fontWeight: "900" },
+  primaryPressed: { backgroundColor: colors.primaryPressed },
+  primaryDisabled: { backgroundColor: colors.primaryDisabled },
+  primaryText: { color: colors.primaryForeground, fontSize: 16, fontWeight: "900" },
   disabled: { opacity: 0.6 },
   linkButton: { alignSelf: "center", paddingVertical: 4, paddingHorizontal: 4, marginTop: 2 },
-  linkText: { color: colors.primary, fontSize: 13, fontWeight: "700" },
-  signupRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 2 },
-  signupHint: { color: colors.muted, fontSize: 13 },
-  signupLink: { color: colors.primary, fontSize: 13, fontWeight: "800" },
+  linkText: { color: colors.amberText, fontSize: 13, fontWeight: "700" },
+  signupRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center", marginTop: 2 },
+  signupHint: { color: colors.muted, fontSize: 13, textAlign: "center" },
+  signupLink: { color: colors.amberText, fontSize: 13, fontWeight: "800", textAlign: "center" },
   confirmActions: { flexDirection: "row", gap: 8, width: "100%" },
   confirmAction: {
     flex: 1,
@@ -355,7 +373,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 8,
   },
-  confirmActionText: { color: colors.primary, fontSize: 12.5, fontWeight: "800", textAlign: "center" },
+  confirmActionText: { color: colors.amberText, fontSize: 12.5, fontWeight: "800", textAlign: "center" },
   confirmBackText: { color: colors.text, fontSize: 12.5, fontWeight: "800", textAlign: "center" },
   secondary: {
     minHeight: 48,

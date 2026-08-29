@@ -894,7 +894,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     alignItems: "center",
   },
-  mediaBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 },
+  mediaBtnText: { color: colors.brandCoralForeground, fontWeight: "800", fontSize: 13 },
   mediaBtnDisabled: { opacity: 0.5 },
   mediaBtnSecondary: {
     flex: 1,
@@ -912,7 +912,7 @@ const styles = StyleSheet.create({
   photoThumbWrap: { width: 112, height: 112, borderRadius: 16, overflow: "hidden", backgroundColor: colors.cardHi },
   photoThumb: { width: "100%", height: "100%" },
   coverPhotoBadge: { position: "absolute", left: 6, top: 6, borderRadius: 9, backgroundColor: colors.amber, paddingHorizontal: 7, paddingVertical: 3 },
-  coverPhotoBadgeText: { color: colors.amberDark, fontSize: 10, fontWeight: "800" },
+  coverPhotoBadgeText: { color: colors.brandCoralForeground, fontSize: 10, fontWeight: "800" },
   photoCoverSelect: { position: "absolute", left: 5, bottom: 5, minHeight: 28, borderRadius: 9, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 7, alignItems: "center", justifyContent: "center" },
   photoCoverSelectText: { color: colors.amberText, fontSize: 10, fontWeight: "800" },
   photoFail: { position: "absolute", left: 7, right: 7, bottom: 7, minHeight: 36, borderRadius: 999, backgroundColor: "rgba(46,42,38,0.82)", alignItems: "center", justifyContent: "center" },
@@ -992,13 +992,13 @@ const styles = StyleSheet.create({
   toggleSub: { fontSize: 11.5, color: colors.faint, marginTop: 3 },
   saveBtn: {
     marginTop: 18,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: "center",
   },
   saveBtnDisabled: { opacity: 0.45 },
-  saveBtnText: { color: colors.amberDark, fontWeight: "800", fontSize: 15 },
+  saveBtnText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 15 },
   saveHint: {
     textAlign: "center",
     color: colors.faint,

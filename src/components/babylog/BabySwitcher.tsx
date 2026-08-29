@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
   metaDot: { color: colors.faint, fontSize: 13 },
   sharedText: { color: colors.muted, fontSize: 12.5, fontWeight: "600" },
   selectedCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  selectedCheck: { color: colors.amberDark, fontSize: 24, lineHeight: 27, fontWeight: "800" },
+  selectedCheck: { color: colors.brandCoralForeground, fontSize: 24, lineHeight: 27, fontWeight: "800" },
   addButton: { minHeight: 66, marginTop: 2, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center" },
   addIcon: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.amber, alignItems: "center", justifyContent: "center" },
   addIconText: { color: colors.amberText, fontSize: 22, lineHeight: 24, fontWeight: "500" },
@@ -180,6 +180,6 @@ const styles = StyleSheet.create({
   label: { marginTop: 10, marginBottom: 6, color: colors.text, fontSize: 12.5, fontWeight: "800" }, input: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.card, paddingHorizontal: 12, color: colors.text, fontSize: 15 },
   avatarWrap: { alignItems: "center", marginBottom: 6 },
   genderRow: { flexDirection: "row", gap: 8 }, genderChip: { minHeight: 44, minWidth: 74, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border }, genderChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft }, genderText: { color: colors.muted, fontWeight: "700" }, genderTextActive: { color: colors.amberText },
-  error: { marginTop: 10, color: colors.dangerText, fontSize: 12 }, actionRow: { flexDirection: "row", gap: 8, marginTop: 18 }, secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border }, secondaryText: { color: colors.muted, fontWeight: "800" }, primary: { flex: 2, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, backgroundColor: colors.amber }, primaryText: { color: colors.amberDark, fontWeight: "800" },
+  error: { marginTop: 10, color: colors.dangerText, fontSize: 12 }, actionRow: { flexDirection: "row", gap: 8, marginTop: 18 }, secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 1, borderColor: colors.border }, secondaryText: { color: colors.muted, fontWeight: "800" }, primary: { flex: 2, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.full, backgroundColor: colors.primary }, primaryText: { color: colors.primaryForeground, fontWeight: "800" },
   empty: { color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center", paddingVertical: 18 },
 });

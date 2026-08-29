@@ -410,6 +410,10 @@ function ActionTile({
             ? undefined
             : t("record.grid.openHint")
       }
+      accessibilityActions={onLongPress && !inProgress ? [{ name: "startTimer", label: t("record.grid.timerHint") }] : undefined}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === "startTimer") onLongPress?.(action.id);
+      }}
     >
       {inProgress ? (
         <View style={styles.progressBadge}>
@@ -511,7 +515,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     zIndex: 1,
   },
-  progressBadgeText: { color: colors.amberDark, fontSize: 8, fontWeight: "800" },
+  progressBadgeText: { color: colors.brandCoralForeground, fontSize: 8, fontWeight: "800" },
   expandTile: {
     minHeight: 86,
     borderRadius: 16,

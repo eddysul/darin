@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   dayPill: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   dayPillSelected: { backgroundColor: colors.amber },
   dayText: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600", textAlign: "center", includeFontPadding: false },
-  dayTextSelected: { color: colors.amberDark, fontWeight: "800" },
+  dayTextSelected: { color: colors.brandCoralForeground, fontWeight: "800" },
   disabled: { opacity: 0.25 },
   close: { minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.full, backgroundColor: colors.cardHi },
   closeText: { color: colors.text, fontWeight: "800" },

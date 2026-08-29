@@ -33,6 +33,8 @@ import { useLanguage } from "../../LanguageContext";
 import type { MessageKey } from "../../i18n";
 import type { RelationshipToChild } from "../../types/careSetup";
 import { colors, radius } from "../../theme";
+
+const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 import { canSubmitUserProfile } from "../../utils/profileCompletion";
 import { caughtErrorMessage } from "../../utils/familyDisplay";
 import { formatDateKey } from "../../utils/dateKey";
@@ -270,6 +272,8 @@ export function ProfileSetupScreen({
                 key={option}
                 style={[styles.chip, relation === option && styles.chipActive]}
                 onPress={() => setRelation(option)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: relation === option }}
               >
                 <Text style={[styles.chipText, relation === option && styles.chipTextActive]}>
                   {relationLabel(option)}
@@ -286,6 +290,8 @@ export function ProfileSetupScreen({
                 key={option.value}
                 style={[styles.chip, residenceCountry === option.value && styles.chipActive]}
                 onPress={() => setResidenceCountry(option.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: residenceCountry === option.value }}
               >
                 <Text style={[styles.chipText, residenceCountry === option.value && styles.chipTextActive]}>
                   {countryLabel(option.value)}
@@ -305,6 +311,7 @@ export function ProfileSetupScreen({
                     style={[styles.chip, preferredLanguage === option.value && styles.chipActive, option.disabled && styles.chipDisabled]}
                     onPress={() => setPreferredLanguage(option.value)}
                     disabled={option.disabled}
+                    accessibilityRole="radio"
                     accessibilityState={{ disabled: option.disabled, selected: preferredLanguage === option.value }}
                   >
                     <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>
@@ -348,7 +355,7 @@ export function ProfileSetupScreen({
               missingFields.length > 0 ? t("profileSetup.missingA11y", { fields: missingFields.join(", ") }) : undefined
             }
           >
-            {saving ? <ActivityIndicator color={colors.amberDark} /> : <Text style={styles.nextText}>{t("profileSetup.next")}</Text>}
+            {saving ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.nextText}>{t("profileSetup.next")}</Text>}
           </Pressable>
         </View>
         <RecordDatePickerModal
@@ -387,7 +394,7 @@ const styles = StyleSheet.create({
   regenerateButton: { minHeight: 48, paddingHorizontal: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberSoft, justifyContent: "center" },
   regenerateText: { color: colors.amberText, fontSize: 13, fontWeight: "800" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { minHeight: 42, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  chip: { minHeight: TOUCH_MIN, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   chipDisabled: { opacity: 0.48 },
   chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   chipText: { color: colors.muted, fontSize: 12.5, fontWeight: "700" },
@@ -399,7 +406,7 @@ const styles = StyleSheet.create({
   dateInput: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   dateInputText: { color: colors.text, fontSize: 15 },
   datePlaceholder: { color: colors.faint },
-  next: { minHeight: 54, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  nextText: { color: colors.amberDark, fontSize: 15, fontWeight: "800" },
+  next: { minHeight: 54, borderRadius: radius.full, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  nextText: { color: colors.primaryForeground, fontSize: 15, fontWeight: "800" },
   disabled: { opacity: 0.45 },
 });

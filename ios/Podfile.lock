@@ -41,8 +41,6 @@ PODS:
     - ExpoModulesCore
   - ExpoLinearGradient (14.0.2):
     - ExpoModulesCore
-  - ExpoLinking (7.0.5):
-    - ExpoModulesCore
   - ExpoModulesCore (2.2.3):
     - DoubleConversion
     - glog
@@ -1825,7 +1823,6 @@ DEPENDENCIES:
   - "ExpoImagePicker (from `../node_modules/.pnpm/expo-image-picker@16.0.6_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babe_cec806cf258612fad5e6b54cec4f9c66/node_modules/expo-image-picker/ios`)"
   - "ExpoKeepAwake (from `../node_modules/.pnpm/expo-keep-awake@14.0.3_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+_41432c932eb684a6a143f4ec9ccb25fb/node_modules/expo-keep-awake/ios`)"
   - "ExpoLinearGradient (from `../node_modules/.pnpm/expo-linear-gradient@14.0.2_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@b_06a36c52ef5dfb8c91f3ab53aa003b6a/node_modules/expo-linear-gradient/ios`)"
-  - "ExpoLinking (from `../node_modules/.pnpm/expo-linking@7.0.5_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core_1d109c32d1c5ebf6c6e59b6b1a6edccf/node_modules/expo-linking/ios`)"
   - "ExpoModulesCore (from `../node_modules/.pnpm/expo-modules-core@2.2.3/node_modules/expo-modules-core`)"
   - "ExpoPrint (from `../node_modules/.pnpm/expo-print@14.0.3_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core@_2dc610618d9647604cbdee472c66cf03/node_modules/expo-print/ios`)"
   - "ExpoSharing (from `../node_modules/.pnpm/expo-sharing@13.0.1_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+cor_56df38401a687823687b1f68569bab66/node_modules/expo-sharing/ios`)"
@@ -1950,8 +1947,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/.pnpm/expo-keep-awake@14.0.3_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+_41432c932eb684a6a143f4ec9ccb25fb/node_modules/expo-keep-awake/ios"
   ExpoLinearGradient:
     :path: "../node_modules/.pnpm/expo-linear-gradient@14.0.2_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@b_06a36c52ef5dfb8c91f3ab53aa003b6a/node_modules/expo-linear-gradient/ios"
-  ExpoLinking:
-    :path: "../node_modules/.pnpm/expo-linking@7.0.5_expo@52.0.49_@babel+core@7.29.7_@babel+preset-env@7.29.7_@babel+core_1d109c32d1c5ebf6c6e59b6b1a6edccf/node_modules/expo-linking/ios"
   ExpoModulesCore:
     :path: "../node_modules/.pnpm/expo-modules-core@2.2.3/node_modules/expo-modules-core"
   ExpoPrint:
@@ -2119,7 +2114,6 @@ SPEC CHECKSUMS:
   ExpoImagePicker: 24e5ba8da111f74519b1e6dc556e0b438b2b8464
   ExpoKeepAwake: b0171a73665bfcefcfcc311742a72a956e6aa680
   ExpoLinearGradient: 35ebd83b16f80b3add053a2fd68cc328ed927f60
-  ExpoLinking: 8d12bee174ba0cdf31239706578e29e74a417402
   ExpoModulesCore: 725faec070d590810d2ea5983d9f78f7cf6a38ec
   ExpoPrint: 13208d67f48c190ccfeb9b97aa3394ff31ec606b
   ExpoSharing: 849a5ce9985c22598c16ec027e32969be8062e8e

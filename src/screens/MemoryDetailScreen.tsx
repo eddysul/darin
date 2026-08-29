@@ -574,8 +574,8 @@ const styles = StyleSheet.create({
   composerLabel: { color: colors.text, fontSize: 12, fontWeight: "800", marginBottom: 6 },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   commentInput: { flex: 1, minHeight: 46, maxHeight: 100, borderRadius: 16, backgroundColor: colors.cardHi, color: colors.text, paddingHorizontal: 13, paddingVertical: 12, fontSize: 13 },
-  send: { minWidth: 54, minHeight: 44, borderRadius: 14, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  sendText: { color: colors.amberDark, fontSize: 12, fontWeight: "800" },
+  send: { minWidth: 54, minHeight: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  sendText: { color: colors.primaryForeground, fontSize: 12, fontWeight: "800" },
   disabled: { opacity: 0.45 },
   inlineError: { marginHorizontal: 16, color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12 },
 });

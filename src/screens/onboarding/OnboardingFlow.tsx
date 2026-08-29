@@ -856,7 +856,7 @@ const styles = StyleSheet.create({
   },
   chipActive: { backgroundColor: colors.amber, borderColor: colors.amber },
   chipText: { fontSize: 12.5, color: colors.muted, fontWeight: "700" },
-  chipTextActive: { color: colors.amberDark },
+  chipTextActive: { color: colors.brandCoralForeground },
   switchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -918,7 +918,7 @@ const styles = StyleSheet.create({
   requestActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 4 },
   declineButton: { minHeight: 44, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.backgroundSecondary, justifyContent: "center" },
   declineText: { color: colors.muted, fontWeight: "700", fontSize: 13 },
-  acceptButton: { minHeight: 44, minWidth: 120, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" },
-  acceptText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 },
+  acceptButton: { minHeight: 44, minWidth: 120, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  acceptText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 13 },
   disabled: { opacity: 0.48 },
 });

@@ -80,6 +80,6 @@ const styles = StyleSheet.create({
   chip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   chipSelected: { borderColor: colors.amber, backgroundColor: colors.amber },
   chipText: { color: colors.muted, fontSize: 13, fontWeight: "700" },
-  chipTextSelected: { color: colors.amberDark },
+  chipTextSelected: { color: colors.brandCoralForeground },
   error: { color: colors.dangerText, fontSize: 11.5, lineHeight: 17 },
 });

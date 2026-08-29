@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
@@ -17,6 +17,10 @@ type Props = NativeStackScreenProps<RootStackParamList, "NotificationCenter">;
 type Filter = "all" | "request" | "family" | "summary" | "event";
 type RequestStatus = "pending" | "accepted" | "declined" | "expired" | "processed";
 type CenterItem = NotificationItem & { requestId?: string; requestStatus?: RequestStatus };
+type CenterRow =
+  | { kind: "section"; id: string; title: string }
+  | { kind: "empty"; id: string }
+  | { kind: "item"; id: string; item: CenterItem };
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 const FILTER_KEYS: Filter[] = ["all", "request", "family", "summary", "event"];
 const FILTER_LABEL: Record<Filter, "notice.critical.001" | "notice.critical.002" | "notice.critical.003" | "notice.critical.004" | "notice.critical.005"> = {
@@ -139,6 +143,16 @@ export function NotificationCenterScreen({ navigation, friendOnly = false }: Pro
   }, []);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   const visible = useMemo(() => items.filter((item) => matches(item, filter)), [filter, items]);
+  const rows = useMemo<CenterRow[]>(() => [
+    { id: "today", title: t("notice.critical.006"), items: visible.filter((item) => item.period === "today") },
+    { id: "week", title: t("notice.critical.007"), items: visible.filter((item) => item.period === "week") },
+    { id: "older", title: t("notice.critical.008"), items: visible.filter((item) => item.period === "older") },
+  ].flatMap((section) => [
+    { kind: "section" as const, id: `section-${section.id}`, title: section.title },
+    ...(section.items.length
+      ? section.items.map((item) => ({ kind: "item" as const, id: item.id, item }))
+      : [{ kind: "empty" as const, id: `empty-${section.id}` }]),
+  ]), [t, visible]);
 
   const markRead = useCallback((item: CenterItem) => {
     if (item.isRead) return;
@@ -224,36 +238,39 @@ export function NotificationCenterScreen({ navigation, friendOnly = false }: Pro
       setResponding(null);
     }
   };
-  return <ScrollView style={styles.root} contentContainerStyle={styles.content}>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>{FILTER_KEYS.map((key) => <Pressable key={key} style={[styles.filter, filter === key && styles.filterActive]} onPress={() => setFilter(key)}><Text style={[styles.filterText, filter === key && styles.filterTextActive]}>{t(FILTER_LABEL[key])}</Text></Pressable>)}</ScrollView>
-    {loading && !items.length ? (
+  return <FlatList
+    style={styles.root}
+    contentContainerStyle={styles.content}
+    data={loading || loadFailed ? [] : rows}
+    keyExtractor={(row) => row.id}
+    ListHeaderComponent={<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>{FILTER_KEYS.map((key) => <Pressable key={key} style={[styles.filter, filter === key && styles.filterActive]} onPress={() => setFilter(key)} accessibilityRole="tab" accessibilityState={{ selected: filter === key }}><Text style={[styles.filterText, filter === key && styles.filterTextActive]}>{t(FILTER_LABEL[key])}</Text></Pressable>)}</ScrollView>}
+    ListEmptyComponent={loading && !items.length ? (
       <View style={styles.empty}><ActivityIndicator color={colors.amberText} /><Text style={styles.emptyText}>{t("notice.critical.009")}</Text></View>
     ) : loadFailed ? (
       <View style={styles.empty}>
         <BabyLogIcon kind="alert" size={26} color={colors.muted} />
         <Text style={styles.emptyTitle}>{t("notice.critical.010")}</Text>
         <Text style={styles.emptyText}>{t("notice.critical.011")}</Text>
-        <Pressable style={styles.retryButton} onPress={() => void load()} accessibilityRole="button">
-          <Text style={styles.retryText}>{t("notice.critical.012")}</Text>
-        </Pressable>
+        <Pressable style={styles.retryButton} onPress={() => void load()} accessibilityRole="button"><Text style={styles.retryText}>{t("notice.critical.012")}</Text></Pressable>
       </View>
-    ) : (
-      <>
-        <Section title={t("notice.critical.006")} items={visible.filter((item) => item.period === "today")} open={open} respond={respond} responding={responding} t={t} />
-        <Section title={t("notice.critical.007")} items={visible.filter((item) => item.period === "week")} open={open} respond={respond} responding={responding} t={t} />
-        <Section title={t("notice.critical.008")} items={visible.filter((item) => item.period === "older")} open={open} respond={respond} responding={responding} t={t} />
-        {!visible.length ? <View style={styles.empty}><BabyLogIcon kind="bell" size={26} color={colors.faint} /><Text style={styles.emptyTitle}>{t("notice.critical.013")}</Text><Text style={styles.emptyText}>{t("notice.critical.014")}</Text></View> : null}
-      </>
-    )}
-    {!friendOnly ? <Pressable style={styles.settingsRow} onPress={() => navigation.navigate("SettingsHome")}><View style={styles.settingsIcon}><BabyLogIcon kind="settings" size={18} color={colors.muted} /></View><Text style={styles.settingsText}>{t("notice.critical.015")}</Text><BabyLogIcon kind="chevron" size={18} color={colors.faint} /></Pressable> : null}
-  </ScrollView>;
+    ) : null}
+    renderItem={({ item: row }) => row.kind === "section"
+      ? <Text style={styles.sectionTitle}>{row.title}</Text>
+      : row.kind === "empty"
+        ? <Text style={styles.sectionEmpty}>{t("notice.critical.016")}</Text>
+        : <NotificationCard item={row.item} open={open} respond={respond} responding={responding} t={t} />}
+    ListFooterComponent={<>
+      {!loading && !loadFailed && !visible.length ? <View style={styles.empty}><BabyLogIcon kind="bell" size={26} color={colors.faint} /><Text style={styles.emptyTitle}>{t("notice.critical.013")}</Text><Text style={styles.emptyText}>{t("notice.critical.014")}</Text></View> : null}
+      {!friendOnly ? <Pressable style={styles.settingsRow} onPress={() => navigation.navigate("SettingsHome")} accessibilityRole="button"><View style={styles.settingsIcon}><BabyLogIcon kind="settings" size={18} color={colors.muted} /></View><Text style={styles.settingsText}>{t("notice.critical.015")}</Text><BabyLogIcon kind="chevron" size={18} color={colors.faint} /></Pressable> : null}
+    </>}
+  />;
 }
 
-function Section({ title, items, open, respond, responding, t }: { title: string; items: CenterItem[]; open: (item: CenterItem) => void; respond: (item: CenterItem, accept: boolean) => void; responding: string | null; t: ReturnType<typeof useLanguage>["t"] }) {
+function NotificationCard({ item, open, respond, responding, t }: { item: CenterItem; open: (item: CenterItem) => void; respond: (item: CenterItem, accept: boolean) => void; responding: string | null; t: ReturnType<typeof useLanguage>["t"] }) {
   const statusLabel = (status: RequestStatus) => status === "accepted" ? t("notice.critical.017") : status === "declined" ? t("notice.critical.018") : status === "expired" ? t("notice.critical.019") : t("notice.critical.020");
-  return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{items.length ? items.map((item) => <View key={item.id} style={[styles.card, !item.isRead && styles.unreadCard]}><Pressable style={styles.cardMain} onPress={() => open(item)}><View style={styles.cardIcon}><BabyLogIcon kind={item.type === "invite_request" ? "family" : "bell"} size={18} color={colors.muted} /></View><View style={styles.cardCopy}><Text style={styles.cardTitle}>{notificationTitleLabel(t, item.title)}</Text><Text style={styles.cardBody}>{notificationBodyLabel(t, item.body)}</Text>{item.type === "invite_request" && item.requestStatus && item.requestStatus !== "pending" ? <Text style={styles.requestStatus}>{statusLabel(item.requestStatus)}</Text> : null}</View>{!item.isRead ? <View style={styles.unreadDot} /> : null}</Pressable>{item.type === "invite_request" && item.requestStatus === "pending" ? <View style={styles.inviteActions}><Pressable style={styles.declineButton} disabled={responding === item.id} onPress={() => void respond(item, false)}><Text style={styles.declineText}>{t("notice.critical.021")}</Text></Pressable><Pressable style={styles.acceptButton} disabled={responding === item.id} onPress={() => void respond(item, true)}><Text style={styles.acceptText}>{t("notice.critical.022")}</Text></Pressable></View> : null}</View>) : <Text style={styles.sectionEmpty}>{t("notice.critical.016")}</Text>}</View>;
+  return <View style={[styles.card, !item.isRead && styles.unreadCard]}><Pressable style={styles.cardMain} onPress={() => open(item)} accessibilityRole="button"><View style={styles.cardIcon}><BabyLogIcon kind={item.type === "invite_request" ? "family" : "bell"} size={18} color={colors.muted} /></View><View style={styles.cardCopy}><Text style={styles.cardTitle}>{notificationTitleLabel(t, item.title)}</Text><Text style={styles.cardBody}>{notificationBodyLabel(t, item.body)}</Text>{item.type === "invite_request" && item.requestStatus && item.requestStatus !== "pending" ? <Text style={styles.requestStatus}>{statusLabel(item.requestStatus)}</Text> : null}</View>{!item.isRead ? <View style={styles.unreadDot} /> : null}</Pressable>{item.type === "invite_request" && item.requestStatus === "pending" ? <View style={styles.inviteActions}><Pressable style={styles.declineButton} disabled={responding === item.id} onPress={() => void respond(item, false)} accessibilityRole="button" accessibilityState={{ disabled: responding === item.id }}><Text style={styles.declineText}>{t("notice.critical.021")}</Text></Pressable><Pressable style={styles.acceptButton} disabled={responding === item.id} onPress={() => void respond(item, true)} accessibilityRole="button" accessibilityState={{ disabled: responding === item.id }}><Text style={styles.acceptText}>{t("notice.critical.022")}</Text></Pressable></View> : null}</View>;
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background }, content: { padding: 18, paddingBottom: 32 }, filters: { gap: 8, paddingBottom: 20 }, filter: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, justifyContent: "center" }, filterActive: { backgroundColor: colors.amberSoft, borderColor: colors.amber }, filterText: { color: colors.muted, fontSize: 13, fontWeight: "700" }, filterTextActive: { color: colors.amberText }, section: { gap: 9, marginBottom: 22 }, sectionTitle: { marginLeft: 2, color: colors.text, fontSize: 15, fontWeight: "800" }, sectionEmpty: { paddingLeft: 2, color: colors.faint, fontSize: 13 }, card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }, unreadCard: { borderColor: "#E8918A" }, cardMain: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: 11, padding: 13 }, cardIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }, cardCopy: { flex: 1 }, cardTitle: { color: colors.text, fontSize: 14, fontWeight: "800" }, cardBody: { marginTop: 3, color: colors.muted, fontSize: 12.5, lineHeight: 18 }, requestStatus: { marginTop: 5, color: colors.faint, fontSize: 11.5, fontWeight: "700" }, unreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#E8918A" }, inviteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, paddingHorizontal: 13, paddingBottom: 13 }, declineButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.backgroundSecondary, justifyContent: "center" }, declineText: { color: colors.muted, fontWeight: "700", fontSize: 13 }, acceptButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.amber, justifyContent: "center" }, acceptText: { color: colors.amberDark, fontWeight: "800", fontSize: 13 }, empty: { alignItems: "center", paddingHorizontal: 30, paddingVertical: 52 }, emptyTitle: { marginTop: 12, color: colors.text, fontSize: 16, fontWeight: "800" }, emptyText: { marginTop: 6, color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center" }, retryButton: { marginTop: 16, minHeight: TOUCH_MIN, paddingHorizontal: 20, borderRadius: radius.full, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center" }, retryText: { color: colors.amberDark, fontSize: 13, fontWeight: "800" }, settingsRow: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 13, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }, settingsIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }, settingsText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800" },
+  root: { flex: 1, backgroundColor: colors.background }, content: { padding: 18, paddingBottom: 32 }, filters: { gap: 8, paddingBottom: 20 }, filter: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, justifyContent: "center" }, filterActive: { backgroundColor: colors.amberSoft, borderColor: colors.amber }, filterText: { color: colors.muted, fontSize: 13, fontWeight: "700" }, filterTextActive: { color: colors.amberText }, sectionTitle: { marginLeft: 2, marginTop: 8, marginBottom: 9, color: colors.text, fontSize: 15, fontWeight: "800" }, sectionEmpty: { paddingLeft: 2, marginBottom: 22, color: colors.faint, fontSize: 13 }, card: { marginBottom: 9, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" }, unreadCard: { borderColor: "#E8918A" }, cardMain: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: 11, padding: 13 }, cardIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }, cardCopy: { flex: 1 }, cardTitle: { color: colors.text, fontSize: 14, fontWeight: "800" }, cardBody: { marginTop: 3, color: colors.muted, fontSize: 12.5, lineHeight: 18 }, requestStatus: { marginTop: 5, color: colors.faint, fontSize: 11.5, fontWeight: "700" }, unreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#E8918A" }, inviteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, paddingHorizontal: 13, paddingBottom: 13 }, declineButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.backgroundSecondary, justifyContent: "center" }, declineText: { color: colors.muted, fontWeight: "700", fontSize: 13 }, acceptButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.primary, justifyContent: "center" }, acceptText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 13 }, empty: { alignItems: "center", paddingHorizontal: 30, paddingVertical: 52 }, emptyTitle: { marginTop: 12, color: colors.text, fontSize: 16, fontWeight: "800" }, emptyText: { marginTop: 6, color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center" }, retryButton: { marginTop: 16, minHeight: TOUCH_MIN, paddingHorizontal: 20, borderRadius: radius.full, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, retryText: { color: colors.primaryForeground, fontSize: 13, fontWeight: "800" }, settingsRow: { minHeight: 56, marginTop: 16, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 13, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }, settingsIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }, settingsText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800" },
 });

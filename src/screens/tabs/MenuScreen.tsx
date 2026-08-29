@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,9 +21,6 @@ import { DiaryReminderSettingsModal } from "../../components/babylog/DiaryRemind
 import { QuickRecordEditorSheet } from "../../components/babylog/QuickRecordEditorSheet";
 import { ErrorState } from "../../components/states/FeedbackStates";
 import { QaDebugPanel } from "../../components/qa/QaDebugPanel";
-import {
-  AppSettingsModal,
-} from "../../components/settings/AppSettingsModal";
 import { LanguagePicker } from "../../components/LanguagePicker";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import { useBabyLog } from "../../context/BabyLogContext";
@@ -80,7 +79,6 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
     careSetup,
     myFamilyRole,
   } = useBabyLog();
-  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
@@ -187,7 +185,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
             icon="profile"
             title={t("settings.critical.046")}
             subtitle={t("settings.critical.047")}
-            onPress={() => (onOpenMyProfile ? onOpenMyProfile() : setAccountSettingsOpen(true))}
+            onPress={() => (onOpenMyProfile ? onOpenMyProfile() : onOpenSettings("account"))}
           />
           <MenuRow icon="baby" title={t("settings.critical.048")} subtitle={t("settings.critical.049")} onPress={onOpenProfile} />
           <MenuRow icon="family" title={t("settings.critical.050")} subtitle={t("settings.critical.051")} onPress={onOpenFamilyShare} />
@@ -257,7 +255,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         {__DEV__ ? <QaDebugPanel trigger="menu" /> : null}
 
         <MenuSection title={t("settings.critical.085")}>
-          <MenuRow icon="profile" title={t("settings.critical.086")} subtitle={t("settings.critical.087")} onPress={() => setAccountSettingsOpen(true)} />
+          <MenuRow icon="profile" title={t("settings.critical.086")} subtitle={t("settings.critical.087")} onPress={() => onOpenSettings("account")} />
           <MenuRow icon="logout" title={t("settings.critical.030")} subtitle={t("settings.critical.088")} onPress={confirmLogout} disabled={loggingOut} />
           <MenuRow
             icon="trash"
@@ -282,10 +280,6 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         </MenuSection>
       </ScrollView>
 
-      <AppSettingsModal
-        page={accountSettingsOpen ? "account" : null}
-        onClose={() => setAccountSettingsOpen(false)}
-      />
       <LanguagePicker open={languageOpen} onClose={() => setLanguageOpen(false)} />
 
       <DiaryReminderSettingsModal
@@ -326,8 +320,13 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
       />
 
       <Modal visible={deleteOpen} transparent animationType="fade" onRequestClose={() => !deleting && setDeleteOpen(false)}>
-        <View style={styles.overlay}>
-          <View style={styles.deleteCard}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <ScrollView
+            contentContainerStyle={styles.deleteScroll}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
+          >
+            <View style={styles.deleteCard}>
             <Text style={styles.deleteTitle}>{t("settings.critical.094")}</Text>
             <Text style={styles.deleteBody}>
               {hasServerDeletion
@@ -357,6 +356,7 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
                 placeholderTextColor={colors.faint}
                 editable={!deleting}
                 autoCapitalize="none"
+                accessibilityLabel={t("settings.critical.102")}
                 style={styles.confirmationInput}
               />
             </View>
@@ -369,19 +369,22 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
               />
             ) : null}
             <View style={styles.deleteActions}>
-              <Pressable style={styles.cancelButton} onPress={() => setDeleteOpen(false)} disabled={deleting}>
+              <Pressable style={styles.cancelButton} onPress={() => setDeleteOpen(false)} disabled={deleting} accessibilityRole="button" accessibilityState={{ disabled: deleting }}>
                 <Text style={styles.cancelText}>{t("settings.critical.032")}</Text>
               </Pressable>
               <Pressable
                 style={[styles.confirmDeleteButton, deleteConfirmation.trim() !== t("settings.critical.036") && styles.disabled]}
                 onPress={performDelete}
                 disabled={deleting || deleteConfirmation.trim() !== t("settings.critical.036")}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: deleting || deleteConfirmation.trim() !== t("settings.critical.036"), busy: deleting }}
               >
                 {deleting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.confirmDeleteText}>{t("settings.critical.104")}</Text>}
               </Pressable>
             </View>
-          </View>
-        </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -448,7 +451,8 @@ const styles = StyleSheet.create({
   rowTitle: { color: colors.text, fontSize: type.sm, fontWeight: "800" },
   dangerTitle: { color: colors.dangerText },
   rowSubtitle: { color: colors.faint, fontSize: type.xs, marginTop: 3 },
-  overlay: { flex: 1, justifyContent: "center", padding: 22, backgroundColor: "rgba(30,26,23,0.48)" },
+  overlay: { flex: 1, backgroundColor: "rgba(30,26,23,0.48)" },
+  deleteScroll: { flexGrow: 1, justifyContent: "center", padding: 22 },
   notificationCard: { borderRadius: radius.xl, backgroundColor: colors.card, padding: 20, gap: 8, maxHeight: "88%" },
   notificationTitle: { fontSize: 20, fontWeight: "900", color: colors.text },
   notificationBody: { color: colors.muted, fontSize: 13, marginBottom: 8 },

@@ -74,5 +74,11 @@ withEnv({
 withEnv({
   EXPO_PUBLIC_SUPABASE_URL: `https://${PRODUCTION_PROJECT_REF}.supabase.co`,
 }, () => assert.throws(() => expoConfig({ config: {} }), /local Expo cannot target production/));
+withEnv({
+  EAS_BUILD_PROFILE: "local-production",
+  EXPO_PUBLIC_SUPABASE_URL: `https://${PRODUCTION_PROJECT_REF}.supabase.co`,
+  EXPO_PUBLIC_FEATURE_ENV: "production",
+  EXPO_PUBLIC_FEATURE_PROFILE: "production",
+}, () => assert.deepEqual(expoConfig({ config: { name: "Darin" } }), { name: "Darin" }));
 
 console.log("Build environment guard smoke passed");

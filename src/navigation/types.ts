@@ -12,7 +12,6 @@ export type MainTabParamList = {
     openGrowthBookVault?: boolean;
     diaryEntryId?: string;
   } | undefined;
-  Mic: undefined;
   Report: undefined;
   Memories: undefined;
 };

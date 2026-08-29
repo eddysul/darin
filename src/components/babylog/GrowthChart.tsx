@@ -106,7 +106,15 @@ export function GrowthChart({ measure, label, unit, color, sex, points }: Props)
   const yTicks = [yMin + (yMax - yMin) * 0.15, yMin + (yMax - yMin) * 0.5, yMin + (yMax - yMin) * 0.85];
 
   return (
-    <View style={styles.wrap} onLayout={onLayout}>
+    <View
+      style={styles.wrap}
+      onLayout={onLayout}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={latest
+        ? `${label}: ${latest.value.toFixed(measure === "weight" ? 2 : 1)} ${unit}`
+        : `${label}: ${t("growth.critical.160")}`}
+    >
       <View style={styles.head}>
         <Text style={styles.label}>{label}</Text>
         {latest ? (
@@ -131,7 +139,7 @@ export function GrowthChart({ measure, label, unit, color, sex, points }: Props)
       ) : null}
 
       {width > 0 ? (
-        <Svg width={width} height={HEIGHT}>
+        <Svg width={width} height={HEIGHT} accessible={false}>
           {/* 3~97 구간을 옅게 채워 "대부분이 여기 있다"를 먼저 보이게 한다. */}
           <Path
             d={`${pathOf(curves[0].values)} ${curves[4].values

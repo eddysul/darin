@@ -916,9 +916,9 @@ const styles = StyleSheet.create({
   },
   writeBtn: { minHeight: 44, borderRadius: 14, paddingVertical: 12, alignItems: "center", justifyContent: "center", marginBottom: 12 },
   disabled: { opacity: 0.45 },
-  btnPrimary: { backgroundColor: colors.amber },
+  btnPrimary: { backgroundColor: colors.primary },
   btnInner: { flexDirection: "row", alignItems: "center", gap: 6 },
-  btnPrimaryText: { color: colors.amberDark, fontWeight: "700", fontSize: 14 },
+  btnPrimaryText: { color: colors.primaryForeground, fontWeight: "700", fontSize: 14 },
   bookRow: { flexDirection: "row", gap: 8, marginBottom: 4 },
   bookCard: {
     flex: 1,
@@ -1002,7 +1002,7 @@ const styles = StyleSheet.create({
   },
   filterChipActive: { backgroundColor: colors.amber, borderColor: colors.amber },
   filterChipText: { fontSize: 12.5, fontWeight: "700", color: colors.muted },
-  filterChipTextActive: { color: colors.amberDark },
+  filterChipTextActive: { color: colors.brandCoralForeground },
   monthHeader: {
     fontSize: type.xs,
     fontWeight: "800",

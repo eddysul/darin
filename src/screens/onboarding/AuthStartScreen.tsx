@@ -13,7 +13,7 @@ import {
 import { authProviderFlags } from "../../config/authProviders";
 import { AuthRepository } from "../../repositories/AuthRepository";
 import { localizedErrorMessage } from "../../utils/familyDisplay";
-import { colors } from "../../theme";
+import { colors, fontScaleCap } from "../../theme";
 import { OnboardingShell } from "./OnboardingShell";
 
 type Props = {
@@ -138,7 +138,7 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
               <>
                 <View style={styles.dividerRow}>
                   <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>{t("auth.social.or")}</Text>
+                  <Text style={styles.dividerText} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.social.or")}</Text>
                   <View style={styles.dividerLine} />
                 </View>
 
@@ -146,7 +146,7 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
                   {authProviderFlags.apple.visible ? (
                     <SocialLoginButton
                       label={t("auth.social.apple")}
-                      symbol=""
+                      symbol={Platform.OS === "ios" ? "" : "A"}
                       enabled={authProviderFlags.apple.enabled && Platform.OS === "ios"}
                       busy={socialBusy === "apple"}
                       onPress={() => void continueWithApple()}
@@ -177,15 +177,15 @@ export function AuthStartScreen({ onAuthenticated, recoveryMode = false }: Props
             ) : null}
 
             <View style={styles.legalRow}>
-              <Text style={styles.legalText}>{t("auth.legal.prefix")}</Text>
+              <Text style={styles.legalText} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.legal.prefix")}</Text>
               <Pressable onPress={() => setPolicyPage("terms")} hitSlop={10}>
-                <Text style={styles.legalLink}>{t("auth.legal.terms")}</Text>
+                <Text style={styles.legalLink} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.legal.terms")}</Text>
               </Pressable>
-              <Text style={styles.legalText}>{t("auth.legal.and")}</Text>
+              <Text style={styles.legalText} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.legal.and")}</Text>
               <Pressable onPress={() => setPolicyPage("privacy")} hitSlop={10}>
-                <Text style={styles.legalLink}>{t("auth.legal.privacy")}</Text>
+                <Text style={styles.legalLink} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.legal.privacy")}</Text>
               </Pressable>
-              <Text style={styles.legalText}>{t("auth.legal.suffix")}</Text>
+              <Text style={styles.legalText} maxFontSizeMultiplier={fontScaleCap.control}>{t("auth.legal.suffix")}</Text>
             </View>
           </>
         ) : null}
@@ -224,8 +224,8 @@ function SocialLoginButton({
       accessibilityLabel={label}
       accessibilityState={{ disabled: !enabled || busy, busy }}
     >
-      <Text style={[styles.socialSymbol, tone === "kakao" && styles.kakaoText]}>{symbol}</Text>
-      <Text style={[styles.socialLabel, tone === "kakao" && styles.kakaoText]}>{label}</Text>
+      <Text style={[styles.socialSymbol, tone === "kakao" && styles.kakaoText]} maxFontSizeMultiplier={fontScaleCap.control}>{symbol}</Text>
+      <Text style={[styles.socialLabel, tone === "kakao" && styles.kakaoText]} maxFontSizeMultiplier={fontScaleCap.control}>{label}</Text>
       <View style={styles.trailingSpacer}>
         {busy ? <ActivityIndicator size="small" color={tone === "kakao" ? "#191919" : colors.primary} /> : null}
       </View>

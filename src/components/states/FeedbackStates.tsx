@@ -114,12 +114,12 @@ const styles = StyleSheet.create({
   },
   cta: {
     marginTop: 14,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  ctaText: { color: colors.amberDark, fontWeight: "700", fontSize: 13 },
+  ctaText: { color: colors.primaryForeground, fontWeight: "700", fontSize: 13 },
   disabled: { opacity: 0.5 },
   banner: {
     flexDirection: "row",
