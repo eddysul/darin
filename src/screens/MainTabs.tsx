@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { BottomTabBarProps, BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
@@ -31,6 +31,7 @@ import { ErrorBanner } from "../components/states/FeedbackStates";
 import { isPregnancyStage } from "../utils/childDisplay";
 import { formatLogMeta } from "../utils/formatLog";
 import { recordCategoryLabel } from "../utils/recordDisplay";
+import { useReduceMotion } from "../hooks/useReduceMotion";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 
 const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
@@ -83,6 +84,21 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
   const [voicePrefill, setVoicePrefill] = useState<RecordSheetPrefill | null>(null);
   const [editingVoiceId, setEditingVoiceId] = useState<string | null>(null);
   const [voiceEventPatch, setVoiceEventPatch] = useState<VoiceResult | null>(null);
+  const voiceActiveProgress = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
+
+  const voiceScale = voiceActiveProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.04],
+  });
+  const voiceGlowOpacity = voiceActiveProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.22],
+  });
+  const voiceIconOpacity = voiceActiveProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.92, 1],
+  });
 
   useEffect(() => {
     if (!voiceNotice) return;
@@ -98,6 +114,21 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
     setEditingVoiceId(null);
     setVoiceEventPatch(null);
   }, [allowVoice]);
+
+  useEffect(() => {
+    voiceActiveProgress.stopAnimation();
+    if (reduceMotion) {
+      voiceActiveProgress.setValue(voiceOpen ? 1 : 0);
+      return;
+    }
+    Animated.spring(voiceActiveProgress, {
+      toValue: voiceOpen ? 1 : 0,
+      damping: 22,
+      stiffness: 220,
+      mass: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [reduceMotion, voiceActiveProgress, voiceOpen]);
 
   const items: Array<
     | { kind: "route"; name: keyof MainTabParamList }
@@ -138,18 +169,34 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
                   setVoiceOpen(true);
                 }}
               >
-                <View style={[styles.centerBtnWrap, !allowVoice && styles.centerBtnWrapLocked]}>
-                  {allowVoice ? (
-                    <LinearGradient colors={[...gradients.mic]} style={styles.centerBtn}>
-                      <BabyLogIcon kind="tab" tab="mic" size={24} color={colors.amberDark} strokeWidth={2.2} />
-                    </LinearGradient>
-                  ) : (
-                    <View style={[styles.centerBtn, styles.centerBtnLocked]}>
-                      <BabyLogIcon kind="lock" size={22} color={colors.muted} strokeWidth={2.2} />
-                    </View>
-                  )}
-                </View>
-                <Text style={[styles.tabLabel, styles.centerLabel]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} maxFontSizeMultiplier={fontScaleCap.tab}>{t("tabs.voice")}</Text>
+                <Animated.View style={[styles.centerBtnAnimated, { transform: [{ scale: voiceScale }] }]}>
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[styles.centerBtnGlow, { opacity: voiceGlowOpacity }]}
+                  />
+                  <View style={[styles.centerBtnWrap, !allowVoice && styles.centerBtnWrapLocked]}>
+                    {allowVoice ? (
+                      <LinearGradient colors={[...gradients.mic]} style={styles.centerBtn}>
+                        <Animated.View style={{ opacity: voiceIconOpacity }}>
+                          <BabyLogIcon kind="tab" tab="mic" size={24} color={colors.amberDark} strokeWidth={2.2} />
+                        </Animated.View>
+                      </LinearGradient>
+                    ) : (
+                      <View style={[styles.centerBtn, styles.centerBtnLocked]}>
+                        <BabyLogIcon kind="lock" size={22} color={colors.muted} strokeWidth={2.2} />
+                      </View>
+                    )}
+                  </View>
+                </Animated.View>
+                <Text
+                  style={[styles.tabLabel, styles.centerLabel, voiceOpen && allowVoice && styles.centerLabelActive]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                  maxFontSizeMultiplier={fontScaleCap.tab}
+                >
+                  {t("tabs.voice")}
+                </Text>
               </Pressable>
             );
           }
@@ -425,21 +472,37 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   tabItem: { flex: 1, minHeight: TOUCH_MIN, alignItems: "center", justifyContent: "flex-start", gap: 4, paddingHorizontal: 2 },
+  centerBtnAnimated: {
+    width: 56,
+    height: 56,
+    marginTop: -24,
+  },
+  centerBtnGlow: {
+    position: "absolute",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.brandCoral,
+    shadowColor: colors.brandCoral,
+    shadowOpacity: 0.72,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 8,
+  },
   centerBtnWrap: {
-    marginTop: -28,
-    borderRadius: 31,
+    borderRadius: 28,
     backgroundColor: colors.amber,
     shadowColor: colors.amber,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   centerBtnWrapLocked: { backgroundColor: colors.border, shadowOpacity: 0, elevation: 0 },
   centerBtn: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -451,6 +514,7 @@ const styles = StyleSheet.create({
   tabLabel: { fontSize: type.xs, fontWeight: "700", color: colors.muted },
   tabLabelActive: { color: colors.amberText },
   centerLabel: { marginTop: 2 },
+  centerLabelActive: { color: colors.amberText },
   voiceNotice: {
     position: "absolute",
     left: 16,

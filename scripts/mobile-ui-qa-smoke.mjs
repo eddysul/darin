@@ -20,6 +20,9 @@ const [tabs, navTypes, menu, navigator, theme, consult, notifications, mediaView
 
 assert.ok(tabs.includes('{ kind: "micAction" }'), "Mic remains an independent center action");
 assert.ok(!navTypes.includes("Mic:"), "Mic is not a navigation route");
+assert.ok(!tabs.toLowerCase().includes("capsule"), "tab bar does not add a moving capsule indicator");
+assert.ok(tabs.includes("outputRange: [1, 1.04]") && tabs.includes("width: 56"), "Mic uses the approved compact active treatment");
+assert.ok(tabs.includes("voiceOpen && allowVoice && styles.centerLabelActive"), "Mic label is emphasized only while its action is active");
 assert.ok(tabs.includes("friendOnly ? null : <CustomTabBar"), "friend-only root hides the single-destination tab bar");
 assert.ok(!tabs.match(/setVoiceOpen\(false\);[\s\S]{0,100}navigation\.navigate\("Record"\)/), "closing Mic does not force a tab change");
 assert.ok(menu.includes('onOpenSettings("account")'), "account settings use the existing native stack destination");
