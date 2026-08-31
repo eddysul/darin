@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
@@ -61,6 +62,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const [stickerVaultOpen, setStickerVaultOpen] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [mediaZoomed, setMediaZoomed] = useState(false);
+  const [commentStatus, setCommentStatus] = useState<"submitting" | "saved" | null>(null);
   const [visibleProfiles, setVisibleProfiles] = useState<DisplayProfile[]>([]);
   const [friendBabyName, setFriendBabyName] = useState("");
   const friendView = route.params.source === "friend";
@@ -108,6 +110,12 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   // Always reload + remint signed URL on focus (TTL is short; do not keep stale media links).
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   useEffect(() => { void AuthRepository.getUser().then((user) => setUserId(user?.id ?? "")); }, []);
+  useEffect(() => {
+    if (commentStatus !== "saved") return;
+    AccessibilityInfo.announceForAccessibility(t("memory.critical.180"));
+    const timer = setTimeout(() => setCommentStatus(null), 1_800);
+    return () => clearTimeout(timer);
+  }, [commentStatus, t]);
 
   const authorName = (id: string) => {
     if (id === logAuthor.userId || id === userId) return logAuthor.name;
@@ -140,12 +148,15 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
   const submitComment = async () => {
     if (!bundle || !comment.trim() || working) return;
     setWorking(true);
+    setCommentStatus("submitting");
     setError("");
     try {
       await MemoriesRepository.addComment({ memoryPostId: bundle.post.id, body: comment });
       setComment("");
       await load(false);
+      setCommentStatus("saved");
     } catch (cause) {
+      setCommentStatus(null);
       setError(caughtErrorMessage(t, cause, "memory.critical.126"));
     } finally {
       setWorking(false);
@@ -170,6 +181,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     setStickerVaultOpen(false);
     setBundle((current) => current ? { ...current, comments: [...current.comments, optimistic] } : current);
     setWorking(true);
+    setCommentStatus("submitting");
     setError("");
     try {
       await MemoriesRepository.addStickerComment({
@@ -178,7 +190,9 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
         stickerLabel: sticker.label,
       });
       await load(false);
+      setCommentStatus("saved");
     } catch (cause) {
+      setCommentStatus(null);
       setBundle((current) => current ? { ...current, comments: current.comments.filter((item) => item.id !== tempId) } : current);
       setError(caughtErrorMessage(t, cause, "memory.critical.127"));
     } finally {
@@ -312,7 +326,7 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
           </View>
           <View style={styles.actionRow}>
             <Pressable
-              style={({ pressed }) => [styles.actionPair, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.actionPair, pressed && styles.reactionPressed]}
               onPress={() => void toggleReaction()}
               disabled={likeWorking}
               accessibilityRole="button"
@@ -443,12 +457,24 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
               })}
             </ScrollView>
             {error ? <Text style={styles.sheetError}>{error}</Text> : null}
+            {commentStatus ? (
+              <Text style={styles.commentStatus} accessibilityLiveRegion="polite">
+                {t(commentStatus === "submitting" ? "memory.critical.179" : "memory.critical.180")}
+              </Text>
+            ) : null}
             {!friendView && babyStickers.length ? (
               <View style={styles.stickerBarBlock}>
                 <Text style={styles.stickerBarTitle}>{t("memory.critical.137")}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stickerBar} keyboardShouldPersistTaps="handled">
                   {babyStickers.map((sticker) => (
-                    <Pressable key={sticker.id} style={styles.stickerChoice} onPress={() => void submitStickerComment(sticker)} disabled={working} accessibilityLabel={t("memory.critical.138", { label: sticker.label })}>
+                    <Pressable
+                      key={sticker.id}
+                      style={({ pressed }) => [styles.stickerChoice, pressed && !working && styles.stickerChoicePressed]}
+                      onPress={() => void submitStickerComment(sticker)}
+                      disabled={working}
+                      accessibilityLabel={t("memory.critical.138", { label: sticker.label })}
+                      accessibilityState={{ disabled: working, busy: working }}
+                    >
                       <BabyStickerFromModel sticker={sticker} size={48} />
                       <Text style={styles.stickerChoiceLabel} numberOfLines={1}>{sticker.label}</Text>
                     </Pressable>
@@ -474,7 +500,17 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
                   multiline
                   accessibilityLabel={t("memory.critical.157")}
                 />
-                {comment.trim() ? <Pressable style={[styles.send, working && styles.disabled]} onPress={() => void submitComment()} disabled={working}><Text style={styles.sendText}>{t("memory.critical.143")}</Text></Pressable> : null}
+                {comment.trim() ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.send, working && styles.disabled, pressed && !working && styles.sendPressed]}
+                    onPress={() => void submitComment()}
+                    disabled={working}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: working, busy: working }}
+                  >
+                    {working ? <ActivityIndicator color={colors.primaryForeground} size="small" /> : <Text style={styles.sendText}>{t("memory.critical.143")}</Text>}
+                  </Pressable>
+                ) : null}
               </View>
             </View>
           </View>
@@ -523,6 +559,7 @@ const styles = StyleSheet.create({
   actionSpacer: { flex: 1 },
   actionButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   pressed: { opacity: 0.7 },
+  reactionPressed: { opacity: 0.82, transform: [{ scale: 0.92 }] },
   caption: { color: colors.text, fontSize: 15, lineHeight: 23, marginTop: 6 },
   captionAuthor: { fontWeight: "800" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
@@ -560,10 +597,12 @@ const styles = StyleSheet.create({
   commentDelete: { minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
   commentDeleteText: { color: colors.faint, fontSize: 10.5 },
   sheetError: { color: colors.dangerText, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: 9, fontSize: 11.5, marginBottom: 8 },
+  commentStatus: { color: colors.amberText, backgroundColor: colors.amberSoft, borderRadius: radius.md, padding: 9, fontSize: 11.5, fontWeight: "700", marginBottom: 8 },
   stickerBarBlock: { paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   stickerBarTitle: { color: colors.text, fontSize: 11.5, fontWeight: "800", marginBottom: 5 },
   stickerBar: { gap: 8, paddingRight: 12 },
   stickerChoice: { width: 78, minHeight: 96, alignItems: "center", justifyContent: "center", borderRadius: radius.md, backgroundColor: colors.cardHi, paddingVertical: 8 },
+  stickerChoicePressed: { opacity: 0.84, transform: [{ scale: 0.96 }] },
   stickerChoiceImage: { width: 48, height: 48 },
   stickerChoiceLabel: { color: colors.muted, fontSize: 9.5, fontWeight: "700", maxWidth: 62, marginTop: 2 },
   stickerEmpty: { minHeight: 54, paddingVertical: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8 },
@@ -575,6 +614,7 @@ const styles = StyleSheet.create({
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   commentInput: { flex: 1, minHeight: 46, maxHeight: 100, borderRadius: 16, backgroundColor: colors.cardHi, color: colors.text, paddingHorizontal: 13, paddingVertical: 12, fontSize: 13 },
   send: { minWidth: 54, minHeight: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  sendPressed: { opacity: 0.9, transform: [{ scale: 0.97 }] },
   sendText: { color: colors.primaryForeground, fontSize: 12, fontWeight: "800" },
   disabled: { opacity: 0.45 },
   inlineError: { marginHorizontal: 16, color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12 },

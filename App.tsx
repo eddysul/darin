@@ -607,7 +607,7 @@ function RootApp() {
   return (
     <LogoutProvider onLogout={handleLogout}>
       <View style={styles.root}>
-        <StatusBar style="dark" />
+        <StatusBar style="auto" />
         {phase === "main" && <MainNavigator onboardingProfile={onboardingProfile} friendOnly={friendOnly} />}
         {phase === "splash" && (
           <SplashScreen

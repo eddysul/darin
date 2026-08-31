@@ -701,7 +701,7 @@ function VaultHome({
           {sorted.map((sticker) => (
             <Pressable
               key={sticker.id}
-              style={styles.card}
+              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
               onPress={() => (pickMode ? onPick(sticker) : setPreview(sticker))}
               onLongPress={() => onDelete(sticker)}
               accessibilityRole="button"
@@ -715,7 +715,7 @@ function VaultHome({
               </Text>
               {!pickMode ? (
                 <Pressable
-                  style={styles.deleteBtn}
+                  style={({ pressed }) => [styles.deleteBtn, pressed && styles.deleteBtnPressed]}
                   onPress={() => onDelete(sticker)}
                   accessibilityRole="button"
                   accessibilityLabel={t("sticker.critical.056", { label: sticker.label })}
@@ -917,7 +917,7 @@ function OptionRow<T extends string>({
           return (
             <Pressable
               key={option.value}
-              style={[styles.optionChip, selected && styles.optionChipActive]}
+              style={({ pressed }) => [styles.optionChip, selected && styles.optionChipActive, pressed && styles.optionChipPressed]}
               onPress={() => onChange(option.value)}
             >
               <Text style={[styles.optionChipText, selected && styles.optionChipTextActive]}>
@@ -1015,6 +1015,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     alignItems: "center",
   },
+  cardPressed: { opacity: 0.86, transform: [{ scale: 0.97 }] },
   cardStickerPreview: { minHeight: 118, paddingTop: 8, paddingBottom: 22, alignItems: "center", justifyContent: "center" },
   previewOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1046,6 +1047,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  deleteBtnPressed: { opacity: 0.65, transform: [{ scale: 0.94 }] },
   deleteLink: { fontSize: 11, lineHeight: 16, fontWeight: "700", color: colors.dangerText },
   pickHint: { marginTop: 6, fontSize: 11, fontWeight: "700", color: colors.amberText },
   phraseRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
@@ -1093,6 +1095,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   optionChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  optionChipPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
   optionChipText: { fontSize: 12, fontWeight: "700", color: colors.muted },
   optionChipTextActive: { color: colors.amberText },
 });

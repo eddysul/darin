@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Animated,
@@ -142,6 +142,8 @@ function SwipeableTimelineRow({
   const { t } = useLanguage();
   const translateX = useRef(new Animated.Value(0)).current;
   const reduceMotion = useReduceMotion();
+  const rowOpacity = useRef(new Animated.Value(highlighted && !reduceMotion ? 0 : 1)).current;
+  const rowEnterY = useRef(new Animated.Value(highlighted && !reduceMotion ? 8 : 0)).current;
   const category = resolveLogCategory(entry.cat, customCategories);
   const reset = useCallback(
     () =>
@@ -149,13 +151,42 @@ function SwipeableTimelineRow({
     [reduceMotion, translateX],
   );
 
+  useEffect(() => {
+    if (!highlighted) return;
+    rowOpacity.stopAnimation();
+    rowEnterY.stopAnimation();
+    if (reduceMotion) {
+      rowOpacity.setValue(1);
+      rowEnterY.setValue(0);
+      return;
+    }
+    rowOpacity.setValue(0);
+    rowEnterY.setValue(8);
+    Animated.parallel([
+      Animated.timing(rowOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.timing(rowEnterY, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start();
+  }, [highlighted, reduceMotion, rowEnterY, rowOpacity]);
+
+  const animateDelete = useCallback(() => {
+    if (!onDelete) return;
+    if (reduceMotion) {
+      onDelete();
+      return;
+    }
+    Animated.parallel([
+      Animated.timing(rowOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
+      Animated.timing(translateX, { toValue: -120, duration: 150, useNativeDriver: true }),
+    ]).start(onDelete);
+  }, [onDelete, reduceMotion, rowOpacity, translateX]);
+
   const confirmDelete = useCallback(() => {
     if (!onDelete) return;
     Alert.alert(t("home.timeline.deleteTitle"), t("home.timeline.deleteBody"), [
       { text: t("home.timeline.cancel"), style: "cancel", onPress: reset },
-      { text: t("home.timeline.delete"), style: "destructive", onPress: onDelete },
+      { text: t("home.timeline.delete"), style: "destructive", onPress: animateDelete },
     ]);
-  }, [onDelete, reset, t]);
+  }, [animateDelete, onDelete, reset, t]);
 
   const panResponder = useMemo(
     () =>
@@ -198,7 +229,7 @@ function SwipeableTimelineRow({
           isFirst && styles.rowSurfaceFirst,
           isLast && styles.rowSurfaceLast,
           highlighted && styles.rowHighlight,
-          { transform: [{ translateX }] },
+          { opacity: rowOpacity, transform: [{ translateX }, { translateY: rowEnterY }] },
         ]}
         {...panResponder.panHandlers}
       >

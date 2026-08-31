@@ -802,5 +802,5 @@ const styles = StyleSheet.create({
   saveButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   reactionText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   reactionTextActive: { color: colors.amberText },
-  pressed: { opacity: 0.7 },
+  pressed: { opacity: 0.82, transform: [{ scale: 0.94 }] },
 });

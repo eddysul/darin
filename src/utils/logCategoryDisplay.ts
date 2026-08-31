@@ -6,7 +6,7 @@
  */
 import { getCategory, type BabyLogCategoryId } from "../constants/babyLogCategories";
 import { isCustomCategoryKey } from "../types/logCategory";
-import { colors } from "../theme";
+import { BRAND_CORAL } from "../themePalette";
 
 /** 그림에서 뺄 카테고리. 하루 리듬과 무관하거나 색으로 구분할 값이 아니다. */
 export const DIAL_EXCLUDED: BabyLogCategoryId[] = ["other", "memo", "temp"];
@@ -27,7 +27,7 @@ export function displayKey(cat: string): string {
 }
 
 export function displayMeta(key: string): { label: string; color: string } {
-  if (key === FEED_KEY) return { label: "수유", color: colors.amber };
+  if (key === FEED_KEY) return { label: "수유", color: BRAND_CORAL };
   const meta = getCategory(key as BabyLogCategoryId);
   return { label: meta.label, color: meta.color };
 }

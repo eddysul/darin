@@ -1,4 +1,4 @@
-import { categoryColors } from "../theme";
+import { categoryColors } from "../themePalette";
 
 /** Icon keys available for custom log categories (picker + persistence). */
 export type CustomCategoryIconKey =

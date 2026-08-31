@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
+  DarkTheme,
+  DefaultTheme,
   NavigationContainer,
   createNavigationContainerRef,
   type LinkingOptions,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useColorScheme } from "react-native";
 import * as Notifications from "expo-notifications";
 import { useApp } from "../context/AppContext";
 import { useBabyLog } from "../context/BabyLogContext";
@@ -22,7 +25,7 @@ import { MyProfileScreen } from "../screens/MyProfileScreen";
 import { NotificationCenterScreen } from "../screens/NotificationCenterScreen";
 import { SettingsHomeScreen } from "../screens/SettingsHomeScreen";
 import { ConsultScreen } from "../screens/tabs/ConsultScreen";
-import { colors } from "../theme";
+import { darkThemeColors, lightThemeColors } from "../theme";
 import type { UserProfile } from "../types/profile";
 import type { RootStackParamList } from "./types";
 
@@ -45,7 +48,25 @@ export function MainNavigator({
   const { setProfile } = useApp();
   const { t } = useLanguage();
   const { localDataScope } = useBabyLog();
+  const colorScheme = useColorScheme();
   const pendingNotificationRoute = useRef<Record<string, unknown> | null>(null);
+  const navigationTheme = useMemo(() => {
+    const dark = colorScheme === "dark";
+    const base = dark ? DarkTheme : DefaultTheme;
+    const palette = dark ? darkThemeColors : lightThemeColors;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: "#B65B55",
+        background: palette.background,
+        card: palette.card,
+        text: palette.text,
+        border: palette.border,
+        notification: "#E8918A",
+      },
+    };
+  }, [colorScheme]);
 
   useEffect(() => {
     if (onboardingProfile) setProfile(onboardingProfile);
@@ -161,6 +182,7 @@ export function MainNavigator({
     <NavigationContainer
       linking={linking}
       ref={navigationRef}
+      theme={navigationTheme}
       onReady={() => {
         const pending = pendingNotificationRoute.current;
         if (pending) openNotificationRoute(pending);
@@ -169,12 +191,12 @@ export function MainNavigator({
       <RootStack.Navigator
         screenOptions={{
           headerTitleAlign: "center",
-          headerTintColor: colors.text,
-          headerStyle: { backgroundColor: colors.card },
+          headerTintColor: navigationTheme.colors.text,
+          headerStyle: { backgroundColor: navigationTheme.colors.card },
           headerShadowVisible: true,
           headerBackButtonDisplayMode: "minimal",
           gestureEnabled: true,
-          contentStyle: { backgroundColor: colors.background },
+          contentStyle: { backgroundColor: navigationTheme.colors.background },
         }}
       >
         <RootStack.Screen name="MainTabs" options={{ headerShown: false }}>

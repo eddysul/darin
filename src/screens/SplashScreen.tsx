@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 60,
     // Match app.json splash.backgroundColor / iOS SplashScreenBackground
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
   },
   center: {
     flex: 1,

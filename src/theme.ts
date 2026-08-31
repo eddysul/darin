@@ -1,20 +1,60 @@
-const BRAND_CORAL = "#E8918A";
+import { DynamicColorIOS, Platform, PlatformColor, type ColorValue } from "react-native";
+import { BRAND_CORAL, categoryColors } from "./themePalette";
+
+export { categoryColors } from "./themePalette";
+
 const BRAND_CORAL_SOFT = "rgba(232,145,138,0.16)";
 const PRIMARY_CORAL = "#B65B55";
 const PRIMARY_CORAL_PRESSED = "#A94E49";
 const PRIMARY_CORAL_DISABLED = "#D6AAA6";
 
-export const colors = {
+/**
+ * Native adaptive colors let the existing static StyleSheets react to the
+ * system appearance without rebuilding every screen at runtime. iOS keeps
+ * Darin's warm cream/brown character; Android follows the platform surface
+ * and text roles while the coral brand colors remain stable.
+ */
+function adaptiveColor(
+  light: string,
+  dark: string,
+  androidRole?: string,
+): string {
+  let value: ColorValue = light;
+  if (Platform.OS === "ios") value = DynamicColorIOS({ light, dark });
+  // Semantic Android roles adapt natively. Stable brand colors deliberately
+  // keep their light value so they do not unexpectedly invert.
+  if (Platform.OS === "android" && androidRole) value = PlatformColor(androidRole);
+  return value as unknown as string;
+}
+
+export const lightThemeColors = {
   background: "#FEF7F2",
-  backgroundSecondary: "#FFFFFF",
   card: "#FFFFFF",
-  cardHi: "#FAF4EE",
   text: "#2E2A26",
-  /** Secondary text. >=4.5:1 on every light surface incl. cardHi. */
   muted: "#6B655E",
-  /** Tertiary text and placeholders. >=4.5:1 on every light surface incl. cardHi. */
-  faint: "#736D65",
   border: "#EDE5DC",
+} as const;
+
+export const darkThemeColors = {
+  /** Warm near-black instead of pure black preserves Darin's cream tone. */
+  background: "#181513",
+  card: "#24201D",
+  text: "#F7EEE7",
+  muted: "#C7BCB3",
+  border: "#443B35",
+} as const;
+
+export const colors = {
+  background: adaptiveColor(lightThemeColors.background, darkThemeColors.background, "?attr/colorBackground"),
+  backgroundSecondary: adaptiveColor("#FFFFFF", "#201C19", "?attr/colorBackgroundFloating"),
+  card: adaptiveColor(lightThemeColors.card, darkThemeColors.card, "?attr/colorBackgroundFloating"),
+  cardHi: adaptiveColor("#FAF4EE", "#2B2521", "?attr/colorBackgroundFloating"),
+  text: adaptiveColor(lightThemeColors.text, darkThemeColors.text, "?attr/textColorPrimary"),
+  /** Secondary text. >=4.5:1 on every light surface incl. cardHi. */
+  muted: adaptiveColor(lightThemeColors.muted, darkThemeColors.muted, "?attr/textColorSecondary"),
+  /** Tertiary text and placeholders. >=4.5:1 on every light surface incl. cardHi. */
+  faint: adaptiveColor("#736D65", "#B3A69D", "?attr/textColorSecondary"),
+  border: adaptiveColor(lightThemeColors.border, darkThemeColors.border, "?attr/colorControlNormal"),
   /** Darin's soft brand accent. Keep this for decorative and selected-state accents. */
   brandCoral: BRAND_CORAL,
   brandCoralSoft: BRAND_CORAL_SOFT,
@@ -22,19 +62,19 @@ export const colors = {
   brandCoralForeground: "#2E2A26",
   /** Fill / border accent. Do not use as text on cream or white. */
   amber: BRAND_CORAL,
-  amberSoft: BRAND_CORAL_SOFT,
+  amberSoft: adaptiveColor(BRAND_CORAL_SOFT, "rgba(232,145,138,0.22)"),
   /** Text/icon on light surfaces. ~5.4:1 on #FFFFFF. */
-  amberText: "#B03A34",
+  amberText: adaptiveColor("#B03A34", "#F2A8A1", "?attr/textColorPrimary"),
   /** Content on coral fills (primary buttons, selected chips, FAB). */
   amberDark: "#FFFFFF",
   /** Content on dark fills and scrims (photo overlays, Apple button). */
   onDark: "#FFFFFF",
   /** Accent text on dark surfaces (toasts). ~9:1 on the toast scrim. */
   accentOnDark: "#F7B3AB",
-  danger: "#C0463F",
-  dangerSoft: "rgba(192,70,63,0.12)",
-  dangerText: "#B03A34",
-  black: "#2E2A26",
+  danger: adaptiveColor("#C0463F", "#F28B82"),
+  dangerSoft: adaptiveColor("rgba(192,70,63,0.12)", "rgba(242,139,130,0.18)"),
+  dangerText: adaptiveColor("#B03A34", "#FFAAA2", "?attr/textColorPrimary"),
+  black: adaptiveColor("#2E2A26", "#F7EEE7", "?attr/textColorPrimary"),
   /** Alias of brandCoral. Prefer brandCoral in new code. */
   yellow: BRAND_CORAL,
   /** Alias of amberSoft. Prefer amberSoft in new code. */
@@ -53,37 +93,15 @@ export const colors = {
   accent: BRAND_CORAL,
   /** Alias of amber. Prefer amber in new code. */
   accentGold: BRAND_CORAL,
-  inputBg: "#FFFFFF",
-  sageSurface: "#FAF4EE",
+  inputBg: adaptiveColor("#FFFFFF", "#2A2521", "?attr/colorBackgroundFloating"),
+  sageSurface: adaptiveColor("#FAF4EE", "#2B2521", "?attr/colorBackgroundFloating"),
   champagne: BRAND_CORAL_SOFT,
   /** Alias of amber. Prefer amber in new code. */
   gold: BRAND_CORAL,
-  deepSage: "#FEF7F2",
-  sage: "#FEF7F2",
-  navy: "#2E2A26",
+  deepSage: adaptiveColor("#FEF7F2", "#181513", "?attr/colorBackground"),
+  sage: adaptiveColor("#FEF7F2", "#181513", "?attr/colorBackground"),
+  navy: adaptiveColor("#2E2A26", "#F7EEE7", "?attr/textColorPrimary"),
 };
-
-export const categoryColors = {
-  diaper: "#c98a54",
-  sleep: "#7c83fd",
-  breast: "#e8607a",
-  formula: "#f0a93c",
-  storedMilk: "#E8918A",
-  food: "#4ec9b0",
-  water: "#55AEE6",
-  milk: "#89A9D9",
-  pump: "#ec7fb8",
-  bath: "#4fa8e0",
-  doctor: "#6fcf7a",
-  vaccination: "#6E9FD8",
-  temp: "#e8654a",
-  med: "#3fa66e",
-  snack: "#e0a6a6",
-  tummy: "#5b8dee",
-  play: "#9b7fe8",
-  memo: "#9096a6",
-  other: "#C59AD8",
-} as const;
 
 export const type = {
   xs: 12,
@@ -102,8 +120,16 @@ export const fontScaleCap = {
 } as const;
 
 export const gradients = {
-  screen: ["#FEF7F2", "#FFF9F5", "#FEF7F2"] as const,
-  hero: ["#FFFFFF", "#FAF4EE", "#FEF7F2"] as const,
+  screen: [
+    adaptiveColor("#FEF7F2", "#181513", "?attr/colorBackground"),
+    adaptiveColor("#FFF9F5", "#211C19", "?attr/colorBackground"),
+    adaptiveColor("#FEF7F2", "#181513", "?attr/colorBackground"),
+  ] as const,
+  hero: [
+    adaptiveColor("#FFFFFF", "#29231F", "?attr/colorBackgroundFloating"),
+    adaptiveColor("#FAF4EE", "#211C19", "?attr/colorBackground"),
+    adaptiveColor("#FEF7F2", "#181513", "?attr/colorBackground"),
+  ] as const,
   mic: [BRAND_CORAL, "#D47870"] as const,
 };
 

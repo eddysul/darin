@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getCategory } from "../../constants/babyLogCategories";
 import {
   PREGNANCY_QUICK_RECORD_ACTIONS,
@@ -16,6 +16,7 @@ import { rankQuickActions } from "../../utils/quickCategoryRanking";
 import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { useLanguage } from "../../LanguageContext";
 import { customCategoryDisplayLabel, recordCategoryCompactLabel, recordCategoryLabel } from "../../utils/recordDisplay";
+import { useReduceMotion } from "../../hooks/useReduceMotion";
 
 export type { OneTouchAction } from "../../constants/quickRecordActions";
 
@@ -89,6 +90,7 @@ export function OneTouchRecordGrid({
 }: Props) {
   const compact = useCompactLayout();
   const { t } = useLanguage();
+  const reduceMotion = useReduceMotion();
   const [expanded, setExpanded] = useState(false);
   const catalog = visibleActions?.some((id) => PREGNANCY_QUICK_RECORD_ACTIONS.some((action) => action.id === id))
     ? PREGNANCY_QUICK_RECORD_ACTIONS
@@ -142,6 +144,7 @@ export function OneTouchRecordGrid({
                 onLongPress={onLongPress}
                 onOpenActiveTimer={onOpenActiveTimer}
                 onInteractionChange={onInteractionChange}
+                reduceMotion={reduceMotion}
               />
               {action.id === "vaccination" && onOpenGrowth ? (
                 <GrowthTile dense={compact} disabled={disabled} onPress={onOpenGrowth} />
@@ -180,6 +183,7 @@ export function OneTouchRecordGrid({
               onLongPress={onLongPress}
               onOpenActiveTimer={onOpenActiveTimer}
               onInteractionChange={onInteractionChange}
+              reduceMotion={reduceMotion}
             />
           ))}
           {onOpenGrowth ? (
@@ -331,6 +335,7 @@ function ActionTile({
   onLongPress,
   onOpenActiveTimer,
   onInteractionChange,
+  reduceMotion,
 }: {
   action: QuickRecordActionDefinition;
   sleepActive: boolean;
@@ -342,6 +347,7 @@ function ActionTile({
   onLongPress?: (action: OneTouchAction) => void;
   onOpenActiveTimer?: (action: OneTouchAction) => void;
   onInteractionChange?: (active: boolean) => void;
+  reduceMotion: boolean;
 }) {
   const { t } = useLanguage();
   const category = getCategory(action.cat);
@@ -352,6 +358,29 @@ function ActionTile({
   const tileLabel = activeSleep ? t("record.grid.endSleepShort") : compactLabel;
   const ActionIcon = CATEGORY_ICONS[action.cat];
   const longPressedRef = useRef(false);
+  const longPressProgress = useRef(new Animated.Value(0)).current;
+  const longPressEnabled = Boolean(onLongPress) && !inProgress && !disabled;
+  const longPressRingOpacity = longPressProgress.interpolate({
+    inputRange: [0, 0.25, 1],
+    outputRange: [0, 0.12, 0.72],
+  });
+  const longPressRingScale = longPressProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.94, 1],
+  });
+
+  const resetLongPressFeedback = () => {
+    longPressProgress.stopAnimation();
+    if (reduceMotion) {
+      longPressProgress.setValue(0);
+      return;
+    }
+    Animated.timing(longPressProgress, {
+      toValue: 0,
+      duration: 100,
+      useNativeDriver: true,
+    }).start();
+  };
 
   return (
     <Pressable
@@ -368,8 +397,20 @@ function ActionTile({
       onPressIn={() => {
         longPressedRef.current = false;
         onInteractionChange?.(true);
+        longPressProgress.stopAnimation();
+        longPressProgress.setValue(0);
+        if (longPressEnabled && !reduceMotion) {
+          Animated.timing(longPressProgress, {
+            toValue: 1,
+            duration: 380,
+            useNativeDriver: true,
+          }).start();
+        }
       }}
-      onPressOut={() => onInteractionChange?.(false)}
+      onPressOut={() => {
+        onInteractionChange?.(false);
+        resetLongPressFeedback();
+      }}
       onPress={() => {
         if (longPressedRef.current) {
           longPressedRef.current = false;
@@ -415,6 +456,15 @@ function ActionTile({
         if (event.nativeEvent.actionName === "startTimer") onLongPress?.(action.id);
       }}
     >
+      {longPressEnabled ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.longPressRing,
+            { opacity: longPressRingOpacity, transform: [{ scale: longPressRingScale }] },
+          ]}
+        />
+      ) : null}
       {inProgress ? (
         <View style={styles.progressBadge}>
           <Text style={styles.progressBadgeText}>{t("record.grid.inProgress")}</Text>
@@ -484,6 +534,13 @@ const styles = StyleSheet.create({
   buttonCompactDense: { minHeight: 72 },
   buttonExpandedDense: { minHeight: 76 },
   pressed: { transform: [{ scale: 0.97 }], opacity: 0.82 },
+  longPressRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 2,
+    borderColor: colors.brandCoral,
+    borderRadius: 16,
+    backgroundColor: colors.amberSoft,
+  },
   disabled: { opacity: 0.45 },
   activeButton: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
   iconWrap: {

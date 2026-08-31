@@ -177,6 +177,8 @@ const rows = [
   ["176","친구 공개 추억 열기","Open friend moment","友だち公開の思い出を開く","Abrir recuerdo de amigos","打开朋友公开的回忆"],
   ["177","친구 공유 추억을 불러오지 못했어요.","Couldn't load friend moments.","友だちの思い出を読み込めませんでした。","No se pudieron cargar los recuerdos de amigos.","无法加载朋友分享的回忆。"],
   ["178","사진 다시 올리기","Retry photo upload","写真を再アップロード","Reintentar subida de foto","重新上传照片"],
+  ["179","댓글을 보내는 중…","Sending comment…","コメントを送信中…","Enviando comentario…","正在发送评论…"],
+  ["180","댓글이 등록됐어요.","Comment posted.","コメントを投稿しました。","Comentario publicado.","评论已发布。"],
 ] as const;
 
 type MemoryId = typeof rows[number][0];

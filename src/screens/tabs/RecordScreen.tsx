@@ -40,7 +40,7 @@ import type { ActiveTimer, TimerSide } from "../../types/activeTimer";
 import { formatElapsedClock, elapsedMsNow, isBornTimer, isTimerAction } from "../../types/activeTimer";
 import type { BabyLogEntry } from "../../types/babyLog";
 import type { CustomCategory, LogCategoryKey } from "../../types/logCategory";
-import { customCategoriesForStage, customCategoryKey, isCustomCategoryKey } from "../../types/logCategory";
+import { customCategoriesForStage, customCategoryKey, isCustomCategoryKey, parseCustomCategoryId } from "../../types/logCategory";
 import type { QuickRecord } from "../../types/quickRecord";
 import type { FoodIngredient, FoodIngredientSource } from "../../types/foodIngredient";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
@@ -73,7 +73,7 @@ import { loadFoodIngredients, normalizeIngredientName, saveFoodIngredients } fro
 import type { MainTabParamList } from "../../navigation/types";
 import { useLanguage } from "../../LanguageContext";
 import { RECORD_VALUE } from "../../constants/recordInternalValues";
-import { quickRecordLabel } from "../../utils/recordDisplay";
+import { quickRecordLabel, recordCategoryLabel } from "../../utils/recordDisplay";
 import { formatDayNavLabel } from "../../utils/insightDisplay";
 import {
   buildContractionSaveEntry,
@@ -475,15 +475,21 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
 
   const handleSave = (entry: Omit<BabyLogEntry, "id">, editId?: string) => {
     const nextEntry = isContractionLog(entry) ? buildContractionSaveEntry(entry, logs, editId) : entry;
+    const savedLabel = isCustomCategoryKey(nextEntry.cat)
+      ? customCategories.find((category) => category.id === parseCustomCategoryId(nextEntry.cat))?.label ?? t("record.timeline.recorded")
+      : recordCategoryLabel(t, nextEntry.cat);
+    const savedTitle = t("record.screen.recorded", { label: savedLabel });
     if (editId) {
       const existing = logs.find((log) => log.id === editId);
       if (existing && canEditLog(myFamilyRole, existing.createdBy, me)) {
         updateLog(editId, nextEntry);
         if (isContractionLog(nextEntry)) persistContractionSiblings(logs, { ...nextEntry, id: editId });
+        announceCreated({ ...nextEntry, id: editId }, savedTitle);
       }
     } else if (allowRecord) {
       const created = addLog(nextEntry);
       if (isContractionLog(created)) persistContractionSiblings(logs, created);
+      announceCreated(created, savedTitle);
     }
   };
 

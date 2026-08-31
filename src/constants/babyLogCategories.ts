@@ -1,4 +1,4 @@
-import { categoryColors } from "../theme";
+import { categoryColors } from "../themePalette";
 
 export type BornLogCategoryId =
   | "breast"

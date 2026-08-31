@@ -2,6 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { DIARY_COVER_TEMPLATES, type DiaryCoverTemplateId } from "../../constants/diaryCoverTemplates";
 import { useLanguage } from "../../LanguageContext";
 import type { MessageKey } from "../../i18n";
+import { colors } from "../../theme";
 import { DiaryCoverTemplate } from "./DiaryCoverTemplate";
 
 const TEMPLATE_NAME_KEYS: Record<DiaryCoverTemplateId, MessageKey> = {
@@ -34,5 +35,5 @@ const styles = StyleSheet.create({
   row: { gap: 10, paddingRight: 12 },
   item: { width: 120, padding: 7, borderRadius: 14, borderWidth: 1.5, borderColor: "transparent", alignItems: "center", gap: 6 },
   labelRow: { minHeight: 20, justifyContent: "center" },
-  label: { fontSize: 12, fontWeight: "700", color: "#746D65" },
+  label: { fontSize: 12, fontWeight: "700", color: colors.muted },
 });

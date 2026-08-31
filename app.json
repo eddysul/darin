@@ -6,7 +6,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/darin-logo.png",
       "resizeMode": "contain",
@@ -15,8 +15,18 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.darin.childcare",
-      "buildNumber": "18",
+      "buildNumber": "19",
       "usesAppleSignIn": true,
+      "splash": {
+        "image": "./assets/darin-logo.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#FFFFFF",
+        "dark": {
+          "image": "./assets/darin-logo.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#181513"
+        }
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
@@ -25,17 +35,28 @@
       }
     },
     "android": {
+      "splash": {
+        "image": "./assets/darin-logo.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#FFFFFF",
+        "dark": {
+          "image": "./assets/darin-logo.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#181513"
+        }
+      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/app-icon.png",
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.darin.childcare",
-      "versionCode": 18
+      "versionCode": 19
     },
     "web": {
       "bundler": "metro"
     },
     "plugins": [
+      "expo-system-ui",
       "expo-apple-authentication",
       [
         "expo-image-picker",

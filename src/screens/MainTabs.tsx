@@ -15,6 +15,7 @@ import {
 import { BabyLogIcon, type TabIconKey } from "../components/babylog/BabyLogIcon";
 import { RecordDetailSheet, type RecordSheetPrefill } from "../components/babylog/RecordDetailSheet";
 import { useBabyLog } from "../context/BabyLogContext";
+import { useVoiceRecording } from "../context/VoiceRecordingContext";
 import { isPregnancyLogCategoryId } from "../constants/babyLogCategories";
 import { BabyReportScreen } from "./tabs/BabyReportScreen";
 import { DiaryScreen } from "./tabs/DiaryScreen";
@@ -61,6 +62,7 @@ function openConsult(
 function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarProps & { friendOnly?: boolean }) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
+  const { isRecording } = useVoiceRecording();
   const {
     logs,
     addLog,
@@ -85,12 +87,19 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
   const [editingVoiceId, setEditingVoiceId] = useState<string | null>(null);
   const [voiceEventPatch, setVoiceEventPatch] = useState<VoiceResult | null>(null);
   const voiceActiveProgress = useRef(new Animated.Value(0)).current;
+  const voicePressProgress = useRef(new Animated.Value(0)).current;
+  const voicePulseProgress = useRef(new Animated.Value(0)).current;
   const reduceMotion = useReduceMotion();
 
-  const voiceScale = voiceActiveProgress.interpolate({
+  const voiceActiveScale = voiceActiveProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 1.04],
   });
+  const voicePressScale = voicePressProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0.96],
+  });
+  const voiceScale = Animated.multiply(voiceActiveScale, voicePressScale);
   const voiceGlowOpacity = voiceActiveProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 0.22],
@@ -98,6 +107,14 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
   const voiceIconOpacity = voiceActiveProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [0.92, 1],
+  });
+  const voicePulseOpacity = voicePulseProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.16, 0],
+  });
+  const voicePulseScale = voicePulseProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.16],
   });
 
   useEffect(() => {
@@ -130,6 +147,34 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
     }).start();
   }, [reduceMotion, voiceActiveProgress, voiceOpen]);
 
+  useEffect(() => {
+    voicePulseProgress.stopAnimation();
+    voicePulseProgress.setValue(0);
+    if (!isRecording || reduceMotion) return;
+    const pulse = Animated.loop(
+      Animated.timing(voicePulseProgress, {
+        toValue: 1,
+        duration: 1_400,
+        useNativeDriver: true,
+      }),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [isRecording, reduceMotion, voicePulseProgress]);
+
+  const setVoicePressed = (pressed: boolean) => {
+    voicePressProgress.stopAnimation();
+    if (reduceMotion) {
+      voicePressProgress.setValue(0);
+      return;
+    }
+    Animated.timing(voicePressProgress, {
+      toValue: pressed ? 1 : 0,
+      duration: pressed ? 70 : 140,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const items: Array<
     | { kind: "route"; name: keyof MainTabParamList }
     | { kind: "micAction" }
@@ -156,11 +201,13 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
             return (
               <Pressable
                 key="mic-action"
-                style={styles.tabItem}
+                style={({ pressed }) => [styles.tabItem, pressed && styles.voiceTabItemPressed]}
                 accessibilityRole="button"
                 accessibilityLabel={t("home.a11y.voiceRecord")}
                 accessibilityHint={voiceBlockedReason ?? undefined}
                 accessibilityState={{ disabled: !allowVoice }}
+                onPressIn={() => setVoicePressed(true)}
+                onPressOut={() => setVoicePressed(false)}
                 onPress={() => {
                   if (voiceBlockedReason) {
                     setVoiceNotice(voiceBlockedReason);
@@ -170,6 +217,13 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
                 }}
               >
                 <Animated.View style={[styles.centerBtnAnimated, { transform: [{ scale: voiceScale }] }]}>
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.centerBtnPulse,
+                      { opacity: voicePulseOpacity, transform: [{ scale: voicePulseScale }] },
+                    ]}
+                  />
                   <Animated.View
                     pointerEvents="none"
                     style={[styles.centerBtnGlow, { opacity: voiceGlowOpacity }]}
@@ -210,7 +264,7 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
           return (
             <Pressable
               key={name}
-              style={styles.tabItem}
+              style={({ pressed }) => [styles.tabItem, pressed && styles.tabItemPressed]}
               onPress={() => navigation.navigate(name)}
               accessibilityRole="tab"
               accessibilityLabel={label}
@@ -472,6 +526,8 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   tabItem: { flex: 1, minHeight: TOUCH_MIN, alignItems: "center", justifyContent: "flex-start", gap: 4, paddingHorizontal: 2 },
+  tabItemPressed: { opacity: 0.78, transform: [{ scale: 0.98 }] },
+  voiceTabItemPressed: { opacity: 0.9 },
   centerBtnAnimated: {
     width: 56,
     height: 56,
@@ -488,6 +544,14 @@ const styles = StyleSheet.create({
     shadowRadius: 9,
     shadowOffset: { width: 0, height: 3 },
     elevation: 8,
+  },
+  centerBtnPulse: {
+    position: "absolute",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: colors.brandCoral,
   },
   centerBtnWrap: {
     borderRadius: 28,

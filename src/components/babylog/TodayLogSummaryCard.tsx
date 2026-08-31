@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#F0E9E1",
-    backgroundColor: "#FFFCFA",
+    backgroundColor: colors.card,
   },
   iconWrap: {
     width: 36,

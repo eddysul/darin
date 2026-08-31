@@ -3,6 +3,7 @@ import { DIARY_PAGE_TEMPLATES, type DiaryPageTemplateId } from "../../constants/
 import type { DiarySkyId } from "../../constants/diaryCompose";
 import { useLanguage } from "../../LanguageContext";
 import type { MessageKey } from "../../i18n";
+import { colors } from "../../theme";
 import { DiaryPageTemplate } from "./DiaryPageTemplate";
 
 const TEMPLATE_NAME_KEYS: Record<DiaryPageTemplateId, MessageKey> = {
@@ -35,5 +36,5 @@ const styles = StyleSheet.create({
   row: { gap: 10, paddingRight: 12 },
   item: { width: 120, padding: 7, borderRadius: 14, borderWidth: 1.5, borderColor: "transparent", alignItems: "center", gap: 6 },
   labelRow: { minHeight: 20, justifyContent: "center" },
-  label: { fontSize: 12, fontWeight: "700", color: "#746D65" },
+  label: { fontSize: 12, fontWeight: "700", color: colors.muted },
 });
