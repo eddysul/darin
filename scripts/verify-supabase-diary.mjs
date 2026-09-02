@@ -24,6 +24,7 @@ const [admin, editor, viewer, outsider] = await createQaAccounts([
 ]);
 let babyId = null;
 let storagePath = null;
+let eagerStoragePath = null;
 
 try {
   const { data: baby, error: babyError } = await admin.sb.rpc("create_baby_with_owner", {
@@ -134,6 +135,32 @@ try {
   if (mediaInsertError) throw new Error(`media row create: ${mediaInsertError.message}`);
   pass("local photo upload and diary_media create allowed");
 
+  const eagerMediaId = crypto.randomUUID();
+  const eagerSessionId = crypto.randomUUID();
+  eagerStoragePath = `${babyId}/temp/${eagerSessionId}/${eagerMediaId}.png`;
+  const { error: eagerUploadError } = await admin.sb.storage.from("diary-media").upload(eagerStoragePath, png, {
+    contentType: "image/png",
+    upsert: false,
+  });
+  if (eagerUploadError) throw new Error(`eager photo upload: ${eagerUploadError.message}`);
+  const { error: eagerMediaInsertError } = await admin.sb.from("diary_media").insert({
+    id: eagerMediaId,
+    diary_entry_id: adminEntryId,
+    baby_id: babyId,
+    storage_path: eagerStoragePath,
+    media_type: "image",
+    upload_status: "ready",
+    width: 1,
+    height: 1,
+  });
+  if (eagerMediaInsertError) throw new Error(`eager media row create: ${eagerMediaInsertError.message}`);
+  const { data: eagerSigned, error: eagerSignedError } = await viewer.sb.storage
+    .from("diary-media").createSignedUrl(eagerStoragePath, 180);
+  if (eagerSignedError || !eagerSigned?.signedUrl) {
+    throw new Error(`eager member signed URL: ${eagerSignedError?.message ?? "missing URL"}`);
+  }
+  pass("eager temp diary upload links to diary_media and keeps signed URL RLS");
+
   const { data: signed, error: signedError } = await viewer.sb.storage
     .from("diary-media").createSignedUrl(storagePath, 180);
   if (signedError || !signed?.signedUrl) throw new Error(`member signed URL: ${signedError?.message ?? "missing URL"}`);
@@ -180,6 +207,7 @@ try {
   fail(error instanceof Error ? error.message : String(error));
 } finally {
   if (storagePath) await admin.sb.storage.from("diary-media").remove([storagePath]);
+  if (eagerStoragePath) await admin.sb.storage.from("diary-media").remove([eagerStoragePath]);
   if (babyId) await admin.sb.from("babies").delete().eq("id", babyId);
   await cleanupQaAccounts([admin, editor, viewer, outsider]);
 }

@@ -169,6 +169,29 @@ try {
     return storagePath;
   };
 
+  const attachEagerMedia = async (postId, label) => {
+    const mediaId = crypto.randomUUID();
+    const sessionId = crypto.randomUUID();
+    const storagePath = `${babyId}/temp/${sessionId}/${mediaId}.png`;
+    const { error: uploadError } = await accountA.sb.storage
+      .from("memories")
+      .upload(storagePath, ONE_PIXEL_PNG, { contentType: "image/png", upsert: false });
+    if (uploadError) throw new Error(`${label} eager upload: ${uploadError.message}`);
+    storagePaths.push(storagePath);
+    const { error: mediaError } = await accountA.sb.from("memory_media").insert({
+      id: mediaId,
+      memory_post_id: postId,
+      baby_id: babyId,
+      storage_path: storagePath,
+      media_type: "image",
+      upload_status: "ready",
+      width: 1,
+      height: 1,
+    });
+    if (mediaError) throw new Error(`${label} eager media: ${mediaError.message}`);
+    return storagePath;
+  };
+
   const readById = async (sb, postId) => {
     const { data, error } = await sb.from("memory_posts").select("id,privacy_type,caption").eq("id", postId);
     if (error) throw error;
@@ -184,6 +207,12 @@ try {
   await expectAllowedSignedUrl(accountB.sb, familyPath, "B family signed URL");
   await expectBlockedSignedUrl(accountC.sb, familyPath, "C family signed URL");
   pass("family_circle visibility A/B/E yes, C no");
+
+  const eagerPost = await createPost("family_circle", "eager-temp-path");
+  const eagerPath = await attachEagerMedia(eagerPost.id, "eager-temp-path");
+  await expectAllowedSignedUrl(accountB.sb, eagerPath, "B eager temp signed URL");
+  await expectBlockedSignedUrl(accountC.sb, eagerPath, "C eager temp signed URL");
+  pass("eager temp memory upload links to memory_media and keeps signed URL RLS");
 
   // ---------- Memories V2B: friend_circle ----------
   const friendPost = await createPost("friend_circle", "friend_circle");
