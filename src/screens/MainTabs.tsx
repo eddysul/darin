@@ -34,6 +34,12 @@ import { formatLogMeta } from "../utils/formatLog";
 import { recordCategoryLabel } from "../utils/recordDisplay";
 import { useReduceMotion } from "../hooks/useReduceMotion";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
+import {
+  isVoiceRequestScopeCurrent,
+  resolveVoiceScopeSnapshot,
+  voiceScopeSnapshotKey,
+  type VoiceRequestScope,
+} from "../utils/voiceRequestScope";
 
 const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
   Record: "tabs.record",
@@ -61,7 +67,7 @@ function openConsult(
 
 function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarProps & { friendOnly?: boolean }) {
   const insets = useSafeAreaInsets();
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const { isRecording } = useVoiceRecording();
   const {
     logs,
@@ -74,6 +80,7 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
     myFamilyRole,
     familyMembers,
     careSetup,
+    localDataScope,
   } = useBabyLog();
   const me = familyMembers.find((member) => member.isMe);
   const allowAdd = canAddLog(myFamilyRole);
@@ -86,6 +93,10 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
   const [voicePrefill, setVoicePrefill] = useState<RecordSheetPrefill | null>(null);
   const [editingVoiceId, setEditingVoiceId] = useState<string | null>(null);
   const [voiceEventPatch, setVoiceEventPatch] = useState<VoiceResult | null>(null);
+  const voiceRequestScopeRef = useRef<VoiceRequestScope | null>(null);
+  const currentVoiceScope = resolveVoiceScopeSnapshot(localDataScope, locale);
+  const currentVoiceScopeKey = voiceScopeSnapshotKey(currentVoiceScope);
+  const openedVoiceScopeKeyRef = useRef<string | null>(null);
   const voiceActiveProgress = useRef(new Animated.Value(0)).current;
   const voicePressProgress = useRef(new Animated.Value(0)).current;
   const voicePulseProgress = useRef(new Animated.Value(0)).current;
@@ -131,6 +142,17 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
     setEditingVoiceId(null);
     setVoiceEventPatch(null);
   }, [allowVoice]);
+
+  useEffect(() => {
+    if (!voiceOpen || openedVoiceScopeKeyRef.current === currentVoiceScopeKey) return;
+    setVoiceOpen(false);
+    setVoiceSheetCat(null);
+    setVoicePrefill(null);
+    setEditingVoiceId(null);
+    setVoiceEventPatch(null);
+    voiceRequestScopeRef.current = null;
+    openedVoiceScopeKeyRef.current = null;
+  }, [currentVoiceScopeKey, voiceOpen]);
 
   useEffect(() => {
     voiceActiveProgress.stopAnimation();
@@ -213,6 +235,8 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
                     setVoiceNotice(voiceBlockedReason);
                     return;
                   }
+                  openedVoiceScopeKeyRef.current = currentVoiceScopeKey;
+                  voiceRequestScopeRef.current = null;
                   setVoiceOpen(true);
                 }}
               >
@@ -292,9 +316,12 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
           setVoiceEventPatch(null);
           setVoiceSheetCat(null);
           setVoicePrefill(null);
+          voiceRequestScopeRef.current = null;
+          openedVoiceScopeKeyRef.current = null;
         }}
-        onConfirmAll={({ rawTranscript, events }) => {
+        onConfirmAll={({ rawTranscript, events, requestScope }) => {
           if (!allowVoice) return;
+          if (!isVoiceRequestScopeCurrent(requestScope, currentVoiceScope)) return;
           const stageEvents = pregnancyStage
             ? events.filter((event) => isPregnancyLogCategoryId(event.cat))
             : events;
@@ -302,8 +329,12 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
           addLogs(stageEvents.map((event) => voiceResultToLog(event, rawTranscript, logAuthor)));
           setVoiceOpen(false);
           setEditingVoiceId(null);
+          voiceRequestScopeRef.current = null;
+          openedVoiceScopeKeyRef.current = null;
         }}
-        onEditEvent={(event, rawTranscript) => {
+        onEditEvent={(event, rawTranscript, requestScope) => {
+          if (!isVoiceRequestScopeCurrent(requestScope, currentVoiceScope)) return;
+          voiceRequestScopeRef.current = requestScope;
           const base = voiceResultToLog(event, rawTranscript, logAuthor);
           setEditingVoiceId(event.id);
           setVoicePrefill({
@@ -339,6 +370,8 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
             setEditingVoiceId(null);
           }}
           onSave={(entry, editId) => {
+            if (voiceOpen && voiceRequestScopeRef.current
+              && !isVoiceRequestScopeCurrent(voiceRequestScopeRef.current, currentVoiceScope)) return;
             if (editId) {
               const existing = logs.find((log) => log.id === editId);
               if (!existing || !canEditLog(myFamilyRole, existing.createdBy, me)) return;

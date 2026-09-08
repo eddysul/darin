@@ -16,14 +16,20 @@ import {
 } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { callOpenAI, OpenAIChatError, type OpenAIMessage } from "../../api/openaiChat";
+import { callOpenAI, OpenAIChatError } from "../../api/openaiChat";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { ConsultMemoSheet } from "../../components/babylog/ConsultMemoSheet";
 import { RecordCreatedToast } from "../../components/babylog/RecordCreatedToast";
 import { NavigationHeader } from "../../components/navigation/NavigationHeader";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { useLanguage } from "../../LanguageContext";
-import { buildBabyLogConsultPrompt, buildCareContextPack } from "../../utils/babyLogAIContext";
+import {
+  buildBabyLogConsultPrompt,
+  buildCareContextPack,
+  buildConsultEvidenceText,
+  validateConsultReply,
+} from "../../utils/babyLogAIContext";
+import { AI_PRODUCT_POLICY_VERSION, requestsClinicalJudgment } from "../../utils/aiProductPolicy";
 import { ErrorState, LoadingState } from "../../components/states/FeedbackStates";
 import { colors } from "../../theme";
 import { consumeQaFaultOnce } from "../../utils/qaDebug";
@@ -79,8 +85,6 @@ export function ConsultScreen() {
   const [keyboardInset, setKeyboardInset] = useState(0);
   const scrollRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
-  const historyRef = useRef<OpenAIMessage[]>([]);
-  const historySeeded = useRef(false);
   const requestInFlightRef = useRef(false);
   const consumedInitialRef = useRef<string | null>(null);
   const babyScopeRunRef = useRef(0);
@@ -92,94 +96,79 @@ export function ConsultScreen() {
 
   const sparse = pack.todayLogCount === 0 || pack.weekLogCount < 3;
 
-  // Restore OpenAI turn history after the active baby's chat has hydrated.
+  // A request belongs to one baby + locale display scope. A late result from an
+  // earlier scope is ignored before it can reach chat history.
   useEffect(() => {
     babyScopeRunRef.current += 1;
-    historySeeded.current = false;
-    historyRef.current = [];
     requestInFlightRef.current = false;
     setIsTyping(false);
     setAiError(null);
     setFailedQuestion(null);
-  }, [activeBabyId]);
-
-  useEffect(() => {
-    if (!storageReady || !chatHydrated || historySeeded.current) return;
-    historySeeded.current = true;
-    historyRef.current = chatHistory
-      .filter((m) => m.id !== "greet-1")
-      .map((m) => ({
-        role: m.role === "user" ? ("user" as const) : ("assistant" as const),
-        content: m.text,
-      }));
-  }, [storageReady, chatHydrated, chatHistory, activeBabyId]);
+  }, [activeBabyId, locale]);
 
   const send = async (text: string, retry = false) => {
     const trimmed = text.trim();
     if (!trimmed || requestInFlightRef.current) return;
 
-    requestInFlightRef.current = true;
-    const requestScopeRun = babyScopeRunRef.current;
-    const todayKey = formatDateKey();
-    const recentHistory = await ensureCareLogsForRange(offsetDateKey(todayKey, -6), todayKey);
-    if (requestScopeRun !== babyScopeRunRef.current) return;
-    const promptLogs = recentHistory.complete ? recentHistory.logs : logs;
-    const currentPack = buildCareContextPack({
-      careSetup,
-      logs: promptLogs,
-      diaryEntries,
-      locale,
-      question: trimmed,
-    });
-
-    if (
-      (currentPack.todayLogCount === 0 || currentPack.weekLogCount < 3)
-      && /\uC9C4\uB2E8|\uC57D|\uBCD1\uC6D0|\uAD1C\uCC2E\uC740\uC9C0|\uC2EC\uAC01\uD55C|\uC751\uAE09/.test(trimmed)
-      && currentPack.todayLogCount === 0
-    ) {
-      pushChat("user", trimmed);
-      pushChat(
-        "ai",
-        t("consult.critical.005"),
-      );
-      requestInFlightRef.current = false;
+    if (requestsClinicalJudgment(trimmed)) {
+      if (!retry) pushChat("user", trimmed);
+      pushChat("ai", t("consult.critical.082"));
+      setInput("");
+      setAiError(null);
+      setFailedQuestion(null);
       return;
     }
 
+    requestInFlightRef.current = true;
+    const requestScopeRun = babyScopeRunRef.current;
+    const todayKey = formatDateKey();
     if (!retry) {
       pushChat("user", trimmed);
-      historyRef.current = [...historyRef.current, { role: "user", content: trimmed }];
     }
     setInput("");
     setIsTyping(true);
     scrollRef.current?.scrollToEnd({ animated: !reduceMotion });
 
-    const prompt = buildBabyLogConsultPrompt({
-      careSetup,
-      logs: promptLogs,
-      diaryEntries,
-      locale,
-      question: recentHistory.complete
-        ? trimmed
-        : `${trimmed}\n[Data note: recent care-log history is only partially available. Do not claim that missing events did not occur.]`,
-    });
-
     try {
+      const recentHistory = await ensureCareLogsForRange(offsetDateKey(todayKey, -6), todayKey);
+      if (requestScopeRun !== babyScopeRunRef.current) return;
+      const promptLogs = recentHistory.complete ? recentHistory.logs : logs;
+      const prompt = buildBabyLogConsultPrompt({
+        careSetup,
+        logs: promptLogs,
+        diaryEntries,
+        locale,
+        question: trimmed,
+        historyComplete: recentHistory.complete,
+      });
+      const evidenceText = buildConsultEvidenceText({
+        careSetup,
+        logs: promptLogs,
+        diaryEntries,
+        locale,
+        question: trimmed,
+        historyComplete: recentHistory.complete,
+      });
+
       if (await consumeQaFaultOnce("ai")) {
         throw new OpenAIChatError("QA injected one-shot AI failure", "api_error");
       }
-      const reply = await callOpenAI(historyRef.current, prompt);
+      // Previous AI replies are intentionally not sent back as facts. Each
+      // request is grounded afresh in the current record snapshot.
+      const reply = await callOpenAI([{ role: "user", content: trimmed }], prompt);
       if (requestScopeRun !== babyScopeRunRef.current) return;
-      historyRef.current = [...historyRef.current, { role: "assistant", content: reply }];
-      pushChat("ai", reply);
+      const safeReply = validateConsultReply({
+        reply,
+        locale,
+        evidenceText,
+        historyComplete: recentHistory.complete,
+      }) ? reply : t("consult.critical.083");
+      pushChat("ai", safeReply);
       setAiError(null);
       setFailedQuestion(null);
-    } catch (error) {
-      const message =
-        error instanceof OpenAIChatError && error.code === "missing_api_key"
-          ? t("aiChat.noApiKey")
-          : t("aiChat.error");
-      setAiError(message);
+    } catch {
+      if (requestScopeRun !== babyScopeRunRef.current) return;
+      setAiError(t("consult.critical.021"));
       setFailedQuestion(trimmed);
     } finally {
       if (requestScopeRun === babyScopeRunRef.current) {
@@ -272,6 +261,9 @@ export function ConsultScreen() {
           ? `${formatDateKey(input.remindAt, "midnight")} ${formatHHmm(input.remindAt.getHours(), input.remindAt.getMinutes())}`
           : undefined,
         source: "manual",
+        aiProvenance: memoSeed.trim()
+          ? { operation: "consult", policyVersion: AI_PRODUCT_POLICY_VERSION }
+          : undefined,
       });
       if (!saved) {
         Alert.alert(t("consult.critical.008"), t("consult.critical.009"));

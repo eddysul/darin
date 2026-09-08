@@ -315,12 +315,19 @@ export const DiaryRepository = {
 
   async createWithPhotos(babyId: string, entry: DiaryEntry): Promise<DiaryWriteResult> {
     const created = await this.create(babyId, entry);
+    const existingMedia = await this.listMedia(created.id);
     let photoUploadFailed = 0;
     const attachedIds: string[] = [];
     for (const photoUri of entry.photos) {
       if (isRemotePhoto(photoUri)) continue;
       const job = findJobByLocalUri(photoUri);
       if (job) {
+        const existing = existingMedia.find((media) => media.id === job.id || media.storagePath === job.storagePath);
+        if (existing) {
+          attachedIds.push(job.id);
+          if (job.status === "failed") photoUploadFailed += 1;
+          continue;
+        }
         try {
           await this.addMedia({
             id: job.id,

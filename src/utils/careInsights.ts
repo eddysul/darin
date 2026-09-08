@@ -466,6 +466,26 @@ export const MAX_INSIGHTS = 5;
  */
 export const INSIGHT_WINDOW_DAYS = 28;
 
+function insightSourceDays(
+  logs: BabyLogEntry[],
+  todayKey: string,
+  windowDays: number,
+): DailyFeatures[] {
+  return extractDailyFeatures(logs, todayKey)
+    .filter((day) => day.dateKey !== todayKey)
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+    .slice(-windowDays);
+}
+
+/** Exact dated source window used to derive the insight facts sent to the AI. */
+export function insightSourceDateKeys(
+  logs: BabyLogEntry[],
+  todayKey = formatDateKey(),
+  windowDays = INSIGHT_WINDOW_DAYS,
+): string[] {
+  return insightSourceDays(logs, todayKey, windowDays).map((day) => day.dateKey);
+}
+
 /**
  * 최근 창 안의 후보 쌍을 검정해 통과한 것을 강한 순으로 돌려준다.
  * 통과한 게 없으면 빈 배열 — 없는 패턴을 만들어내지 않기 위해 아예 띄우지 않는다.
@@ -480,10 +500,7 @@ export function findInsights(
   windowDays = INSIGHT_WINDOW_DAYS,
 ): Insight[] {
   // 오늘은 아직 끝나지 않은 날이라 뺀다. 그다음 최근 windowDays 일만 남긴다.
-  const days = extractDailyFeatures(logs, todayKey)
-    .filter((day) => day.dateKey !== todayKey)
-    .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
-    .slice(-windowDays);
+  const days = insightSourceDays(logs, todayKey, windowDays);
 
   const measured = CORRELATION_CANDIDATES.map((candidate) => {
     const pairs = days

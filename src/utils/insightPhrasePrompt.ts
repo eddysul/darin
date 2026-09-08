@@ -12,15 +12,21 @@ import type { Insight } from "./careInsights";
 import { BANNED_PHRASES } from "./weeklyNarrativePrompt";
 import type { Locale } from "../i18n";
 import { aiOutputLanguageInstruction, isAiOutputLocaleSafe } from "./aiLocale";
+import { aiProductPolicyPrompt, isAiProductOutputSafe, preservesFactNumbers } from "./aiProductPolicy";
 
 /** 프롬프트나 출력 형식이 바뀌면 올린다. 캐시가 이 값으로 옛 문장을 걸러낸다. */
-export const INSIGHT_PHRASE_VERSION = 3;
+export const INSIGHT_PHRASE_VERSION = 4;
+/** Bump when describeInsights changes the facts contract sent to the AI. */
+export const INSIGHT_PHRASE_INPUT_SCHEMA_VERSION = 1;
 
 export const INSIGHT_SYSTEM_PROMPT = `You rewrite statistical observations from a childcare log into concise parent-facing sentences.
 
+${aiProductPolicyPrompt("rewrite_insight")}
+
 [Task]
 - Preserve the supplied meaning exactly. The app already found the association; you only improve the wording.
-- Keep every supplied number unchanged and use it no more than once.
+- Keep every number from the Source sentence unchanged and use it exactly once. Sample days may be included once.
+- Do not repeat numbers merely because they also appear in the metadata fields.
 - Describe association only, never causation.
 
 [Safety]
@@ -71,11 +77,6 @@ export function describeInsights(
     .join("\n\n");
 }
 
-/** 문장 속 수를 모은다. */
-function numbersIn(text: string): string[] {
-  return text.match(/\d+(\.\d+)?/g) ?? [];
-}
-
 /**
  * 다듬은 문장이 원래 뜻의 범위 안에 있는지 확인한다.
  * 금지 표현이 있거나, 원래 문장에 없던 수가 등장하면 폐기하고 우리 문장을 쓴다.
@@ -85,14 +86,15 @@ export function validateInsightPhrase(text: string, insight: Insight, locale: Lo
   // 35자 내외를 시켰으니 60자를 넘으면 지시를 벗어난 것이다. 한 줄에 안 들어간다.
   if (!line || line.length > 140) return false;
   if (!isAiOutputLocaleSafe(line, locale)) return false;
+  if (!isAiProductOutputSafe(line)) return false;
   for (const word of BANNED_PHRASES) {
     if (line.includes(word)) return false;
   }
-  const allowed = new Set([
-    ...numbersIn(`${insight.lead}${insight.gapText} ${insight.tail}`),
-    ...numbersIn(String(insight.distribution.totalDays)),
-  ]);
-  return numbersIn(line).every((value) => allowed.has(value));
+  return preservesFactNumbers(
+    line,
+    `${insight.lead}${insight.gapText} ${insight.tail}`,
+    String(insight.distribution.totalDays),
+  );
 }
 
 /** 번호가 붙은 응답을 관계 순서대로 가른다. 줄 수가 모자라면 그만큼만 채워진다. */

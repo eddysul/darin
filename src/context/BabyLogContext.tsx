@@ -38,8 +38,10 @@ import {
 } from "../utils/diaryStore";
 import {
   syncDiaryCreate,
+  syncDiaryCreateWithResult,
   syncDiaryDelete,
   syncDiaryUpdate,
+  syncDiaryUpdateWithResult,
 } from "../utils/diaryServerSync";
 import {
   getChatHistory,
@@ -114,6 +116,7 @@ import {
 } from "../utils/qaDebug";
 import { buildDemoSeed } from "../utils/demoSeed";
 import { DEFAULT_CHAT_GREETING } from "../constants/chatDefaults";
+import { AI_PRODUCT_POLICY_VERSION } from "../utils/aiProductPolicy";
 import { sameLocalDataScope } from "./babyLogContextHelpers";
 import { useBabyLogCachePersistence } from "./useBabyLogCachePersistence";
 import {
@@ -212,7 +215,12 @@ type BabyLogContextValue = {
   deleteLog: (id: string) => void;
   logAuthor: BabyLogActor;
   addDiary: (entry: Omit<DiaryEntry, "id" | "createdAt" | "updatedAt"> & { createdAt?: string; updatedAt?: string }) => void;
+  addDiaryWithPersistence: (
+    entry: Omit<DiaryEntry, "id" | "createdAt" | "updatedAt"> & { createdAt?: string; updatedAt?: string },
+    clientGeneratedId?: string,
+  ) => Promise<DiaryPersistenceOutcome>;
   updateDiary: (id: string, patch: Partial<Omit<DiaryEntry, "id">>) => void;
+  updateDiaryWithPersistence: (id: string, patch: Partial<Omit<DiaryEntry, "id">>) => Promise<DiaryPersistenceOutcome>;
   deleteDiary: (id: string) => void;
   toggleDiaryInGrowthBook: (id: string) => void;
   pushChat: (role: "user" | "ai", text: string, stickerId?: string) => void;
@@ -235,6 +243,11 @@ type BabyLogContextValue = {
     restoreBackupData: () => Promise<void>;
     removeQaChatTurns: () => Promise<void>;
   } | null;
+};
+
+export type DiaryPersistenceOutcome = {
+  entry: DiaryEntry | null;
+  fullyPersisted: boolean;
 };
 
 const BabyLogContext = createContext<BabyLogContextValue | null>(null);
@@ -996,6 +1009,62 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     [localDataScope, careSetup.child],
   );
 
+  const addDiaryWithPersistence = useCallback(
+    async (
+      entry: Omit<DiaryEntry, "id" | "createdAt" | "updatedAt"> & { createdAt?: string; updatedAt?: string },
+      clientGeneratedId?: string,
+    ): Promise<DiaryPersistenceOutcome> => {
+      const now = new Date().toISOString();
+      const scope = localDataScopeRef.current;
+      const optimistic: DiaryEntry = {
+        ...entry,
+        id: clientGeneratedId ?? createId(),
+        babyId: scope?.babyId ?? entry.babyId,
+        dateKey: entry.dateKey || formatDateKey(),
+        photos: entry.photos ?? [],
+        includedInGrowthBook: entry.includedInGrowthBook ?? false,
+        stickerIds: entry.stickerIds ?? [],
+        momentSuggestionsUsed: entry.momentSuggestionsUsed ?? [],
+        weatherStamp: entry.weatherStamp ?? null,
+        moodStamp: entry.moodStamp ?? null,
+        milestoneTag: entry.milestoneTag ?? null,
+        customMilestoneTag: entry.customMilestoneTag ?? null,
+        careLogSummarySnapshot: entry.careLogSummarySnapshot ?? "",
+        stageLabelSnapshot: entry.stageLabelSnapshot
+          ?? formatDiaryStageLabel(careSetup.child, entry.dateKey || formatDateKey()),
+        source: entry.source ?? "manual",
+        draftStatus: "saved",
+        createdAt: entry.createdAt ?? now,
+        updatedAt: entry.updatedAt ?? now,
+      };
+      const previous = diaryEntries.find((item) => item.id === optimistic.id);
+      setDiaryEntries((current) => current.some((item) => item.id === optimistic.id)
+        ? current.map((item) => item.id === optimistic.id ? optimistic : item)
+        : [optimistic, ...current]);
+
+      const result = await syncDiaryCreateWithResult(scope, optimistic);
+      if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) {
+        return { entry: result?.entry ?? null, fullyPersisted: false };
+      }
+      if (result) {
+        setDiaryEntries((current) => current.map((item) => (
+          item.id === optimistic.id
+            ? { ...result.entry, photos: result.entry.photos.length ? result.entry.photos : item.photos }
+            : item
+        )));
+        return { entry: result.entry, fullyPersisted: result.photoUploadFailed === 0 };
+      }
+      if (isSupabaseConfigured()) {
+        setDiaryEntries((current) => previous
+          ? current.map((item) => item.id === optimistic.id ? previous : item)
+          : current.filter((item) => item.id !== optimistic.id));
+        return { entry: null, fullyPersisted: false };
+      }
+      return { entry: optimistic, fullyPersisted: true };
+    },
+    [careSetup.child, diaryEntries],
+  );
+
   const updateDiary = useCallback((id: string, patch: Partial<Omit<DiaryEntry, "id">>) => {
     const now = new Date().toISOString();
     const scope = localDataScope;
@@ -1023,6 +1092,42 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       }
     });
   }, [diaryEntries, localDataScope, careSetup.child]);
+
+  const updateDiaryWithPersistence = useCallback(async (
+    id: string,
+    patch: Partial<Omit<DiaryEntry, "id">>,
+  ): Promise<DiaryPersistenceOutcome> => {
+    const now = new Date().toISOString();
+    const scope = localDataScopeRef.current;
+    const previous = diaryEntries.find((entry) => entry.id === id);
+    if (!previous) return { entry: null, fullyPersisted: false };
+    const optimistic: DiaryEntry = {
+      ...previous,
+      ...patch,
+      stageLabelSnapshot: patch.stageLabelSnapshot
+        ?? previous.stageLabelSnapshot
+        ?? formatDiaryStageLabel(careSetup.child, patch.dateKey ?? previous.dateKey),
+      updatedAt: patch.updatedAt ?? now,
+    };
+    setDiaryEntries((current) => current.map((entry) => entry.id === id ? optimistic : entry));
+    const result = await syncDiaryUpdateWithResult(scope, optimistic);
+    if (scope && !sameLocalDataScope(localDataScopeRef.current, scope)) {
+      return { entry: result?.entry ?? null, fullyPersisted: false };
+    }
+    if (result) {
+      setDiaryEntries((current) => current.map((entry) => (
+        entry.id === id
+          ? { ...result.entry, photos: result.entry.photos.length ? result.entry.photos : entry.photos }
+          : entry
+      )));
+      return { entry: result.entry, fullyPersisted: result.photoUploadFailed === 0 };
+    }
+    if (isSupabaseConfigured()) {
+      setDiaryEntries((current) => current.map((entry) => entry.id === id ? previous : entry));
+      return { entry: null, fullyPersisted: false };
+    }
+    return { entry: optimistic, fullyPersisted: true };
+  }, [careSetup.child, diaryEntries]);
 
   const deleteDiary = useCallback((id: string) => {
     const scope = localDataScope;
@@ -1064,7 +1169,13 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   }, [diaryEntries, localDataScope]);
 
   const pushChat = useCallback((role: "user" | "ai", text: string, stickerId?: string) => {
-    setChatHistory((prev) => [...prev, { id: createId(), role, text, stickerId }]);
+    setChatHistory((prev) => [...prev, {
+      id: createId(),
+      role,
+      text,
+      stickerId,
+      aiPolicyVersion: role === "ai" ? AI_PRODUCT_POLICY_VERSION : undefined,
+    }]);
   }, []);
 
   const clearAllUserData = useCallback(async () => {
@@ -1505,7 +1616,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       deleteLog,
       logAuthor,
       addDiary,
+      addDiaryWithPersistence,
       updateDiary,
+      updateDiaryWithPersistence,
       deleteDiary,
       toggleDiaryInGrowthBook,
       pushChat,
@@ -1569,7 +1682,9 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       deleteLog,
       logAuthor,
       addDiary,
+      addDiaryWithPersistence,
       updateDiary,
+      updateDiaryWithPersistence,
       deleteDiary,
       toggleDiaryInGrowthBook,
       pushChat,

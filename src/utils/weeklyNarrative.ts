@@ -6,12 +6,17 @@
  *  - 출력은 반드시 검증을 통과해야 화면에 나간다. 실패하면 규칙 문장으로 대체한다.
  *  - 인과·권유·예측을 쓰지 않는다. 영유아 건강 근처라 앱이 판단하면 안 된다.
  *
- * 서버 경로는 AI 상담과 같은 /chat 을 쓴다. OpenAI 키는 클라이언트에 두지 않는다.
+ * 서버 경로는 AI 기록 도우미와 같은 /chat 을 쓴다. OpenAI 키는 클라이언트에 두지 않는다.
  */
 import { callOpenAI } from "../api/openaiChat";
 import type { Locale } from "../i18n";
 import type { WeeklyFeatureTable } from "./weeklyFeatureTable";
-import { narrativeSystemPrompt, describeTable, validateNarrative } from "./weeklyNarrativePrompt";
+import {
+  narrativeSystemPrompt,
+  describeTable,
+  parseWeeklyNarrative,
+  validateNarrative,
+} from "./weeklyNarrativePrompt";
 
 export type WeeklyNarrative = {
   headline: string;
@@ -38,10 +43,9 @@ export async function buildWeeklyNarrative(
     );
     if (!validateNarrative(reply, table, locale)) return fallback;
 
-    const [headline, ...rest] = reply.split("\n").map((line) => line.trim()).filter(Boolean);
-    const body = rest.join(" ").trim();
-    if (!headline || !body) return fallback;
-    return { headline, body, fromAI: true };
+    const parsed = parseWeeklyNarrative(reply);
+    if (!parsed) return fallback;
+    return { headline: parsed.headline, body: parsed.body, fromAI: true };
   } catch {
     return fallback;
   }

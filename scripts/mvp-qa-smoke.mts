@@ -960,7 +960,7 @@ function log(
   );
 }
 
-// --- AI consult prompt: safety + diary snapshot + chronological relevant logs ---
+// --- AI record helper prompt: product boundary + diary snapshot + chronological relevant logs ---
 {
   const logs: BabyLogEntry[] = [
     log({ id: "old", cat: "formula", time: "20:00", dateKey: shiftDateKey(1) }),
@@ -994,7 +994,8 @@ function log(
     locale: "ko",
     question: "오늘 수유 괜찮아요?",
   });
-  assert.match(prompt, /의료 안전|소아과/);
+  assert.match(prompt, /Darin AI product policy|cannot provide that judgment/);
+  assert.doesNotMatch(prompt, /childcare advisor|advise pediatric|소아과나 응급 진료를 권하세요/);
   assert.match(prompt, /수유 3회 요약/);
   assert.match(prompt, /최근 기록 기준|ONLY the context pack/i);
   // older date then today in relevant lines order

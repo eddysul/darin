@@ -27,6 +27,7 @@ import {
   hydrateDiaryDraft,
   saveDiaryDraft,
 } from "../../utils/diaryDraftStore";
+import { createDiarySaveCoordinator } from "../../utils/diarySaveTransaction";
 import {
   formatReminderTime,
   getDiaryReminder,
@@ -64,6 +65,8 @@ import type { MainTabParamList } from "../../navigation/types";
 import { diaryStageLabel } from "../../utils/childDisplay";
 import { useLanguage } from "../../LanguageContext";
 import { formatLocalizedDate } from "../../utils/localeFormat";
+import { createId } from "../../utils/id";
+import { waitForEagerPhotosToSettle } from "../../utils/eagerMediaUpload";
 
 type Props = {
   onOpenProfile: () => void;
@@ -82,8 +85,9 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   const {
     diaryEntries,
     localDataScope,
-    addDiary,
+    addDiaryWithPersistence,
     updateDiary,
+    updateDiaryWithPersistence,
     deleteDiary,
     toggleDiaryInGrowthBook,
     babyName,
@@ -125,13 +129,23 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     pushVisible || sheetOpen || chipPressing,
   );
   const diaryEntriesRef = useRef(diaryEntries);
-  const persistLockRef = useRef(false);
+  const saveCoordinatorRef = useRef(createDiarySaveCoordinator());
+  const screenMountedRef = useRef(true);
+  const pendingCreateRef = useRef<{ scopeKey: string; dateKey: string; id: string } | null>(null);
   diaryEntriesRef.current = diaryEntries;
   const localDataScopeKey = localDataScope ? `${localDataScope.userId}:${localDataScope.babyId}` : "local";
+  const composeScopeKeyRef = useRef(localDataScopeKey);
   const localDataScopeKeyRef = useRef(localDataScopeKey);
   localDataScopeKeyRef.current = localDataScopeKey;
   const draftRef = useRef(draftMemory);
   draftRef.current = draftMemory;
+
+  useEffect(() => {
+    screenMountedRef.current = true;
+    return () => {
+      screenMountedRef.current = false;
+    };
+  }, []);
 
   const todayKey = formatDateKey();
 
@@ -154,6 +168,18 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     })();
   }, [localDataScope]);
 
+  useEffect(() => {
+    pendingCreateRef.current = null;
+    if (composeScopeKeyRef.current !== localDataScopeKey) {
+      setComposeOpen(false);
+      setEditingEntry(null);
+      setInitialDraft(null);
+      setComposeFromPush(false);
+      setComposeReadOnly(false);
+    }
+    composeScopeKeyRef.current = localDataScopeKey;
+  }, [localDataScopeKey]);
+
   const openComposeFresh = useCallback(() => {
     void (async () => {
       const requestScopeKey = localDataScopeKeyRef.current;
@@ -167,7 +193,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
       });
       if (target.kind === "edit") {
         setEditingEntry(target.entry);
-        setInitialDraft(null);
+        setInitialDraft(target.draft ? draftToComposePrefill(target.draft) : null);
         setComposeReadOnly(!canEditLog(myFamilyRole, target.entry.createdBy, me));
         setComposeFromPush(false);
         setComposeOpen(true);
@@ -219,7 +245,12 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   }, []);
 
   const openEdit = useCallback((entry: DiaryEntry, fromPush = false) => {
-    setInitialDraft(null);
+    const draft = getDiaryDraft() ?? draftRef.current;
+    setInitialDraft(
+      draft?.dateKey === entry.dateKey && draft.targetDiaryId === entry.id
+        ? draftToComposePrefill(draft)
+        : null,
+    );
     setEditingEntry(entry);
     setComposeReadOnly(!canEditLog(myFamilyRole, entry.createdBy, me));
     setComposeFromPush(fromPush);
@@ -241,7 +272,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
       if (target.kind !== "edit" && !allowAdd) return;
       setComposeFromPush(true);
       if (target.kind === "edit") {
-        setInitialDraft(null);
+        setInitialDraft(target.draft ? draftToComposePrefill(target.draft) : null);
         setEditingEntry(target.entry);
         setComposeReadOnly(!canEditLog(myFamilyRole, target.entry.createdBy, me));
       } else if (target.kind === "draft") {
@@ -355,94 +386,142 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     : t("diary.screen.newEntry");
   const writeDisabled = !todayDiary && !allowAdd;
 
-  const persistFromDraft = (draft: DiaryComposeDraft, source: "manual" | "notification") => {
-    if (persistLockRef.current) return;
-    persistLockRef.current = true;
-    try {
-      const existingToday = diaryEntries.find((d) => d.dateKey === todayKey);
-      const target = editingEntry ?? existingToday;
-      if (target) {
-        if (!canEditLog(myFamilyRole, target.createdBy, me)) return;
-      } else if (!allowAdd) {
-        return;
+  const persistFromDraft = async (
+    draft: DiaryComposeDraft,
+    source: "manual" | "notification",
+  ): Promise<boolean> => {
+    const requestScope = localDataScope;
+    const requestScopeKey = localDataScopeKey;
+    const requestDateKey = editingEntry?.dateKey || todayKey;
+    const existingAtRequest = editingEntry
+      ?? diaryEntriesRef.current.find((entry) => entry.dateKey === todayKey);
+    let targetDiaryId = existingAtRequest?.id;
+    if (!targetDiaryId) {
+      let pending = pendingCreateRef.current;
+      if (!pending || pending.scopeKey !== requestScopeKey || pending.dateKey !== todayKey) {
+        const recoverableDraft = getDiaryDraft() ?? draftRef.current;
+        pending = {
+          scopeKey: requestScopeKey,
+          dateKey: todayKey,
+          id: recoverableDraft?.dateKey === todayKey && recoverableDraft.targetDiaryId
+            ? recoverableDraft.targetDiaryId
+            : createId(),
+        };
+        pendingCreateRef.current = pending;
       }
-      void clearDiaryDraft(localDataScope, todayKey);
-      setDraftMemory(null);
-      const now = new Date();
-      const dateLabel = formatLocalizedDate(now, locale, { month: "long", day: "numeric", weekday: "short" });
-
-      if (editingEntry) {
-        updateDiary(editingEntry.id, {
-          photos: draft.photos,
-          coverStyleId: draft.coverStyleId,
-          pageStyleId: draft.pageStyleId,
-          coverPhotoUri: draft.coverPhotoUri,
-          coverPhotoTransform: draft.coverPhotoTransform,
-          coverTitle: draft.coverTitle,
-          stickerIds: draft.stickerIds ?? [],
-          comment: draft.comment,
-          weatherStamp: draft.weatherStamp,
-          moodStamp: draft.moodStamp,
-          milestoneTag: draft.milestoneTag,
-          customMilestoneTag: draft.customMilestoneTag,
-          includedInGrowthBook: draft.includedInGrowthBook,
-          // Keep frozen snapshot on edit — do not overwrite with live summary
-          careLogSummarySnapshot: editingEntry.careLogSummarySnapshot,
-          momentSuggestionsUsed: draft.momentSuggestionsUsed,
-          dateKey: editingEntry.dateKey || todayKey,
-          draftStatus: "saved",
-        });
-        return;
-      }
-
-      if (existingToday) {
-        updateDiary(existingToday.id, {
-          photos: draft.photos,
-          coverStyleId: draft.coverStyleId,
-          pageStyleId: draft.pageStyleId,
-          coverPhotoUri: draft.coverPhotoUri,
-          coverPhotoTransform: draft.coverPhotoTransform,
-          coverTitle: draft.coverTitle,
-          stickerIds: draft.stickerIds ?? [],
-          comment: draft.comment,
-          weatherStamp: draft.weatherStamp,
-          moodStamp: draft.moodStamp,
-          milestoneTag: draft.milestoneTag,
-          customMilestoneTag: draft.customMilestoneTag,
-          includedInGrowthBook: draft.includedInGrowthBook,
-          careLogSummarySnapshot: existingToday.careLogSummarySnapshot,
-          momentSuggestionsUsed: draft.momentSuggestionsUsed,
-          draftStatus: "saved",
-        });
-        return;
-      }
-
-      addDiary({
-        babyId: localDataScope?.babyId ?? "",
-        date: dateLabel,
-        dateKey: todayKey,
-        photos: draft.photos,
-        coverStyleId: draft.coverStyleId,
-        pageStyleId: draft.pageStyleId,
-        coverPhotoUri: draft.coverPhotoUri,
-        coverPhotoTransform: draft.coverPhotoTransform,
-        coverTitle: draft.coverTitle,
-        stickerIds: draft.stickerIds ?? [],
-        comment: draft.comment,
-        weatherStamp: draft.weatherStamp,
-        moodStamp: draft.moodStamp,
-        careLogSummarySnapshot: draft.careLogSummarySnapshot,
-        momentSuggestionsUsed: draft.momentSuggestionsUsed,
-        milestoneTag: draft.milestoneTag,
-        customMilestoneTag: draft.customMilestoneTag,
-        includedInGrowthBook: draft.includedInGrowthBook,
-        createdBy: logAuthor,
-        source,
-        draftStatus: "saved",
-      });
-    } finally {
-      persistLockRef.current = false;
+      targetDiaryId = pending.id;
     }
+    const persistedDraft: DiaryDraft = {
+      ...draft,
+      dateKey: requestDateKey,
+      updatedAt: new Date().toISOString(),
+      targetDiaryId,
+    };
+    setDraftMemory(persistedDraft);
+
+    const result = await saveCoordinatorRef.current.run({
+      preserveDraft: () => saveDiaryDraft(persistedDraft, requestScope),
+      isCurrent: () => screenMountedRef.current && requestScopeKey === localDataScopeKeyRef.current,
+      clearPersistedDraft: () => clearDiaryDraft(requestScope, {
+        dateKey: persistedDraft.dateKey,
+        updatedAt: persistedDraft.updatedAt,
+      }),
+      persist: async () => {
+        if (!(await waitForEagerPhotosToSettle(draft.photos))) return false;
+        const existingToday = diaryEntriesRef.current.find((d) => d.dateKey === todayKey);
+        const target = editingEntry ?? existingToday;
+        if (target) {
+          if (!canEditLog(myFamilyRole, target.createdBy, me)) return false;
+        } else if (!allowAdd) {
+          return false;
+        }
+        const now = new Date();
+        const dateLabel = formatLocalizedDate(now, locale, { month: "long", day: "numeric", weekday: "short" });
+
+        if (editingEntry) {
+          const outcome = await updateDiaryWithPersistence(editingEntry.id, {
+            photos: draft.photos,
+            coverStyleId: draft.coverStyleId,
+            pageStyleId: draft.pageStyleId,
+            coverPhotoUri: draft.coverPhotoUri,
+            coverPhotoTransform: draft.coverPhotoTransform,
+            coverTitle: draft.coverTitle,
+            stickerIds: draft.stickerIds ?? [],
+            comment: draft.comment,
+            weatherStamp: draft.weatherStamp,
+            moodStamp: draft.moodStamp,
+            milestoneTag: draft.milestoneTag,
+            customMilestoneTag: draft.customMilestoneTag,
+            includedInGrowthBook: draft.includedInGrowthBook,
+            // Keep frozen snapshot on edit — do not overwrite with live summary
+            careLogSummarySnapshot: editingEntry.careLogSummarySnapshot,
+            momentSuggestionsUsed: draft.momentSuggestionsUsed,
+            dateKey: editingEntry.dateKey || todayKey,
+            draftStatus: "saved",
+          });
+          return outcome.fullyPersisted;
+        }
+
+        if (existingToday) {
+          const outcome = await updateDiaryWithPersistence(existingToday.id, {
+            photos: draft.photos,
+            coverStyleId: draft.coverStyleId,
+            pageStyleId: draft.pageStyleId,
+            coverPhotoUri: draft.coverPhotoUri,
+            coverPhotoTransform: draft.coverPhotoTransform,
+            coverTitle: draft.coverTitle,
+            stickerIds: draft.stickerIds ?? [],
+            comment: draft.comment,
+            weatherStamp: draft.weatherStamp,
+            moodStamp: draft.moodStamp,
+            milestoneTag: draft.milestoneTag,
+            customMilestoneTag: draft.customMilestoneTag,
+            includedInGrowthBook: draft.includedInGrowthBook,
+            careLogSummarySnapshot: existingToday.careLogSummarySnapshot,
+            momentSuggestionsUsed: draft.momentSuggestionsUsed,
+            draftStatus: "saved",
+          });
+          return outcome.fullyPersisted;
+        }
+
+        const pending = pendingCreateRef.current;
+        if (!pending) return false;
+        const outcome = await addDiaryWithPersistence({
+          babyId: requestScope?.babyId ?? "",
+          date: dateLabel,
+          dateKey: todayKey,
+          photos: draft.photos,
+          coverStyleId: draft.coverStyleId,
+          pageStyleId: draft.pageStyleId,
+          coverPhotoUri: draft.coverPhotoUri,
+          coverPhotoTransform: draft.coverPhotoTransform,
+          coverTitle: draft.coverTitle,
+          stickerIds: draft.stickerIds ?? [],
+          comment: draft.comment,
+          weatherStamp: draft.weatherStamp,
+          moodStamp: draft.moodStamp,
+          careLogSummarySnapshot: draft.careLogSummarySnapshot,
+          momentSuggestionsUsed: draft.momentSuggestionsUsed,
+          milestoneTag: draft.milestoneTag,
+          customMilestoneTag: draft.customMilestoneTag,
+          includedInGrowthBook: draft.includedInGrowthBook,
+          createdBy: logAuthor,
+          source,
+          draftStatus: "saved",
+        }, pending.id);
+        return outcome.fullyPersisted;
+      },
+    });
+
+    if (result === "saved") {
+      pendingCreateRef.current = null;
+      if (requestScopeKey === localDataScopeKeyRef.current) setDraftMemory(null);
+      return true;
+    }
+    if (requestScopeKey === localDataScopeKeyRef.current) {
+      setDraftMemory(getDiaryDraft() ?? persistedDraft);
+    }
+    return false;
   };
 
   return (
@@ -682,10 +761,14 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
         }}
         onDraftChange={(draft) => {
           if (!isMeaningfulDiaryDraft(draft)) return;
+          const previousDraft = getDiaryDraft() ?? draftRef.current;
+          const draftDateKey = editingEntry?.dateKey ?? todayKey;
           const payload: DiaryDraft = {
             ...draft,
-            dateKey: todayKey,
+            dateKey: draftDateKey,
             updatedAt: new Date().toISOString(),
+            targetDiaryId: editingEntry?.id
+              ?? (previousDraft?.dateKey === draftDateKey ? previousDraft.targetDiaryId : undefined),
           };
           setDraftMemory(payload);
           void saveDiaryDraft(payload, localDataScope);

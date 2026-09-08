@@ -66,7 +66,7 @@ type Props = {
   editingEntry?: DiaryEntry | null;
   initialDraft?: DiaryComposeDraft | null;
   onClose: () => void;
-  onSave: (draft: DiaryComposeDraft) => void;
+  onSave: (draft: DiaryComposeDraft) => Promise<boolean>;
   onDraftChange?: (draft: DiaryComposeDraft) => void;
   onDelete?: (id: string) => void;
 };
@@ -112,7 +112,12 @@ export function DiaryComposeModal({
   const sessionIdRef = useRef(createUploadSessionId());
   const handedOffRef = useRef(false);
   const savingRef = useRef(false);
+  const savingDraftSignatureRef = useRef<string | null>(null);
   const baselineRef = useRef<string | null>(null);
+  const initializedComposeRef = useRef<string | null>(null);
+  const onDraftChangeRef = useRef(onDraftChange);
+  const mountedRef = useRef(true);
+  const visibleRef = useRef(visible);
   const [touchNonce, setTouchNonce] = useState(0);
   const [stickerIds, setStickerIds] = useState<string[]>([]);
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
@@ -126,6 +131,16 @@ export function DiaryComposeModal({
   const [dateLabel, setDateLabel] = useState(() => formatTodayLabel(locale));
   const [frozenSnapshot, setFrozenSnapshot] = useState<string | undefined>();
   const [ready, setReady] = useState(false);
+
+  visibleRef.current = visible;
+  onDraftChangeRef.current = onDraftChange;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const todayKey = formatDateKey();
   const todayLogs = useMemo(() => getLogsForDay(logs, todayKey, todayKey), [logs, todayKey]);
@@ -192,10 +207,18 @@ export function DiaryComposeModal({
   useEffect(() => {
     if (!visible) {
       setReady(false);
+      initializedComposeRef.current = null;
       return;
     }
+    const composeKey = editingEntry
+      ? `edit:${editingEntry.id}`
+      : initialDraft
+        ? "new:draft"
+        : "new:blank";
+    if (initializedComposeRef.current === composeKey) return;
+    initializedComposeRef.current = composeKey;
     if (editingEntry) {
-      const d = entryToComposeDraft(editingEntry);
+      const d = initialDraft ?? entryToComposeDraft(editingEntry);
       setNotes(d.comment);
       setPhotos(d.photos);
       setCoverStyleId(d.coverStyleId);
@@ -299,14 +322,19 @@ export function DiaryComposeModal({
       const handedOff = handedOffRef.current;
       sessionIdRef.current = createUploadSessionId();
       setEagerPhotos([]);
-      if (handedOff) return;
+      if (handedOff || savingRef.current) return;
       void discardSession(sessionId).catch(() => undefined);
     };
   }, [visible]);
 
   useEffect(() => {
-    if (!visible || !ready || isEdit || readOnly || !onDraftChange) return;
-    const t = setTimeout(() => onDraftChange(buildDraft()), 400);
+    if (!visible || !ready || readOnly || !onDraftChangeRef.current) return;
+    if (isEdit && !savingRef.current) return;
+    const t = setTimeout(() => {
+      const isUnchangedSaveSnapshot = savingRef.current
+        && dirtySignature() === savingDraftSignatureRef.current;
+      if (!isUnchangedSaveSnapshot) onDraftChangeRef.current?.(buildDraft());
+    }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- buildDraft reads latest state
   }, [
@@ -314,7 +342,6 @@ export function DiaryComposeModal({
     ready,
     isEdit,
     readOnly,
-    onDraftChange,
     notes,
     photos,
     coverStyleId,
@@ -390,18 +417,32 @@ export function DiaryComposeModal({
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (readOnly || !canSubmit || savingRef.current) return;
     savingRef.current = true;
+    savingDraftSignatureRef.current = dirtySignature();
     const draft = buildDraft();
     draft.comment = notes.trim() || DIARY_PHOTO_ONLY_COMMENT;
-    handedOffRef.current = true;
-    onSave(draft);
-    onClose();
+    try {
+      const saved = await onSave(draft);
+      if (!mountedRef.current || !visibleRef.current) return;
+      if (!saved) {
+        Alert.alert(t("record.screen.saveFailed"));
+        return;
+      }
+      handedOffRef.current = true;
+      onClose();
+    } catch {
+      if (mountedRef.current && visibleRef.current) Alert.alert(t("record.screen.saveFailed"));
+    } finally {
+      savingDraftSignatureRef.current = null;
+      if (mountedRef.current) savingRef.current = false;
+    }
   };
 
   const handleClose = () => {
-    if (!readOnly && !isEdit && onDraftChange) onDraftChange(buildDraft());
+    if (savingRef.current) return;
+    if (!readOnly && !isEdit && onDraftChangeRef.current) onDraftChangeRef.current(buildDraft());
     // New entries are kept as a draft, so only edits can actually lose work.
     if (!readOnly && isEdit && baselineRef.current !== null && dirtySignature() !== baselineRef.current) {
       Alert.alert(t("diary.compose.discardTitle"), t("diary.compose.discardBody"), [
@@ -414,7 +455,7 @@ export function DiaryComposeModal({
   };
 
   const handleDelete = () => {
-    if (readOnly || !editingEntry || !onDelete) return;
+    if (readOnly || savingRef.current || !editingEntry || !onDelete) return;
     Alert.alert(t("diary.compose.deleteTitle"), t("diary.compose.deleteBody"), [
       { text: t("common.cancel"), style: "cancel" },
       {

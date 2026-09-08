@@ -1,0 +1,2356 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Darin · 한눈에 HTML Demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --background: #fef7f2;
+      --surface: #ffffff;
+      --surface-hi: #faf4ee;
+      --text: #2e2a26;
+      --muted: #6b655e;
+      --faint: #736d65;
+      --border: #ede5dc;
+      --brand-coral: #e8918a;
+      --coral-soft: rgba(232, 145, 138, .16);
+      --primary-coral: #b65b55;
+      --amber-text: #b03a34;
+      --sleep: #7c83fd;
+      --feed: #e8918a;
+      --diaper: #c98a54;
+      --activity: #4ec9b0;
+      --sage: #4ec9b0;
+      --purple: #7c83fd;
+      --blue: #7c83fd;
+      --shadow: 0 8px 24px rgba(93, 67, 49, .07);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(232,145,138,.16), transparent 26rem),
+        radial-gradient(circle at 88% 100%, rgba(124,131,253,.08), transparent 22rem),
+        #f3ece6;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+    }
+
+    .demo-stage {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(220px, 280px) minmax(0, auto);
+      justify-content: center;
+      align-items: center;
+      gap: 36px;
+      padding: 28px 28px;
+    }
+    .demo-rail { max-width: 300px; }
+    .demo-brand {
+      margin: 0 0 10px;
+      color: var(--amber-text);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .demo-rail h1 {
+      margin: 0 0 10px;
+      font-size: 36px;
+      line-height: 1.15;
+      letter-spacing: -.03em;
+    }
+    .demo-rail > p {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 14.5px;
+      line-height: 1.65;
+    }
+    .demo-hints {
+      margin: 0 0 22px;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+    .demo-hints li {
+      padding-left: 14px;
+      border-left: 2px solid var(--brand-coral);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .demo-device {
+      position: relative;
+      padding: 11px;
+      border-radius: 46px;
+      background: #2a2420;
+      box-shadow: 0 28px 80px rgba(60, 43, 34, .22), inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+    .demo-device::before {
+      content: "";
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      z-index: 6;
+      width: 92px;
+      height: 18px;
+      border-radius: 0 0 12px 12px;
+      background: #2a2420;
+      transform: translateX(-50%);
+    }
+
+    button { font: inherit; }
+    button:focus-visible { outline: 2px solid var(--primary-coral); outline-offset: 2px; }
+
+    .demo-shell {
+      width: min(100vw - 24px, 390px);
+      height: min(844px, calc(100vh - 72px));
+      min-height: 640px;
+      background: var(--background);
+      border: 0;
+      border-radius: 36px;
+      box-shadow: none;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .status-bar {
+      height: 38px;
+      padding: 16px 22px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 750;
+      flex: 0 0 auto;
+    }
+
+    .system-icons { display: flex; align-items: center; gap: 6px; color: var(--text); }
+    .signal { letter-spacing: -2px; font-size: 10px; }
+    .battery { width: 20px; height: 9px; border: 1.4px solid currentColor; border-radius: 3px; padding: 1px; position: relative; }
+    .battery::after { content: ""; position: absolute; right: -3px; top: 2px; width: 2px; height: 4px; border-radius: 0 1px 1px 0; background: currentColor; }
+    .battery > i { display: block; width: 78%; height: 100%; background: currentColor; border-radius: 1px; }
+
+    .app-header {
+      margin: 0 -18px;
+      padding: 12px 20px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .identity { min-width: 0; }
+    .baby-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .baby-button {
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 0;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 18px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+    .baby-button svg { color: var(--muted); }
+    .age-badge {
+      background: var(--coral-soft);
+      color: var(--amber-text);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .caregivers { margin-top: 8px; display: flex; align-items: center; min-height: 28px; }
+    .avatar {
+      width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--background);
+      display: grid; place-items: center; color: #fff; font-size: 10px; font-weight: 850;
+      margin-left: -6px;
+    }
+    .avatar:first-child { margin-left: 0; }
+    .avatar.mom { background: #d97770; }
+    .avatar.dad { background: #748db3; }
+    .caregiver-label { margin-left: 7px; color: var(--faint); font-size: 11px; font-weight: 650; }
+
+    .header-actions { display: flex; gap: 8px; }
+    .icon-button {
+      width: 48px; height: 48px; border-radius: 24px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--muted); display: grid; place-items: center;
+      box-shadow: 0 2px 8px rgba(87, 66, 51, .03); cursor: pointer;
+      transition: transform .14s ease, background .14s ease;
+    }
+    .icon-button:active { transform: scale(.96); background: var(--surface-hi); }
+
+    .scroll-area {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 0 18px 136px;
+      scrollbar-width: none;
+    }
+    .scroll-area::-webkit-scrollbar { display: none; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 15px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 13px; }
+    .card-title { margin: 0; font-size: 15.5px; line-height: 1.25; font-weight: 850; }
+    .caption { color: var(--faint); font-size: 10.5px; font-weight: 650; text-align: right; }
+
+    .today-summary {
+      display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: center;
+      min-height: 112px; padding: 7px 4px 16px; margin-bottom: 8px;
+    }
+    .duck-mascot {
+      width: 58px; height: 82px; align-self: start;
+      background-image: url("./assets/today-summary-duck-frames.png?t=2");
+      background-repeat: no-repeat; background-size: 232px 164px; background-position: 0 0;
+      cursor: pointer;
+    }
+    .duck-mascot.is-playing { animation: todayDuckSprite 2.2s steps(1, end) 1 both; }
+    @keyframes todayDuckSprite {
+      0%, 12.49% { background-position: 0 0; }
+      12.5%, 24.99% { background-position: -58px 0; }
+      25%, 37.49% { background-position: -116px 0; }
+      37.5%, 49.99% { background-position: -174px 0; }
+      50%, 62.49% { background-position: 0 -82px; }
+      62.5%, 74.99% { background-position: -58px -82px; }
+      75%, 87.49% { background-position: -116px -82px; }
+      87.5%, 100% { background-position: -174px -82px; }
+    }
+    .duck-inline { display: inline-block; width: 16px; height: 17px; margin-right: 2px; vertical-align: -3px; background: url("./assets/darin-duck-sprites.png") no-repeat -2.5px -1.5px / 126px auto; }
+    .milestone-intro .duck-inline { width: 54px; height: 66px; flex: 0 0 54px; margin: 0; vertical-align: middle; background-image: url("./assets/milestone-intro-duck-frames.png?t=2"); background-size: 216px 132px; background-position: 0 0; cursor: pointer; }
+    .milestone-intro .duck-inline.is-playing { animation: milestoneIntroSprite 2.6s steps(1, end) 1 both; }
+    @keyframes milestoneIntroSprite {
+      0%, 12.49% { background-position: 0 0; }
+      12.5%, 24.99% { background-position: -54px 0; }
+      25%, 37.49% { background-position: -108px 0; }
+      37.5%, 49.99% { background-position: -162px 0; }
+      50%, 62.49% { background-position: 0 -66px; }
+      62.5%, 74.99% { background-position: -54px -66px; }
+      75%, 87.49% { background-position: -108px -66px; }
+      87.5%, 100% { background-position: -162px -66px; }
+    }
+    .today-summary-title { margin: 0; color: var(--text); font-size: 15px; line-height: 1.48; font-weight: 850; letter-spacing: -.015em; }
+    .today-summary-body { margin: 4px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+    .today-stats { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px 10px; padding: 8px 12px; border-radius: 12px; background: var(--surface-hi); color: var(--muted); font-size: 11px; font-weight: 750; }
+    .today-stats strong { color: var(--text); font-weight: 850; }
+
+    .rhythm-card { padding-bottom: 14px; }
+    .rhythm-heading { display: inline-flex; align-items: center; }
+    .rhythm-today {
+      border-radius: 999px; padding: 4px 9px 4px 10px; color: var(--muted);
+      background: var(--surface-hi); font-size: 11px; font-weight: 750;
+    }
+    .rhythm-sky {
+      position: relative;
+      --now-position: 63.89%;
+      padding: 8px 2px 54px;
+    }
+    .rhythm-line-shell { padding: 0; }
+    .bar-events { position: absolute; inset: 0; z-index: 3; }
+    .rhythm-line {
+      height: 32px; position: relative; overflow: visible;
+      background: transparent; border: 0; box-shadow: none;
+    }
+    .rhythm-line::before {
+      content: ""; position: absolute; left: 0; right: 0; top: 50%; z-index: 0;
+      height: 12px; border-radius: 99px; background: #ece9f4; transform: translateY(-50%);
+    }
+    .sleep-block { position: absolute; top: 0; bottom: 0; z-index: 1; padding: 0; border: 0; background: transparent; cursor: pointer; }
+    .sleep-block::before {
+      content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 12px; border-radius: 999px;
+      transform: translateY(-50%);
+      background: #a8adf8;
+    }
+    .sleep-block:focus-visible { outline: 2px solid var(--primary-coral); outline-offset: 2px; }
+    .sleep-block::after { content: ""; }
+    .now-scrubber {
+      position: absolute; left: var(--now-position); top: 0; z-index: 6;
+      width: 64px; height: 140px; padding: 0; border: 0; background: transparent;
+      transform: translateX(-50%); touch-action: none; cursor: grab; user-select: none;
+      outline: none; -webkit-tap-highlight-color: transparent;
+    }
+    .now-scrubber.is-dragging { cursor: grabbing; }
+    .now-scrubber:focus,
+    .now-scrubber:focus-visible { outline: none; }
+    .now-badge { position: absolute; left: 50%; top: 0; transform: translateX(-50%); z-index: 5; border-radius: 999px; padding: 4px 9px; color: white; background: var(--sleep); box-shadow: 0 3px 8px rgba(124, 131, 253, .22); font-size: 10px; font-weight: 850; white-space: nowrap; }
+    .now-badge.is-time { padding: 4px 7px; font-size: 9.5px; }
+    .now-badge::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 7px; height: 7px; background: var(--sleep); transform: translateX(-50%) rotate(45deg); border-radius: 1px; }
+    .now-line { position: absolute; left: var(--now-position); top: -22px; bottom: -10px; z-index: 2; width: 3px; transform: translateX(-50%); background: color-mix(in srgb, var(--sleep) 78%, transparent); border-radius: 99px; pointer-events: none; }
+    .now-scrubber, .now-line { transition: left .46s cubic-bezier(.2,.82,.28,1); }
+    .rhythm-sky.is-dragging .now-scrubber,
+    .rhythm-sky.is-dragging .now-line { transition: none; }
+    .rhythm-duck { position: absolute; left: 50%; top: 78px; z-index: 4; background-image: url("./assets/darin-duck-sprites.png"); background-repeat: no-repeat; background-size: 615px auto; transform: translateX(-50%); transform-origin: center top; filter: drop-shadow(0 3px 3px rgba(74,52,40,.12)); pointer-events: none; }
+    .rhythm-duck.sleeping { width: 100px; height: 64px; background-position: 0 -228px; transform: translateX(-50%) scale(.7); }
+    .rhythm-duck.awake,
+    .rhythm-duck.feeding,
+    .rhythm-duck.diapered,
+    .rhythm-duck.resting { background-position: center bottom; background-size: contain; }
+    .rhythm-duck.awake { width: 46px; height: 54px; top: 76px; background-image: url("./assets/rhythm-duck-idle.png?t=12"); transform: translateX(-50%); }
+    .rhythm-duck.feeding { width: 48px; height: 48px; top: 80px; background-image: url("./assets/rhythm-duck-feed.png?t=12"); transform: translateX(-50%); }
+    .rhythm-duck.diapered { width: 44px; height: 48px; top: 80px; background-image: url("./assets/rhythm-duck-diaper.png?t=12"); transform: translateX(-50%); }
+    .rhythm-duck.resting { width: 54px; height: 42px; top: 84px; background-image: url("./assets/rhythm-duck-rest.png?t=12"); transform: translateX(-50%); }
+    @media (prefers-reduced-motion: reduce) {
+      .now-scrubber, .now-line { transition: none; }
+    }
+    .status-copy { margin: 14px 0 2px; color: var(--muted); font-size: 11px; font-weight: 750; text-align: center; }
+    .status-copy strong { color: var(--text); font-weight: 850; }
+    .timeline-rows { display: grid; gap: 7px; margin: 14px 0 0; }
+    .timeline-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 6px; min-height: 36px; align-items: center; }
+    .timeline-label { display: inline-flex; align-items: center; justify-content: center; gap: 3px; color: var(--muted); }
+    .timeline-label i { display: inline-block; flex: 0 0 auto; }
+    .timeline-label .feed-mark { width: 9px; height: 12px; border: 2px solid var(--brand-coral); border-radius: 3px 3px 4px 4px; position: relative; }
+    .timeline-label .feed-mark::after { content: ""; position: absolute; left: 1px; right: 1px; top: -5px; height: 4px; border: 2px solid var(--brand-coral); border-bottom: 0; border-radius: 3px 3px 0 0; }
+    .timeline-label .diaper-mark { width: 12px; height: 8px; border: 2px solid var(--diaper); border-radius: 2px 2px 5px 5px; }
+    .timeline-label .activity-mark { width: 12px; height: 8px; border: 2px solid var(--activity); border-radius: 2px 2px 5px 5px; }
+    .bar-events .timeline-event { width: 20px; height: 32px; }
+    .bar-events .timeline-event::before {
+      inset: auto; top: 50%; left: 50%; width: 5px; height: 12px;
+      border: 1px solid var(--surface); box-sizing: border-box;
+      border-radius: 999px; transform: translate(-50%, -50%); box-shadow: none;
+    }
+    .bar-events .timeline-event.feed::before { background: var(--feed); }
+    .bar-events .timeline-event.feed::after { content: none; }
+    .bar-events .timeline-event.diaper::before { background: #e6b84d; }
+    .bar-events .timeline-event.activity::before { background: var(--activity); }
+    .bar-events .timeline-event:hover::before,
+    .bar-events .timeline-event:focus-visible::before,
+    .bar-events .timeline-event.is-active::before {
+      transform: translate(-50%, -50%) scale(1.15);
+      box-shadow: none;
+    }
+    .event-track { position: relative; min-height: 36px; border-bottom: 1px solid rgba(237,229,220,.62); }
+    .timeline-event { position: absolute; top: 50%; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; transform: translate(-50%, -50%); cursor: pointer; }
+    .timeline-event::before { content: ""; position: absolute; inset: 16px 12px; border-radius: 999px; background: var(--brand-coral); transition: transform .14s ease, box-shadow .14s ease; }
+    .timeline-event.diaper::before { background: var(--diaper); }
+    .timeline-event.activity::before { background: var(--activity); }
+    .timeline-event:hover::before, .timeline-event:focus-visible::before,
+    .timeline-event.is-active::before { transform: scale(1.28); box-shadow: 0 0 0 4px var(--coral-soft); }
+    .timeline-event.diaper.is-active::before { box-shadow: 0 0 0 4px rgba(201, 138, 84, .28); }
+    .timeline-event.activity.is-active::before { box-shadow: 0 0 0 4px rgba(78, 201, 176, .28); }
+    .timeline-event:focus-visible { outline: 0; }
+    .timeline-rows { display: none; }
+    .rhythm-card.is-expanded .timeline-rows { display: grid; }
+    .rhythm-card.is-expanded .bar-events { visibility: hidden; pointer-events: none; }
+    .timeline-toggle { min-height: 44px; margin: 3px 0 -3px; padding: 5px 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; font-weight: 800; cursor: pointer; }
+    .timeline-toggle:focus-visible { outline: 2px solid var(--coral-soft); outline-offset: 2px; border-radius: 7px; }
+    .activity-block { position: absolute; top: 12px; bottom: 12px; border-radius: 999px; background: linear-gradient(135deg, #8fdcc8, var(--activity)); box-shadow: inset 0 1px 0 rgba(255,255,255,.5); }
+    .rhythm-chips { display: none; }
+    .time-axis { position: relative; height: 28px; margin: 0 0 2px; border: 0; }
+    .rhythm-card.is-expanded .timeline-toggle { margin-left: 28px; }
+    .time-axis span {
+      position: absolute; top: 0; color: var(--faint); font-size: 10px; font-weight: 750;
+      transform: translateX(-50%); white-space: nowrap;
+    }
+    .time-axis span::after {
+      content: ""; position: absolute; left: 50%; top: 16px; width: 1px; height: 6px;
+      background: #d9d2cb; transform: translateX(-50%);
+    }
+    .time-axis span:first-child { transform: none; }
+    .time-axis span:first-child::after { left: 0; transform: none; }
+    .time-axis span:last-child { transform: translateX(-100%); }
+    .time-axis span:last-child::after { left: auto; right: 0; transform: none; }
+    .legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; gap: 6px; margin-top: 10px; padding: 0; border: 0; background: transparent; }
+    .legend-item { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; color: var(--faint); font-size: 10px; white-space: nowrap; }
+    .legend-dot { width: 18px; height: 8px; flex: 0 0 auto; border-radius: 99px; }
+    .legend-dot.sleep { background: #a8adf8; }
+    .legend-dot.feed { background: var(--feed); }
+    .legend-dot.activity { background: var(--activity); }
+    .legend-tick { width: 18px; height: 8px; flex: 0 0 auto; border-radius: 99px; background: #e6b84d; }
+
+    .weekly-card {
+      width: 100%; text-align: left; cursor: pointer; color: inherit;
+      background: linear-gradient(145deg, var(--surface), var(--surface-hi));
+      border: 1px solid var(--border); border-radius: 16px; padding: 16px;
+      margin: 0 0 12px; box-shadow: var(--shadow);
+      transition: transform .14s ease, border-color .14s ease;
+    }
+    .weekly-card:active { transform: scale(.987); }
+    .weekly-card:focus-visible { outline: 3px solid var(--coral-soft); outline-offset: 2px; }
+    .weekly-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .weekly-kicker { color: var(--amber-text); font-size: 11px; font-weight: 850; letter-spacing: .01em; }
+    .weekly-badge { background: var(--coral-soft); color: var(--amber-text); border-radius: 999px; padding: 5px 9px; font-size: 10.5px; font-weight: 750; }
+    .weekly-main { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 10px; align-items: center; margin-top: 13px; }
+    .weekly-duck { width: 54px; height: 66px; flex: 0 0 54px; background-image: url("./assets/weekly-report-duck-frames.png?t=5"); background-repeat: no-repeat; background-size: 216px 132px; background-position: 0 0; }
+    .weekly-card.is-playing .weekly-duck { animation: weeklyDuckSprite 2.6s steps(1, end) 1 both; }
+    @keyframes weeklyDuckSprite {
+      0%, 12.49% { background-position: 0 0; }
+      12.5%, 24.99% { background-position: -54px 0; }
+      25%, 37.49% { background-position: -108px 0; }
+      37.5%, 49.99% { background-position: -162px 0; }
+      50%, 62.49% { background-position: 0 -66px; }
+      62.5%, 74.99% { background-position: -54px -66px; }
+      75%, 87.49% { background-position: -108px -66px; }
+      87.5%, 100% { background-position: -162px -66px; }
+    }
+    .weekly-text { min-width: 0; }
+    .weekly-headline { display: block; margin: 0; font-size: 18px; line-height: 1.35; font-weight: 880; letter-spacing: -.02em; }
+    .weekly-copy { display: block; margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.68; }
+    .weekly-copy strong { color: var(--text); font-weight: 850; }
+    .finding { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: #9b5a32; font-size: 11px; font-weight: 750; }
+    .weekly-link { margin-top: 14px; color: var(--amber-text); font-size: 12px; font-weight: 850; }
+
+    .growth-heading { display: flex; justify-content: space-between; align-items: flex-end; margin: 22px 1px 10px; }
+    .growth-heading h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+    .growth-heading span { color: var(--faint); font-size: 10.5px; font-weight: 700; }
+    .growth-card { overflow: hidden; margin: 0 0 12px; padding: 14px 16px 10px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
+    .growth-card.weight { --growth-color: #d97872; --growth-soft: rgba(232,145,138,.15); }
+    .growth-card.height { --growth-color: #8d74c8; --growth-soft: rgba(155,130,215,.15); }
+    .growth-card.head { --growth-color: #4eaa94; --growth-soft: rgba(105,195,174,.16); }
+    .growth-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .growth-card-head h3 { margin: 0; font-size: 15.5px; font-weight: 850; }
+    .growth-date { color: var(--faint); font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .growth-summary { display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 8px; align-items: center; min-height: 96px; padding: 4px 0 2px; }
+    .growth-compare { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; margin: 0; color: var(--text); font-variant-numeric: tabular-nums; }
+    .growth-compare .from { color: var(--muted); font-size: 15px; font-weight: 800; letter-spacing: -.02em; }
+    .growth-compare .arrow { color: var(--faint); font-size: 13px; font-weight: 700; }
+    .growth-compare .to { color: var(--text); font-size: 24px; line-height: 1.05; font-weight: 900; letter-spacing: -.035em; transform-origin: left center; }
+    .growth-delta { display: inline-flex; align-items: center; gap: 4px; margin: 6px 0 0; color: var(--growth-color); font-size: 12px; font-weight: 850; transition: opacity .18s ease, transform .18s ease; }
+    .growth-delta::before { content: "↗"; display: grid; width: 17px; height: 17px; place-items: center; border-radius: 50%; background: var(--growth-soft); font-size: 11px; }
+    .growth-caption { display: flex; align-items: center; gap: 4px; margin: 6px 0 0; color: var(--text); font-size: 11.5px; font-weight: 850; }
+    .growth-readout.is-counting .from,
+    .growth-readout.is-counting .arrow,
+    .growth-readout.is-counting .growth-delta,
+    .growth-readout.is-counting .growth-caption { opacity: 0; transform: translateY(5px); }
+    .growth-readout.is-landing .growth-compare .to { animation: growthValueLand .42s cubic-bezier(.2,.85,.32,1); }
+    .growth-readout.is-revealing .growth-delta,
+    .growth-readout.is-revealing .growth-caption { animation: growthDeltaPop .48s cubic-bezier(.2,.85,.32,1) both; }
+    @keyframes growthValueLand {
+      0% { transform: scale(1); }
+      45% { transform: scale(1.055); }
+      100% { transform: scale(1); }
+    }
+    @keyframes growthDeltaPop {
+      0% { opacity: 0; transform: translateY(6px) scale(.94); }
+      68% { opacity: 1; transform: translateY(-1px) scale(1.04); }
+      100% { opacity: 1; transform: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .growth-readout.is-landing .growth-compare .to,
+      .growth-readout.is-revealing .growth-delta,
+      .growth-readout.is-revealing .growth-caption { animation: none; }
+      .growth-readout.is-counting .from,
+      .growth-readout.is-counting .arrow,
+      .growth-readout.is-counting .growth-delta,
+      .growth-readout.is-counting .growth-caption { opacity: 1; transform: none; }
+    }
+    .growth-scene { position: relative; height: 96px; border-radius: 18px; overflow: hidden; background: linear-gradient(145deg, var(--growth-soft), rgba(255,255,255,.3)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--growth-color) 10%, transparent); }
+    button.growth-scene { width: 100%; padding: 0; border: 0; color: inherit; cursor: pointer; }
+    button.growth-scene:active { transform: scale(.98); }
+    .growth-scene::after { content: ""; position: absolute; left: 13px; right: 13px; bottom: 13px; height: 5px; border-radius: 50%; background: rgba(77,58,45,.1); filter: blur(2px); }
+    .growth-duck { position: absolute; z-index: 1; left: 50%; bottom: -3px; width: 78px; height: 82px; background: url("./assets/darin-duck-sprites.png") no-repeat -12px -7px / 615px auto; transform: translateX(-50%) scale(.67); transform-origin: center bottom; animation: growthDuckPop .75s cubic-bezier(.2,.9,.35,1) both; }
+    .measure-scene .growth-duck { left: 50%; bottom: 2px; animation: none; }
+    .height-value, .weight-value, .weight-result, .head-value, .head-result,
+    .height-dynamic-copy, .measure-sparkle { display: none !important; }
+    .height-measure { background: transparent; }
+    .height-motion { position: absolute; z-index: 2; inset: 0; overflow: visible; border-radius: inherit; }
+    .height-measure .height-value { display: none; }
+    .sprite-measure,
+    .height-measure { background: transparent; box-shadow: none; }
+    .measure-scene.growth-scene { overflow: visible; }
+    .measure-scene::after { display: none; }
+    .measure-motion { position: absolute; z-index: 2; inset: 6px; overflow: visible; border-radius: inherit; }
+    .sprite-measure .measure-motion-frame {
+      position: absolute; inset: 0; left: 0; top: 0; width: 100%; height: 100%;
+      max-width: none; object-fit: contain; object-position: center center;
+      opacity: 0; transform: none;
+      filter: drop-shadow(0 2px 4px rgba(74,52,40,.14));
+      transition: opacity 70ms ease;
+    }
+    .sprite-measure .measure-motion-frame.is-active { opacity: 1; transform: none; }
+    .sprite-measure .weight-value, .sprite-measure .weight-result,
+    .sprite-measure .head-value, .sprite-measure .head-result { display: none; }
+    @keyframes measureValueReveal {
+      0%,48% { opacity: 0; transform: translateY(2px); }
+      55%,76% { opacity: 1; transform: translateY(0); }
+      84%,100% { opacity: 0; }
+    }
+    @keyframes measureResultReveal {
+      0%,78% { opacity: 0; transform: translateY(2px) scale(.96); }
+      86%,100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .measure-sparkle { position: absolute; z-index: 5; right: 17px; top: 7px; color: var(--growth-color); font-size: 10px; opacity: 0; }
+    .measure-scene.is-animating .measure-sparkle { animation: measureSparkle 3s ease both; }
+    @keyframes measureSparkle { 0%,83% { opacity: 0; transform: scale(.4) rotate(-15deg); } 90% { opacity: 1; transform: scale(1.15) rotate(7deg); } 100% { opacity: .75; transform: scale(1) rotate(0); } }
+
+    .weight-measure .growth-duck { bottom: 5px; }
+    .weight-scale { position: absolute; z-index: 2; left: 14px; right: 14px; bottom: 8px; height: 11px; border: 2px solid rgba(217,120,114,.62); border-radius: 8px 8px 5px 5px; background: rgba(255,255,255,.56); box-shadow: 0 3px 5px rgba(91,62,50,.08); }
+    .weight-scale::after { content: ""; position: absolute; left: 50%; top: 2px; width: 15px; height: 4px; border-radius: 3px; background: rgba(217,120,114,.28); transform: translateX(-50%); }
+    .weight-measure.is-animating .growth-duck { animation: weightStepOn 3s cubic-bezier(.22,.8,.32,1) both; }
+    .weight-measure.is-animating .weight-scale { animation: weightScalePress 3s ease both; }
+    .weight-measure.is-animating .weight-value { animation: measureValueReveal 3s ease both; }
+    .weight-measure.is-animating .weight-result { animation: measureResultReveal 3s ease both; }
+    @keyframes weightStepOn {
+      0%,16% { transform: translateX(-50%) translateY(3px) scale(.64); }
+      27% { transform: translateX(-50%) translateY(-8px) scale(.66); }
+      39% { transform: translateX(-50%) translateY(0) scale(.69,.65); }
+      48%,100% { transform: translateX(-50%) translateY(-1px) scale(.67); }
+    }
+    @keyframes weightScalePress { 0%,14% { opacity: 0; transform: translateY(3px) scaleY(1); } 24%,34% { opacity: 1; transform: translateY(0) scaleY(1); } 42% { opacity: 1; transform: scaleY(.8); } 51%,100% { opacity: 1; transform: scaleY(1); } }
+
+    .head-measure .growth-duck { bottom: 1px; }
+    .head-reel { position: absolute; z-index: 4; top: 20px; right: 6px; width: 17px; height: 17px; border: 2px solid rgba(78,170,148,.8); border-radius: 50%; background: color-mix(in srgb, var(--surface) 82%, transparent); opacity: 0; }
+    .head-reel::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: rgba(78,170,148,.45); }
+    .head-tape { position: absolute; z-index: 3; left: 18px; top: 27px; width: 60px; height: 12px; border-top: 3px solid rgba(78,170,148,.82); border-radius: 50% 0 0 50%; background: repeating-linear-gradient(90deg, rgba(78,170,148,.62) 0 1px, transparent 1px 7px); opacity: 0; transform: scaleX(.04) rotate(-3deg); transform-origin: right center; }
+    .head-tape::before { content: ""; position: absolute; left: -1px; top: -4px; width: 3px; height: 10px; border-radius: 3px; background: #4eaa94; }
+    .head-marker { position: absolute; z-index: 3; right: 11px; top: 8px; width: 3px; height: 50px; border-radius: 3px; background: rgba(78,170,148,.55); opacity: 0; }
+    .head-marker::after { content: ""; position: absolute; right: 0; top: 19px; width: 24px; height: 3px; border-radius: 3px; background: #4eaa94; }
+    .head-measure.is-animating .growth-duck { animation: headMeasureHold 3s ease both; }
+    .head-measure.is-animating .head-reel { animation: headReelAppear 3s ease both; }
+    .head-measure.is-animating .head-tape { animation: headTapeUnroll 3s cubic-bezier(.22,.8,.32,1) both; }
+    .head-measure.is-animating .head-marker { animation: headMarkerAlign 3s ease both; }
+    .head-measure.is-animating .head-value { animation: measureValueReveal 3s ease both; }
+    .head-measure.is-animating .head-result { animation: measureResultReveal 3s ease both; }
+    @keyframes headMeasureHold { 0%,18% { transform: translateX(-50%) scale(.67); } 34%,52% { transform: translateX(-50%) rotate(-2deg) scale(.68); } 59% { transform: translateX(-50%) rotate(1deg) scale(.67); } 66%,100% { transform: translateX(-50%) scale(.67); } }
+    @keyframes headReelAppear { 0%,18% { opacity: 0; transform: scale(.7); } 26%,100% { opacity: 1; transform: scale(1); } }
+    @keyframes headTapeUnroll { 0%,22% { opacity: 0; transform: scaleX(.04) rotate(-3deg); } 27% { opacity: 1; } 44% { opacity: 1; transform: scaleX(1.06) rotate(-3deg); } 52%,100% { opacity: 1; transform: scaleX(1) rotate(-3deg); } }
+    @keyframes headMarkerAlign { 0%,44% { opacity: 0; transform: translateY(-7px); } 58%,100% { opacity: 1; transform: translateY(0); } }
+    @keyframes growthDuckPop { from { transform: translateX(-50%) translateY(5px) scale(.62); opacity: .55; } to { transform: translateX(-50%) scale(.67); opacity: 1; } }
+    @keyframes growthDuckTall { from { transform: translateX(-50%) translateY(7px) scale(.63); opacity: .55; } to { transform: translateX(-50%) translateY(-3px) scale(.67); opacity: 1; } }
+    .growth-message { margin: 5px 0 12px; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+    .growth-message strong { color: var(--text); font-weight: 850; }
+    .growth-chart-wrap { padding: 11px 10px 8px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-hi); }
+    .growth-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+    .growth-chart-head span { color: var(--muted); font-size: 10px; font-weight: 800; }
+    .growth-chart-head small { color: var(--faint); font-size: 9.5px; }
+    .growth-chart { height: 112px; position: relative; overflow: hidden; }
+    .growth-chart::before, .growth-chart::after { content: ""; position: absolute; left: 0; right: 0; height: 1px; background: rgba(189,177,166,.35); }
+    .growth-chart::before { top: 27%; } .growth-chart::after { top: 70%; }
+    .growth-chart svg { position: relative; z-index: 1; width: 100%; height: 100%; overflow: visible; }
+    .growth-chart-axis { display: flex; justify-content: space-between; color: var(--faint); font-size: 9px; font-weight: 700; padding: 2px 3px 0; }
+    .growth-inline-panel { margin-top: 9px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 13px; background: var(--growth-soft); animation: growthPanelIn .16s ease-out; }
+    .growth-inline-panel[hidden] { display: none; }
+    .growth-inline-panel strong { display: block; color: var(--text); font-size: 12px; line-height: 1.4; }
+    .growth-inline-panel p { margin: 4px 0 0; color: var(--muted); font-size: 10.5px; line-height: 1.55; }
+    .growth-inline-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 9px; }
+    .growth-inline-values span { min-width: 0; padding: 8px 6px; border-radius: 9px; background: color-mix(in srgb, var(--surface) 76%, transparent); color: var(--faint); font-size: 9.5px; font-weight: 750; text-align: center; }
+    .growth-inline-values b { display: block; margin-top: 2px; color: var(--text); font-size: 11.5px; font-weight: 900; white-space: nowrap; }
+    @keyframes growthPanelIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+    .percentile-band { fill: rgba(105, 195, 174, .11); stroke: none; }
+    .percentile { fill: none; stroke: var(--faint); stroke-width: 1.15; stroke-dasharray: 3 4; }
+    .percentile-label { fill: var(--faint); font-size: 8px; font-weight: 750; }
+    .growth-line { fill: none; stroke: var(--growth-color); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .growth-point { fill: var(--growth-color); stroke: var(--surface); stroke-width: 2.2; cursor: pointer; transition: r .14s ease, filter .14s ease; }
+    .growth-point.current { r: 5.5; filter: drop-shadow(0 2px 3px color-mix(in srgb, var(--growth-color) 35%, transparent)); }
+    .growth-point.selected { r: 6.4; stroke: var(--primary-coral); stroke-width: 2.8; }
+    .growth-point:hover, .growth-point:focus { r: 6.4; outline: none; }
+    .growth-point:focus { stroke: var(--primary-coral); stroke-width: 2.8; }
+    .growth-tooltip { position: absolute; z-index: 3; left: var(--point-x); top: var(--point-y); min-width: 112px; max-width: 150px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--growth-color) 26%, var(--border)); border-radius: 9px; background: color-mix(in srgb, var(--surface) 94%, white); box-shadow: 0 4px 12px rgba(74,52,40,.13); color: var(--text); font-size: 9.5px; line-height: 1.35; pointer-events: none; transform: translate(-50%, calc(-100% - 8px)); }
+    .growth-tooltip.below { transform: translate(-50%, 8px); }
+    .growth-tooltip.edge-right { transform: translate(calc(-100% - 2px), calc(-100% - 8px)); }
+    .growth-tooltip.edge-right.below { transform: translate(calc(-100% - 2px), 8px); }
+    .growth-tooltip strong, .growth-tooltip span { display: block; }
+    .growth-tooltip strong { font-size: 11px; font-weight: 900; }
+    .growth-tooltip span { margin-top: 1px; color: var(--muted); font-weight: 700; }
+    .growth-more-row { display: flex; justify-content: flex-end; margin-top: 1px; }
+    .growth-more { min-height: 48px; padding: 0 2px 0 12px; border: 0; background: transparent; color: var(--growth-color); font-size: 12px; font-weight: 850; cursor: pointer; }
+    .growth-more:active { transform: scale(.98); }
+    .growth-detail { margin-top: 2px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .growth-detail[hidden] { display: none; }
+    .growth-card-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; }
+    .growth-action { min-height: 48px; padding: 8px 10px; border: 0; border-radius: 11px; background: transparent; color: var(--growth-color); font-size: 11px; font-weight: 850; text-align: left; cursor: pointer; }
+    .growth-action.primary { background: var(--growth-soft); }
+    .growth-action:active { transform: scale(.98); }
+    .height-predict { margin-top: 12px; }
+    .height-predict h4 { margin: 0 0 10px; font-size: 13.5px; font-weight: 880; }
+    .height-predict-note { margin: -4px 0 10px; color: var(--muted); font-size: 10.5px; line-height: 1.45; }
+    .height-predict-row { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 8px; align-items: center; margin-bottom: 8px; }
+    .height-predict-row label { color: var(--muted); font-size: 12px; font-weight: 800; }
+    .height-predict-field { display: grid; grid-template-columns: minmax(0, 1fr) 24px; gap: 6px; align-items: center; }
+    .height-predict-field input { min-width: 0; height: 44px; padding: 0 11px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-hi); color: var(--text); font: inherit; font-size: 14px; font-weight: 750; }
+    .height-predict-field span { color: var(--muted); font-size: 12px; font-weight: 800; }
+    .height-predict-error { margin: 2px 0 8px; color: #b03a34; font-size: 11px; line-height: 1.45; }
+    .height-predict-error[hidden] { display: none; }
+    .height-predict-submit { width: 100%; min-height: 48px; margin-top: 4px; border: 0; border-radius: 12px; background: var(--growth-color); color: white; font-size: 13px; font-weight: 850; cursor: pointer; }
+    .height-predict-submit:active { transform: scale(.98); }
+    .height-predict-result { margin-top: 12px; padding: 12px; border-radius: 13px; background: var(--growth-soft); }
+    .height-predict-result[hidden] { display: none; }
+    .height-predict-result strong { display: block; color: var(--text); font-size: 12px; font-weight: 850; }
+    .height-predict-range { margin: 6px 0 4px; color: var(--text); font-size: 22px; line-height: 1.15; font-weight: 900; letter-spacing: -.03em; }
+    .height-predict-result p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .height-predict-reset { min-height: 48px; margin-top: 4px; padding: 0; border: 0; background: transparent; color: var(--growth-color); font-size: 12px; font-weight: 850; cursor: pointer; }
+    .growth-source { margin: 3px 3px 22px; color: var(--faint); font-size: 10px; line-height: 1.55; }
+    .growth-month-card, .milestone-card, .growth-ai-card { margin: 0 0 12px; padding: 16px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
+    .growth-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .growth-section-head h3 { margin: 0; font-size: 15px; font-weight: 880; }
+    .growth-section-head span, .growth-text-action { color: var(--faint); font-size: 10.5px; font-weight: 800; }
+    .growth-text-action { min-height: 48px; padding: 0 4px; border: 0; background: transparent; color: var(--primary-coral); cursor: pointer; }
+    .monthly-growth-top { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; }
+    .monthly-duck { position: relative; width: 62px; height: 57px; overflow: hidden; }
+    .monthly-duck::after { content: "쑥쑥!"; position: absolute; right: 0; bottom: 1px; color: #8d74c8; font-size: 9px; font-weight: 900; }
+    .monthly-duck .growth-duck { bottom: -7px; left: 27px; animation-name: growthDuckTall; }
+    .monthly-number-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; min-width: 0; }
+    .monthly-number-summary span { min-width: 0; padding: 8px 4px; border-radius: 11px; background: var(--surface-hi); text-align: center; }
+    .monthly-number-summary b { display: block; overflow: hidden; color: var(--faint); font-size: 8.5px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+    .monthly-number-summary strong { display: block; margin-top: 4px; color: var(--text); font-size: 11px; font-weight: 900; letter-spacing: -.02em; white-space: nowrap; }
+    .monthly-growth-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--border); color: var(--muted); font-size: 10.5px; line-height: 1.45; }
+    .month-compare { margin-top: 10px; padding: 10px 11px; border-radius: 12px; background: var(--surface-hi); color: var(--muted); font-size: 10.5px; line-height: 1.55; }
+    .month-compare[hidden] { display: none; }
+    .milestone-intro { display: flex; align-items: center; gap: 8px; margin: 10px 0 15px; color: var(--muted); font-size: 11.5px; line-height: 1.55; font-weight: 750; letter-spacing: 0; }
+    .milestone-intro-copy { min-width: 0; }
+    .milestone-rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; }
+    .milestone-item { min-width: 0; min-height: 100px; padding: 5px 2px; border: 0; border-radius: 11px; background: transparent; color: var(--muted); cursor: pointer; }
+    .milestone-item:focus-visible { outline: 2px solid var(--primary-coral); outline-offset: 1px; }
+    .milestone-symbol { display: grid; width: 28px; height: 28px; margin: 0 auto 6px; place-items: center; border: 1px solid var(--border); border-radius: 50%; font-size: 13px; font-weight: 900; }
+    .milestone-item.done .milestone-symbol { background: rgba(105,195,174,.15); border-color: rgba(105,195,174,.35); color: #4e9d89; }
+    .milestone-item.observing .milestone-symbol { background: var(--coral-soft); border-color: rgba(232,145,138,.38); color: var(--primary-coral); }
+    .milestone-item.empty .milestone-symbol { color: var(--faint); }
+    .milestone-name, .milestone-state { display: block; overflow-wrap: anywhere; }
+    .milestone-name { color: var(--text); font-size: 10px; font-weight: 850; }
+    .milestone-state { margin-top: 3px; color: var(--faint); font-size: 8.5px; }
+    .new-milestone { margin-top: 12px; padding: 11px 12px; border-radius: 13px; background: linear-gradient(145deg, rgba(232,145,138,.11), rgba(155,130,215,.08)); }
+    .new-milestone .kicker { color: #9b5a32; font-size: 10px; font-weight: 850; }
+    .new-milestone strong { display: block; margin-top: 5px; color: var(--text); font-size: 12px; line-height: 1.45; }
+    .new-milestone span { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; }
+    .new-milestone button { min-height: 48px; margin: 1px 0 -8px; padding: 0 4px; border: 0; background: transparent; color: var(--primary-coral); font-size: 10px; font-weight: 850; cursor: pointer; }
+    .milestone-card .growth-source { margin: 10px 0 0; }
+    .growth-ai-card { background: linear-gradient(145deg, var(--surface), rgba(255,246,240,.94)); }
+    .growth-ai-top { display: flex; align-items: center; gap: 9px; }
+    .growth-ai-duck { width: 54px; height: 60px; flex: 0 0 auto; background-image: url("./assets/growth-ai-duck-frames.png?t=3"); background-repeat: no-repeat; background-size: 162px 120px; background-position: 0 0; cursor: pointer; }
+    .growth-ai-duck.is-playing { animation: growthAiDuckSprite 2.4s steps(1, end) 1 both; }
+    @keyframes growthAiDuckSprite {
+      0%, 16.49% { background-position: 0 0; }
+      16.67%, 33.16% { background-position: -54px 0; }
+      33.33%, 49.99% { background-position: -108px 0; }
+      50%, 66.49% { background-position: 0 -60px; }
+      66.67%, 83.16% { background-position: -54px -60px; }
+      83.33%, 100% { background-position: -108px -60px; }
+    }
+    .growth-ai-top h3 { margin: 0; font-size: 14px; }
+    .growth-ai-copy { margin: 9px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+    .growth-ai-copy strong { color: var(--text); font-weight: 850; }
+    .growth-ai-actions { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 9px; }
+    .growth-ai-actions button { min-height: 48px; padding: 0 4px; border: 0; background: transparent; color: var(--primary-coral); font-size: 10.5px; font-weight: 850; cursor: pointer; }
+    .growth-evidence { margin-top: 9px; padding: 10px 11px; border-radius: 12px; background: var(--surface-hi); color: var(--muted); font-size: 10px; line-height: 1.65; }
+    .growth-evidence[hidden] { display: none; }
+
+    @media (prefers-reduced-motion: reduce) { .growth-duck, .growth-ai-duck { animation: none; background-position: 0 0; } .growth-point, .growth-action { transition: none; } }
+
+    .consult {
+      position: absolute; right: 16px; bottom: 118px; width: 48px; height: 48px;
+      border: 0; border-radius: 18px; color: white; background: var(--primary-coral);
+      box-shadow: 0 8px 20px rgba(182, 91, 85, .25); display: grid; place-items: center;
+      cursor: pointer; z-index: 4; transition: transform .14s ease;
+    }
+    .consult:active { transform: scale(.95); }
+    .consult.attention { animation: consultNudge .28s ease; }
+    @keyframes consultNudge { 0%,100% { transform: translateX(0); } 35% { transform: translateX(-2px); } 70% { transform: translateX(2px); } }
+
+    .tab-bar {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+      min-height: 88px; padding: 9px 4px 18px;
+      background: var(--surface); border-top: 1px solid var(--border);
+      border-radius: 18px 18px 0 0; box-shadow: 0 -8px 22px rgba(74,52,40,.07);
+      display: grid; grid-template-columns: repeat(5, 1fr); align-items: start;
+    }
+    .tab {
+      min-width: 0; min-height: 52px; border: 0; background: transparent; color: var(--muted);
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      gap: 5px; padding: 4px 2px; font-size: 11px; font-weight: 750; cursor: pointer;
+    }
+    .tab svg { width: 22px; height: 22px; stroke-width: 1.8; }
+    .tab.active { color: var(--amber-text); }
+    .tab.active svg { stroke-width: 2.2; }
+    .tab:active { opacity: .78; transform: scale(.98); }
+    .mic-slot { position: relative; padding-top: 0; }
+    .mic-button {
+      width: 56px; height: 56px; border-radius: 50%; margin-top: -28px;
+      display: grid; place-items: center; color: white;
+      background: linear-gradient(145deg, var(--brand-coral), #d47870);
+      box-shadow: 0 5px 12px rgba(232,145,138,.22);
+    }
+    .mic-slot span { margin-top: 1px; }
+    .mic-slot.active-action { color: #b03a34; }
+    .mic-slot.active-action .mic-button { transform: scale(1.04); box-shadow: 0 7px 18px rgba(232,145,138,.34), 0 0 0 7px rgba(232,145,138,.10); }
+    .mic-slot:active .mic-button { transform: scale(.96); }
+
+    .voice-sheet { text-align: center; }
+    .voice-orb {
+      position: relative; width: 92px; height: 92px; margin: 8px auto 16px; border-radius: 50%;
+      display: grid; place-items: center; color: white;
+      background: linear-gradient(145deg, var(--brand-coral), #d47870);
+      box-shadow: 0 12px 28px rgba(182,91,85,.22);
+    }
+    .voice-orb svg { width: 34px; height: 34px; }
+    .voice-orb::before { content: ""; position: absolute; inset: -8px; border: 2px solid rgba(232,145,138,.22); border-radius: 50%; opacity: 0; }
+    .voice-sheet.recording .voice-orb::before { opacity: 1; animation: voicePulse 1.8s ease-out infinite; }
+    @keyframes voicePulse { 0% { transform: scale(.9); opacity: .36; } 75%,100% { transform: scale(1.18); opacity: 0; } }
+    .voice-state { margin: 0; color: var(--text); font-size: 18px; font-weight: 880; }
+    .voice-help { margin: 6px 0 16px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .voice-record { width: 100%; min-height: 48px; border: 0; border-radius: 14px; color: white; background: var(--primary-coral); font-weight: 850; cursor: pointer; }
+    .voice-sheet.recording .voice-record { color: var(--primary-coral); background: var(--coral-soft); }
+
+    .sheet-backdrop {
+      position: absolute; inset: 0; z-index: 8; background: rgba(35, 28, 24, .32);
+      display: flex; align-items: flex-end; opacity: 0; pointer-events: none;
+      transition: opacity .18s ease;
+    }
+    .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+    .sheet {
+      width: 100%; max-height: 78%; overflow: auto; background: var(--surface);
+      border-radius: 24px 24px 0 0; padding: 10px 20px 28px;
+      transform: translateY(20px); transition: transform .2s ease;
+      position: relative;
+    }
+    .sheet-backdrop.open .sheet { transform: translateY(0); }
+    .grabber { width: 38px; height: 4px; border-radius: 4px; background: var(--border); margin: 0 auto 18px; }
+    .sheet h2 { margin: 0 0 6px; font-size: 20px; }
+    .sheet .period { color: var(--faint); font-size: 12px; }
+    .sheet-row { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .sheet-row strong { font-size: 14px; }
+    .discovery-title { margin: 22px 0 10px; font-size: 14px; font-weight: 850; }
+    .discovery-list { display: grid; gap: 9px; }
+    .discovery {
+      display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start;
+      padding: 12px; border-radius: 14px; background: var(--surface-hi); border: 1px solid var(--border);
+    }
+    .discovery-icon { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: var(--coral-soft); color: #b03a34; font-weight: 900; }
+    .discovery strong { display: block; font-size: 13px; line-height: 1.4; }
+    .discovery p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .disclaimer { margin: 12px 2px 0; color: var(--faint); font-size: 10px; line-height: 1.5; }
+    .prompt-list { display: grid; gap: 9px; margin-top: 18px; }
+    .prompt {
+      min-height: 52px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--border);
+      background: var(--surface-hi); color: var(--text); text-align: left; font-weight: 750; cursor: pointer;
+    }
+    .close-sheet { width: 100%; min-height: 48px; margin-top: 18px; border: 0; border-radius: 14px; color: white; background: var(--primary-coral); font-weight: 850; cursor: pointer; }
+    .growth-sheet-value { margin: 16px 0 9px; color: var(--text); font-size: 30px; line-height: 1; font-weight: 900; letter-spacing: -.035em; }
+    .growth-sheet-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .growth-sheet-details > div { padding: 11px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-hi); }
+    .growth-sheet-details span { display: block; color: var(--faint); font-size: 10px; font-weight: 750; }
+    .growth-sheet-details strong { display: block; margin-top: 3px; color: var(--text); font-size: 12px; line-height: 1.4; }
+    .milestone-reference-card { position: relative; min-height: 70px; padding-right: 58px !important; }
+    .milestone-reference-card .milestone-status { position: absolute; top: 9px; right: 8px; display: grid; min-width: 42px; min-height: 42px; padding: 4px; place-items: center; border: 2px solid currentColor; border-radius: 50%; font-size: 9px; font-style: normal; font-weight: 900; line-height: 1.05; text-align: center; transform: rotate(-8deg); }
+    .milestone-reference-card.is-done .milestone-status { color: #4e9d89; background: rgba(105,195,174,.12); }
+    .milestone-reference-card.is-progress .milestone-status { color: var(--primary-coral); background: var(--coral-soft); transform: rotate(6deg); }
+    .growth-record-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 11px; }
+    .growth-record-links[hidden] { display: none; }
+    .growth-record-link { min-height: 44px; padding: 8px 9px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-hi); color: var(--primary-coral); font-size: 10.5px; font-weight: 850; text-align: left; cursor: pointer; }
+    .growth-record-link:active { transform: scale(.98); }
+    .growth-measure-form { margin-top: 14px; }
+    .growth-measure-form label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 800; }
+    .growth-measure-form > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .growth-measure-form input { min-width: 0; height: 44px; padding: 0 11px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-hi); color: var(--text); font: inherit; font-size: 14px; font-weight: 750; }
+    .growth-measure-form button { min-height: 44px; padding: 0 15px; border: 0; border-radius: 11px; background: var(--primary-coral); color: white; font-size: 12px; font-weight: 850; cursor: pointer; }
+    .milestone-sheet-visual { position: absolute; top: 18px; right: 20px; width: 104px; height: 108px; overflow: hidden; border-radius: 18px; background: linear-gradient(145deg, var(--coral-soft), rgba(155,130,215,.13)); }
+    .milestone-sheet-visual[hidden] { display: none; }
+    .milestone-sheet-duck { position: absolute; left: 50%; bottom: 0; width: 72px; height: 108px; background-image: url("./assets/milestone-sheet-duck-frames.png?t=2"); background-repeat: no-repeat; background-size: 288px 216px; background-position: 0 0; transform: translateX(-50%); animation: none; filter: drop-shadow(0 3px 3px rgba(74,52,40,.12)); }
+    .milestone-sheet-duck.pose-head { background-position: -144px 0; animation: milestoneSheetHead 1.7s steps(1, end) 1 both; }
+    .milestone-sheet-duck.pose-coo { background-position: -216px 0; animation: milestoneSheetCoo 1.7s steps(1, end) 1 both; }
+    .milestone-sheet-duck.pose-reach { background-position: -72px -108px; animation: milestoneSheetReach 1.7s steps(1, end) 1 both; }
+    .milestone-sheet-duck.pose-roll { background-position: -144px -108px; animation: milestoneSheetRoll 1.7s steps(1, end) 1 both; }
+    .milestone-sheet-duck.pose-story { animation: milestoneSheetSprite 2.6s steps(1, end) 1 both; }
+    @keyframes milestoneSheetHead {
+      0%, 34% { background-position: 0 0; }
+      35%, 64% { background-position: -72px 0; }
+      65%, 100% { background-position: -144px 0; }
+    }
+    @keyframes milestoneSheetCoo {
+      0%, 34% { background-position: 0 0; }
+      35%, 64% { background-position: -144px 0; }
+      65%, 100% { background-position: -216px 0; }
+    }
+    @keyframes milestoneSheetReach {
+      0%, 34% { background-position: 0 0; }
+      35%, 64% { background-position: -216px 0; }
+      65%, 100% { background-position: -72px -108px; }
+    }
+    @keyframes milestoneSheetRoll {
+      0%, 34% { background-position: 0 0; }
+      35%, 64% { background-position: -72px 0; }
+      65%, 100% { background-position: -144px -108px; }
+    }
+    @keyframes milestoneSheetSprite {
+      0%, 12.49% { background-position: 0 0; }
+      12.5%, 24.99% { background-position: -72px 0; }
+      25%, 37.49% { background-position: -144px 0; }
+      37.5%, 49.99% { background-position: -216px 0; }
+      50%, 62.49% { background-position: 0 -108px; }
+      62.5%, 74.99% { background-position: -72px -108px; }
+      75%, 87.49% { background-position: -144px -108px; }
+      87.5%, 100% { background-position: -216px -108px; }
+    }
+    #growthSheetTitle.milestone-title { padding-right: 106px; min-height: 55px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+    .report-screen { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; background: var(--background); opacity: 0; pointer-events: none; transform: translateX(18px); transition: opacity .18s ease, transform .2s ease; }
+    .report-screen.open { opacity: 1; pointer-events: auto; transform: translateX(0); }
+    .linked-record-screen { position: absolute; inset: 0; z-index: 11; display: flex; flex-direction: column; background: var(--background); opacity: 0; pointer-events: none; transform: translateX(18px); transition: opacity .18s ease, transform .2s ease; }
+    .linked-record-screen.open { opacity: 1; pointer-events: auto; transform: translateX(0); }
+    .linked-record-header { display: flex; align-items: center; gap: 10px; padding: 16px 18px 10px; border-bottom: 1px solid var(--border); }
+    .linked-record-back { width: 44px; height: 44px; margin: -6px 0; border: 0; border-radius: 50%; background: transparent; color: var(--text); font-size: 30px; line-height: 1; cursor: pointer; }
+    .linked-record-header h2 { margin: 0; font-size: 17px; }
+    .linked-record-scroll { flex: 1; overflow: auto; padding: 20px 18px 112px; }
+    .linked-record-kicker { margin: 0; color: var(--primary-coral); font-size: 11px; font-weight: 850; }
+    .linked-record-scroll h3 { margin: 8px 0 4px; font-size: 22px; letter-spacing: -.025em; }
+    .linked-record-meta { margin: 0; color: var(--faint); font-size: 11px; }
+    .linked-record-visual { position: relative; height: 190px; margin-top: 18px; overflow: hidden; border-radius: 18px; background: linear-gradient(145deg, var(--coral-soft), rgba(155,130,215,.16)); }
+    .linked-record-duck { position: absolute; left: 50%; bottom: 13px; width: 100px; height: 105px; background: url("./assets/darin-duck-sprites.png") no-repeat -500px -86px / 615px auto; transform: translateX(-48%) scale(1.2); filter: drop-shadow(0 7px 6px rgba(74,52,40,.12)); }
+    .linked-record-note { margin-top: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); color: var(--muted); font-size: 13px; line-height: 1.65; }
+    .linked-record-note strong { display: block; margin-bottom: 4px; color: var(--text); font-size: 11px; }
+    .report-header { display: flex; align-items: center; gap: 8px; padding: 16px 18px 11px; background: color-mix(in srgb, var(--background) 92%, transparent); border-bottom: 1px solid var(--border); }
+    .report-back { width: 44px; height: 44px; margin: -5px 0; border: 0; border-radius: 50%; color: var(--text); background: transparent; font-size: 27px; line-height: 1; cursor: pointer; }
+    .report-back:focus-visible, .report-tab:focus-visible, .evidence-toggle:focus-visible, .report-question:focus-visible { outline: 2px solid var(--primary-coral); outline-offset: 2px; }
+    .report-title { margin: 0; font-size: 18px; font-weight: 880; letter-spacing: -.02em; }
+    .report-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
+    .report-tab { min-height: 48px; border: 0; border-radius: 11px; background: transparent; color: var(--faint); font-size: 12px; font-weight: 800; cursor: pointer; }
+    .report-tab[aria-selected="true"] { color: white; background: var(--primary-coral); box-shadow: 0 3px 9px rgba(182,91,85,.2); }
+    .report-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 18px 18px 42px; scrollbar-width: none; }
+    .report-scroll::-webkit-scrollbar { display: none; }
+    .report-panel[hidden] { display: none; }
+    .report-period { margin: 0 0 7px; color: #b03a34; font-size: 11px; font-weight: 850; }
+    .report-hero { display: grid; grid-template-columns: 56px minmax(0,1fr); gap: 10px; align-items: start; padding: 14px; border: 1px solid var(--border); border-radius: 17px; background: linear-gradient(145deg, var(--surface), var(--surface-hi)); box-shadow: var(--shadow); }
+    .report-hero .report-duck { align-self: end; }
+    .report-duck { width: 54px; height: 58px; background: url("./assets/darin-duck-sprites.png") no-repeat -9px -7px / 430px auto; }
+    .report-duck-week { width: 54px; height: 66px; background-image: url("./assets/weekly-report-duck-frames.png?t=4"); background-repeat: no-repeat; background-size: 216px 132px; background-position: 0 0; cursor: pointer; }
+    .report-duck-week.is-playing { animation: weeklyReportDuckSprite 2.6s steps(1, end) 1 both; }
+    @keyframes weeklyReportDuckSprite {
+      0%, 12.49% { background-position: 0 0; }
+      12.5%, 24.99% { background-position: -54px 0; }
+      25%, 37.49% { background-position: -108px 0; }
+      37.5%, 49.99% { background-position: -162px 0; }
+      50%, 62.49% { background-position: 0 -66px; }
+      62.5%, 74.99% { background-position: -54px -66px; }
+      75%, 87.49% { background-position: -108px -66px; }
+      87.5%, 100% { background-position: -162px -66px; }
+    }
+    .report-duck-month { width: 54px; height: 66px; background-image: url("./assets/monthly-report-duck-frames.png?t=4"); background-repeat: no-repeat; background-size: 216px 132px; background-position: 0 0; cursor: pointer; }
+    .report-duck-month.is-playing { animation: monthlyReportDuckSprite 2.6s steps(1, end) 1 both; }
+    @keyframes monthlyReportDuckSprite {
+      0%, 12.49% { background-position: 0 0; }
+      12.5%, 24.99% { background-position: -54px 0; }
+      25%, 37.49% { background-position: -108px 0; }
+      37.5%, 49.99% { background-position: -162px 0; }
+      50%, 62.49% { background-position: 0 -66px; }
+      62.5%, 74.99% { background-position: -54px -66px; }
+      75%, 87.49% { background-position: -108px -66px; }
+      87.5%, 100% { background-position: -162px -66px; }
+    }
+    .report-duck-all { width: 54px; height: 66px; background-image: url("./assets/all-report-duck-frames.png?t=5"); background-repeat: no-repeat; background-size: 270px 66px; background-position: 0 0; cursor: pointer; }
+    .report-duck-all.is-playing { animation: allReportDuckSprite 2.6s steps(1, end) 1 both; }
+    @keyframes allReportDuckSprite {
+      0%, 19.99% { background-position: 0 0; }
+      20%, 39.99% { background-position: -54px 0; }
+      40%, 59.99% { background-position: -108px 0; }
+      60%, 79.99% { background-position: -162px 0; }
+      80%, 100% { background-position: -216px 0; }
+    }
+    .report-hero h3 { margin: 0; font-size: 15px; line-height: 1.45; letter-spacing: -.015em; }
+    .report-hero p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .report-section { margin-top: 23px; }
+    .report-section h3 { margin: 0 0 10px; font-size: 15px; font-weight: 880; }
+    .report-section-intro { margin: -4px 0 10px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .report-metrics { border-top: 1px solid var(--border); }
+    .report-metric { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+    .report-metric strong { color: var(--text); font-size: 14px; font-weight: 850; }
+    .report-compare { display: grid; gap: 9px; }
+    .compare-row { padding: 12px; border-radius: 13px; background: var(--surface-hi); border: 1px solid var(--border); }
+    .compare-label { display: block; color: var(--muted); font-size: 11px; font-weight: 800; }
+    .compare-values { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 14px; font-weight: 850; }
+    .compare-values .before { color: var(--faint); font-weight: 700; }
+    .compare-values .trend-up { color: #6c9d8e; } .compare-values .trend-same { color: var(--faint); }
+    .insight-stack { display: grid; gap: 9px; }
+    .report-insight { padding: 13px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+    .report-insight strong { display: block; font-size: 13px; line-height: 1.45; }
+    .report-insight p { margin: 4px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+    .evidence-toggle { min-height: 48px; margin: 1px 0 -8px; padding: 0 4px; border: 0; background: transparent; color: #9b5a32; font-size: 11px; font-weight: 850; cursor: pointer; }
+    .evidence { margin-top: 8px; padding: 9px 10px; border-radius: 10px; background: var(--surface-hi); color: var(--muted); font-size: 10.5px; line-height: 1.65; }
+    .evidence[hidden] { display: none; }
+    .report-note { margin: 9px 2px 0; color: var(--faint); font-size: 10px; line-height: 1.55; }
+    .watch-list { display: grid; gap: 8px; }
+    .watch-item { padding: 11px 12px; border-left: 3px solid var(--sage); border-radius: 0 11px 11px 0; background: rgba(105,195,174,.09); color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+    .report-questions { display: grid; gap: 8px; }
+    .report-question { min-height: 46px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-hi); color: var(--text); text-align: left; font-size: 12px; font-weight: 750; cursor: pointer; }
+    .trend-list { display: grid; gap: 9px; }
+    .trend-card { padding: 13px; border-radius: 14px; background: var(--surface-hi); border: 1px solid var(--border); }
+    .trend-card h4 { margin: 0 0 10px; font-size: 12px; }
+    .trend-values { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .trend-values span { color: var(--faint); font-size: 9.5px; text-align: center; }
+    .trend-values strong { display: block; margin-top: 4px; color: var(--text); font-size: 12px; }
+    .story-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 12px; }
+    .story-summary span { padding: 10px 6px; border-radius: 12px; background: var(--surface-hi); color: var(--faint); font-size: 10px; text-align: center; }
+    .story-summary strong { display: block; margin-top: 4px; color: var(--text); font-size: 12px; }
+    .milestones { display: grid; gap: 0; padding-left: 14px; border-left: 2px solid var(--coral-soft); }
+    .milestone { position: relative; padding: 0 0 17px 13px; }
+    .milestone::before { content: ""; position: absolute; left: -20px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--brand-coral); border: 2px solid var(--background); }
+    .milestone:last-child { padding-bottom: 0; }
+    .milestone time { color: #b03a34; font-size: 10.5px; font-weight: 850; }
+    .milestone p { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+
+    .theme-switch {
+      border: 1px solid rgba(70,54,44,.15);
+      border-radius: 999px; padding: 11px 14px; color: #4d4038; background: rgba(255,255,255,.82);
+      font-size: 13px; font-weight: 750; cursor: pointer;
+    }
+
+    body.dark {
+      color-scheme: dark;
+      --background: #181513; --surface: #24201d; --surface-hi: #2b2521;
+      --text: #f7eee7; --muted: #c7bcb3; --faint: #b3a69d; --border: #443b35;
+      --coral-soft: rgba(232,145,138,.22); --shadow: 0 8px 24px rgba(0,0,0,.18);
+      --future-mask: rgba(24, 21, 19, .48);
+      background:
+        radial-gradient(circle at 20% 0%, rgba(232,145,138,.14), transparent 28rem),
+        #100e0d;
+    }
+    body.dark .age-badge, body.dark .weekly-kicker, body.dark .weekly-link, body.dark .tab.active { color: #f2a8a1; }
+    body.dark .weekly-badge { color: #f2a8a1; }
+    body.dark .report-period, body.dark .evidence-toggle, body.dark .milestone time { color: #f2a8a1; }
+    body.dark .watch-item { background: rgba(105,195,174,.13); }
+    body.dark .growth-ai-card { background: linear-gradient(145deg, var(--surface), rgba(61,42,38,.72)); }
+    body.dark .growth-scene, body.dark .linked-record-visual, body.dark .milestone-sheet-visual { background: linear-gradient(145deg, var(--growth-soft, var(--coral-soft)), rgba(43,37,33,.92)); }
+    body.dark .sprite-measure,
+    body.dark .height-measure { background: transparent; box-shadow: none; }
+    body.dark .new-milestone { background: linear-gradient(145deg, rgba(232,145,138,.16), rgba(155,130,215,.13)); }
+    body.dark .theme-switch { background: rgba(36,32,29,.9); color: #f7eee7; border-color: #443b35; }
+    body.dark .rhythm-line::before { background: #4a433c; }
+    body.dark .time-axis span::after { background: #6a5f55; }
+    body.dark .sleep-block::before { background: #8b90e8; }
+    body.dark { background: #100e0d; }
+    body.dark .demo-brand { color: #f2a8a1; }
+    body.dark .growth-chart-wrap { background: #322b26; border-color: #6a5c52; }
+    body.dark .growth-chart::before,
+    body.dark .growth-chart::after { background: rgba(247, 238, 231, .22); }
+    body.dark .growth-chart-head span,
+    body.dark .growth-chart-axis { color: #e8d8cc; }
+    body.dark .growth-chart-head small { color: #d2c3b7; }
+    body.dark .percentile { stroke: #e0d0c3; }
+    body.dark .percentile-label { fill: #f0e2d6; }
+    body.dark .percentile-band { fill: rgba(78, 201, 176, .24); }
+    body.dark .growth-point { stroke: #f7eee7; }
+    body.dark .growth-tooltip {
+      background: #3d342e;
+      border-color: #7a6a5e;
+      color: #fff8f2;
+      box-shadow: 0 10px 24px rgba(0,0,0,.42);
+    }
+    body.dark .growth-tooltip span { color: #eadcce; }
+    body.dark .sheet-backdrop { background: rgba(8, 6, 5, .62); }
+    body.dark .sheet { background: #2c2622; }
+    body.dark .sheet .period,
+    body.dark .disclaimer,
+    body.dark .growth-sheet-details span { color: #e0d0c3; }
+    body.dark .sheet-row,
+    body.dark .report-header,
+    body.dark .linked-record-header,
+    body.dark .report-tabs { border-color: #6a5c52; }
+    body.dark .sheet-row strong,
+    body.dark .growth-sheet-value { color: #fff8f2; }
+    body.dark .discovery,
+    body.dark .prompt,
+    body.dark .growth-sheet-details > div,
+    body.dark .growth-record-link,
+    body.dark .report-insight,
+    body.dark .compare-row,
+    body.dark .trend-card,
+    body.dark .evidence,
+    body.dark .growth-evidence,
+    body.dark .month-compare { background: #3a322c; border-color: #6a5c52; color: #f7eee7; }
+    body.dark .discovery p,
+    body.dark .report-insight p,
+    body.dark .report-note { color: #e0d0c3; }
+    body.dark .report-screen,
+    body.dark .linked-record-screen { background: #181513; }
+    body.dark .report-header,
+    body.dark .linked-record-header { background: #221d1a; }
+    body.dark .report-tab { color: #d8c8bc; }
+    body.dark .report-metric { border-color: #6a5c52; color: #e0d0c3; }
+    body.dark .report-metric strong { color: #fff8f2; }
+    body.dark .growth-card.weight { --growth-color: #f0b0ab; --growth-soft: rgba(232,145,138,.28); }
+    body.dark .growth-card.height { --growth-color: #c4b0ef; --growth-soft: rgba(155,130,215,.28); }
+    body.dark .growth-card.head { --growth-color: #6ed4bc; --growth-soft: rgba(105,195,174,.26); }
+    body.dark .growth-action,
+    body.dark .growth-more,
+    body.dark .height-predict-reset { color: var(--growth-color); }
+    body.dark .growth-action.primary { background: var(--growth-soft); }
+    body.dark .growth-compare .from { color: #eadcce; }
+    body.dark .growth-caption { color: #fff8f2; }
+    body.dark .growth-detail { border-color: #6a5c52; }
+    body.dark .height-predict-field input {
+      background: #3a322c;
+      border-color: #7a6a5e;
+      color: #fff8f2;
+    }
+    body.dark .height-predict-error { color: #f2a8a1; }
+    body.dark .height-predict-result { color: #fff8f2; }
+    body.dark .height-predict-result p { color: #eadcce; }
+    body.dark .growth-inline-panel { background: rgba(232,145,138,.2); border-color: #7a5a54; color: #fff8f2; }
+    body.dark .growth-inline-panel p { color: #eadcce; }
+    body.dark .growth-inline-values span { background: #322b26; color: #eadcce; }
+    body.dark .growth-heading span,
+    body.dark .growth-date,
+    body.dark .growth-source,
+    body.dark .growth-section-head span { color: #d8c8bc; }
+    body.dark .grabber { background: #7a6a5e; }
+    body.dark .sheet { color: #fff8f2; }
+    body.dark .sheet-row { color: #f7eee7; }
+    body.dark .growth-measure-form label { color: #eadcce; }
+    body.dark .growth-measure-form input {
+      background: #3a322c;
+      border-color: #7a6a5e;
+      color: #fff8f2;
+    }
+    @media (max-width: 720px) {
+      .demo-stage { grid-template-columns: 1fr; justify-items: center; gap: 22px; padding: 24px 16px 32px; }
+      .demo-rail { max-width: 390px; text-align: center; }
+      .demo-hints li { border-left: 0; padding-left: 0; }
+    }
+
+    @media (max-width: 480px) {
+      body { background: var(--background); }
+      .demo-stage { padding: 0; gap: 0; }
+      .demo-rail { display: none; }
+      .demo-device { padding: 0; border-radius: 0; background: transparent; box-shadow: none; }
+      .demo-device::before { display: none; }
+      .demo-shell { width: 100%; height: 100dvh; min-height: 0; border-radius: 0; }
+    }
+
+    @media (max-width: 360px) {
+      .scroll-area { padding-inline: 14px; }
+      .app-header { margin-inline: -14px; padding-inline: 16px; }
+      .today-summary { grid-template-columns: 64px minmax(0, 1fr); gap: 7px; }
+      .duck-mascot { transform: scale(.82); transform-origin: left top; }
+      .today-summary-title { font-size: 14px; line-height: 1.44; }
+      .today-summary-body { font-size: 11px; }
+      .rhythm-chip { padding-inline: 3px; font-size: 8.5px; }
+      .rhythm-chip strong { font-size: 10px; }
+      .milestone-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+      .milestone-item { min-height: 82px; }
+      .growth-record-links { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .001ms !important; animation-duration: .001ms !important; }
+      .duck-mascot, .duck-mascot.is-playing { animation: none !important; background-position: 0 0; }
+      .weekly-card.is-playing .weekly-duck { animation: none !important; background-position: 0 0; }
+      .report-duck-week.is-playing { animation: none !important; background-position: 0 0; }
+      .report-duck-month.is-playing { animation: none !important; background-position: 0 0; }
+      .report-duck-all.is-playing { animation: none !important; background-position: 0 0; }
+      .milestone-intro .duck-inline, .milestone-intro .duck-inline.is-playing { animation: none !important; background-position: 0 0; }
+      .growth-ai-duck, .growth-ai-duck.is-playing { animation: none !important; background-position: 0 0; }
+      .milestone-sheet-duck, .milestone-sheet-duck.pose-story { animation: none !important; background-position: 0 0; }
+      .milestone-sheet-duck.pose-head { background-position: -144px 0; }
+      .milestone-sheet-duck.pose-coo { background-position: -216px 0; }
+      .milestone-sheet-duck.pose-reach { background-position: -72px -108px; }
+      .milestone-sheet-duck.pose-roll { background-position: -144px -108px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-stage">
+    <aside class="demo-rail">
+      <p class="demo-brand">Darin</p>
+      <h1>한눈에</h1>
+      <p>오늘의 리듬, 주간 리포트, 성장을 한 화면에서 보는 인터랙티브 데모예요.</p>
+      <ul class="demo-hints">
+        <li>지금 표시를 좌우로 밀면 그 시간에 한 일이 보여요</li>
+        <li>주간 리포트를 열면 발견과 근거가 나와요</li>
+        <li>성장 카드의 자세히에서 그래프와 측정을 볼 수 있어요</li>
+      </ul>
+      <button class="theme-switch" id="themeSwitch" type="button" aria-label="데모 테마 전환">다크 모드</button>
+    </aside>
+    <div class="demo-device">
+  <main class="demo-shell" aria-label="Darin 한눈에 화면 데모">
+    <div class="status-bar" aria-hidden="true">
+      <span id="systemTime">3:20</span>
+      <span class="system-icons"><span class="signal">▂▄▆█</span><span>⌁</span><span class="battery"><i></i></span></span>
+    </div>
+
+    <section class="scroll-area" aria-label="한눈에 요약">
+    <header class="app-header">
+      <div class="identity">
+        <div class="baby-row">
+          <button class="baby-button" type="button" aria-label="아기 선택">
+            다린이
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m7 10 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <span class="age-badge">생후 4개월</span>
+        </div>
+        <div class="caregivers" aria-label="함께 기록하는 보호자 2명">
+          <span class="avatar mom">엄마</span><span class="avatar dad">아빠</span><span class="caregiver-label">함께 돌보는 중</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-button" type="button" aria-label="알림">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+        </button>
+        <button class="icon-button" type="button" aria-label="설정">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 10 3.01V3h4v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+        </button>
+      </div>
+    </header>
+      <section class="today-summary" aria-labelledby="todaySummaryTitle">
+        <div class="duck-mascot" role="button" tabindex="0" aria-label="오늘의 요약 오리 애니메이션 다시 보기"></div>
+        <div>
+          <h1 class="today-summary-title" id="todaySummaryTitle">오늘 다린이는 전반적으로 평소 리듬대로 지내고 있어요.</h1>
+          <p class="today-summary-body" id="todaySummaryBody">밤잠은 어제보다 1시간 길었고, 수유 간격도 안정적이에요.</p>
+        </div>
+        <div class="today-stats" aria-label="오늘 기록 요약">
+          <span>수면 <strong>8시간 30분</strong></span><span>·</span><span>수유 <strong>5회</strong></span><span>·</span><span>기저귀 <strong>5회</strong></span><span>·</span><span>터미타임 <strong>2회</strong></span>
+        </div>
+      </section>
+
+      <article class="card rhythm-card">
+        <div class="card-head">
+          <h2 class="card-title rhythm-heading">
+            오늘의 리듬
+          </h2>
+          <span class="rhythm-today">오늘</span>
+        </div>
+        <div class="rhythm-sky" id="rhythmSky" aria-label="오늘 24시간 수면, 수유, 기저귀 리듬">
+          <div class="now-scrubber" id="nowScrubber" role="slider" tabindex="0" aria-label="오늘 리듬 탐색" aria-describedby="scrubHelp" aria-valuemin="0" aria-valuemax="920" aria-valuenow="920" aria-valuetext="지금, 깨어 있음">
+            <span class="now-badge" id="nowBadge">지금</span>
+            <span class="rhythm-duck awake" id="rhythmDuck" aria-hidden="true"></span>
+          </div>
+          <span class="sr-only" id="scrubHelp">좌우로 밀거나 화살표 키로 그 시간에 한 일을 볼 수 있어요. 손을 놓으면 지금으로 돌아와요.</span>
+          <div class="time-axis" aria-hidden="true"><span style="left:0%">0시</span><span style="left:25%">6시</span><span style="left:50%">12시</span><span style="left:75%">18시</span><span style="left:100%">24시</span></div>
+          <div class="rhythm-line-shell">
+            <div class="rhythm-line" id="rhythmLine">
+              <div id="sleepBlocks"></div>
+              <div class="bar-events" id="barEvents" aria-label="오늘 수유, 기저귀, 활동 기록"></div>
+              <i class="now-line" id="nowLine" aria-hidden="true"></i>
+            </div>
+          </div>
+        </div>
+        <p class="status-copy" id="rhythmStatus"><strong>지금은 깨어 있어요</strong> · 마지막 수유 오후 2:30</p>
+        <div class="timeline-rows" id="timelineRows">
+          <div class="timeline-row">
+            <span class="timeline-label"><i class="feed-mark"></i><span class="sr-only">수유</span></span>
+            <div class="event-track" id="feedEvents"></div>
+          </div>
+          <div class="timeline-row">
+            <span class="timeline-label"><i class="diaper-mark"></i><span class="sr-only">기저귀</span></span>
+            <div class="event-track" id="diaperEvents"></div>
+          </div>
+          <div class="timeline-row" id="activityRow">
+            <span class="timeline-label"><i class="activity-mark"></i><span class="sr-only">활동</span></span>
+            <div class="event-track" id="activityEvents"></div>
+          </div>
+        </div>
+        <button class="timeline-toggle" id="timelineToggle" type="button" aria-expanded="false" aria-controls="timelineRows">펼쳐서 보기</button>
+        <div class="legend" aria-label="범례">
+          <span class="legend-item"><i class="legend-dot sleep"></i>수면</span>
+          <span class="legend-item"><i class="legend-dot feed"></i>수유</span>
+          <span class="legend-item"><i class="legend-tick"></i>기저귀</span>
+          <span class="legend-item"><i class="legend-dot activity"></i>터미타임</span>
+        </div>
+      </article>
+
+      <button class="weekly-card" id="weeklyCard" type="button" aria-haspopup="dialog">
+        <span class="weekly-top"><span class="weekly-kicker">주간 리포트</span><span class="weekly-badge">8월 5주차</span></span>
+        <span class="weekly-main"><span class="weekly-duck" aria-hidden="true"></span><span class="weekly-text"><span class="weekly-headline">밤잠은 조금 길어지고, 수유 리듬은 안정적이에요</span><span class="weekly-copy">최근 기록에서 밤잠이 <strong>4시간 51분 → 6시간 12분</strong>으로 늘었어요. 수유 간격은 지난주와 비슷해요.</span></span></span>
+        <span class="finding">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z"/></svg>
+          흥미로운 발견 2가지가 있어요
+        </span>
+        <span class="weekly-link">리포트 보기 ›</span>
+      </button>
+
+      <div class="growth-heading"><h2>성장</h2><span>최근 측정 · 2026.08.28</span></div>
+
+      <article class="growth-card weight" aria-labelledby="weightTitle">
+        <header class="growth-card-head"><h3 id="weightTitle">몸무게</h3><span class="growth-date">8월 28일 측정</span></header>
+        <div class="growth-summary">
+          <div class="growth-readout" id="weightReadout">
+            <p class="growth-compare"><span class="from" id="weightFromValue">6.1kg</span><span class="arrow" aria-hidden="true">→</span><strong class="to" id="weightCurrentValue">6.4kg</strong></p>
+            <p class="growth-delta" id="weightDeltaValue">+300g</p>
+            <p class="growth-caption" id="weightCaption">지난번보다 300g 늘었어요</p>
+          </div>
+          <button class="growth-scene measure-scene sprite-measure weight-measure" id="weightMeasureAnimation" type="button" aria-label="다린이 몸무게 측정 애니메이션 다시 보기">
+            <span class="measure-motion" aria-hidden="true">
+              <img class="measure-motion-frame is-active" src="./assets/weight-motion-01.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/weight-motion-02.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/weight-motion-03.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/weight-motion-04.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/weight-motion-05.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/weight-motion-06.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/weight-motion-07.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/weight-motion-08.png?t=7" alt="" decoding="async">
+            </span>
+            <span class="weight-value" id="weightMeasureValue" aria-hidden="true">6.1kg</span>
+          </button>
+          <span class="sr-only" id="weightAnimationStatus" aria-live="polite"></span>
+        </div>
+        <div class="growth-more-row"><button class="growth-more" type="button" data-growth-detail="weight" aria-expanded="false" aria-controls="weightDetail">자세히 ›</button></div>
+        <div class="growth-detail" id="weightDetail" hidden>
+          <div class="growth-chart-wrap">
+            <div class="growth-chart-head"><span>지금까지의 성장 기록</span><small>점을 눌러 기록 보기</small></div>
+            <div class="growth-chart"><svg viewBox="0 0 320 100" preserveAspectRatio="none" role="img" aria-label="몸무게 전체 성장 그래프. 성장 기록 점을 누르면 상세를 볼 수 있습니다."><path class="percentile-band" d="M0 80 C70 70 115 61 170 50 S265 31 320 27 L320 8 C265 13 220 19 170 29 S70 46 0 58 Z"/><path class="percentile" d="M0 69 C70 59 115 51 170 40 S265 22 320 18"/><text class="percentile-label" x="268" y="15">50th %ile</text><path class="growth-line" d="M20 77 C70 72 120 62 172 52 S200 50 213 48 S232 42 245 38 S278 33 300 30"/><circle class="growth-point" cx="20" cy="77" r="4" tabindex="0" role="button" data-growth-metric="몸무게" data-growth-value="4.2kg" data-growth-date="2026.05.03" data-growth-age="생후 0개월 5일" data-growth-percentile="48번째 백분위 근처" aria-label="5월 3일 몸무게 4.2kg 기록 보기"/><circle class="growth-point" cx="92" cy="66" r="4" tabindex="0" role="button" data-growth-metric="몸무게" data-growth-value="5.0kg" data-growth-date="2026.06.14" data-growth-age="생후 1개월 16일" data-growth-percentile="49번째 백분위 근처" aria-label="6월 14일 몸무게 5.0kg 기록 보기"/><circle class="growth-point" cx="172" cy="52" r="4" tabindex="0" role="button" data-growth-metric="몸무게" data-growth-value="5.7kg" data-growth-date="2026.07.18" data-growth-age="생후 2개월 20일" data-growth-percentile="50번째 백분위 근처" aria-label="7월 18일 몸무게 5.7kg 기록 보기"/><circle class="growth-point" cx="213" cy="48" r="4" tabindex="0" role="button" data-growth-metric="몸무게" data-growth-value="5.82kg" data-growth-date="2026.08.02" data-growth-age="생후 3개월 5일" data-growth-percentile="50번째 백분위 근처" aria-label="8월 2일 몸무게 5.82kg 기록 보기"/><circle class="growth-point" cx="245" cy="38" r="4" tabindex="0" role="button" data-growth-metric="몸무게" data-growth-value="6.1kg" data-growth-date="2026.08.14" data-growth-age="생후 3개월 18일" data-growth-percentile="50번째 백분위 근처" aria-label="8월 14일 몸무게 6.1kg 기록 보기"/><circle class="growth-point current" cx="300" cy="30" r="5.5" tabindex="0" role="button" data-growth-metric="몸무게" data-growth-value="6.4kg" data-growth-date="2026.08.28" data-growth-age="생후 4개월 1일" data-growth-percentile="51번째 백분위 근처" aria-label="8월 28일 몸무게 6.4kg 현재 기록 보기"/></svg></div>
+            <div class="growth-chart-axis" aria-hidden="true"><span>5월</span><span>6월</span><span>7월</span><span>8월</span></div>
+          </div>
+          <div class="growth-inline-panel" id="weightInline"><strong>몸무게 최근 3회</strong><div class="growth-inline-values"><span>8월 2일<b>5.82kg</b></span><span>8월 14일<b>6.1kg</b></span><span>8월 28일<b>6.4kg</b></span></div><p>그래프의 점을 누르면 해당 날짜의 월령과 성장 위치를 바로 확인할 수 있어요.</p></div>
+          <div class="growth-card-actions"><button class="growth-action primary" type="button" data-growth-add="몸무게">새 측정 추가</button></div>
+        </div>
+      </article>
+
+      <article class="growth-card height" aria-labelledby="heightTitle">
+        <header class="growth-card-head"><h3 id="heightTitle">키</h3><span class="growth-date">8월 28일 측정</span></header>
+        <div class="growth-summary">
+          <div class="growth-readout" id="heightReadout">
+            <p class="growth-compare"><span class="from" id="heightFromValue">61.4cm</span><span class="arrow" aria-hidden="true">→</span><strong class="to" id="heightCurrentValue">62.8cm</strong></p>
+            <p class="growth-delta" id="heightDeltaValue">+1.4cm</p>
+            <p class="growth-caption" id="heightCaption">지난번보다 1.4cm 컸어요</p>
+          </div>
+          <button class="growth-scene measure-scene sprite-measure height-measure" id="heightMeasureAnimation" type="button" data-previous="61.4" data-current="62.8" data-unit="cm" aria-label="다린이 키 측정 애니메이션 다시 보기">
+            <span class="height-motion measure-motion" aria-hidden="true">
+              <img class="height-motion-frame measure-motion-frame is-active" src="./assets/height-motion-01.png?t=7" alt="" decoding="async">
+              <img class="height-motion-frame measure-motion-frame" src="./assets/height-motion-02.png?t=7" alt="" decoding="async">
+              <img class="height-motion-frame measure-motion-frame" src="./assets/height-motion-03.png?t=7" alt="" decoding="async">
+              <img class="height-motion-frame measure-motion-frame" src="./assets/height-motion-04.png?t=7" alt="" decoding="async">
+              <img class="height-motion-frame measure-motion-frame" src="./assets/height-motion-05.png?t=7" alt="" decoding="async">
+              <img class="height-motion-frame measure-motion-frame" src="./assets/height-motion-06.png?t=7" alt="" decoding="async">
+              <img class="height-motion-frame measure-motion-frame" src="./assets/height-motion-07.png?t=7" alt="" decoding="async">
+              <img class="height-motion-frame measure-motion-frame" src="./assets/height-motion-08.png?t=7" alt="" decoding="async">
+            </span>
+            <span class="height-dynamic-copy height-dynamic-readout" aria-hidden="true"><strong id="heightCurrentText">62.8cm</strong><span id="heightPreviousText">61.4cm</span></span>
+            <span class="height-dynamic-copy height-dynamic-delta" id="heightDeltaText" aria-hidden="true">+1.4cm!</span>
+            <span class="height-dynamic-copy height-dynamic-final" id="heightFinalText" aria-hidden="true">62.8cm</span>
+            <span class="height-value" id="heightMeasureValue" aria-hidden="true">61.4cm</span>
+          </button>
+          <span class="sr-only" id="heightAnimationStatus" aria-live="polite"></span>
+        </div>
+        <div class="growth-more-row"><button class="growth-more" type="button" data-growth-detail="height" aria-expanded="false" aria-controls="heightDetail">자세히 ›</button></div>
+        <div class="growth-detail" id="heightDetail" hidden>
+          <div class="growth-chart-wrap">
+            <div class="growth-chart-head"><span>지금까지의 성장 기록</span><small>점을 눌러 기록 보기</small></div>
+            <div class="growth-chart"><svg viewBox="0 0 320 100" preserveAspectRatio="none" role="img" aria-label="키 전체 성장 그래프. 성장 기록 점을 누르면 상세를 볼 수 있습니다."><path class="percentile-band" d="M0 82 C70 68 130 55 180 46 S260 32 320 24 L320 6 C260 13 230 17 180 27 S70 47 0 60 Z"/><path class="percentile" d="M0 71 C70 57 130 44 180 36 S260 23 320 16"/><text class="percentile-label" x="268" y="14">50th %ile</text><path class="growth-line" d="M20 80 C70 70 120 56 172 48 S200 43 213 41 S232 37 245 35 S278 29 300 26"/><circle class="growth-point" cx="20" cy="80" r="4" tabindex="0" role="button" data-growth-metric="키" data-growth-value="52.1cm" data-growth-date="2026.05.03" data-growth-age="생후 0개월 5일" data-growth-percentile="49번째 백분위 근처" aria-label="5월 3일 키 52.1cm 기록 보기"/><circle class="growth-point" cx="92" cy="65" r="4" tabindex="0" role="button" data-growth-metric="키" data-growth-value="56.7cm" data-growth-date="2026.06.14" data-growth-age="생후 1개월 16일" data-growth-percentile="50번째 백분위 근처" aria-label="6월 14일 키 56.7cm 기록 보기"/><circle class="growth-point" cx="172" cy="48" r="4" tabindex="0" role="button" data-growth-metric="키" data-growth-value="59.8cm" data-growth-date="2026.07.18" data-growth-age="생후 2개월 20일" data-growth-percentile="50번째 백분위 근처" aria-label="7월 18일 키 59.8cm 기록 보기"/><circle class="growth-point" cx="213" cy="41" r="4" tabindex="0" role="button" data-growth-metric="키" data-growth-value="60.7cm" data-growth-date="2026.08.02" data-growth-age="생후 3개월 5일" data-growth-percentile="50번째 백분위 근처" aria-label="8월 2일 키 60.7cm 기록 보기"/><circle class="growth-point" cx="245" cy="35" r="4" tabindex="0" role="button" data-growth-metric="키" data-growth-value="61.4cm" data-growth-date="2026.08.14" data-growth-age="생후 3개월 18일" data-growth-percentile="50번째 백분위 근처" aria-label="8월 14일 키 61.4cm 기록 보기"/><circle class="growth-point current" cx="300" cy="26" r="5.5" tabindex="0" role="button" data-growth-metric="키" data-growth-value="62.8cm" data-growth-date="2026.08.28" data-growth-age="생후 4개월 1일" data-growth-percentile="51번째 백분위 근처" aria-label="8월 28일 키 62.8cm 현재 기록 보기"/></svg></div>
+            <div class="growth-chart-axis" aria-hidden="true"><span>5월</span><span>6월</span><span>7월</span><span>8월</span></div>
+          </div>
+          <div class="growth-inline-panel" id="heightInline"><strong>키 최근 3회</strong><div class="growth-inline-values"><span>8월 2일<b>60.7cm</b></span><span>8월 14일<b>61.4cm</b></span><span>8월 28일<b>62.8cm</b></span></div><p>그래프의 점을 누르면 해당 날짜의 월령과 성장 위치를 바로 확인할 수 있어요.</p></div>
+          <div class="growth-card-actions"><button class="growth-action" type="button" data-growth-add="키">새 측정 추가</button></div>
+          <form class="height-predict" id="heightPredictForm">
+            <h4>성인 키 간단 참고치</h4>
+            <p class="height-predict-note">부모 키 평균을 바탕으로 한 데모용 참고치예요.</p>
+            <div class="height-predict-row"><label for="dadHeight">아빠 키</label><div class="height-predict-field"><input id="dadHeight" name="dadHeight" inputmode="decimal" type="number" min="140" max="210" step="0.1" required /><span>cm</span></div></div>
+            <div class="height-predict-row"><label for="momHeight">엄마 키</label><div class="height-predict-field"><input id="momHeight" name="momHeight" inputmode="decimal" type="number" min="140" max="210" step="0.1" required /><span>cm</span></div></div>
+            <p class="height-predict-error" id="heightPredictError" role="alert" hidden></p>
+            <button class="height-predict-submit" type="submit">예상 범위 보기</button>
+          </form>
+          <div class="height-predict-result" id="heightPredictResult" aria-live="polite" hidden>
+            <strong>간단 참고치</strong>
+            <p class="height-predict-range" id="heightPredictRange">약 163–169cm</p>
+            <p>부모 키 평균에서 ±8.5cm를 계산한 범위예요. 성별과 성장 속도에 따라 달라질 수 있어요.</p>
+            <button class="height-predict-reset" id="heightPredictReset" type="button">다시 입력</button>
+          </div>
+        </div>
+      </article>
+
+      <article class="growth-card head" aria-labelledby="headTitle">
+        <header class="growth-card-head"><h3 id="headTitle">머리둘레</h3><span class="growth-date">8월 28일 측정</span></header>
+        <div class="growth-summary">
+          <div class="growth-readout" id="headReadout">
+            <p class="growth-compare"><span class="from" id="headFromValue">40.6cm</span><span class="arrow" aria-hidden="true">→</span><strong class="to" id="headCurrentValue">41.2cm</strong></p>
+            <p class="growth-delta" id="headDeltaValue">+0.6cm</p>
+            <p class="growth-caption" id="headCaption">지난번보다 0.6cm 자랐어요</p>
+          </div>
+          <button class="growth-scene measure-scene sprite-measure head-measure" id="headMeasureAnimation" type="button" aria-label="다린이 머리둘레 측정 애니메이션 다시 보기">
+            <span class="measure-motion" aria-hidden="true">
+              <img class="measure-motion-frame is-active" src="./assets/head-motion-01.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/head-motion-02.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/head-motion-03.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/head-motion-04.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/head-motion-05.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/head-motion-06.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/head-motion-07.png?t=7" alt="" decoding="async">
+              <img class="measure-motion-frame" src="./assets/head-motion-08.png?t=7" alt="" decoding="async">
+            </span>
+            <span class="head-value" id="headMeasureValue" aria-hidden="true">40.6cm</span>
+          </button>
+          <span class="sr-only" id="headAnimationStatus" aria-live="polite"></span>
+        </div>
+        <div class="growth-more-row"><button class="growth-more" type="button" data-growth-detail="head" aria-expanded="false" aria-controls="headDetail">자세히 ›</button></div>
+        <div class="growth-detail" id="headDetail" hidden>
+          <div class="growth-chart-wrap">
+            <div class="growth-chart-head"><span>지금까지의 성장 기록</span><small>점을 눌러 기록 보기</small></div>
+            <div class="growth-chart"><svg viewBox="0 0 320 100" preserveAspectRatio="none" role="img" aria-label="머리둘레 전체 성장 그래프. 성장 기록 점을 누르면 상세를 볼 수 있습니다."><path class="percentile-band" d="M0 78 C80 65 130 55 180 47 S258 33 320 29 L320 10 C258 15 230 18 180 28 S80 43 0 54 Z"/><path class="percentile" d="M0 67 C80 54 130 45 180 37 S258 24 320 20"/><text class="percentile-label" x="268" y="17">50th %ile</text><path class="growth-line" d="M20 76 C70 68 120 56 172 47 S200 40 213 37 S232 36 245 36 S278 32 300 30"/><circle class="growth-point" cx="20" cy="76" r="4" tabindex="0" role="button" data-growth-metric="머리둘레" data-growth-value="35.5cm" data-growth-date="2026.05.03" data-growth-age="생후 0개월 5일" data-growth-percentile="48번째 백분위 근처" aria-label="5월 3일 머리둘레 35.5cm 기록 보기"/><circle class="growth-point" cx="92" cy="65" r="4" tabindex="0" role="button" data-growth-metric="머리둘레" data-growth-value="37.8cm" data-growth-date="2026.06.14" data-growth-age="생후 1개월 16일" data-growth-percentile="49번째 백분위 근처" aria-label="6월 14일 머리둘레 37.8cm 기록 보기"/><circle class="growth-point" cx="172" cy="47" r="4" tabindex="0" role="button" data-growth-metric="머리둘레" data-growth-value="39.6cm" data-growth-date="2026.07.18" data-growth-age="생후 2개월 20일" data-growth-percentile="50번째 백분위 근처" aria-label="7월 18일 머리둘레 39.6cm 기록 보기"/><circle class="growth-point" cx="213" cy="37" r="4" tabindex="0" role="button" data-growth-metric="머리둘레" data-growth-value="40.5cm" data-growth-date="2026.08.02" data-growth-age="생후 3개월 5일" data-growth-percentile="50번째 백분위 근처" aria-label="8월 2일 머리둘레 40.5cm 기록 보기"/><circle class="growth-point" cx="245" cy="36" r="4" tabindex="0" role="button" data-growth-metric="머리둘레" data-growth-value="40.6cm" data-growth-date="2026.08.14" data-growth-age="생후 3개월 18일" data-growth-percentile="51번째 백분위 근처" aria-label="8월 14일 머리둘레 40.6cm 기록 보기"/><circle class="growth-point current" cx="300" cy="30" r="5.5" tabindex="0" role="button" data-growth-metric="머리둘레" data-growth-value="41.2cm" data-growth-date="2026.08.28" data-growth-age="생후 4개월 1일" data-growth-percentile="52번째 백분위 근처" aria-label="8월 28일 머리둘레 41.2cm 현재 기록 보기"/></svg></div>
+            <div class="growth-chart-axis" aria-hidden="true"><span>5월</span><span>6월</span><span>7월</span><span>8월</span></div>
+          </div>
+          <div class="growth-inline-panel" id="headInline"><strong>머리둘레 최근 3회</strong><div class="growth-inline-values"><span>8월 2일<b>40.5cm</b></span><span>8월 14일<b>40.6cm</b></span><span>8월 28일<b>41.2cm</b></span></div><p>그래프의 점을 누르면 해당 날짜의 월령과 성장 위치를 바로 확인할 수 있어요.</p></div>
+          <div class="growth-card-actions"><button class="growth-action primary" type="button" data-growth-add="머리둘레">새 측정 추가</button></div>
+        </div>
+      </article>
+      <p class="growth-source">WHO 성장 기준을 참고한 데모예요. 수치·백분위는 진단이나 의료적 판단을 대신하지 않아요.</p>
+
+      <article class="growth-month-card" aria-labelledby="monthlyGrowthTitle">
+        <div class="growth-section-head"><h3 id="monthlyGrowthTitle">이번 달 다린이는 이렇게 컸어요</h3><span>8월</span></div>
+        <div class="monthly-growth-top"><div class="monthly-duck" aria-hidden="true"><span class="growth-duck"></span></div><div class="monthly-number-summary" aria-label="8월 성장 변화 수치"><span><b>키</b><strong>+2.1cm</strong></span><span><b>몸무게</b><strong>+580g</strong></span><span><b>머리둘레</b><strong>+0.7cm</strong></span></div></div>
+        <div class="monthly-growth-foot"><span>최근 측정 · 8월 28일</span><button class="growth-text-action" id="monthCompareToggle" type="button" aria-expanded="false" aria-controls="monthCompare">지난달과 비교 ›</button></div>
+        <div class="month-compare" id="monthCompare" hidden><strong>지난달과 비교</strong><br>키는 지난달 +1.6cm보다 0.5cm 더 늘었고, 몸무게와 머리둘레도 이전 흐름 안에서 함께 증가했어요.</div>
+      </article>
+
+      <article class="milestone-card" aria-labelledby="milestoneTitle">
+        <div class="growth-section-head"><h3 id="milestoneTitle">발달 마일스톤</h3><button class="growth-text-action" id="milestoneAllButton" type="button">전체보기 ›</button></div>
+        <p class="milestone-intro"><span class="duck-inline" role="button" tabindex="0" aria-label="발달 안내 오리 애니메이션 다시 보기"></span><span class="milestone-intro-copy">몸도 마음도 하루하루 자라고 있어요.</span></p>
+        <div class="milestone-rail" aria-label="발달 마일스톤 목록">
+          <button class="milestone-item done" type="button" data-milestone="머리와 가슴 들기" data-milestone-date="D+82 · 3개월 말 기준" data-milestone-copy="배를 대고 있을 때 머리와 가슴을 들고, 팔로 몸을 지지하는 모습을 기록했어요." data-milestone-pose="head"><span class="milestone-symbol">✓</span><span class="milestone-name">머리 들기</span><span class="milestone-state">D+82</span></button>
+          <button class="milestone-item done" type="button" data-milestone="옹알이·소리 흉내" data-milestone-date="D+101 · 3개월 말 기준" data-milestone-copy="아우아우 소리를 처음 기록했고, 이후 8번 더 남겼어요." data-milestone-pose="coo"><span class="milestone-symbol">✓</span><span class="milestone-name">옹알이</span><span class="milestone-state">D+101</span></button>
+          <button class="milestone-item observing" type="button" data-milestone="손 장난감 잡기" data-milestone-date="요즘 보여요 · 3개월 말 기준" data-milestone-copy="손을 폈다 쥐고 장난감을 향해 손을 뻗는 모습을 이번 달 새롭게 기록했어요." data-milestone-pose="reach"><span class="milestone-symbol">●</span><span class="milestone-name">장난감 잡기</span><span class="milestone-state">관찰 중</span></button>
+          <button class="milestone-item empty" type="button" data-milestone="뒤집기" data-milestone-date="아직 기록 없음 · 7개월 기준 참고" data-milestone-copy="양쪽으로 뒤집기는 제공된 참고표의 7개월 기준 항목이에요. 아기마다 속도와 순서가 다르므로 기록이 생기면 다린이의 순간으로 남겨요." data-milestone-pose="roll"><span class="milestone-symbol">○</span><span class="milestone-name">뒤집기</span><span class="milestone-state">미기록</span></button>
+        </div>
+        <div class="new-milestone"><span class="kicker">이번 달 새롭게 기록했어요</span><strong>“장난감을 향해 손을 뻗었어요”</strong><span>8월 21일 · 생후 4개월</span><button id="growthMomentButton" type="button">성장 순간 보기 ›</button></div>
+        <p class="growth-source">참고: 사용자 제공 발달 이정표 자료. 발달 시점은 아기마다 다르며, 이 화면은 관찰 기록을 위한 참고용이에요.</p>
+      </article>
+
+      <article class="growth-ai-card" aria-labelledby="growthAiTitle">
+        <div class="growth-ai-top"><span class="growth-ai-duck" role="button" tabindex="0" aria-label="돋보기 오리 애니메이션 다시 보기"></span><h3 id="growthAiTitle">다린이가 살펴봤어요</h3></div>
+        <p class="growth-ai-copy"><strong>이번 달에는 키 변화가 가장 눈에 띄었어요.</strong><br>세 가지 성장 기록이 모두 이전보다 증가했고, 장난감을 향해 손을 뻗는 새로운 발달 모습도 기록됐어요.</p>
+        <div class="growth-ai-actions"><button id="growthEvidenceToggle" type="button" aria-expanded="false" aria-controls="growthEvidence">왜 이렇게 말했어? ↓</button><button id="growthAskButton" type="button">AI에게 물어보기</button></div>
+        <div class="growth-evidence" id="growthEvidence" hidden><strong>다린이가 참고한 기록</strong><br>키 8/02 60.7cm → 8/28 62.8cm (+2.1cm)<br>몸무게 8/02 5.82kg → 8/28 6.40kg (+580g)<br>머리둘레 8/02 40.5cm → 8/28 41.2cm (+0.7cm)<br>발달 기록 8/21 장난감을 향해 손 뻗기</div>
+      </article>
+    </section>
+
+    <button class="consult" id="consultButton" type="button" aria-label="AI 육아 상담" aria-haspopup="dialog">
+      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/><path d="M8 10h.01M12 10h.01M16 10h.01" stroke-linecap="round"/></svg>
+    </button>
+
+    <nav class="tab-bar" role="tablist" aria-label="주요 메뉴">
+      <button class="tab" data-tab="기록" type="button" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19h16M6 16V8l6-4 6 4v8M9 16v-5h6v5"/></svg><span>기록</span></button>
+      <button class="tab" data-tab="일기" type="button" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg><span>일기</span></button>
+      <button class="tab mic-slot" id="voiceAction" type="button" aria-label="음성 기록 열기" aria-haspopup="dialog" aria-expanded="false"><span class="mic-button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></span><span>음성</span></button>
+      <button class="tab active" data-tab="한눈에" type="button" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg><span>한눈에</span></button>
+      <button class="tab" data-tab="추억" type="button" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="3"/><circle cx="9" cy="11" r="2"/><path d="m21 16-4-4-7 7"/></svg><span>추억</span></button>
+    </nav>
+    <span class="sr-only" id="tabStatus" aria-live="polite"></span>
+
+    <div class="sheet-backdrop" id="voiceBackdrop" role="presentation">
+      <section class="sheet voice-sheet" id="voiceSheet" role="dialog" aria-modal="true" aria-labelledby="voiceTitle" tabindex="-1">
+        <div class="grabber" aria-hidden="true"></div>
+        <div class="voice-orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></div>
+        <h2 class="voice-state" id="voiceTitle">말로 기록해 보세요</h2>
+        <p class="voice-help" id="voiceHelp">현재 한눈에 탭을 유지한 채 음성 기록을 시작해요.</p>
+        <button class="voice-record" id="voiceRecord" type="button" aria-pressed="false">녹음 시작</button>
+        <button class="close-sheet" id="closeVoice" type="button">닫기</button>
+      </section>
+    </div>
+
+    <div class="sheet-backdrop" id="sheetBackdrop" role="presentation">
+      <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1">
+        <div class="grabber" aria-hidden="true"></div>
+        <h2 id="sheetTitle">주간 리포트</h2>
+        <div class="period">8월 24일–8월 30일 · 기록한 6일 기준</div>
+        <div class="sheet-row"><span>하루 평균 수유</span><strong>7.2회</strong></div>
+        <div class="sheet-row"><span>하루 평균 수면</span><strong>13시간 18분</strong></div>
+        <div class="sheet-row"><span>하루 평균 기저귀</span><strong>6.5회</strong></div>
+        <div class="sheet-row"><span>가장 긴 밤잠</span><strong>6시간 12분</strong></div>
+        <h3 class="discovery-title">흥미로운 발견 2가지</h3>
+        <div class="discovery-list">
+          <article class="discovery">
+            <span class="discovery-icon">↗</span>
+            <div><strong>밤잠이 조금 더 길어졌어요</strong><p>가장 긴 밤잠이 지난주 4시간 51분에서 이번 주 6시간 12분으로 늘었어요.</p></div>
+          </article>
+          <article class="discovery">
+            <span class="discovery-icon">≈</span>
+            <div><strong>수유 간격이 안정적으로 이어졌어요</strong><p>하루 평균 수유 횟수와 간격이 지난주 범위 안에서 비슷하게 유지됐어요.</p></div>
+          </article>
+        </div>
+        <p class="disclaimer">함께 나타난 기록을 정리한 것이며, 원인이나 의학적 판단을 뜻하지 않아요.</p>
+        <button class="close-sheet" id="closeSheet" type="button">닫기</button>
+      </section>
+    </div>
+
+    <div class="sheet-backdrop" id="consultBackdrop" role="presentation">
+      <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="consultTitle" tabindex="-1">
+        <div class="grabber" aria-hidden="true"></div>
+        <h2 id="consultTitle">무엇이 궁금하세요?</h2>
+        <div class="period">오늘 기록을 바탕으로 질문을 골라보세요.</div>
+        <div class="prompt-list">
+          <button class="prompt" type="button">오늘 수유 간격은 괜찮은 편이야?</button>
+          <button class="prompt" type="button">밤잠이 길어진 흐름을 설명해줘</button>
+          <button class="prompt" type="button">직접 질문하기</button>
+        </div>
+        <button class="close-sheet" id="closeConsult" type="button">닫기</button>
+      </section>
+    </div>
+
+    <div class="sheet-backdrop" id="growthBackdrop" role="presentation">
+      <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="growthSheetTitle" tabindex="-1">
+        <div class="grabber" aria-hidden="true"></div>
+        <div class="milestone-sheet-visual" id="milestoneSheetVisual" aria-hidden="true" hidden><span class="milestone-sheet-duck" id="milestoneSheetDuck"></span></div>
+        <h2 id="growthSheetTitle">성장 기록</h2>
+        <div class="period" id="growthSheetPeriod"></div>
+        <div class="growth-sheet-value" id="growthSheetValue"></div>
+        <div class="growth-sheet-details" id="growthSheetDetails"></div>
+        <div class="growth-record-links" id="growthRecordLinks" hidden></div>
+        <form class="growth-measure-form" id="growthMeasureForm" hidden>
+          <label for="growthMeasureInput" id="growthMeasureLabel">측정값</label>
+          <div><input id="growthMeasureInput" inputmode="decimal" type="number" step="0.1" required /><button type="submit">저장</button></div>
+        </form>
+        <p class="disclaimer" id="growthSheetNote">성장 수치는 기록을 돌아보기 위한 참고 정보예요.</p>
+        <button class="close-sheet" id="closeGrowth" type="button">닫기</button>
+      </section>
+    </div>
+
+    <section class="report-screen" id="reportScreen" role="dialog" aria-modal="true" aria-labelledby="reportTitle" aria-hidden="true">
+      <header class="report-header">
+        <button class="report-back" id="reportBack" type="button" aria-label="한눈에 화면으로 돌아가기">‹</button>
+        <h2 class="report-title" id="reportTitle">리포트</h2>
+      </header>
+      <div class="report-tabs" role="tablist" aria-label="리포트 기간">
+        <button class="report-tab" type="button" role="tab" data-report-tab="week" aria-selected="true">주</button>
+        <button class="report-tab" type="button" role="tab" data-report-tab="month" aria-selected="false">월</button>
+        <button class="report-tab" type="button" role="tab" data-report-tab="all" aria-selected="false">전체</button>
+      </div>
+      <div class="report-scroll">
+        <section class="report-panel" data-report-panel="week" role="tabpanel">
+          <p class="report-period">주간 리포트 · 8월 5주차</p>
+          <article class="report-hero">
+            <span class="report-duck report-duck-week" role="button" tabindex="0" aria-label="주간 리포트 오리 애니메이션 다시 보기"></span>
+            <div><h3>이번 주 다린이는 밤잠이 조금 길어졌어요.</h3><p>수유 간격은 지난주와 비슷하게 유지되고 있어요.</p></div>
+          </article>
+
+          <section class="report-section">
+            <h3>핵심 기록</h3>
+            <div class="report-metrics">
+              <div class="report-metric"><span>하루 평균 수유</span><strong>7.2회</strong></div>
+              <div class="report-metric"><span>하루 평균 수면</span><strong>13시간 18분</strong></div>
+              <div class="report-metric"><span>하루 평균 기저귀</span><strong>6.5회</strong></div>
+              <div class="report-metric"><span>가장 긴 밤잠</span><strong>6시간 12분</strong></div>
+              <div class="report-metric"><span>터미타임</span><strong>하루 평균 22분</strong></div>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <h3>지난주와 비교</h3>
+            <div class="report-compare">
+              <article class="compare-row"><span class="compare-label">밤잠</span><div class="compare-values"><span class="before">4시간 51분</span><span>→</span><span>6시간 12분</span><span class="trend-up">↑</span></div></article>
+              <article class="compare-row"><span class="compare-label">수유 간격</span><div class="compare-values"><span class="before">2시간 41분</span><span>→</span><span>2시간 45분</span><span class="trend-same">≈</span></div></article>
+              <article class="compare-row"><span class="compare-label">터미타임</span><div class="compare-values"><span class="before">17분</span><span>→</span><span>22분</span><span class="trend-up">↑</span></div></article>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <h3><span class="duck-inline" aria-hidden="true"></span>다린이가 발견했어요</h3>
+            <div class="insight-stack">
+              <article class="report-insight"><strong>밤잠이 조금 더 길어졌어요.</strong><p>가장 긴 밤잠이 지난주 4시간 51분에서 이번 주 6시간 12분으로 늘었어요.</p><button class="evidence-toggle" type="button" aria-expanded="false" aria-controls="evidenceSleep">근거 보기 ↓</button><div class="evidence" id="evidenceSleep" hidden>3주 전 4시간 51분<br>2주 전 5시간 18분<br>지난주 5시간 42분<br><strong>이번 주 6시간 12분</strong></div></article>
+              <article class="report-insight"><strong>수유 간격이 안정적으로 이어지고 있어요.</strong><p>최근 7일 동안 수유 간격의 변동 폭이 지난주보다 작았어요.</p><button class="evidence-toggle" type="button" aria-expanded="false" aria-controls="evidenceFeed">근거 보기 ↓</button><div class="evidence" id="evidenceFeed" hidden>지난주 평균 2시간 41분 · 이번 주 평균 2시간 45분<br>이번 주 기록일 6일 기준으로 비교했어요.</div></article>
+              <article class="report-insight"><strong>터미타임을 오래 한 날은 오후 낮잠도 긴 편이었어요.</strong><p>최근 기록에서 두 항목이 함께 움직이는 경향이 있었어요.</p></article>
+            </div>
+            <p class="report-note">기록에서 함께 나타난 경향이며, 원인이나 의학적 판단을 의미하지 않아요.</p>
+          </section>
+
+          <section class="report-section">
+            <h3>다음 주에 볼게요</h3>
+            <div class="watch-list"><div class="watch-item">밤잠이 6시간 이상 이어지는 날이 계속 늘어나는지 확인해볼게요.</div><div class="watch-item">최근 오후 수유 시간이 일정해지고 있어요. 며칠 더 기록하면 새로운 리듬인지 더 잘 알 수 있어요.</div><div class="watch-item">터미타임 기록을 조금 더 남기면 수면과 함께 나타나는 패턴도 확인할 수 있어요.</div></div>
+          </section>
+
+          <section class="report-section">
+            <h3>AI에게 더 물어보기</h3>
+            <div class="report-questions"><button class="report-question" type="button" data-report-question>밤잠이 길어진 흐름을 자세히 설명해줘</button><button class="report-question" type="button" data-report-question>다린이 평소 수유 간격과 비교해줘</button><button class="report-question" type="button" data-report-question>다음 주에 어떤 기록을 더 남기면 좋아?</button></div>
+          </section>
+        </section>
+
+        <section class="report-panel" data-report-panel="month" role="tabpanel" hidden>
+          <p class="report-period">월간 리포트 · 8월</p>
+          <article class="report-hero"><span class="report-duck report-duck-month" role="button" tabindex="0" aria-label="월간 리포트 오리 애니메이션 다시 보기"></span><div><h3>8월에는 밤잠이 점점 길어졌어요.</h3><p>수유 횟수는 조금 줄었지만 수유 간격은 더 일정해졌어요.</p></div></article>
+          <section class="report-section"><h3>4주 흐름</h3><div class="trend-list"><article class="trend-card"><h4>가장 긴 밤잠</h4><div class="trend-values"><span>1주<strong>4h 48m</strong></span><span>2주<strong>5h 12m</strong></span><span>3주<strong>5h 46m</strong></span><span>4주<strong>6h 12m</strong></span></div></article><article class="trend-card"><h4>하루 평균 수유</h4><div class="trend-values"><span>1주<strong>8.1회</strong></span><span>2주<strong>7.8회</strong></span><span>3주<strong>7.4회</strong></span><span>4주<strong>7.2회</strong></span></div></article><article class="trend-card"><h4>하루 평균 터미타임</h4><div class="trend-values"><span>1주<strong>12분</strong></span><span>2주<strong>17분</strong></span><span>3주<strong>20분</strong></span><span>4주<strong>24분</strong></span></div></article></div></section>
+          <section class="report-section"><h3>다린이가 발견했어요</h3><article class="report-insight"><strong>최근 4주 동안 밤잠이 매주 조금씩 길어지고 있어요.</strong><p>일시적인 하루 변화보다 최근 리듬의 변화에 가까운 흐름이에요.</p></article></section>
+          <section class="report-section"><h3>AI가 지난달과 비교해 봤어요</h3><div class="insight-stack"><article class="report-insight"><strong>가장 긴 밤잠이 지난달보다 1시간 24분 길어졌어요.</strong><p>8월의 마지막 주에 6시간을 넘긴 뒤, 긴 밤잠이 이어지는 날도 조금씩 늘었어요.</p></article><article class="report-insight"><strong>수유 횟수는 줄었지만, 간격은 더 일정해졌어요.</strong><p>하루 평균 수유는 지난달 8.1회에서 이번 달 7.2회로 줄었고, 최근 2주간의 시간대는 더 비슷하게 이어졌어요.</p></article></div><p class="report-note">이번 달은 기록한 24일을 기준으로 비교했어요. 누락된 날의 변화는 단정하지 않아요.</p></section>
+          <section class="report-section"><h3>다음 달에 관찰할게요</h3><div class="watch-list"><div class="watch-item">밤잠이 6시간 이상 이어지는 흐름이 다음 달에도 유지되는지 살펴볼게요.</div><div class="watch-item">터미타임 기록을 꾸준히 남기면 낮잠과 함께 나타나는 개인 리듬을 더 정확히 볼 수 있어요.</div></div></section>
+        </section>
+
+        <section class="report-panel" data-report-panel="all" role="tabpanel" hidden>
+          <p class="report-period">전체 리포트 · 다린이의 124일</p>
+          <article class="report-hero"><span class="report-duck report-duck-all" role="button" tabindex="0" aria-label="전체 리포트 오리 애니메이션 다시 보기"></span><div><h3>기록이 쌓이며 다린이만의 리듬이 만들어지고 있어요.</h3><p>또래 평균보다 다린이의 최근 평소를 기준으로 변화를 살펴봐요.</p></div></article>
+          <div class="story-summary"><span>총 기록<strong>1,842개</strong></span><span>함께 기록한 날<strong>112일</strong></span><span>첫 기록<strong>2026.05.03</strong></span></div>
+          <section class="report-section"><h3>장기 변화</h3><div class="trend-list"><article class="trend-card"><h4>가장 긴 밤잠</h4><div class="trend-values"><span>1개월<strong>2h 40m</strong></span><span>2개월<strong>3h 45m</strong></span><span>3개월<strong>5h 10m</strong></span><span>지금<strong>6h 12m</strong></span></div></article><article class="trend-card"><h4>하루 평균 수유</h4><div class="trend-values"><span>1개월<strong>10.2회</strong></span><span>2개월<strong>8.7회</strong></span><span>3개월<strong>7.8회</strong></span><span>지금<strong>7.2회</strong></span></div></article></div></section>
+          <section class="report-section"><h3>다린이가 이렇게 달라졌어요</h3><div class="milestones"><div class="milestone"><time>D+28</time><p>처음 4시간 이상 연속으로 잤어요.</p></div><div class="milestone"><time>D+47</time><p>수유 간격이 처음 3시간을 넘었어요.</p></div><div class="milestone"><time>D+63</time><p>터미타임을 하루 20분 이상 했어요.</p></div><div class="milestone"><time>D+91</time><p>장난감을 향해 처음 손을 뻗었어요.</p></div><div class="milestone"><time>D+112</time><p>밤잠이 처음 6시간을 넘었어요.</p></div></div></section>
+          <section class="report-section"><h3>AI 관찰 결과</h3><div class="insight-stack"><article class="report-insight"><strong>다린이의 최근 평소가 조금씩 바뀌고 있어요.</strong><p>최근 4주 평균보다 밤잠은 38분 길어졌고, 수유 간격은 조금 더 안정적으로 이어졌어요.</p></article><article class="report-insight"><strong>기록이 충분한 항목부터만 비교했어요.</strong><p>수면과 수유는 최근 112일의 기록을 반영했어요. 터미타임은 초반 기록이 적어 장기 추세로 단정하지 않았어요.</p></article></div><p class="report-note">AI는 다린이의 이전 기록을 기준으로 변화를 정리하며, 의료적 판단이나 진단을 제공하지 않아요.</p></section>
+          <section class="report-section"><h3>앞으로 지켜볼 변화</h3><div class="watch-list"><div class="watch-item">밤잠이 길어진 뒤 아침 첫 수유 시간도 함께 달라지는지 계속 확인해볼게요.</div><div class="watch-item">활동과 낮잠 기록이 더 쌓이면 다린이에게 자주 함께 나타나는 패턴을 더 잘 알려드릴 수 있어요.</div></div></section>
+        </section>
+      </div>
+    </section>
+
+    <section class="linked-record-screen" id="linkedRecordScreen" role="dialog" aria-modal="true" aria-labelledby="linkedRecordTitle" aria-hidden="true">
+      <header class="linked-record-header"><button class="linked-record-back" id="linkedRecordBack" type="button" aria-label="성장 순간으로 돌아가기">‹</button><h2 id="linkedRecordTitle">우리 순간</h2></header>
+      <div class="linked-record-scroll">
+        <p class="linked-record-kicker" id="linkedRecordKicker">우리 순간</p>
+        <h3 id="linkedRecordHeadline">장난감을 향해 손을 뻗었어요</h3>
+        <p class="linked-record-meta" id="linkedRecordMeta">2026.08.21 · 생후 4개월</p>
+        <div class="linked-record-visual" aria-hidden="true"><span class="linked-record-duck"></span></div>
+        <article class="linked-record-note"><strong id="linkedRecordNoteTitle">엄마의 기록</strong><span id="linkedRecordNote">오늘 아침 장난감을 보며 손을 쭉 뻗었어요. 작은 손으로 잡으려는 모습이 사랑스러웠어요.</span></article>
+      </div>
+    </section>
+  </main>
+    </div>
+  </div>
+
+  <script>
+    const sleepBlocks = document.getElementById("sleepBlocks");
+    const feedEvents = document.getElementById("feedEvents");
+    const diaperEvents = document.getElementById("diaperEvents");
+    const activityEvents = document.getElementById("activityEvents");
+    const barEvents = document.getElementById("barEvents");
+    const timelineRows = document.getElementById("timelineRows");
+    const timelineToggle = document.getElementById("timelineToggle");
+    const rhythmCard = timelineToggle.closest(".rhythm-card");
+    const rhythmLine = document.getElementById("rhythmLine");
+    const nowBadge = document.getElementById("nowBadge");
+    const nowLine = document.getElementById("nowLine");
+    const rhythmDuck = document.getElementById("rhythmDuck");
+    const rhythmStatus = document.getElementById("rhythmStatus");
+    const rhythmSky = document.getElementById("rhythmSky");
+    const nowScrubber = document.getElementById("nowScrubber");
+    const nowMinutes = 15 * 60 + 20;
+    const daySpan = 24 * 60;
+
+    const sleepData = [
+      { type: "밤잠", start: 21 * 60 + 10, duration: 280, detail: "4시간 40분" },
+      { type: "밤잠", start: 2 * 60 + 15, duration: 255, detail: "4시간 15분" },
+      { type: "낮잠", start: 8 * 60 + 15, duration: 50, detail: "50분" },
+      { type: "낮잠", start: 10 * 60 + 55, duration: 45, detail: "45분" },
+      { type: "낮잠", start: 13 * 60 + 25, duration: 50, detail: "50분" },
+    ];
+    const feedData = [
+      { type: "모유", start: 1 * 60 + 52, duration: 14 },
+      { type: "분유", start: 6 * 60 + 40, amount: "120ml" },
+      { type: "모유", start: 9 * 60 + 15, duration: 15 },
+      { type: "분유", start: 12 * 60 + 0, amount: "130ml" },
+      { type: "모유", start: 14 * 60 + 30, duration: 12 },
+    ];
+    const diaperData = [
+      { type: "기저귀", start: 2 * 60 + 8, detail: "소변" },
+      { type: "기저귀", start: 6 * 60 + 55, detail: "소변" },
+      { type: "기저귀", start: 9 * 60 + 35, detail: "대변" },
+      { type: "기저귀", start: 12 * 60 + 20, detail: "소변" },
+      { type: "기저귀", start: 14 * 60 + 48, detail: "소변" },
+    ];
+    const activityData = [
+      { type: "터미타임", start: 9 * 60 + 50, duration: 8 },
+      { type: "터미타임", start: 12 * 60 + 45, duration: 10 },
+    ];
+
+    const formatTime = (minutes) => {
+      const hour = Math.floor(minutes / 60) % 24;
+      const minute = minutes % 60;
+      const period = hour < 12 ? "오전" : "오후";
+      const displayHour = hour % 12 || 12;
+      return `${period} ${displayHour}:${String(minute).padStart(2, "0")}`;
+    };
+
+    const percentAt = (minutes) => `${(minutes / daySpan) * 100}%`;
+    const isSleepingAt = (minutes) => sleepData.find((event) => {
+      const end = event.start + event.duration;
+      return end <= 1440 ? minutes >= event.start && minutes < end : minutes >= event.start || minutes < end - 1440;
+    });
+    const sleepElapsed = (event, minutes) => {
+      const end = event.start + event.duration;
+      if (end > 1440 && minutes < event.start) return 1440 - event.start + minutes;
+      return minutes - event.start;
+    };
+    const renderSleepBlocks = () => sleepData.forEach((event) => {
+      const end = event.start + event.duration;
+      const segments = end <= 1440
+        ? [{ start: event.start, duration: event.duration }]
+        : [{ start: event.start, duration: 1440 - event.start }, { start: 0, duration: end - 1440 }];
+      segments
+        .map((segment) => ({
+          start: segment.start,
+          duration: Math.min(segment.duration, nowMinutes - segment.start),
+        }))
+        .filter((segment) => segment.duration > 0)
+        .forEach((segment) => {
+          const block = document.createElement("button");
+          block.type = "button";
+          block.className = "sleep-block";
+          block.style.left = percentAt(segment.start);
+          block.style.width = `${(segment.duration / daySpan) * 100}%`;
+          block.setAttribute("aria-label", `${formatTime(event.start)} ${event.type} ${event.detail} 기록 보기`);
+          block.title = `${event.type} ${event.detail}`;
+          block.addEventListener("click", () => showEvent(event));
+          sleepBlocks.appendChild(block);
+        });
+    });
+    const duckPoses = ["sleeping", "awake", "feeding", "diapered", "resting"];
+    const eventEnd = (event, fallback = 12) => event.start + (event.duration || fallback);
+    const coveringEvent = (events, minutes, fallback = 12) => events.find((event) => (
+      event.start <= nowMinutes && minutes >= event.start && minutes < eventEnd(event, fallback)
+    ));
+    const highlightEvent = (kind, start) => {
+      document.querySelectorAll(".timeline-event.is-active").forEach((el) => el.classList.remove("is-active"));
+      if (!kind) return;
+      document.querySelectorAll(`[data-event-key="${kind}-${start}"]`).forEach((el) => el.classList.add("is-active"));
+    };
+    const applyDuckPose = (pose) => {
+      duckPoses.forEach((name) => rhythmDuck.classList.toggle(name, name === pose));
+    };
+    const describeFeed = (feed) => (feed.duration ? `${feed.duration}분` : feed.amount);
+    const setPlayhead = (minutes, live = false) => {
+      rhythmSky.style.setProperty("--now-position", percentAt(minutes));
+      if (!live) {
+        const sleepingNow = isSleepingAt(nowMinutes);
+        applyDuckPose(sleepingNow ? "sleeping" : "awake");
+        highlightEvent();
+        nowBadge.textContent = "지금";
+        nowBadge.classList.remove("is-time");
+        nowScrubber.setAttribute("aria-valuenow", String(nowMinutes));
+        nowScrubber.setAttribute("aria-valuetext", sleepingNow ? "지금, 낮잠 중" : "지금, 깨어 있음");
+        rhythmStatus.innerHTML = sleepingNow
+          ? `<strong>낮잠 중 · ${nowMinutes - sleepingNow.start}분째</strong> · ${formatTime(sleepingNow.start)} 시작`
+          : `<strong>지금은 깨어 있어요</strong> · 마지막 수유 ${formatTime(feedData.at(-1).start)}`;
+        return;
+      }
+      const diaperOn = coveringEvent(diaperData, minutes, 6);
+      const feedOn = coveringEvent(feedData, minutes, 12);
+      const activityOn = coveringEvent(activityData, minutes, 8);
+      const sleeping = isSleepingAt(minutes);
+      let pose = "awake";
+      let kind = "";
+      let match = null;
+      let valueText = `${formatTime(minutes)}, 깨어 있음`;
+      let status = `<strong>${formatTime(minutes)} · 깨어 있어요</strong>`;
+      if (diaperOn) {
+        pose = "diapered";
+        kind = "diaper";
+        match = diaperOn;
+        valueText = `${formatTime(minutes)}, 기저귀 ${diaperOn.detail}`;
+        status = `<strong>${formatTime(diaperOn.start)} · ${diaperOn.type}</strong> · ${diaperOn.detail}`;
+      } else if (feedOn) {
+        pose = "feeding";
+        kind = "feed";
+        match = feedOn;
+        valueText = `${formatTime(minutes)}, ${feedOn.type} ${describeFeed(feedOn)}`;
+        status = `<strong>${formatTime(feedOn.start)} · ${feedOn.type}</strong> · ${describeFeed(feedOn)}`;
+      } else if (activityOn) {
+        pose = "resting";
+        kind = "activity";
+        match = activityOn;
+        valueText = `${formatTime(minutes)}, ${activityOn.type} ${activityOn.duration}분`;
+        status = `<strong>${formatTime(activityOn.start)} · ${activityOn.type}</strong> · ${activityOn.duration}분`;
+      } else if (sleeping) {
+        pose = "sleeping";
+        valueText = `${formatTime(minutes)}, ${sleeping.type}`;
+        status = `<strong>${sleeping.type} 중 · ${Math.max(1, sleepElapsed(sleeping, minutes))}분째</strong> · ${formatTime(sleeping.start)} 시작`;
+      }
+      applyDuckPose(pose);
+      highlightEvent(kind, match?.start);
+      nowBadge.textContent = formatTime(minutes).replace("오전 ", "").replace("오후 ", "");
+      nowBadge.classList.add("is-time");
+      nowScrubber.setAttribute("aria-valuenow", String(minutes));
+      nowScrubber.setAttribute("aria-valuetext", valueText);
+      rhythmStatus.innerHTML = status;
+    };
+    const setCurrentState = () => setPlayhead(nowMinutes, false);
+    const clampMinutes = (minutes) => Math.max(0, Math.min(nowMinutes, Math.round(minutes)));
+    const minutesFromClientX = (clientX) => {
+      const rect = rhythmLine.getBoundingClientRect();
+      if (!rect.width) return nowMinutes;
+      return clampMinutes(((clientX - rect.left) / rect.width) * daySpan);
+    };
+    const returnToNow = () => {
+      rhythmSky.classList.remove("is-dragging");
+      nowScrubber.classList.remove("is-dragging");
+      setCurrentState();
+    };
+    let scrubPointer = null;
+    let scrubKeyTimer = 0;
+    nowScrubber.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      scrubPointer = event.pointerId;
+      try { nowScrubber.setPointerCapture(event.pointerId); } catch (_) {}
+      rhythmSky.classList.add("is-dragging");
+      nowScrubber.classList.add("is-dragging");
+      nowScrubber.focus({ preventScroll: true });
+      setPlayhead(minutesFromClientX(event.clientX), true);
+    });
+    nowScrubber.addEventListener("pointermove", (event) => {
+      if (scrubPointer !== event.pointerId) return;
+      setPlayhead(minutesFromClientX(event.clientX), true);
+    });
+    const endScrub = (event) => {
+      if (scrubPointer !== event.pointerId) return;
+      scrubPointer = null;
+      returnToNow();
+    };
+    nowScrubber.addEventListener("pointerup", endScrub);
+    nowScrubber.addEventListener("pointercancel", endScrub);
+    nowScrubber.addEventListener("keydown", (event) => {
+      const step = event.shiftKey ? 60 : 15;
+      const rawNow = nowScrubber.getAttribute("aria-valuenow");
+      let next = rawNow == null || rawNow === "" ? nowMinutes : Number(rawNow);
+      if (event.key === "ArrowLeft") next -= step;
+      else if (event.key === "ArrowRight") next += step;
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End" || event.key === "Escape") next = nowMinutes;
+      else return;
+      event.preventDefault();
+      rhythmSky.classList.add("is-dragging");
+      setPlayhead(clampMinutes(next), next !== nowMinutes);
+      window.clearTimeout(scrubKeyTimer);
+      if (next === nowMinutes) {
+        returnToNow();
+        return;
+      }
+      scrubKeyTimer = window.setTimeout(returnToNow, 1200);
+    });
+    const showEvent = (event) => {
+      const value = event.duration ? `${event.duration}분` : event.amount || event.detail;
+      rhythmStatus.innerHTML = `<strong>${formatTime(event.start)} · ${event.type}</strong> · ${value}`;
+    };
+    const appendEventButton = (event, parent, className, left) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `timeline-event ${className}`;
+      button.dataset.eventKey = `${className || "feed"}-${event.start}`;
+      button.style.left = percentAt(left);
+      button.setAttribute("aria-label", `${formatTime(event.start)} ${event.type} 기록 보기`);
+      button.title = `${formatTime(event.start)} ${event.type}`;
+      button.addEventListener("click", () => showEvent(event));
+      parent.appendChild(button);
+    };
+    const renderEvents = (events, parent, className = "") => events
+      .filter((event) => event.start <= nowMinutes)
+      .forEach((event) => appendEventButton(event, parent, className, event.start));
+    const renderBarEvents = () => {
+      feedData.filter((event) => event.start <= nowMinutes).forEach((event) => appendEventButton(event, barEvents, "feed", event.start));
+      diaperData.filter((event) => event.start <= nowMinutes).forEach((event) => appendEventButton(event, barEvents, "diaper", event.start));
+      activityData.filter((event) => event.start <= nowMinutes).forEach((event) => appendEventButton(event, barEvents, "activity", event.start));
+    };
+    const renderActivities = () => activityData
+      .filter((event) => event.start <= nowMinutes)
+      .forEach((event) => {
+      const block = document.createElement("span");
+      block.className = "activity-block";
+      block.style.left = percentAt(event.start);
+      block.style.width = `${Math.max((Math.min(event.duration, nowMinutes - event.start) / daySpan) * 100, 2.4)}%`;
+      block.title = `${formatTime(event.start)} ${event.type} ${event.duration}분`;
+      activityEvents.appendChild(block);
+      });
+
+    renderSleepBlocks();
+    setCurrentState();
+    renderEvents(feedData, feedEvents);
+    renderEvents(diaperData, diaperEvents, "diaper");
+    renderBarEvents();
+    renderActivities();
+    document.getElementById("systemTime").textContent = formatTime(nowMinutes).replace("오전 ", "").replace("오후 ", "");
+
+    timelineToggle.addEventListener("click", () => {
+      const expanded = timelineToggle.getAttribute("aria-expanded") === "true";
+      timelineToggle.setAttribute("aria-expanded", String(!expanded));
+      rhythmCard.classList.toggle("is-expanded", !expanded);
+      timelineToggle.textContent = expanded ? "펼쳐서 보기" : "접기";
+    });
+
+    const summaryTitle = document.getElementById("todaySummaryTitle");
+    const summaryBody = document.getElementById("todaySummaryBody");
+
+    // Motion scenes stay on their first frame until they enter the viewport.
+    // They play once on first appearance, then replay on tap or keyboard activation.
+    const replayMotionScene = (scene) => {
+      if (!scene || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      scene.classList.remove("is-playing");
+      void scene.offsetWidth;
+      scene.classList.add("is-playing");
+    };
+    const motionScenes = [
+      document.querySelector(".duck-mascot"),
+      document.querySelector(".weekly-card"),
+      document.querySelector(".report-duck-week"),
+      document.querySelector(".report-duck-month"),
+      document.querySelector(".report-duck-all"),
+      document.querySelector(".milestone-intro .duck-inline"),
+      document.querySelector(".growth-ai-duck"),
+    ].filter(Boolean);
+    motionScenes.forEach((scene) => {
+      const replay = () => replayMotionScene(scene);
+      scene.addEventListener("click", replay);
+      scene.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          replay();
+        }
+      });
+    });
+    if ("IntersectionObserver" in window) {
+      const motionObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting || entry.target.dataset.autoPlayed === "true") return;
+          entry.target.dataset.autoPlayed = "true";
+          replayMotionScene(entry.target);
+          observer.unobserve(entry.target);
+        });
+      }, { threshold: 0.35 });
+      motionScenes.forEach((scene) => motionObserver.observe(scene));
+    } else {
+      motionScenes.forEach((scene) => replayMotionScene(scene));
+    }
+
+    const hour = Math.floor(nowMinutes / 60);
+    if (hour < 11) {
+      summaryTitle.textContent = "밤새 6시간 12분 푹 잤어요. 아침 첫 수유도 잘 했어요.";
+      summaryBody.textContent = "오늘은 어젯밤보다 조금 더 길게 잠을 이어갔어요.";
+    } else if (hour < 18) {
+      summaryTitle.textContent = "오늘 다린이는 평소 리듬대로 편안하게 지내고 있어요.";
+      summaryBody.textContent = "수유 간격이 안정적이고, 터미타임도 2회 총 18분 했어요.";
+    } else {
+      summaryTitle.textContent = "오늘 하루도 다린이의 평소 리듬대로 흘러갔어요.";
+      summaryBody.textContent = "수면 13시간 18분, 수유 7회로 평소와 비슷한 하루예요.";
+    }
+    const backdrop = document.getElementById("sheetBackdrop");
+    const weeklyCard = document.getElementById("weeklyCard");
+    const closeSheet = document.getElementById("closeSheet");
+    const consultBackdrop = document.getElementById("consultBackdrop");
+    const consultButton = document.getElementById("consultButton");
+    const closeConsult = document.getElementById("closeConsult");
+    const voiceBackdrop = document.getElementById("voiceBackdrop");
+    const voiceAction = document.getElementById("voiceAction");
+    const voiceSheet = document.getElementById("voiceSheet");
+    const voiceRecord = document.getElementById("voiceRecord");
+    const voiceTitle = document.getElementById("voiceTitle");
+    const voiceHelp = document.getElementById("voiceHelp");
+    const closeVoice = document.getElementById("closeVoice");
+    const growthBackdrop = document.getElementById("growthBackdrop");
+    const closeGrowth = document.getElementById("closeGrowth");
+    const growthSheetTitle = document.getElementById("growthSheetTitle");
+    const growthSheetPeriod = document.getElementById("growthSheetPeriod");
+    const growthSheetValue = document.getElementById("growthSheetValue");
+    const growthSheetDetails = document.getElementById("growthSheetDetails");
+    const growthSheetNote = document.getElementById("growthSheetNote");
+    const growthMeasureForm = document.getElementById("growthMeasureForm");
+    const growthMeasureInput = document.getElementById("growthMeasureInput");
+    const growthMeasureLabel = document.getElementById("growthMeasureLabel");
+    const milestoneSheetVisual = document.getElementById("milestoneSheetVisual");
+    const milestoneSheetDuck = document.getElementById("milestoneSheetDuck");
+    const growthRecordLinks = document.getElementById("growthRecordLinks");
+    const linkedRecordScreen = document.getElementById("linkedRecordScreen");
+    const linkedRecordBack = document.getElementById("linkedRecordBack");
+    const linkedRecordTitle = document.getElementById("linkedRecordTitle");
+    const linkedRecordKicker = document.getElementById("linkedRecordKicker");
+    const linkedRecordHeadline = document.getElementById("linkedRecordHeadline");
+    const linkedRecordMeta = document.getElementById("linkedRecordMeta");
+    const linkedRecordNoteTitle = document.getElementById("linkedRecordNoteTitle");
+    const linkedRecordNote = document.getElementById("linkedRecordNote");
+    const reportScreen = document.getElementById("reportScreen");
+    const reportBack = document.getElementById("reportBack");
+    const reportTabs = [...document.querySelectorAll(".report-tab")];
+    const reportPanels = [...document.querySelectorAll(".report-panel")];
+    let activeModal = null;
+    let returnFocus = null;
+    let reportReturnFocus = null;
+    let linkedRecordReturnFocus = null;
+
+    const focusableIn = (modal) => [...modal.querySelectorAll("button, [href], [tabindex]:not([tabindex='-1'])")]
+      .filter((element) => !element.disabled);
+    const openModal = (modal, trigger) => {
+      activeModal = modal;
+      returnFocus = trigger;
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+      modal.querySelector(".sheet").focus();
+    };
+    const closeModal = (modal) => {
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+      if (modal === voiceBackdrop) {
+        voiceAction.classList.remove("active-action");
+        voiceAction.setAttribute("aria-expanded", "false");
+        voiceSheet.classList.remove("recording");
+        voiceRecord.setAttribute("aria-pressed", "false");
+        voiceRecord.textContent = "녹음 시작";
+        voiceTitle.textContent = "말로 기록해 보세요";
+        voiceHelp.textContent = "현재 한눈에 탭을 유지한 채 음성 기록을 시작해요.";
+      }
+      activeModal = null;
+      const target = returnFocus;
+      returnFocus = null;
+      target?.focus();
+    };
+    const openReport = (trigger) => {
+      reportReturnFocus = trigger;
+      reportScreen.classList.add("open");
+      reportScreen.setAttribute("aria-hidden", "false");
+      const weeklyDuck = document.querySelector(".report-duck-week");
+      if (weeklyDuck && weeklyDuck.dataset.autoPlayed !== "true") {
+        weeklyDuck.dataset.autoPlayed = "true";
+        replayMotionScene(weeklyDuck);
+      }
+      reportBack.focus();
+    };
+    const closeReport = () => {
+      reportScreen.classList.remove("open");
+      reportScreen.setAttribute("aria-hidden", "true");
+      const target = reportReturnFocus;
+      reportReturnFocus = null;
+      target?.focus();
+    };
+    const openLinkedRecord = (trigger, kind, title, date) => {
+      linkedRecordReturnFocus = trigger;
+      growthBackdrop.classList.remove("open");
+      growthBackdrop.setAttribute("aria-hidden", "true");
+      activeModal = null;
+      const diary = kind === "diary";
+      linkedRecordTitle.textContent = diary ? "육아일기" : "우리 순간";
+      linkedRecordKicker.textContent = diary ? "육아일기 · 연결된 기록" : "우리 순간 · 연결된 기록";
+      linkedRecordHeadline.textContent = diary ? `${title}를 기록한 날` : title;
+      linkedRecordMeta.textContent = date;
+      linkedRecordNoteTitle.textContent = diary ? "오늘의 일기" : "엄마의 기록";
+      linkedRecordNote.textContent = diary
+        ? "오늘은 장난감을 보며 손을 쭉 뻗었어요. 작은 손으로 잡으려는 모습이 사랑스러워서 남겨두었어요."
+        : "장난감을 향해 손을 뻗는 모습을 사진과 함께 기록했어요. 그날의 순간을 다시 확인할 수 있어요.";
+      linkedRecordScreen.classList.add("open");
+      linkedRecordScreen.setAttribute("aria-hidden", "false");
+      linkedRecordBack.focus();
+    };
+    const closeLinkedRecord = () => {
+      linkedRecordScreen.classList.remove("open");
+      linkedRecordScreen.setAttribute("aria-hidden", "true");
+      const target = linkedRecordReturnFocus;
+      linkedRecordReturnFocus = null;
+      openModal(growthBackdrop, target);
+    };
+
+    [backdrop, consultBackdrop, growthBackdrop, voiceBackdrop].forEach((modal) => {
+      modal.setAttribute("aria-hidden", "true");
+      modal.addEventListener("click", (event) => { if (event.target === modal) closeModal(modal); });
+    });
+    weeklyCard.addEventListener("click", () => openReport(weeklyCard));
+    closeSheet.addEventListener("click", () => closeModal(backdrop));
+    consultButton.addEventListener("click", () => openModal(consultBackdrop, consultButton));
+    closeConsult.addEventListener("click", () => closeModal(consultBackdrop));
+    voiceAction.addEventListener("click", () => {
+      voiceAction.classList.add("active-action");
+      voiceAction.setAttribute("aria-expanded", "true");
+      openModal(voiceBackdrop, voiceAction);
+    });
+    closeVoice.addEventListener("click", () => closeModal(voiceBackdrop));
+    voiceRecord.addEventListener("click", () => {
+      const recording = voiceRecord.getAttribute("aria-pressed") === "true";
+      voiceRecord.setAttribute("aria-pressed", String(!recording));
+      voiceSheet.classList.toggle("recording", !recording);
+      voiceRecord.textContent = recording ? "녹음 시작" : "녹음 완료";
+      voiceTitle.textContent = recording ? "말로 기록해 보세요" : "듣고 있어요";
+      voiceHelp.textContent = recording ? "현재 한눈에 탭을 유지한 채 음성 기록을 시작해요." : "수유, 수면, 기저귀처럼 자연스럽게 말해 주세요.";
+    });
+    closeGrowth.addEventListener("click", () => closeModal(growthBackdrop));
+    linkedRecordBack.addEventListener("click", closeLinkedRecord);
+    reportBack.addEventListener("click", closeReport);
+    reportTabs.forEach((tab) => tab.addEventListener("click", () => {
+      const selected = tab.dataset.reportTab;
+      reportTabs.forEach((item) => item.setAttribute("aria-selected", String(item === tab)));
+      reportPanels.forEach((panel) => { panel.hidden = panel.dataset.reportPanel !== selected; });
+      reportScreen.querySelector(".report-scroll").scrollTop = 0;
+      if (selected === "week" || selected === "month" || selected === "all") {
+        const reportDuck = document.querySelector(`.report-duck-${selected}`);
+        if (reportDuck && reportDuck.dataset.autoPlayed !== "true") {
+          reportDuck.dataset.autoPlayed = "true";
+          replayMotionScene(reportDuck);
+        }
+      }
+    }));
+    document.querySelectorAll(".evidence-toggle").forEach((button) => button.addEventListener("click", () => {
+      const evidence = document.getElementById(button.getAttribute("aria-controls"));
+      const expanded = button.getAttribute("aria-expanded") === "true";
+      button.setAttribute("aria-expanded", String(!expanded));
+      button.textContent = expanded ? "근거 보기 ↓" : "근거 숨기기 ↑";
+      evidence.hidden = expanded;
+    }));
+    document.querySelectorAll("[data-report-question]").forEach((button) => button.addEventListener("click", () => openModal(consultBackdrop, button)));
+
+    const growthDetailMarkup = (label, value) => `<div><span>${label}</span><strong>${value}</strong></div>`;
+    const setMilestoneVisual = (pose) => {
+      milestoneSheetVisual.hidden = false;
+      const supportedPoses = new Set(["head", "coo", "reach", "roll", "story"]);
+      const nextPose = supportedPoses.has(pose) ? pose : "story";
+      milestoneSheetDuck.className = "milestone-sheet-duck";
+      void milestoneSheetDuck.offsetWidth;
+      milestoneSheetDuck.className = `milestone-sheet-duck pose-${nextPose}`;
+      growthSheetTitle.classList.add("milestone-title");
+    };
+    const clearMilestoneVisual = () => {
+      milestoneSheetVisual.hidden = true;
+      milestoneSheetDuck.className = "milestone-sheet-duck";
+      growthSheetTitle.classList.remove("milestone-title");
+    };
+    const clearGrowthRecordLinks = () => {
+      growthRecordLinks.hidden = true;
+      growthRecordLinks.innerHTML = "";
+    };
+    const setGrowthRecordLinks = (title, date) => {
+      growthRecordLinks.hidden = false;
+      growthRecordLinks.innerHTML = `<button class="growth-record-link" type="button" data-linked-record="memory">우리 순간 확인하기 ›</button><button class="growth-record-link" type="button" data-linked-record="diary">육아일기 확인하기 ›</button>`;
+      growthRecordLinks.querySelectorAll("[data-linked-record]").forEach((button) => button.addEventListener("click", () => {
+        openLinkedRecord(button, button.dataset.linkedRecord, title, date);
+      }));
+    };
+    const showGrowthRecord = (point) => {
+      const { growthMetric: metric, growthValue: value, growthDate: date, growthAge: age } = point.dataset;
+      const chart = point.closest(".growth-chart");
+      chart.querySelectorAll(".growth-point").forEach((item) => item.classList.toggle("selected", item === point));
+      chart.querySelector(".growth-tooltip")?.remove();
+      const tooltip = document.createElement("div");
+      const x = (Number(point.getAttribute("cx")) / 320) * 100;
+      const y = (Number(point.getAttribute("cy")) / 100) * 100;
+      tooltip.className = `growth-tooltip${y < 37 ? " below" : ""}${x > 74 ? " edge-right" : ""}`;
+      tooltip.style.setProperty("--point-x", `${x}%`);
+      tooltip.style.setProperty("--point-y", `${y}%`);
+      tooltip.setAttribute("role", "status");
+      tooltip.setAttribute("aria-live", "polite");
+      tooltip.innerHTML = `<strong>${metric} ${value}</strong><span>${date} · ${age}</span>`;
+      chart.appendChild(tooltip);
+    };
+    document.querySelectorAll(".growth-point").forEach((point) => {
+      point.addEventListener("click", () => showGrowthRecord(point));
+      point.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); showGrowthRecord(point); }
+      });
+    });
+
+    const measurementAnimations = [
+      { id: "weight", start: 6.1, end: 6.4, unit: "kg", delta: "+300g", announcement: "몸무게 측정 완료. 6.1kg에서 6.4kg로 300g 늘었어요." },
+      {
+        id: "height",
+        start: Number(document.getElementById("heightMeasureAnimation").dataset.previous),
+        end: Number(document.getElementById("heightMeasureAnimation").dataset.current),
+        unit: document.getElementById("heightMeasureAnimation").dataset.unit || "cm",
+        announcement: "키 측정 애니메이션이 완료됐어요.",
+      },
+      { id: "head", start: 40.6, end: 41.2, unit: "cm", delta: "+0.6cm", announcement: "머리둘레 측정 완료. 40.6cm에서 41.2cm로 0.6cm 자랐어요." },
+    ].map((item) => ({
+      ...item,
+      scene: document.getElementById(`${item.id}MeasureAnimation`),
+      value: document.getElementById(`${item.id}MeasureValue`),
+      status: document.getElementById(`${item.id}AnimationStatus`),
+      readout: document.getElementById(`${item.id}Readout`),
+      fromValue: document.getElementById(`${item.id}FromValue`),
+      currentValue: document.getElementById(`${item.id}CurrentValue`),
+      deltaValue: document.getElementById(`${item.id}DeltaValue`),
+      spriteFrames: [...document.getElementById(`${item.id}MeasureAnimation`).querySelectorAll(".measure-motion-frame")],
+    }));
+    const reduceMeasurementMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const measurementFrames = new Map();
+    const heightScene = document.getElementById("heightMeasureAnimation");
+    const heightPrevious = Number(heightScene.dataset.previous);
+    const heightCurrent = Number(heightScene.dataset.current);
+    const heightUnit = heightScene.dataset.unit || "cm";
+    const formatHeight = (value) => `${value.toFixed(1)}${heightUnit}`;
+    document.getElementById("heightPreviousText").textContent = formatHeight(heightPrevious);
+    document.getElementById("heightCurrentText").textContent = formatHeight(heightCurrent);
+    document.getElementById("heightFinalText").textContent = formatHeight(heightCurrent);
+    document.getElementById("heightDeltaText").textContent = `+${(heightCurrent - heightPrevious).toFixed(1)}${heightUnit}!`;
+    const heightItem = measurementAnimations.find((item) => item.id === "height");
+    heightItem.announcement = `키 측정 완료. ${formatHeight(heightPrevious)}에서 ${formatHeight(heightCurrent)}로 ${(heightCurrent - heightPrevious).toFixed(1)}${heightUnit} 컸어요.`;
+    heightItem.delta = `+${(heightCurrent - heightPrevious).toFixed(1)}${heightUnit}`;
+    const formatMeasure = (item, value) => `${value.toFixed(1)}${item.unit}`;
+    const setReadoutState = (item, state) => {
+      if (!item.readout) return;
+      item.readout.classList.toggle("is-counting", state === "counting");
+      item.readout.classList.toggle("is-landing", state === "landing" || state === "revealing");
+      item.readout.classList.toggle("is-revealing", state === "revealing");
+    };
+    const showFinalReadout = (item) => {
+      if (item.fromValue) item.fromValue.textContent = formatMeasure(item, item.start);
+      item.currentValue.textContent = formatMeasure(item, item.end);
+      item.deltaValue.textContent = item.delta;
+      setReadoutState(item, "idle");
+    };
+    const runMeasurementAnimation = (item) => {
+      cancelAnimationFrame(measurementFrames.get(item.id) || 0);
+      item.scene.classList.remove("is-animating");
+      void item.scene.offsetWidth;
+      item.value.textContent = formatMeasure(item, item.start);
+      if (item.fromValue) item.fromValue.textContent = formatMeasure(item, item.start);
+      item.currentValue.textContent = formatMeasure(item, item.start);
+      item.deltaValue.textContent = item.delta;
+      item.status.textContent = "";
+      setReadoutState(item, "counting");
+      item.scene.classList.add("is-animating");
+      if (item.id === "height") item.scene.dataset.spritePhase = "motion";
+      item.spriteFrames.forEach((frame, index) => frame.classList.toggle("is-active", index === 0));
+      if (reduceMeasurementMotion.matches) {
+        item.value.textContent = formatMeasure(item, item.end);
+        showFinalReadout(item);
+        item.spriteFrames.forEach((frame, index) => frame.classList.toggle("is-active", index === item.spriteFrames.length - 1));
+        if (item.id === "height") item.scene.dataset.spritePhase = "final";
+        item.status.textContent = item.announcement;
+        return;
+      }
+      let landed = false;
+      const startedAt = performance.now();
+      const updateMeasurementValue = (now) => {
+        const elapsed = now - startedAt;
+        const progress = Math.min(Math.max((elapsed - 1450) / 720, 0), 1);
+        const nextValue = formatMeasure(item, item.start + (item.end - item.start) * progress);
+        item.value.textContent = nextValue;
+        item.currentValue.textContent = nextValue;
+        if (progress >= 1 && !landed) {
+          landed = true;
+          item.currentValue.textContent = formatMeasure(item, item.end);
+          item.readout.classList.remove("is-landing", "is-revealing");
+          void item.readout.offsetWidth;
+          setReadoutState(item, "revealing");
+        }
+        if (item.spriteFrames.length) {
+          const spriteStops = [0, 310, 610, 900, 1190, 1540, 2050, 2520];
+          let activeFrame = 0;
+          spriteStops.forEach((stop, index) => { if (elapsed >= stop) activeFrame = index; });
+          item.spriteFrames.forEach((frame, index) => frame.classList.toggle("is-active", index === activeFrame));
+          item.scene.dataset.spritePhase = activeFrame === 5 ? "measure" : activeFrame === 6 ? "result" : activeFrame === 7 ? "final" : "motion";
+        }
+        if (elapsed < 3000) {
+          measurementFrames.set(item.id, requestAnimationFrame(updateMeasurementValue));
+        } else {
+          item.status.textContent = item.announcement;
+          measurementFrames.delete(item.id);
+        }
+      };
+      measurementFrames.set(item.id, requestAnimationFrame(updateMeasurementValue));
+    };
+    const measurementObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting || entry.intersectionRatio < .65) return;
+        const item = measurementAnimations.find((candidate) => candidate.scene === entry.target);
+        if (item) runMeasurementAnimation(item);
+        measurementObserver.unobserve(entry.target);
+      });
+    }, { threshold: [.65] });
+    measurementAnimations.forEach((item) => {
+      item.scene.addEventListener("click", () => runMeasurementAnimation(item));
+      measurementObserver.observe(item.scene);
+    });
+
+    document.querySelectorAll("[data-growth-detail]").forEach((button) => button.addEventListener("click", () => {
+      const detail = document.getElementById(button.getAttribute("aria-controls"));
+      const expanded = button.getAttribute("aria-expanded") === "true";
+      detail.hidden = expanded;
+      button.setAttribute("aria-expanded", String(!expanded));
+      button.textContent = expanded ? "자세히 ›" : "간단히 ‹";
+    }));
+    document.querySelectorAll("[data-growth-add]").forEach((button) => button.addEventListener("click", () => {
+      const metric = button.dataset.growthAdd;
+      const unit = metric === "몸무게" ? "kg" : "cm";
+      clearMilestoneVisual();
+      clearGrowthRecordLinks();
+      growthSheetTitle.textContent = `${metric} 새 측정`;
+      growthSheetPeriod.textContent = "오늘의 측정값을 기록해요";
+      growthSheetValue.textContent = "";
+      growthSheetDetails.innerHTML = growthDetailMarkup("측정 팁", metric === "몸무게" ? "가능하면 비슷한 시간대에 측정해요." : "같은 자세와 도구로 재면 비교하기 좋아요.");
+      growthMeasureLabel.textContent = `${metric} (${unit})`;
+      growthMeasureInput.value = "";
+      growthMeasureInput.placeholder = unit === "kg" ? "예: 6.4" : "예: 62.8";
+      growthMeasureInput.step = "0.1";
+      growthMeasureForm.dataset.metric = metric;
+      growthMeasureForm.dataset.unit = unit;
+      growthMeasureForm.hidden = false;
+      growthSheetNote.textContent = "이 데모에서는 저장 성공 피드백까지 확인할 수 있어요.";
+      openModal(growthBackdrop, button);
+      setTimeout(() => growthMeasureInput.focus(), 220);
+    }));
+    const heightPredictForm = document.getElementById("heightPredictForm");
+    const heightPredictResult = document.getElementById("heightPredictResult");
+    const heightPredictRange = document.getElementById("heightPredictRange");
+    const heightPredictError = document.getElementById("heightPredictError");
+    const dadHeightInput = document.getElementById("dadHeight");
+    const momHeightInput = document.getElementById("momHeight");
+    const simpleHeightRangeMargin = 8.5;
+    const showHeightPredictError = (message) => {
+      heightPredictError.hidden = !message;
+      heightPredictError.textContent = message;
+    };
+    const parseParentHeight = (input) => {
+      const value = Number(input.value);
+      return Number.isFinite(value) ? value : NaN;
+    };
+    heightPredictForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const dadHeight = parseParentHeight(dadHeightInput);
+      const momHeight = parseParentHeight(momHeightInput);
+      if (!dadHeightInput.value.trim() || !momHeightInput.value.trim()) {
+        showHeightPredictError("아빠 키와 엄마 키를 모두 입력해 주세요.");
+        (!dadHeightInput.value.trim() ? dadHeightInput : momHeightInput).focus();
+        return;
+      }
+      if (dadHeight < 140 || dadHeight > 210 || momHeight < 140 || momHeight > 210) {
+        showHeightPredictError("키는 140cm에서 210cm 사이로 입력해 주세요.");
+        return;
+      }
+      // Demo-only simple reference: midpoint of parent heights ±8.5cm.
+      // Keep this explicitly labeled as a reference, not a clinical prediction model.
+      const mid = (dadHeight + momHeight) / 2;
+      const low = Math.round(mid - simpleHeightRangeMargin);
+      const high = Math.round(mid + simpleHeightRangeMargin);
+      showHeightPredictError("");
+      heightPredictRange.textContent = `약 ${low}–${high}cm`;
+      heightPredictForm.hidden = true;
+      heightPredictResult.hidden = false;
+    });
+    document.getElementById("heightPredictReset").addEventListener("click", () => {
+      heightPredictResult.hidden = true;
+      heightPredictForm.hidden = false;
+      showHeightPredictError("");
+      dadHeightInput.focus();
+    });
+    growthMeasureForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const value = growthMeasureInput.value.trim();
+      if (!value) return;
+      const { metric, unit } = growthMeasureForm.dataset;
+      growthMeasureForm.hidden = true;
+      clearMilestoneVisual();
+      clearGrowthRecordLinks();
+      growthSheetTitle.textContent = "측정 기록을 저장했어요";
+      growthSheetPeriod.textContent = `오늘 · ${metric}`;
+      growthSheetValue.textContent = `${value}${unit}`;
+      growthSheetDetails.innerHTML = growthDetailMarkup("저장 상태", "데모 기록이 추가됐어요");
+      growthSheetNote.textContent = "실제 앱에서는 저장 후 그래프와 최근 측정 요약이 함께 갱신돼요.";
+    });
+
+    const monthCompareToggle = document.getElementById("monthCompareToggle");
+    const monthCompare = document.getElementById("monthCompare");
+    monthCompareToggle.addEventListener("click", () => {
+      const expanded = monthCompareToggle.getAttribute("aria-expanded") === "true";
+      monthCompareToggle.setAttribute("aria-expanded", String(!expanded));
+      monthCompareToggle.textContent = expanded ? "지난달과 비교 ›" : "비교 숨기기 ↑";
+      monthCompare.hidden = expanded;
+    });
+    const openMilestone = (trigger, title, date, copy, pose) => {
+      setMilestoneVisual(pose);
+      growthMeasureForm.hidden = true;
+      growthSheetTitle.textContent = title;
+      growthSheetPeriod.textContent = date;
+      growthSheetValue.textContent = "다린이의 성장 순간";
+      growthSheetDetails.innerHTML = growthDetailMarkup("기록", copy);
+      setGrowthRecordLinks(title, date);
+      growthSheetNote.textContent = "발달은 아기마다 속도와 순서가 다를 수 있어요. 이 화면은 다린이의 기록을 돌아보기 위한 공간이에요.";
+      openModal(growthBackdrop, trigger);
+    };
+    document.querySelectorAll("[data-milestone]").forEach((button) => button.addEventListener("click", () => {
+      openMilestone(button, button.dataset.milestone, button.dataset.milestoneDate, button.dataset.milestoneCopy, button.dataset.milestonePose);
+    }));
+    document.getElementById("growthMomentButton").addEventListener("click", (event) => {
+      openMilestone(event.currentTarget, "손 뻗기", "2026.08.21 · 생후 4개월", "장난감을 향해 손을 뻗는 모습을 처음 기록했어요.", "reach");
+    });
+    document.getElementById("milestoneAllButton").addEventListener("click", (event) => {
+      setMilestoneVisual("story");
+      growthMeasureForm.hidden = true;
+      clearGrowthRecordLinks();
+      growthSheetTitle.textContent = "발달 마일스톤 참고";
+      growthSheetPeriod.textContent = "사용자 제공 자료의 연령대별 참고 항목";
+      growthSheetValue.textContent = "다린이의 속도로";
+      growthSheetDetails.innerHTML = `
+        <div class="milestone-reference-card is-done"><span>첫 1개월</span><strong>손·시선·소리에 반응하기</strong><em class="milestone-status">성공<br>✓</em></div>
+        <div class="milestone-reference-card is-progress"><span>3개월 말</span><strong>머리·가슴 들기, 장난감 잡기, 소리 흉내</strong><em class="milestone-status">진행<br>중</em></div>
+        ${growthDetailMarkup("7개월", "뒤집기, 바로 앉기, 물체를 옮기기")}
+        ${growthDetailMarkup("첫돌", "기기, 일어서기, 간단한 말·몸짓")}
+        ${growthDetailMarkup("두 돌", "걷기, 낙서, 간단한 말과 지시 이해")}`;
+      growthSheetNote.textContent = "이는 제공된 자료의 참고 항목을 간단히 정리한 것이며, 시점은 아기마다 다를 수 있어요. 걱정되는 변화가 있다면 의료 전문가와 상담하세요.";
+      openModal(growthBackdrop, event.currentTarget);
+    });
+    const growthEvidenceToggle = document.getElementById("growthEvidenceToggle");
+    const growthEvidence = document.getElementById("growthEvidence");
+    growthEvidenceToggle.addEventListener("click", () => {
+      const expanded = growthEvidenceToggle.getAttribute("aria-expanded") === "true";
+      growthEvidenceToggle.setAttribute("aria-expanded", String(!expanded));
+      growthEvidenceToggle.textContent = expanded ? "왜 이렇게 말했어? ↓" : "근거 숨기기 ↑";
+      growthEvidence.hidden = expanded;
+    });
+    document.getElementById("growthAskButton").addEventListener("click", (event) => {
+      document.getElementById("consultTitle").textContent = "성장에 대해 물어보세요";
+      openModal(consultBackdrop, event.currentTarget);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (activeModal) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeModal(activeModal);
+          return;
+        }
+        if (event.key === "Tab") {
+          const items = focusableIn(activeModal);
+          const first = items[0];
+          const last = items[items.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+        return;
+      }
+      if (linkedRecordScreen.classList.contains("open")) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeLinkedRecord();
+          return;
+        }
+        if (event.key === "Tab") {
+          const items = focusableIn(linkedRecordScreen);
+          const first = items[0];
+          const last = items[items.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+        return;
+      }
+      if (!reportScreen.classList.contains("open")) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeReport();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusableIn(reportScreen);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+    document.addEventListener("focusin", (event) => {
+      if (activeModal) {
+        if (!activeModal.querySelector(".sheet").contains(event.target)) {
+          focusableIn(activeModal)[0]?.focus();
+        }
+        return;
+      }
+      if (linkedRecordScreen.classList.contains("open") && !linkedRecordScreen.contains(event.target)) {
+        focusableIn(linkedRecordScreen)[0]?.focus();
+        return;
+      }
+      if (reportScreen.classList.contains("open") && !reportScreen.contains(event.target)) {
+        focusableIn(reportScreen)[0]?.focus();
+      }
+    });
+
+    const tabs = [...document.querySelectorAll('.tab[role="tab"][data-tab]')];
+    const tabStatus = document.getElementById("tabStatus");
+    tabs.forEach((tab) => tab.addEventListener("click", () => {
+      tabs.forEach((item) => {
+        const selected = item === tab;
+        item.classList.toggle("active", selected);
+        item.setAttribute("aria-selected", String(selected));
+      });
+      tabStatus.textContent = `${tab.dataset.tab} 탭을 선택했어요.`;
+    }));
+
+    const themeSwitch = document.getElementById("themeSwitch");
+    themeSwitch.addEventListener("click", () => {
+      const dark = document.body.classList.toggle("dark");
+      themeSwitch.textContent = dark ? "라이트 모드" : "다크 모드";
+    });
+  </script>
+</body>
+</html>

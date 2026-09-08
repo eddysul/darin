@@ -1,4 +1,5 @@
 import type { CareEvent } from "./transcribe";
+import type { VoiceRequestScope } from "../utils/voiceRequestScope";
 
 export type VoiceNote = {
   id: string;
@@ -7,6 +8,7 @@ export type VoiceNote = {
   durationMs: number;
   transcript: string;
   savedAt: string;
+  requestScope: VoiceRequestScope;
   events?: CareEvent[];
   transcribeDate?: string;
 };

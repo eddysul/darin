@@ -34,11 +34,11 @@ const table: WeeklyFeatureTable = {
 };
 
 const valid: Record<Locale, string> = {
-  ko: "밤잠이 길어졌어요\n\n100분 → 120분으로 늘었어요.",
-  en: "Night sleep became longer\n\nIt changed from 100 minutes → 120 minutes.",
-  ja: "夜の睡眠が長くなりました\n\n100分 → 120分に変わりました。",
-  es: "El sueño nocturno fue más largo\n\nCambió de 100 minutos → 120 minutos.",
-  "zh-CN": "夜间睡眠时间变长了\n\n从100分钟 → 120分钟。",
+  ko: "metric:nightSleepMinutes\n밤잠이 길어졌어요\n\n100분 → 120분으로 늘었어요.",
+  en: "metric:nightSleepMinutes\nNight sleep became longer\n\nIt changed from 100 minutes → 120 minutes.",
+  ja: "metric:nightSleepMinutes\n夜の睡眠が長くなりました\n\n100分 → 120分に変わりました。",
+  es: "metric:nightSleepMinutes\nEl sueño nocturno fue más largo\n\nCambió de 100 minutos → 120 minutos.",
+  "zh-CN": "metric:nightSleepMinutes\n夜间睡眠时间变长了\n\n从100分钟 → 120分钟。",
 };
 const unsafe: Record<Locale, string> = {
   ko: "밤잠을 늘려보세요",
@@ -52,6 +52,16 @@ for (const locale of locales) {
   assert.ok(narrativeSystemPrompt(locale).includes("Write only"), `${locale}: target-language instruction missing`);
   assert.ok(isAiOutputLocaleSafe(valid[locale], locale), `${locale}: valid native-language copy rejected`);
   assert.ok(validateNarrative(valid[locale], table, locale), `${locale}: valid narrative rejected`);
+  assert.equal(
+    validateNarrative(valid[locale].replace("metric:nightSleepMinutes", "metric:feedCount"), table, locale),
+    false,
+    `${locale}: comparison accepted under the wrong metric id`,
+  );
+  assert.equal(
+    validateNarrative(valid[locale].replace(/(?:분|分|minutes?|minutos?|分钟)/g, "ml"), table, locale),
+    false,
+    `${locale}: comparison accepted with the wrong unit`,
+  );
   assert.equal(isAiOutputLocaleSafe(unsafe[locale], locale), false, `${locale}: advice language accepted`);
   assert.equal(validateNarrative(`${valid[locale]}\nExtra line`, table, locale), false, `${locale}: extra output accepted`);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
 import { AppHeader } from "../../components/babylog/AppHeader";
@@ -22,12 +22,12 @@ import {
 import { colors, radius } from "../../theme";
 import { formatDisplayTime } from "../../utils/logSummary";
 import type { GrowthRecord } from "../../types/growthRecord";
-import { findInsights } from "../../utils/careInsights";
+import { findInsights, insightSourceDateKeys } from "../../utils/careInsights";
 import { GrowthChart, type GrowthPoint } from "../../components/babylog/GrowthChart";
 import { ageDaysBetween, type WhoMeasure, type WhoSex } from "../../utils/growthPercentile";
 import { displayKey, displayMeta, hasDuration, isDisplayableCat } from "../../utils/logCategoryDisplay";
 import { WeeklyReportSheet } from "../../components/babylog/WeeklyReportSheet";
-import { buildWeeklyFeatureTable } from "../../utils/weeklyFeatureTable";
+import { buildWeeklyFeatureTable, WEEK_DAYS } from "../../utils/weeklyFeatureTable";
 import { buildRuleNarrative } from "../../utils/weeklyRuleNarrative";
 import { chartCategoryLabel, formatWeekOfMonth } from "../../utils/insightDisplay";
 import { buildWeeklyNarrative } from "../../utils/weeklyNarrative";
@@ -37,13 +37,34 @@ import {
   saveWeeklyNarrative,
 } from "../../utils/weeklyNarrativeStore";
 import {
+  buildInsightPhraseInput,
   buildInsightPhrases,
   getInsightPhrases,
   hydrateInsightPhrases,
+  saveInsightPhrases,
   type InsightPhrases,
 } from "../../utils/insightPhrase";
+import {
+  INSIGHT_PHRASE_INPUT_SCHEMA_VERSION,
+  INSIGHT_PHRASE_VERSION,
+} from "../../utils/insightPhrasePrompt";
+import {
+  createWeeklyAiDisplayState,
+  createWeeklyAiCacheIdentity,
+  getCurrentWeeklyAiDisplayValue,
+  runWeeklyAiRequestOnce,
+  weeklyAiCacheIdentityKey,
+  type WeeklyAiDisplayState,
+} from "../../utils/weeklyAiCache";
+import {
+  describeTable,
+  NARRATIVE_VERSION,
+  WEEKLY_NARRATIVE_INPUT_SCHEMA_VERSION,
+} from "../../utils/weeklyNarrativePrompt";
 import { useLanguage } from "../../LanguageContext";
 import type { ReportCriticalKey } from "../../i18nReportCriticalMessages";
+
+const EMPTY_INSIGHT_PHRASES: InsightPhrases = {};
 
 type Props = {
   onOpenProfile: () => void;
@@ -73,6 +94,7 @@ export function BabyReportScreen({
     storageReady,
     careLogCoverage,
     ensureCareLogsForRange,
+    localDataScope,
   } = useBabyLog();
   const [growthModalOpen, setGrowthModalOpen] = useState(false);
   const [editingGrowthRecord, setEditingGrowthRecord] = useState<GrowthRecord | null>(null);
@@ -126,67 +148,141 @@ export function BabyReportScreen({
 
   const weekTable = useMemo(() => buildWeeklyFeatureTable(reportLogs, careSetup), [reportLogs, careSetup]);
   const ruleNarrative = useMemo(() => buildRuleNarrative(weekTable, t, locale), [locale, t, weekTable]);
+  const narrativePromptInput = useMemo(() => describeTable(weekTable), [weekTable]);
+  const narrativeFromDateKey = weekTable.meta.dateKeys[0]
+    ? offsetDateKey(weekTable.meta.dateKeys[0], -WEEK_DAYS)
+    : "";
+  const narrativeToDateKey = weekTable.meta.dateKeys[weekTable.meta.dateKeys.length - 1] ?? "";
+  const narrativeCacheIdentity = useMemo(() => createWeeklyAiCacheIdentity({
+    operation: "weekly_narrative",
+    scope: localDataScope,
+    fromDateKey: narrativeFromDateKey,
+    toDateKey: narrativeToDateKey,
+    locale,
+    inputFacts: narrativePromptInput,
+    inputSchemaVersion: WEEKLY_NARRATIVE_INPUT_SCHEMA_VERSION,
+    promptVersion: NARRATIVE_VERSION,
+  }), [
+    localDataScope?.babyId,
+    localDataScope?.userId,
+    locale,
+    narrativeFromDateKey,
+    narrativePromptInput,
+    narrativeToDateKey,
+  ]);
+  const narrativeRequestKey = narrativeCacheIdentity
+    ? weeklyAiCacheIdentityKey(narrativeCacheIdentity)
+    : null;
+  const narrativeRequestKeyRef = useRef(narrativeRequestKey);
+  narrativeRequestKeyRef.current = narrativeRequestKey;
   const [narrative, setNarrative] = useState({ headline: "", body: "" });
 
-  // 주 1회만 AI 를 부른다. 캐시가 있으면 그대로 쓰고, 실패하면 규칙 문장이 남는다.
+  // 같은 계정·아기·기간·사실에는 한 번만 AI 를 부른다. 실패하면 규칙 문장이 남는다.
   useEffect(() => {
     let active = true;
     if (!ruleNarrative.headline) {
       setNarrative({ headline: "", body: "" });
       return;
     }
-    const cacheKey = `${weekTable.meta.periodLabel}:${locale}`;
     const fallback = { headline: ruleNarrative.headline, body: ruleNarrative.body, fromAI: false };
     setNarrative(fallback);
+    if (!narrativeCacheIdentity) return;
+    const requestKey = weeklyAiCacheIdentityKey(narrativeCacheIdentity);
 
     void (async () => {
-      await hydrateWeeklyNarrative();
-      if (!active) return;
-      const cached = getWeeklyNarrative(cacheKey);
+      await hydrateWeeklyNarrative(narrativeCacheIdentity);
+      if (!active || narrativeRequestKeyRef.current !== requestKey) return;
+      const cached = getWeeklyNarrative(narrativeCacheIdentity);
       if (cached) {
         setNarrative({ headline: cached.headline, body: cached.body });
         return;
       }
-      const result = await buildWeeklyNarrative(weekTable, fallback, locale);
-      if (!active) return;
+      const result = await runWeeklyAiRequestOnce(
+        narrativeCacheIdentity,
+        () => buildWeeklyNarrative(weekTable, fallback, locale),
+      );
+      if (!active || narrativeRequestKeyRef.current !== requestKey) return;
       setNarrative({ headline: result.headline, body: result.body });
       if (result.fromAI) {
-        void saveWeeklyNarrative({ periodLabel: cacheKey, ...result });
+        void saveWeeklyNarrative(narrativeCacheIdentity, result);
       }
     })();
 
     return () => {
       active = false;
     };
-  }, [locale, ruleNarrative, weekTable]);
+  }, [locale, narrativeCacheIdentity, ruleNarrative, weekTable]);
 
   // 발견 문장 다듬기. 상관은 이미 기기에서 찾았고 여기서는 표현만 바꾼다.
   // 실패하면 빈 객체라 우리 문장이 그대로 나간다.
-  const [insightPhrases, setInsightPhrases] = useState<InsightPhrases>({});
+  const [insightPhraseDisplay, setInsightPhraseDisplay] =
+    useState<WeeklyAiDisplayState<InsightPhrases> | null>(null);
+  const insightDateKeys = useMemo(
+    () => insightSourceDateKeys(reportLogs, todayKey),
+    [reportLogs, todayKey],
+  );
+  const insightPromptInput = useMemo(
+    () => buildInsightPhraseInput(insights, locale, t),
+    [insights, locale, t],
+  );
+  const insightCacheIdentity = useMemo(() => createWeeklyAiCacheIdentity({
+    operation: "insight_phrase",
+    scope: localDataScope,
+    fromDateKey: insightDateKeys[0] ?? "",
+    toDateKey: insightDateKeys[insightDateKeys.length - 1] ?? "",
+    locale,
+    inputFacts: insightPromptInput,
+    inputSchemaVersion: INSIGHT_PHRASE_INPUT_SCHEMA_VERSION,
+    promptVersion: INSIGHT_PHRASE_VERSION,
+  }), [
+    insightDateKeys,
+    insightPromptInput,
+    localDataScope?.babyId,
+    localDataScope?.userId,
+    locale,
+  ]);
+  const insightRequestKey = insightCacheIdentity
+    ? weeklyAiCacheIdentityKey(insightCacheIdentity)
+    : null;
+  const insightRequestKeyRef = useRef(insightRequestKey);
+  insightRequestKeyRef.current = insightRequestKey;
+  const displayedInsightPhrases = getCurrentWeeklyAiDisplayValue(
+    insightCacheIdentity,
+    insightPhraseDisplay,
+  ) ?? EMPTY_INSIGHT_PHRASES;
   useEffect(() => {
     let active = true;
-    if (!insights.length) {
-      setInsightPhrases({});
+    if (!insights.length || !insightCacheIdentity) {
+      setInsightPhraseDisplay(null);
       return;
     }
-    const periodLabel = `${weekTable.meta.periodLabel}:${locale}`;
+    const requestKey = weeklyAiCacheIdentityKey(insightCacheIdentity);
 
     void (async () => {
-      await hydrateInsightPhrases();
-      if (!active) return;
-      const cached = getInsightPhrases(periodLabel);
+      await hydrateInsightPhrases(insightCacheIdentity);
+      if (!active || insightRequestKeyRef.current !== requestKey) return;
+      const cached = getInsightPhrases(insightCacheIdentity);
       if (cached) {
-        setInsightPhrases(cached);
+        setInsightPhraseDisplay(createWeeklyAiDisplayState(insightCacheIdentity, cached));
         return;
       }
-      const phrases = await buildInsightPhrases(insights, periodLabel, locale, t);
-      if (active) setInsightPhrases(phrases);
+      const phrases = await runWeeklyAiRequestOnce(
+        insightCacheIdentity,
+        () => buildInsightPhrases(insights, insightPromptInput, locale),
+      );
+      if (!active || insightRequestKeyRef.current !== requestKey) return;
+      if (Object.keys(phrases).length) {
+        setInsightPhraseDisplay(createWeeklyAiDisplayState(insightCacheIdentity, phrases));
+        void saveInsightPhrases(insightCacheIdentity, phrases);
+      } else {
+        setInsightPhraseDisplay(null);
+      }
     })();
 
     return () => {
       active = false;
     };
-  }, [insights, locale, t, weekTable.meta.periodLabel]);
+  }, [insightCacheIdentity, insightPromptInput, insights, locale]);
 
   // 백분위는 성별 기준이 달라서, 성별을 모르면 그리지 않는다.
   const growthSex: WhoSex | null =
@@ -315,7 +411,7 @@ export function BabyReportScreen({
         table={weekTable}
         logs={reportLogs}
         insights={insights}
-        insightPhrases={insightPhrases}
+        insightPhrases={displayedInsightPhrases}
         babyName={babyName}
         onClose={() => setReportOpen(false)}
       />

@@ -8,7 +8,7 @@ import { DIARY_PHOTO_ONLY_COMMENT, diaryHasMilestone } from "./diaryModel";
 import type { Translate } from "./recordDisplay";
 
 export type DiaryComposeTarget =
-  | { kind: "edit"; entry: DiaryEntry }
+  | { kind: "edit"; entry: DiaryEntry; draft?: DiaryDraft }
   | { kind: "draft"; draft: DiaryDraft }
   | { kind: "new" };
 
@@ -40,7 +40,12 @@ export function resolveDiaryComposeTarget(input: {
 }): DiaryComposeTarget {
   const key = input.dateKey ?? formatDateKey();
   const saved = findDiaryForDate(input.entries, key);
-  if (saved) return { kind: "edit", entry: saved };
+  if (saved) {
+    const matchingDraft = input.draft?.dateKey === key && input.draft.targetDiaryId === saved.id
+      ? input.draft
+      : undefined;
+    return { kind: "edit", entry: saved, draft: matchingDraft };
+  }
   if (input.draft && input.draft.dateKey === key) return { kind: "draft", draft: input.draft };
   return { kind: "new" };
 }
@@ -71,7 +76,7 @@ export function buildDiaryNotificationCopy(input: {
 }
 
 export function draftToComposePrefill(draft: DiaryDraft): DiaryComposeDraft {
-  const { dateKey: _dk, updatedAt: _ua, ...rest } = draft;
+  const { dateKey: _dk, updatedAt: _ua, targetDiaryId: _target, ...rest } = draft;
   return rest;
 }
 

@@ -115,6 +115,10 @@ export type CareLogPayload = {
   rawTranscript?: string;
   confidence?: number;
   flags?: string[];
+  aiProvenance?: {
+    operation: "consult";
+    policyVersion: number;
+  };
   createdBy?: {
     userId: string;
     name: string;

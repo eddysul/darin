@@ -2,6 +2,7 @@ import { requireSupabase } from "../lib/supabase";
 import { compressImageForUpload } from "./compressImage";
 import { createId } from "./id";
 import { buildTempMediaPath } from "./tempMediaPath";
+import { isUnownedEagerMedia } from "./eagerMediaOwnership";
 
 export type MediaBucket = "memories" | "diary-media";
 export type PhotoUploadStatus = "local" | "compressing" | "uploading" | "uploaded" | "failed";
@@ -75,6 +76,44 @@ export function subscribeEagerUploads(onChange: () => void): () => void {
   };
 }
 
+/** Waits only for photos already owned by the eager-upload queue. */
+export async function waitForEagerPhotosToSettle(
+  photoUris: string[],
+  timeoutMs = 90_000,
+): Promise<boolean> {
+  const ids = photoUris
+    .map((uri) => findJobByLocalUri(uri)?.id)
+    .filter((id): id is string => Boolean(id));
+  if (!ids.length) return true;
+
+  const status = () => {
+    const current = ids.map((id) => jobs.get(id));
+    if (current.some((job) => !job || job.status === "failed")) return "failed" as const;
+    if (current.every((job) => job?.status === "uploaded")) return "uploaded" as const;
+    return "pending" as const;
+  };
+  const initial = status();
+  if (initial !== "pending") return initial === "uploaded";
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(result);
+    };
+    const unsubscribe = subscribeEagerUploads(() => {
+      const next = status();
+      if (next !== "pending") finish(next === "uploaded");
+    });
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    const afterSubscribe = status();
+    if (afterSubscribe !== "pending") finish(afterSubscribe === "uploaded");
+  });
+}
+
 export function enqueuePickedPhotos(input: {
   babyId: string;
   bucket: MediaBucket;
@@ -123,7 +162,9 @@ export function removeEagerPhoto(id: string): void {
 }
 
 export async function discardSession(sessionId: string): Promise<void> {
-  const sessionJobs = [...jobs.values()].filter((job) => job.sessionId === sessionId);
+  const sessionJobs = [...jobs.values()].filter((job) => (
+    job.sessionId === sessionId && isUnownedEagerMedia(job)
+  ));
   const uploadedPaths = sessionJobs
     .filter((job) => job.status === "uploaded" || job.status === "uploading")
     .map((job) => ({ bucket: job.bucket, path: job.storagePath }));

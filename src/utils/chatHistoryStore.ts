@@ -2,6 +2,7 @@ import type { ChatMessage } from "../types/babyLog";
 import { qaStorage } from "./qaStorage";
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
+import { AI_PRODUCT_POLICY_VERSION } from "./aiProductPolicy";
 import {
   isValidLocalDataScope,
   localDataScopeId,
@@ -26,7 +27,14 @@ function isMsg(item: unknown): item is ChatMessage {
 function parseMessages(raw: string): ChatMessage[] | null {
   const parsed = JSON.parse(raw) as unknown;
   if (!Array.isArray(parsed)) return null;
-  return parsed.filter(isMsg);
+  const messages = parsed.filter(isMsg);
+  // Old assistant copy was never checked against the current product policy.
+  // Do not silently grandfather it into the record-helper experience.
+  if (messages.some((message) =>
+    message.role === "ai" && message.aiPolicyVersion !== AI_PRODUCT_POLICY_VERSION)) {
+    return [];
+  }
+  return messages;
 }
 
 function mergeMessages(scoped: ChatMessage[] | null, legacy: ChatMessage[]): ChatMessage[] {

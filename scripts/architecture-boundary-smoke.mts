@@ -71,7 +71,7 @@ assert.match(reportScreen, /ensureCareLogsForRange/);
 assert.match(reportScreen, /careLogCoverageContains/);
 assert.match(reportScreen, /<WeeklyReportSheet[\s\S]*?logs=\{reportLogs\}/);
 assert.match(consultScreen, /ensureCareLogsForRange/);
-assert.match(consultScreen, /recent care-log history is only partially available/);
+assert.match(consultScreen, /historyComplete: recentHistory\.complete/);
 assert.match(consultScreen, /requestScopeRun !== babyScopeRunRef\.current/);
 assert.match(diaryScreen, /ensureCareLogsForRange/);
 assert.match(diaryScreen, /requestScopeKey !== localDataScopeKeyRef\.current/);

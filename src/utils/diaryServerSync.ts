@@ -1,6 +1,6 @@
 import { isSupabaseConfigured } from "../lib/supabase";
 import { AuthRepository } from "../repositories/AuthRepository";
-import { DiaryRepository } from "../repositories/DiaryRepository";
+import { DiaryRepository, type DiaryWriteResult } from "../repositories/DiaryRepository";
 import type { DiaryEntry } from "../types/babyLog";
 import {
   isDiaryServerMigrationComplete,
@@ -89,13 +89,21 @@ export async function syncDiaryCreate(
   scope: LocalDataScope | null,
   entry: DiaryEntry,
 ): Promise<DiaryEntry | null> {
+  const result = await syncDiaryCreateWithResult(scope, entry);
+  return result?.entry ?? null;
+}
+
+export async function syncDiaryCreateWithResult(
+  scope: LocalDataScope | null,
+  entry: DiaryEntry,
+): Promise<DiaryWriteResult | null> {
   if (!isSupabaseConfigured() || !isValidLocalDataScope(scope) || !(await authenticatedScope(scope))) return null;
   try {
     const result = await DiaryRepository.createWithPhotos(scope.babyId, entry);
     if (result.photoUploadFailed > 0) {
       devWarn(`[supabase] ${result.photoUploadFailed} diary photo upload(s) failed; text was preserved.`);
     }
-    return result.entry;
+    return result;
   } catch (error) {
     devWarn("[supabase] diary create failed:", errorMessage(error));
     return null;
@@ -106,13 +114,21 @@ export async function syncDiaryUpdate(
   scope: LocalDataScope | null,
   entry: DiaryEntry,
 ): Promise<DiaryEntry | null> {
+  const result = await syncDiaryUpdateWithResult(scope, entry);
+  return result?.entry ?? null;
+}
+
+export async function syncDiaryUpdateWithResult(
+  scope: LocalDataScope | null,
+  entry: DiaryEntry,
+): Promise<DiaryWriteResult | null> {
   if (!isSupabaseConfigured() || !isValidLocalDataScope(scope) || !(await authenticatedScope(scope))) return null;
   try {
     const result = await DiaryRepository.updateWithPhotos(scope.babyId, entry);
     if (result.photoUploadFailed > 0) {
       devWarn(`[supabase] ${result.photoUploadFailed} diary photo upload(s) failed; text was preserved.`);
     }
-    return result.entry;
+    return result;
   } catch (error) {
     devWarn("[supabase] diary update failed:", errorMessage(error));
     return null;

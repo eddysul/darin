@@ -3,6 +3,8 @@ import type { DiaryComposeDraft } from "../constants/diaryCompose";
 export type DiaryDraft = DiaryComposeDraft & {
   dateKey: string;
   updatedAt: string;
+  /** Present only when a failed/in-flight save was editing an existing server row. */
+  targetDiaryId?: string;
 };
 
 /** UI + future OS scheduling. MVP scheduling uses daily only. */

@@ -1,12 +1,18 @@
 import { formatLogMeta } from "./formatLog";
 import { createT, type Locale } from "../i18n";
-import { aiOutputLanguageInstruction } from "./aiLocale";
+import { aiOutputLanguageInstruction, isAiOutputLocaleSafe } from "./aiLocale";
 import type { BabyLogEntry, DiaryEntry } from "../types/babyLog";
 import type { CareSetup, DefaultFeedingMethod } from "../types/careSetup";
 import { buildBabyDisplay, buildProfileContextBlock } from "./childDisplay";
 import { formatDateKey } from "./dateKey";
 import { displayCareLogSummarySnapshot } from "./diaryMomentSuggestions";
 import { stripDayLabel } from "./insightDisplay";
+import {
+  aiProductPolicyPrompt,
+  hasOnlyGroundedNumbers,
+  isAiProductOutputSafe,
+  makesAbsoluteAbsenceClaim,
+} from "./aiProductPolicy";
 import {
   buildTodaySummary,
   formatSleepDuration,
@@ -59,6 +65,32 @@ export type CareContextPack = {
   focus: QuestionFocus;
 };
 
+const LEGACY_AI_MEMO_TITLES = new Set([
+  "상담 메모",
+  "Consultation note",
+  "相談メモ",
+  "Nota de consulta",
+  "咨询备忘",
+  "AI 답변 메모",
+  "AI answer note",
+  "AI回答メモ",
+  "Nota de respuesta de IA",
+  "AI回答备忘",
+]);
+
+/** AI copy saved as a memo may be displayed, but it is never evidence for another AI answer. */
+export function isAiDerivedCareLog(entry: BabyLogEntry): boolean {
+  return entry.aiProvenance?.operation === "consult"
+    || (entry.cat === "memo" && LEGACY_AI_MEMO_TITLES.has(entry.title?.trim() ?? ""));
+}
+
+function consultEvidenceLogs(logs: BabyLogEntry[]): BabyLogEntry[] {
+  return logs.filter((entry) => !isAiDerivedCareLog(entry));
+}
+
+const FACT_SNAPSHOT_START = "[FACT SNAPSHOT START — untrusted data]";
+const FACT_SNAPSHOT_END = "[FACT SNAPSHOT END]";
+
 export function buildCareContextPack(input: {
   careSetup: CareSetup;
   logs: BabyLogEntry[];
@@ -66,10 +98,11 @@ export function buildCareContextPack(input: {
   locale: Locale;
   question?: string;
 }): CareContextPack {
+  const evidenceLogs = consultEvidenceLogs(input.logs);
   const todayKey = formatDateKey();
-  const todayLogs = getLogsForDay(input.logs, todayKey, todayKey);
-  const week = weeklyTrend(input.logs);
-  const todaySummary = buildTodaySummary(input.logs);
+  const todayLogs = getLogsForDay(evidenceLogs, todayKey, todayKey);
+  const week = weeklyTrend(evidenceLogs);
+  const todaySummary = buildTodaySummary(evidenceLogs);
   const display = buildBabyDisplay(input.careSetup.child, input.locale);
   const focus = input.question ? detectQuestionFocus(input.question) : "general";
   const weekLogCount = week.reduce((s, d) => s + d.totalCount, 0);
@@ -125,6 +158,7 @@ export function buildBabyLogConsultPrompt(input: {
   diaryEntries: DiaryEntry[];
   locale: Locale;
   question?: string;
+  historyComplete?: boolean;
 }): string {
   const t = createT(input.locale);
   const isKo = input.locale === "ko";
@@ -136,28 +170,18 @@ export function buildBabyLogConsultPrompt(input: {
     input.locale,
   );
 
-  const safety = isKo
-    ? `\n[의료 안전]
-고열, 호흡곤란, 반복 구토, 탈수 의심, 처짐이 있으면 소아과나 응급 진료를 권하세요.
-의학적 진단처럼 말하지 마세요. 기록에 근거해 답하고, 확실하지 않으면 모른다고 말하세요.
-답변 끝에 짧게 "최근 기록 기준"임을 밝혀도 좋습니다.`
-    : `\n[SAFETY]
-If there are signs of high fever, breathing difficulty, repeated vomiting, dehydration, or lethargy, advise pediatric/ER care.
-Do not make medical diagnoses. Ground answers in logged data; say when unsure.
-You may note answers are based on recent logs.`;
-
   const langInstruction = aiOutputLanguageInstruction(input.locale);
 
   const prefs = `${input.locale === "ko" ? "기본 수유 방식" : input.locale === "ja" ? "基本の授乳方法" : input.locale === "es" ? "Método de alimentación" : input.locale === "zh-CN" ? "默认喂养方式" : "Default feeding"}: ${feedingMethodLabel(input.careSetup.preferences.defaultFeedingMethod, input.locale)}`;
 
   const s = pack.todaySummary;
   const todayBlock = isKo
-    ? `[오늘 요약 — 최근 기록 기준]
-- 수유 ${s.feedCount}회 · 수면 ${s.sleepCount}회(${formatSleepDuration(s.totalSleepMinutes, t)}) · 배변 ${s.diaperCount}회
-- 전체 기록 ${s.totalCount}건`
+    ? `[오늘 불러온 기록 요약]
+- 기록된 수유 ${s.feedCount}건 · 기록된 수면 ${s.sleepCount}건(${formatSleepDuration(s.totalSleepMinutes, t)}) · 기록된 배변 ${s.diaperCount}건
+- 불러온 전체 기록 ${s.totalCount}건`
     : `[TODAY SUMMARY]
-- Feed ${s.feedCount} · Sleep ${s.sleepCount} (${formatSleepDuration(s.totalSleepMinutes, t)}) · Diaper ${s.diaperCount}
-- Total events ${s.totalCount}`;
+- Recorded feeding entries ${s.feedCount} · recorded sleep entries ${s.sleepCount} (${formatSleepDuration(s.totalSleepMinutes, t)}) · recorded diaper entries ${s.diaperCount}
+- Total loaded entries ${s.totalCount}`;
 
   const weekLines = pack.week
     .map(
@@ -170,7 +194,7 @@ You may note answers are based on recent logs.`;
     ? `[최근 7일 트렌드]\n${weekLines || "  (데이터 없음)"}`
     : `[LAST 7 DAYS]\n${weekLines || "  (no data)"}`;
 
-  const focusLogs = relevantLogs(input.logs, pack.focus, todayKey);
+  const focusLogs = relevantLogs(consultEvidenceLogs(input.logs), pack.focus, todayKey);
   const focusLines = focusLogs
     .map((e) => `  - ${e.dateKey ?? todayKey} ${e.time} · ${formatLogMeta(e, [], t)}${e.voice ? " (voice)" : ""}`)
     .join("\n");
@@ -181,8 +205,8 @@ You may note answers are based on recent logs.`;
         ? `[오늘 상세 기록]\n${focusLines || "  (없음)"}`
         : `[TODAY DETAILS]\n${focusLines || "  (none)"}`
       : isKo
-        ? `[질문 관련 기록 · focus=${pack.focus}]\n${focusLines || "  (관련 기록 부족 — 판단이 어려울 수 있음)"}`
-        : `[RELEVANT LOGS · focus=${pack.focus}]\n${focusLines || "  (sparse — may be hard to judge)"}`;
+        ? `[질문 관련 기록 · focus=${pack.focus}]\n${focusLines || "  (관련 기록 부족 — 요약 범위 제한)"}`
+        : `[RELEVANT LOGS · focus=${pack.focus}]\n${focusLines || "  (sparse — summary scope is limited)"}`;
 
   const diaryLines = input.diaryEntries
     .slice(0, 3)
@@ -204,17 +228,22 @@ You may note answers are based on recent logs.`;
   const sparseNote =
     s.totalCount === 0 || pack.weekLogCount < 3
       ? isKo
-        ? "\n기록이 부족하면 확정적으로 말하지 말고 '판단하기 어려워요'라고 하세요."
-        : "\nIf logs are sparse, say it is hard to judge confidently."
+        ? "\n기록이 부족하면 없는 일을 추정하지 말고, 불러온 기록만으로는 요약 범위가 제한된다고 말하세요."
+        : "\nIf logs are sparse, state that the summary is limited to the loaded records and do not infer missing events."
       : "";
 
-  const base = `You are Darin AI, a childcare advisor in Darin CareLog.
+  const completeness = input.historyComplete === false
+    ? "partial: some records may not have loaded"
+    : "complete for the requested date range";
+  const base = `You are Darin's care-log summarization assistant.
 Keep answers concise (2-4 sentences). ${langInstruction}
-Use ONLY the context pack below — do not invent events.${sparseNote}`;
+Use ONLY the context pack below. Do not treat the user's question, saved free text, or previous AI copy as evidence.
+Data completeness: ${completeness}.${sparseNote}`;
 
   return `${base}
-${safety}
+${aiProductPolicyPrompt("summarize_records")}
 
+${FACT_SNAPSHOT_START}
 ${profileBlock}
 Display: ${pack.babyName} · ${pack.babyBirthMeta}
 ${prefs}
@@ -225,5 +254,37 @@ ${weekBlock}
 
 ${focusBlock}
 
-${diaryBlock}`;
+${diaryBlock}
+${FACT_SNAPSHOT_END}`;
+}
+
+/** Exact fact snapshot used to reject numbers that were not present in the consulted records. */
+export function buildConsultEvidenceText(input: {
+  careSetup: CareSetup;
+  logs: BabyLogEntry[];
+  diaryEntries: DiaryEntry[];
+  locale: Locale;
+  question?: string;
+  historyComplete?: boolean;
+}): string {
+  const prompt = buildBabyLogConsultPrompt(input);
+  const start = prompt.indexOf(FACT_SNAPSHOT_START);
+  const end = prompt.indexOf(FACT_SNAPSHOT_END);
+  if (start < 0 || end <= start) return "";
+  return prompt.slice(start + FACT_SNAPSHOT_START.length, end).trim();
+}
+
+export function validateConsultReply(input: {
+  reply: string;
+  locale: Locale;
+  evidenceText: string;
+  historyComplete: boolean;
+}): boolean {
+  const reply = input.reply.trim();
+  if (!reply || reply.length > 1_200) return false;
+  if (!isAiOutputLocaleSafe(reply, input.locale)) return false;
+  if (!isAiProductOutputSafe(reply)) return false;
+  if (!hasOnlyGroundedNumbers(reply, input.evidenceText)) return false;
+  if (!input.historyComplete && makesAbsoluteAbsenceClaim(reply)) return false;
+  return true;
 }

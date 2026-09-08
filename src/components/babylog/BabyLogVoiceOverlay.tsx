@@ -25,12 +25,14 @@ import { colors } from "../../theme";
 import { formatTemperature, formatVolume } from "../../utils/measurementFormat";
 import { formatTimeOfDay } from "../../utils/timePicker";
 import { recordCategoryLabel, storedRecordValueLabel, type Translate } from "../../utils/recordDisplay";
+import type { VoiceRequestScope } from "../../utils/voiceRequestScope";
 
 export type VoiceResult = VoiceEventDraft;
 
 export type VoiceSessionPayload = {
   rawTranscript: string;
   events: VoiceResult[];
+  requestScope: VoiceRequestScope;
 };
 
 type Stage = "listening" | "analyzing" | "result" | "error";
@@ -40,7 +42,7 @@ type Props = {
   pregnancy?: boolean;
   onClose: () => void;
   onConfirmAll: (session: VoiceSessionPayload) => void;
-  onEditEvent: (event: VoiceResult, rawTranscript: string) => void;
+  onEditEvent: (event: VoiceResult, rawTranscript: string, requestScope: VoiceRequestScope) => void;
   onManualEntry: () => void;
   /** When set, replaces the matching card in the open review session. */
   eventPatch?: VoiceResult | null;
@@ -122,6 +124,7 @@ export function BabyLogVoiceOverlay({
   const [stage, setStage] = useState<Stage>("listening");
   const [events, setEvents] = useState<VoiceResult[]>([]);
   const [rawTranscript, setRawTranscript] = useState("");
+  const [resultScope, setResultScope] = useState<VoiceRequestScope | null>(null);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const openedRef = useRef(false);
   const appliedKeyRef = useRef<string | null>(null);
@@ -131,6 +134,7 @@ export function BabyLogVoiceOverlay({
     setStage("listening");
     setEvents([]);
     setRawTranscript("");
+    setResultScope(null);
     setTranscriptOpen(false);
     appliedKeyRef.current = null;
   };
@@ -173,6 +177,7 @@ export function BabyLogVoiceOverlay({
       appliedKeyRef.current = applyKey;
       setRawTranscript(session.rawTranscript);
       setEvents(session.events);
+      setResultScope(savedNote.requestScope);
       setTranscriptOpen(false);
       setStage("result");
     }
@@ -353,7 +358,7 @@ export function BabyLogVoiceOverlay({
                   <EventCard
                     key={event.id}
                     event={event}
-                    onEdit={() => onEditEvent(event, rawTranscript)}
+                    onEdit={() => resultScope && onEditEvent(event, rawTranscript, resultScope)}
                     onRemove={() => handleRemove(event.id)}
                     onResolveTime={(time) => resolveTime(event.id, time)}
                     t={t}
@@ -377,7 +382,7 @@ export function BabyLogVoiceOverlay({
               {events.length > 0 ? (
                 <Pressable
                   style={[styles.btn, styles.btnPrimary, styles.confirmBtn]}
-                  onPress={() => onConfirmAll({ rawTranscript, events })}
+                  onPress={() => resultScope && onConfirmAll({ rawTranscript, events, requestScope: resultScope })}
                 >
                   <Text style={styles.btnPrimaryText}>{t("voice.confirm")}</Text>
                 </Pressable>

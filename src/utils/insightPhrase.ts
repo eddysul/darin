@@ -9,7 +9,6 @@ import type { Locale } from "../i18n";
 import type { Insight } from "./careInsights";
 import { localizeInsight } from "./insightDisplay";
 import {
-  INSIGHT_PHRASE_VERSION,
   insightSystemPrompt,
   describeInsights,
   parseInsightPhrases,
@@ -18,48 +17,60 @@ import type { Translate } from "./recordDisplay";
 import { STORAGE_KEYS } from "./storageKeys";
 import { reportStorageIssue } from "./storageIssues";
 import { qaStorage } from "./qaStorage";
+import {
+  createScopedWeeklyAiCacheStore,
+  type WeeklyAiCacheIdentity,
+  type WeeklyAiCacheScope,
+} from "./weeklyAiCache";
 
 /** 발견 키 → 다듬은 문장. */
 export type InsightPhrases = Record<string, string>;
 
-type Cached = {
-  periodLabel: string;
-  version: number;
-  phrases: InsightPhrases;
-};
-
 const STORAGE_KEY = STORAGE_KEYS.insightPhrases;
 
-let memory: Cached | null = null;
-let hydrated = false;
-
-export async function hydrateInsightPhrases(force = false): Promise<void> {
-  if (hydrated && !force) return;
-  try {
-    const raw = await qaStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as Cached) : null;
-    memory = parsed && typeof parsed.periodLabel === "string" && parsed.phrases ? parsed : null;
-    hydrated = true;
-  } catch {
-    reportStorageIssue("load", STORAGE_KEY);
-  }
+function isInsightPhrases(value: unknown): value is InsightPhrases {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const phrases = Object.values(value as Record<string, unknown>);
+  return phrases.length > 0
+    && phrases.every((item) => typeof item === "string" && Boolean(item.trim()));
 }
 
-/** 이번 주의, 지금 프롬프트로 만든 문장만 돌려준다. */
-export function getInsightPhrases(periodLabel: string): InsightPhrases | null {
-  if (!memory || memory.periodLabel !== periodLabel) return null;
-  return memory.version === INSIGHT_PHRASE_VERSION ? memory.phrases : null;
+const cache = createScopedWeeklyAiCacheStore<InsightPhrases>({
+  baseKey: STORAGE_KEY,
+  isValue: isInsightPhrases,
+  onStorageError: (operation) => reportStorageIssue(operation, STORAGE_KEY),
+});
+
+export function hydrateInsightPhrases(
+  scope: WeeklyAiCacheScope | null,
+  force = false,
+): Promise<boolean> {
+  return cache.hydrate(scope, qaStorage, force);
 }
 
-async function saveInsightPhrases(periodLabel: string, phrases: InsightPhrases): Promise<void> {
-  const stamped: Cached = { periodLabel, version: INSIGHT_PHRASE_VERSION, phrases };
-  memory = stamped;
-  hydrated = true;
-  try {
-    await qaStorage.setItem(STORAGE_KEY, JSON.stringify(stamped));
-  } catch {
-    reportStorageIssue("save", STORAGE_KEY);
-  }
+export function getInsightPhrases(identity: WeeklyAiCacheIdentity): InsightPhrases | null {
+  return cache.get(identity);
+}
+
+export function saveInsightPhrases(
+  identity: WeeklyAiCacheIdentity,
+  phrases: InsightPhrases,
+): Promise<boolean> {
+  return cache.save(identity, phrases, qaStorage);
+}
+
+export function resetInsightPhrasesMemory(): void {
+  cache.reset();
+}
+
+/** Exact localized facts string used both for the request and its fingerprint. */
+export function buildInsightPhraseInput(
+  insights: Insight[],
+  locale: Locale = "ko",
+  t?: Translate,
+): string {
+  const localized = t ? insights.map((insight) => localizeInsight(insight, t, locale)) : undefined;
+  return describeInsights(insights, localized);
 }
 
 /**
@@ -68,21 +79,17 @@ async function saveInsightPhrases(periodLabel: string, phrases: InsightPhrases):
  */
 export async function buildInsightPhrases(
   insights: Insight[],
-  periodLabel: string,
+  promptInput: string,
   locale: Locale = "ko",
-  t?: Translate,
 ): Promise<InsightPhrases> {
   if (!insights.length) return {};
   try {
-    const localized = t ? insights.map((insight) => localizeInsight(insight, t, locale)) : undefined;
     const reply = await callOpenAI(
-      [{ role: "user", content: describeInsights(insights, localized) }],
+      [{ role: "user", content: promptInput }],
       insightSystemPrompt(locale),
       300,
     );
-    const phrases = parseInsightPhrases(reply, insights, locale);
-    if (Object.keys(phrases).length) void saveInsightPhrases(periodLabel, phrases);
-    return phrases;
+    return parseInsightPhrases(reply, insights, locale);
   } catch {
     return {};
   }

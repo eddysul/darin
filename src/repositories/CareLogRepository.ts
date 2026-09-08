@@ -74,6 +74,7 @@ function payloadFromEntry(entry: BabyLogEntry | Omit<BabyLogEntry, "id">): CareL
     rawTranscript: entry.rawTranscript,
     confidence: entry.confidence,
     flags: entry.flags,
+    aiProvenance: entry.aiProvenance,
     createdBy: entry.createdBy,
   };
 }
@@ -143,6 +144,10 @@ export function careLogRowToEntry(row: CareLogEntryRow): BabyLogEntry {
     rawTranscript: p.rawTranscript,
     confidence: p.confidence,
     flags: p.flags as BabyLogFlag[] | undefined,
+    aiProvenance: p.aiProvenance?.operation === "consult"
+      && Number.isFinite(p.aiProvenance.policyVersion)
+      ? p.aiProvenance
+      : undefined,
     createdBy: row.created_by
       ? {
           // The relational column is protected by RLS and is authoritative.

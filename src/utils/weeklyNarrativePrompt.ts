@@ -7,14 +7,24 @@
 import type { WeeklyFeatureTable } from "./weeklyFeatureTable";
 import type { Locale } from "../i18n";
 import { aiOutputLanguageInstruction, isAiOutputLocaleSafe } from "./aiLocale";
+import {
+  aiProductPolicyPrompt,
+  hasExactMetricComparison,
+  hasOnlyExpectedMetricUnit,
+  isAiProductOutputSafe,
+} from "./aiProductPolicy";
 
 /**
  * 프롬프트나 출력 형식이 바뀌면 올린다.
  * 캐시는 이 값이 다르면 무시한다. 안 그러면 같은 주 동안 옛 형식 문장이 계속 나온다.
  */
-export const NARRATIVE_VERSION = 5;
+export const NARRATIVE_VERSION = 6;
+/** Bump when describeTable changes the facts contract sent to the AI. */
+export const WEEKLY_NARRATIVE_INPUT_SCHEMA_VERSION = 1;
 
 export const SYSTEM_PROMPT = `You write one preview card for a childcare app's weekly report.
+
+${aiProductPolicyPrompt("weekly_narrative")}
 
 [Task]
 - Select exactly one metric with the most meaningful week-over-week change.
@@ -29,10 +39,11 @@ export const SYSTEM_PROMPT = `You write one preview card for a childcare app's w
 - Do not use an em dash.
 
 [Format]
-- First line: a short headline without numbers.
+- First line: exactly "metric:<key>" using the selected metric key from the supplied JSON.
+- Second line: a short headline without numbers.
 - Blank line.
 - Then one factual body sentence containing exactly one "previous value → current value" comparison.
-- Return no labels, bullets, markdown, or additional commentary.`;
+- Return no bullets, markdown, or additional commentary.`;
 
 export function narrativeSystemPrompt(locale: Locale): string {
   return `${SYSTEM_PROMPT}
@@ -60,51 +71,37 @@ export const BANNED_PHRASES = [
   "습니다", "됩니다", "입니다",
 ];
 
-/** 표에 실제로 등장하는 수를 모은다. 문장에 이 밖의 수가 있으면 지어낸 것이다. */
-function allowedNumbers(table: WeeklyFeatureTable): Set<number> {
-  const set = new Set<number>();
-  const add = (n: number | null | undefined) => {
-    if (n === null || n === undefined || !Number.isFinite(n)) return;
-    set.add(Math.round(n));
-    // 분 단위 값은 "N시간 M분"으로 읽히므로 그 조각도 허용한다.
-    if (n >= 60) {
-      set.add(Math.floor(n / 60));
-      set.add(Math.round(n % 60));
-    }
-  };
-  for (const metric of table.metrics) {
-    add(metric.thisWeek.avg);
-    add(metric.thisWeek.min);
-    add(metric.thisWeek.max);
-    add(metric.thisWeek.days);
-    add(metric.lastWeek?.avg);
-    add(metric.lastWeek?.min);
-    add(metric.lastWeek?.max);
-    if (metric.lastWeek) add(Math.abs(metric.thisWeek.avg - metric.lastWeek.avg));
-    for (const value of metric.daily) add(value);
-  }
-  add(table.meta.recordedDays);
-  add(table.meta.ageMonths);
-  return set;
+export type ParsedWeeklyNarrative = {
+  metricKey: string;
+  headline: string;
+  body: string;
+};
+
+export function parseWeeklyNarrative(text: string): ParsedWeeklyNarrative | null {
+  const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length !== 3) return null;
+  const metric = /^metric:([A-Za-z][A-Za-z0-9_]*)$/.exec(lines[0]);
+  if (!metric || !lines[1] || !lines[2]) return null;
+  return { metricKey: metric[1], headline: lines[1], body: lines[2] };
 }
 
 /** 문장 속 수가 전부 표에서 온 것인지, 금지 표현이 없는지 확인한다. */
 export function validateNarrative(text: string, table: WeeklyFeatureTable, locale: Locale = "ko"): boolean {
   if (!text.trim()) return false;
   if (!isAiOutputLocaleSafe(text, locale)) return false;
-  const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
-  if (lines.length !== 2 || /\d/.test(lines[0])) return false;
+  if (!isAiProductOutputSafe(text)) return false;
+  const parsed = parseWeeklyNarrative(text);
+  if (!parsed || /\d/.test(parsed.headline)) return false;
   if ((text.match(/→/g) ?? []).length !== 1) return false;
   for (const word of BANNED_PHRASES) {
     if (text.includes(word)) return false;
   }
-  const allowed = allowedNumbers(table);
-  const numbers = text.match(/\d+(\.\d+)?/g) ?? [];
-  return numbers.every((raw) => {
-    const value = Math.round(Number.parseFloat(raw));
-    // 시각 표기(6시 30분)와 반올림 오차를 감안해 ±1 까지 인정한다.
-    return allowed.has(value) || allowed.has(value - 1) || allowed.has(value + 1);
-  });
+  const selected = table.metrics.find((metric) => metric.key === parsed.metricKey);
+  if (!selected?.lastWeek) return false;
+  return hasOnlyExpectedMetricUnit(parsed.body, selected.unit) && hasExactMetricComparison(parsed.body, [{
+    previous: selected.lastWeek.avg,
+    current: selected.thisWeek.avg,
+  }]);
 }
 
 /** 표를 프롬프트에 넣기 좋은 형태로. 분 단위 시각은 사람이 읽는 형태를 함께 준다. */

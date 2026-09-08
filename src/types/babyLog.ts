@@ -14,6 +14,12 @@ export type BabyLogActor = {
 
 export type BabyLogSource = "manual" | "voice" | "diary" | "caregiver";
 
+export type BabyLogAiProvenance = {
+  /** AI output can be shown as a memo, but must never become evidence for another AI request. */
+  operation: "consult";
+  policyVersion: number;
+};
+
 export type BabyLogEntry = {
   id: string;
   /** Local guard/cache scope. Server remains authoritative through care_logs.baby_id. */
@@ -93,6 +99,7 @@ export type BabyLogEntry = {
   rawTranscript?: string;
   confidence?: number;
   flags?: BabyLogFlag[];
+  aiProvenance?: BabyLogAiProvenance;
   createdBy?: BabyLogActor;
 };
 
@@ -152,6 +159,8 @@ export type ChatMessage = {
   id: string;
   role: "user" | "ai";
   text: string;
+  /** AI messages without the current policy version are not safe to redisplay after an upgrade. */
+  aiPolicyVersion?: number;
   /** Optional baby sticker attached to a chat bubble. */
   stickerId?: string;
 };
