@@ -29,4 +29,7 @@ class PrivacyLogger:
         }
         payload = {"event": name}
         payload.update({key: value for key, value in fields.items() if key in allowed and value is not None})
-        self._logger.info(json.dumps(payload, separators=(",", ":"), sort_keys=True))
+        # Voice rejection codes remain visible under the default WARNING level;
+        # the allow-list above still excludes all source/provider content.
+        emit = self._logger.warning if fields.get("validation") else self._logger.info
+        emit(json.dumps(payload, separators=(",", ":"), sort_keys=True))

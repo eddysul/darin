@@ -48,7 +48,22 @@ VOICE_PROMPT = """Internal operation: voice_event_parse.
 Extract only explicitly spoken childcare events from the transcript. Unknown fields must be null.
 Do not add advice, medical judgment, or an event that was not spoken.
 Use only these category labels: 배변, 식사, 수면, 키 몸무게의 변화, 목욕, 진료, 온도/습도, 영양제, 터미타임, 간식, 복용 약.
-Output schema: {"events":[{"category":"allowed label", "other documented fields":null}]}."""
+Return {"events": [...]} only. Each event may contain only these fields:
+category, source_text, amount_unit, time, time_start, time_end, duration_min, type,
+amount, color, height_cm, weight_kg, hospital, reason, body_temp, room_temp,
+humidity, name, note. Unknown fields must be omitted or null, never invented.
+source_text must copy the complete event clause verbatim, including negation;
+do not extract a keyword from a negative, planned or questioned event. Omit such events.
+Use separate evidence for each event; never borrow numbers from another event.
+amount is numeric feeding volume with amount_unit="ml"; duration_min is minutes.
+Normalize explicit ml/mL/milliliters/밀리리터 and minutes/분 only; do not infer units.
+time is HH:MM only when explicitly stated, including explicit AM/PM conversions.
+type/color/hospital/reason/name/note must be exact text from that source clause,
+not translated, paraphrased or classified labels. Category labels remain Korean
+regardless of locale. For example formula stays "formula", not "분유".
+Example: {"events":[{"category":"식사","source_text":"분유 120ml 먹었어요",
+"amount":120,"amount_unit":"ml","type":"분유"}]}.
+Never use a field named unit or a category such as feeding or sleep."""
 
 OPERATION_PROMPTS = {
     "consult_record_question": CONSULT_PROMPT,
@@ -63,7 +78,8 @@ def system_prompt(operation: str, locale: Locale) -> str:
 
 
 def voice_system_prompt(locale: Locale) -> str:
-    return f"{BASE_POLICY}\n\n{VOICE_PROMPT}\n\n{LANGUAGE_INSTRUCTION[locale]}"
+    # Extraction copies evidence; the prose translation instruction is not applicable.
+    return f"{BASE_POLICY}\n\n{VOICE_PROMPT}\n\nTranscript locale: {locale}. Copy evidence verbatim."
 
 
 def untrusted_payload(value: Any) -> str:

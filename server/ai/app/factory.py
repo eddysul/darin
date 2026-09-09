@@ -127,6 +127,7 @@ def create_app(
             user=audit.opaque_user(request.state.user_id) if hasattr(request.state, "user_id") else None,
             status=error.status_code,
             error_code=error.code,
+            validation=getattr(error, "validation_reason", None),
             path=request.url.path,
         )
         response = JSONResponse(_error_body(error, request.state.request_id), status_code=error.status_code)

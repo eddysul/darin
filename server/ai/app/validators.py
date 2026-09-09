@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from collections import Counter
 from typing import Any
@@ -103,30 +102,5 @@ def validate_insight_output(
 
 
 def validate_voice_events(raw: dict[str, Any], transcript: str) -> VoiceEventsOutput:
-    result = _parse(VoiceEventsOutput, raw)
-    grounded = set(numbers(transcript))
-    for event in result.events:
-        serialized = json.dumps(event.model_dump(exclude_none=True), ensure_ascii=False)
-        if not set(numbers(serialized)).issubset(grounded):
-            raise output_rejected()
-        anchors = {
-            "배변": r"(?:배변|대변|소변|응가|쉬|기저귀|diaper|stool|urine|poop|pee)",
-            "식사": r"(?:식사|수유|모유|분유|이유식|우유|먹|물|feed|milk|formula|food)",
-            "수면": r"(?:수면|잠|낮잠|취침|sleep|nap)",
-            "키 몸무게의 변화": r"(?:키|신장|몸무게|체중|height|weight)",
-            "목욕": r"(?:목욕|씻|bath)",
-            "진료": r"(?:진료|병원|의사|검진|hospital|doctor|clinic)",
-            "온도/습도": r"(?:체온|온도|습도|temperature|humidity)",
-            "영양제": r"(?:영양제|비타민|vitamin|supplement)",
-            "터미타임": r"(?:터미|tummy)",
-            "간식": r"(?:간식|snack)",
-            "복용 약": r"(?:복용|약|medicine|medication)",
-        }
-        if not re.search(anchors[event.category], transcript, re.IGNORECASE):
-            raise output_rejected()
-        normalized_transcript = transcript.casefold()
-        for field in ("type", "color", "hospital", "reason", "name", "note"):
-            value = getattr(event, field)
-            if value is not None and str(value).casefold() not in normalized_transcript:
-                raise output_rejected()
-    return result
+    from .voice_grounding import validate
+    return validate(raw, transcript)
