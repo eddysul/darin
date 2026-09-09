@@ -27,6 +27,7 @@
     "qa:diary-save": "node --experimental-strip-types scripts/diary-save-reliability-smoke.mts",
     "qa:voice-scope": "node --experimental-strip-types scripts/voice-request-scope-smoke.mts",
     "qa:ai-policy": "node --experimental-strip-types scripts/ai-product-policy-smoke.mts",
+    "qa:ai-server": "if [ -x server/ai/.venv/bin/python ]; then server/ai/.venv/bin/python -m unittest discover -s server/ai/tests -p 'test_*.py'; else python3 -m unittest discover -s server/ai/tests -p 'test_*.py'; fi",
     "qa:build12": "pnpm dlx tsx scripts/build12-multibaby-qa-smoke.mts",
     "qa:build14-stickers": "pnpm dlx tsx scripts/growth-sticker-qa-smoke.mts",
     "qa:memory-zoom": "node --experimental-strip-types scripts/memory-media-zoom-qa.mts",
