@@ -52,8 +52,11 @@ Return {"events": [...]} only. Each event may contain only these fields:
 category, source_text, amount_unit, time, time_start, time_end, duration_min, type,
 amount, color, height_cm, weight_kg, hospital, reason, body_temp, room_temp,
 humidity, name, note. Unknown fields must be omitted or null, never invented.
-source_text must copy the complete event clause verbatim, including negation;
-do not extract a keyword from a negative, planned or questioned event. Omit such events.
+source_text must copy a unique contiguous span verbatim from one event clause.
+A partial span is allowed, but include every value/unit/text field you return.
+The server checks the entire surrounding clause for negation, plans and questions;
+never use a shortened span to assert those events. Omit such events.
+If identical source text occurs more than once, copy a longer unique span.
 Use separate evidence for each event; never borrow numbers from another event.
 amount is numeric feeding volume with amount_unit="ml"; duration_min is minutes.
 Normalize explicit ml/mL/milliliters/밀리리터 and minutes/분 only; do not infer units.

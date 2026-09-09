@@ -66,7 +66,7 @@ class VoiceGroundingTests(unittest.TestCase):
             ('분유 120ml',[{'category':'식사','amount':999}], 'NUMBER_UNIT_NOT_GROUNDED'),
             ('분유 120ml',[{'category':'식사','note':'happy'}], 'TEXT_FIELD_NOT_GROUNDED'),
             ('분유 120ml',[{'category':'식사','source_text':'분유 999ml'}], 'SOURCE_EVIDENCE_MISMATCH'),
-            ('목욕 안 했어',[{'category':'목욕','source_text':'목욕'}], 'SOURCE_EVIDENCE_MISMATCH'),
+            ('목욕 안 했어',[{'category':'목욕','source_text':'목욕'}], 'EVENT_NOT_CONFIRMED'),
             ('분유 120ml',[{'category':'식사','amount':120,'unit':'ml'}], 'STRUCTURE_INVALID'),
         ]
         for t,events,reason in cases:
@@ -75,6 +75,40 @@ class VoiceGroundingTests(unittest.TestCase):
     def test_same_category_cannot_borrow_quantity(self):
         self.route('분유 120ml, 분유 30ml',[{'category':'식사','amount':30,'source_text':'분유 120ml'}],422,'NUMBER_UNIT_NOT_GROUNDED')
         self.route('분유 120ml 이후 분유 30ml',[{'category':'식사','amount':30}],422,'AMBIGUOUS_EVENT_SPAN')
+
+    def test_partial_source_success(self):
+        for transcript, events in [
+            ('분유 120ml 먹었어요',[{'category':'식사','source_text':'분유 120ml','amount':120}]),
+            ('30분 잤어요',[{'category':'수면','source_text':'30분','duration_min':30}]),
+            ('분유 120ml 먹고 30분 잤어요',[{'category':'식사','source_text':'분유 120ml','amount':120},{'category':'수면','source_text':'30분 잤어요','duration_min':30}]),
+            ('기저귀 갈았어요',[{'category':'배변','source_text':'기저귀'}]),
+            ('목욕했어요',[{'category':'목욕','source_text':'목욕'}]),
+            ('At three PM, formula feeding, one hundred twenty milliliters.',[{'category':'식사','source_text':'formula feeding, one hundred twenty milliliters','amount':120,'amount_unit':'ml'}]),
+        ]:
+            with self.subTest(transcript=transcript): self.route(transcript,events,200)
+
+    def test_partial_source_context(self):
+        for transcript in ['목욕 안 했어요','목욕하지 않았어요','목욕 안 함','목욕 못 했어요','목욕하려고 해요','목욕했어?','목욕했다고 안 했어요']:
+            with self.subTest(transcript=transcript):
+                self.route(transcript,[{'category':'목욕','source_text':'목욕'}],422,'EVENT_NOT_CONFIRMED')
+        for transcript in ['이제 분유 120ml 먹일 거예요','분유 120ml 먹었나?']:
+            with self.subTest(transcript=transcript):
+                self.route(transcript,[{'category':'식사','source_text':'분유 120ml','amount':120}],422,'EVENT_NOT_CONFIRMED')
+        self.route('bath and not done',[{'category':'목욕','source_text':'bath'}],422,'EVENT_NOT_CONFIRMED')
+
+    def test_partial_source_reject(self):
+        cases = [
+            ('분유 120ml 먹고 30분 잤어요',{'category':'식사','source_text':'분유 120ml','amount':30},'NUMBER_UNIT_NOT_GROUNDED'),
+            ('분유 120ml 먹고 30분 잤어요',{'category':'수면','source_text':'30분 잤어요','duration_min':120},'NUMBER_UNIT_NOT_GROUNDED'),
+            ('분유 120ml 먹었어요',{'category':'식사','source_text':'분유 120ml','amount':120,'amount_unit':'minutes'},'UNIT_NOT_GROUNDED'),
+            ('분유 120ml 먹었어요',{'category':'식사','source_text':'분유를 120밀리리터 먹음','amount':120},'SOURCE_EVIDENCE_MISMATCH'),
+            ('분유 120ml 먹었어요',{'category':'식사','source_text':'분유 999ml','amount':999},'SOURCE_EVIDENCE_MISMATCH'),
+            ('분유 120ml 먹고, 나중에 또 분유 120ml 먹었어요',{'category':'식사','source_text':'분유 120ml','amount':120},'SOURCE_AMBIGUOUS'),
+            ('분유 120ml 먹었어요',{'category':'식사','source_text':'20ml','amount':20},'SOURCE_EVIDENCE_MISMATCH'),
+            ('분유 120ml 먹고 30분 잤어요',{'category':'식사','source_text':'분유','amount':120},'NUMBER_UNIT_NOT_GROUNDED'),
+        ]
+        for transcript,event,reason in cases:
+            with self.subTest(event=event): self.route(transcript,[event],422,reason)
 
     def test_legacy_repro_diagnostics(self):
         with self.assertRaises(VoiceGroundingError) as caught:

@@ -42,7 +42,7 @@ ANCHORS = {
     "복용 약": r"복용|약|medicine|medication",
 }
 UNCONFIRMED = re.compile(
-    r"안\s|안(?:했|하|먹|자)|못\s|않|없|아니|하려|할\s*예정|했나|할까|[?？]|"
+    r"안\s|안(?:했|하|먹|자)|못\s|않|없|아니|하려|할\s*예정|거예요|거야|계획|예정|했나|할까|[?？]|"
     r"\b(?:no|not|never|without|didn't|didn’t|plan|planning|will|going to)\b|"
     r"ない|なかった|ません|予定|没|沒有|没有|不|打算|\b(?:sin|nunca)\b", re.I)
 UNIT_PATTERNS = {
@@ -80,12 +80,14 @@ def normalized(text: str) -> str:
 def clauses(transcript: str) -> list[str]:
     # Commas stay within a clause ("At three PM, formula feeding, 120 ml").
     # Split a comma only if both sides independently identify an event.
-    parts = [p.strip() for p in re.split(r"[;；\n]|(?<!\d)[.!。](?!\d)|(?<=고)\s+|\band\b|그리고", transcript) if p.strip()]
+    parts = [p.strip() for p in re.split(r"[;；\n]|(?<!\d)[.!。](?!\d)", transcript) if p.strip()]
     result = []
     has_anchor = lambda s: any(re.search(p, s, re.I) for p in ANCHORS.values())
     for part in parts:
         start = 0
-        for m in re.finditer(r"[,，]", part):
+        # A connector alone is not an event boundary. Keep trailing context in
+        # "목욕했다고 안 했어요" and "bath and not done" with its event.
+        for m in re.finditer(r"[,，]|(?<=고)\s+|\band\b|그리고", part):
             if has_anchor(part[start:m.start()]) and has_anchor(part[m.end():]):
                 result.append(part[start:m.start()].strip()); start = m.end()
         result.append(part[start:].strip())
@@ -106,13 +108,30 @@ def validate(raw: dict[str, Any], transcript: str) -> VoiceEventsOutput:
     used = set()
     for event in parsed.events:
         candidates = [p for p in parts if re.search(ANCHORS[event.category], p, re.I)]
+        copied = None
         if event.source_text is not None:
-            # Require an entire server-delimited clause, not an extracted keyword
-            # which could omit its negation or steal another event's number.
+            # Match literal continuous evidence, but retain the enclosing server
+            # clause as the owner of negation, modality and event-type context.
             copied = event.source_text.strip().rstrip('.!。').strip()
-            if copied not in parts:
+            if not copied:
                 fail("SOURCE_EVIDENCE_MISMATCH")
-            candidates = [p for p in candidates if p == copied]
+            occurrences = list(re.finditer(r"(?=" + re.escape(copied) + r")", transcript))
+            if not occurrences:
+                fail("SOURCE_EVIDENCE_MISMATCH")
+            if len(occurrences) != 1:
+                fail("SOURCE_AMBIGUOUS")
+            start = occurrences[0].start()
+            end = start + len(copied)
+            # A substring must not turn 120ml into 20ml or minutes into min.
+            if (start and re.match(r"[A-Za-z0-9.]", transcript[start-1])
+                    and re.match(r"[A-Za-z0-9.]", copied[0])) or (
+                    end < len(transcript) and re.match(r"[A-Za-z0-9.]", transcript[end])
+                    and re.match(r"[A-Za-z0-9.]", copied[-1])
+                    and transcript[end] != '.'):
+                fail("SOURCE_EVIDENCE_MISMATCH")
+            candidates = [p for p in candidates if copied in p]
+            if not candidates:
+                fail("SOURCE_EVIDENCE_MISMATCH")
         if len(candidates) != 1:
             fail("EVENT_TYPE_NOT_GROUNDED")
         source = candidates[0]
@@ -124,7 +143,9 @@ def validate(raw: dict[str, Any], transcript: str) -> VoiceEventsOutput:
         if source in used:
             fail("DUPLICATE_SOURCE_EVENT")
         used.add(source)
-        evidence = normalized(source)
+        # Values/units/text come only from selected evidence, never the global
+        # transcript. Omitted source_text retains the unique-clause legacy path.
+        evidence = normalized(copied if copied is not None else source)
         def quantity(value, unit):
             pairs = re.findall(r"(?<![\w.])([0-9]+(?:\.[0-9]+)?)\s*(?:" + UNIT_PATTERNS[unit] + r")", evidence, re.I)
             if len(pairs) > 1:
@@ -168,7 +189,7 @@ def validate(raw: dict[str, Any], transcript: str) -> VoiceEventsOutput:
                     fail("TIME_NOT_GROUNDED")
         for field in ("type", "color", "hospital", "reason", "name", "note"):
             value = getattr(event,field)
-            if value is not None and str(value).casefold() not in source.casefold():
+            if value is not None and str(value).casefold() not in (copied if copied is not None else source).casefold():
                 fail("TEXT_FIELD_NOT_GROUNDED")
         result.append(VoiceEvent.model_validate(event.model_dump(exclude={"source_text","amount_unit"})))
     return VoiceEventsOutput(events=result)
