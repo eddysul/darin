@@ -53,14 +53,20 @@ category, source_text, amount_unit, time, time_start, time_end, duration_min, ty
 amount, color, height_cm, weight_kg, hospital, reason, body_temp, room_temp,
 humidity, name, note. Unknown fields must be omitted or null, never invented.
 source_text must copy a unique contiguous span verbatim from one event clause.
-A partial span is allowed, but include every value/unit/text field you return.
+A partial span is allowed, but include every non-clock fact value/unit/text field you return.
 The server checks the entire surrounding clause for negation, plans and questions;
 never use a shortened span to assert those events. Omit such events.
 If identical source text occurs more than once, copy a longer unique span.
 Use separate evidence for each event; never borrow numbers from another event.
 amount is numeric feeding volume with amount_unit="ml"; duration_min is minutes.
 Normalize explicit ml/mL/milliliters/밀리리터 and minutes/분 only; do not infer units.
-time is HH:MM only when explicitly stated, including explicit AM/PM conversions.
+time/time_start/time_end are HH:MM only when an explicit clock appears in the
+same surrounding event clause (it may be outside the shorter source_text).
+Supported explicit forms include 8 AM, 8:30 PM, at eight in the morning,
+08:00, 오전 8시, 오후 8시 30분. Never infer AM/PM for bare Korean hours.
+Never convert duration, feeding amount, recording timestamp or approximate
+expressions (around eight, this morning, 8시쯤) to a precise clock. Use null.
+Do not borrow a clock from another event or guess endpoints of a time range.
 type/color/hospital/reason/name/note must be exact text from that source clause,
 not translated, paraphrased or classified labels. Category labels remain Korean
 regardless of locale. For example formula stays "formula", not "분유".

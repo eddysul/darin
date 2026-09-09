@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from .errors import AppError
 from .models import VoiceEvent, VoiceEventsOutput, StrictModel
+from .voice_time import clocks, without_clocks
 from pydantic import Field
 
 
@@ -56,7 +57,7 @@ UNIT_PATTERNS = {
 }
 WORDS = dict(zip("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split(), range(20)))
 WORDS.update(dict(zip("twenty thirty forty fifty sixty seventy eighty ninety".split(), range(20,100,10))))
-WORD_NUMBER = re.compile(r"\b(?:" + "|".join(WORDS) + r"|hundred)(?:[ -]+(?:" + "|".join(WORDS) + r"|hundred))*\b", re.I)
+WORD_NUMBER = re.compile(r"\b(?:" + "|".join(WORDS) + r"|hundred)(?:[ -]+(?:" + "|".join(WORDS) + r"|hundred|and))*\b", re.I)
 
 
 def normalized(text: str) -> str:
@@ -65,6 +66,10 @@ def normalized(text: str) -> str:
         # A small exact grammar; no guesses for unsupported number phrases.
         if len(tokens) >= 2 and tokens[0] in WORDS and 1 <= WORDS[tokens[0]] <= 9 and tokens[1] == "hundred":
             base, tokens = WORDS[tokens[0]] * 100, tokens[2:]
+            if tokens and tokens[0] == "and":
+                tokens = tokens[1:]
+                if not tokens:
+                    return match.group()
         else:
             base = 0
         if not tokens:
@@ -80,7 +85,17 @@ def normalized(text: str) -> str:
 def clauses(transcript: str) -> list[str]:
     # Commas stay within a clause ("At three PM, formula feeding, 120 ml").
     # Split a comma only if both sides independently identify an event.
-    parts = [p.strip() for p in re.split(r"[;；\n]|(?<!\d)[.!。](?!\d)", transcript) if p.strip()]
+    abbreviations = [m.span() for m in re.finditer(r"\b[ap]\.\s*m\.", transcript, re.I)]
+    boundaries = [m for m in re.finditer(r"[;；\n]|(?<!\d)[.!。](?!\d)", transcript)
+                  if not any(start <= m.start() < end for start,end in abbreviations)]
+    parts = []
+    start = 0
+    for boundary in boundaries:
+        if transcript[start:boundary.start()].strip():
+            parts.append(transcript[start:boundary.start()].strip())
+        start = boundary.end()
+    if transcript[start:].strip():
+        parts.append(transcript[start:].strip())
     result = []
     has_anchor = lambda s: any(re.search(p, s, re.I) for p in ANCHORS.values())
     for part in parts:
@@ -147,7 +162,20 @@ def validate(raw: dict[str, Any], transcript: str) -> VoiceEventsOutput:
         # transcript. Omitted source_text retains the unique-clause legacy path.
         evidence = normalized(copied if copied is not None else source)
         def quantity(value, unit):
-            pairs = re.findall(r"(?<![\w.])([0-9]+(?:\.[0-9]+)?)\s*(?:" + UNIT_PATTERNS[unit] + r")", evidence, re.I)
+            # Mask clocks in the entire clause before selecting the evidence;
+            # a span starting at "30분" must not hide the preceding "8시".
+            quantity_evidence = evidence
+            if unit == "minutes":
+                original = normalized(source)
+                masked = without_clocks(original)
+                if copied is not None:
+                    offset = original.find(evidence)
+                    if offset < 0:
+                        fail("NUMBER_UNIT_NOT_GROUNDED")
+                    quantity_evidence = masked[offset:offset+len(evidence)]
+                else:
+                    quantity_evidence = masked
+            pairs = re.findall(r"(?<![\w.])([0-9]+(?:\.[0-9]+)?)\s*(?:" + UNIT_PATTERNS[unit] + r")", quantity_evidence, re.I)
             if len(pairs) > 1:
                 fail("AMBIGUOUS_EVENT_SPAN")
             if not pairs or Decimal(str(value)) not in {Decimal(x) for x in pairs}:
@@ -180,11 +208,9 @@ def validate(raw: dict[str, Any], transcript: str) -> VoiceEventsOutput:
         for field in ("time", "time_start", "time_end"):
             value = getattr(event,field)
             if value is not None:
-                # No inferred AM/PM, date or cross-clause time borrowing.
-                found = re.findall(r"(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?!\d)\s*(am|pm)?",evidence)
-                valid = {f"{(int(h)%12+(12 if p=='pm' else 0)) if p else int(h):02}:{m}" for h,m,p in found if not p or 1 <= int(h) <= 12}
-                for h, period in re.findall(r"\b(1[0-2]|[1-9])\s*(am|pm)\b",evidence):
-                    valid.add(f"{int(h)%12+(12 if period=='pm' else 0):02}:00")
+                # Explicit clocks belong to this event's surrounding clause,
+                # not necessarily the provider's shorter facts span.
+                valid, _ = clocks(normalized(source))
                 if len(valid) != 1 or value not in valid:
                     fail("TIME_NOT_GROUNDED")
         for field in ("type", "color", "hospital", "reason", "name", "note"):

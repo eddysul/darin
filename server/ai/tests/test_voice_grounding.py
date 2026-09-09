@@ -114,3 +114,34 @@ class VoiceGroundingTests(unittest.TestCase):
         with self.assertRaises(VoiceGroundingError) as caught:
             validate({'events':[{'category':'식사','type':'분유','amount':120}]},'formula 120ml')
         self.assertEqual(caught.exception.validation_reason,'TEXT_FIELD_NOT_GROUNDED')
+
+    def test_clock_context_success(self):
+        for text, expected in [('8 AM','08:00'),('8:30 PM','20:30'),('08:00','08:00'),('8:00','08:00'),('eight in the morning','08:00'),('three PM','15:00'),('three p.m.','15:00'),('12 AM','00:00'),('12 PM','12:00')]:
+            with self.subTest(clock=text):
+                self.route(f'At {text}, formula feeding, one hundred twenty milliliters.',[{'category':'식사','source_text':'formula feeding, one hundred twenty milliliters','amount':120,'amount_unit':'ml','time':expected}],200)
+        for text, expected in [('오전 8시','08:00'),('오전 8시 30분','08:30'),('오후 8시 30분','20:30')]:
+            with self.subTest(clock=text):
+                self.route(f'{text}에 분유 120ml 먹었어요',[{'category':'식사','source_text':'분유 120ml','amount':120,'time':expected}],200)
+        self.route('오전 8시에 분유 120ml 먹고 30분 잤어요',[
+            {'category':'식사','source_text':'분유 120ml','amount':120,'time':'08:00'},
+            {'category':'수면','source_text':'30분 잤어요','duration_min':30}],200)
+        self.route('30분 잤어요',[{'category':'수면','duration_min':30}],200)
+
+    def test_clock_reject(self):
+        for text, value in [('분유 120ml 먹었어요','08:00'),('8시에 먹었어요','09:00'),('오전 8시 30분에 먹었어요','08:00'),('8시쯤 먹었어요','08:00'),('아침에 먹었어요','08:00'),('조금 전에 먹었어요','08:00'),('점심 무렵 먹었어요','12:00'),('around 8 AM formula','08:00'),('8:99 PM formula','20:00'),('25:00 formula','01:00'),('8 AM formula','8:00'),('8 AM formula','tomorrow'),('formula 120ml','01:20')]:
+            with self.subTest(text=text):
+                self.route(text,[{'category':'식사','time':value}],422,'TIME_NOT_GROUNDED')
+        self.route('30분 잤어요',[{'category':'수면','duration_min':30,'time':'00:30'}],422,'TIME_NOT_GROUNDED')
+        self.route('오전 8시에 분유 120ml 먹고 30분 잤어요',[
+            {'category':'수면','source_text':'30분 잤어요','duration_min':30,'time':'08:00'}],422,'TIME_NOT_GROUNDED')
+        for field in ['time_start','time_end']:
+            self.route('30분 잤어요',[{'category':'수면',field:'08:00'}],422,'TIME_NOT_GROUNDED')
+        for text in ['오전 8시경에 먹었어요','8:00amish formula','8 AM or 9 AM formula']:
+            self.route(text,[{'category':'식사','time':'08:00'}],422,'TIME_NOT_GROUNDED')
+
+    def test_clock_minutes_are_not_duration(self):
+        for source in [None,'30분 잤어요']:
+            event={'category':'수면','duration_min':30}
+            if source:event['source_text']=source
+            self.route('오전 8시 30분 잤어요',[event],422,'NUMBER_UNIT_NOT_GROUNDED')
+        self.route('오전 8시 30분에 20분 잤어요',[{'category':'수면','duration_min':20,'time':'08:30'}],200)
