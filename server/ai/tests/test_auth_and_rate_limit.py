@@ -8,7 +8,7 @@ import unittest
 from fastapi.testclient import TestClient
 
 from server.ai.app.auth import SupabaseJwksVerifier
-from server.ai.app.factory import create_app
+from server.ai.tests.support import create_app
 from server.ai.app.rate_limit import InMemoryRateLimiter
 from server.ai.tests.support import (
     FakeLlmProvider,

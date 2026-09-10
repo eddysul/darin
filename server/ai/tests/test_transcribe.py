@@ -8,7 +8,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from starlette.datastructures import UploadFile
 
-from server.ai.app.factory import create_app
+from server.ai.tests.support import create_app
 from server.ai.app.upload import BoundedMultipartParser
 from server.ai.tests.support import (
     FakeLlmProvider,

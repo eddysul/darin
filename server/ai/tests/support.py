@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import uuid
 from collections import deque
 from dataclasses import replace
 from typing import Any
@@ -8,6 +10,10 @@ from typing import Any
 from server.ai.app.auth import AuthContext
 from server.ai.app.config import Settings
 from server.ai.app.providers import LlmRequest, SttRequest
+from server.ai.app.providers.base import ProviderResult
+from server.ai.app.quota.types import Accounting
+from server.ai.app.quota.pricing import VerifiedAudioDuration
+from server.ai.tests.quota_fake import service
 
 
 def test_settings(**overrides: Any) -> Settings:
@@ -46,7 +52,11 @@ class FakeLlmProvider:
         result = self.results.popleft()
         if isinstance(result, Exception):
             raise result
-        return result
+        if isinstance(result, ProviderResult):
+            return result
+        return ProviderResult(result, Accounting(stage_id=request.stage_id,
+            pricing_version=request.pricing_version, observed_model=request.model,
+            usage_status="KNOWN", input_usage=100, output_usage=10, parse_status="OK"))
 
 
 class FakeSttProvider:
@@ -60,11 +70,27 @@ class FakeSttProvider:
         self.requests.append(request)
         if isinstance(self.result, Exception):
             raise self.result
-        return self.result
+        if isinstance(self.result, ProviderResult):
+            return self.result
+        return ProviderResult(self.result, Accounting(stage_id=request.stage_id,
+            pricing_version=request.pricing_version, observed_model=request.model,
+            usage_status="KNOWN", billable_duration_ms=4095, parse_status="OK"))
 
 
 def auth_headers(token: str = "valid-token") -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+    return {"Authorization": f"Bearer {token}", "Idempotency-Key": f"20260909.{uuid.uuid4().hex}"}
+
+
+def verified_duration(audio):
+    return VerifiedAudioDuration(hashlib.sha256(audio.data).hexdigest(), 4095, "verified-duration.v1")
+
+
+def create_app(**kwargs):
+    """Existing regression routes use an explicitly injected central fake and duration proof."""
+    from server.ai.app.factory import create_app as factory
+    kwargs.setdefault("quota_service", service())
+    kwargs.setdefault("duration_verifier", verified_duration)
+    return factory(**kwargs)
 
 
 def consult_body(question: str = "기록을 요약해줘") -> dict[str, Any]:

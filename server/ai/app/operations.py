@@ -23,6 +23,7 @@ from .policy import (
 )
 from .providers import LlmProvider, LlmRequest
 from .safe_claims import render_claim
+from .quota.service import QuotaService
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +55,9 @@ async def execute_operation(
     locale: Locale,
     settings: Settings,
     provider: LlmProvider,
+    quota: QuotaService,
+    user_id: str,
+    nonce: str | None,
 ) -> ExecuteResponse:
     if operation == "consult_record_question" and requests_clinical_judgment(operation_input.question):
         return ExecuteResponse(
@@ -72,8 +76,12 @@ async def execute_operation(
         max_output_tokens=definition.max_output_tokens,
         timeout_seconds=settings.llm_timeout_seconds,
     )
+    record = await quota.begin_llm(user_id, operation, nonce, locale,
+                                  operation_input.model_dump(mode="json"), request)
     try:
-        raw = await provider.complete_json(request)
+        raw = await quota.llm(record, "llm", request, provider)
+    except AppError:
+        raise
     except (asyncio.TimeoutError, TimeoutError) as exc:
         raise AppError(
             "PROVIDER_TIMEOUT",
@@ -88,6 +96,9 @@ async def execute_operation(
             "The AI provider request failed.",
             fallback_recommended=True,
         ) from exc
+
+    finally:
+        await quota.cancel_unsent(record)
 
     result = render_claim(operation, raw, operation_input, locale)
     return ExecuteResponse(

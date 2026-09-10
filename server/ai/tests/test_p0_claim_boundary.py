@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from fastapi.testclient import TestClient
 
-from server.ai.app.factory import create_app
+from server.ai.tests.support import create_app
 from server.ai.tests.support import (
     FakeLlmProvider, FakeSttProvider, FakeVerifier, auth_headers,
     consult_body, weekly_body, insight_body, test_settings,

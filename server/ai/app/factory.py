@@ -32,6 +32,7 @@ from .providers import (
 from .rate_limit import InMemoryRateLimiter
 from .validators import validate_voice_events
 from .upload import MULTIPART_OVERHEAD_BYTES, bounded_upload, check_declared_size
+from .quota.service import QuotaService
 
 
 async def _read_json(request: Request, max_bytes: int) -> dict[str, Any]:
@@ -67,6 +68,8 @@ def create_app(
     stt_provider: SttProvider | None = None,
     limiter: InMemoryRateLimiter | None = None,
     privacy_logger: PrivacyLogger | None = None,
+    quota_service: QuotaService | None = None,
+    duration_verifier=None,
 ) -> FastAPI:
     resolved = settings or Settings.from_env()
     auth = RequireAuth(verifier or SupabaseJwksVerifier(resolved))
@@ -74,6 +77,7 @@ def create_app(
     stt = stt_provider or OpenAiSttProvider(resolved.openai_api_key)
     rate_limiter = limiter or InMemoryRateLimiter()
     audit = privacy_logger or PrivacyLogger(hash_salt=resolved.log_hash_salt)
+    quota = quota_service or QuotaService.unavailable()
 
     app = FastAPI(title="Darin AI Backend", version=SERVICE_VERSION)
     if resolved.cors_allowed_origins:
@@ -82,7 +86,7 @@ def create_app(
             allow_origins=list(resolved.cors_allowed_origins),
             allow_credentials=False,
             allow_methods=["GET", "POST"],
-            allow_headers=["Authorization", "Content-Type", "Accept"],
+            allow_headers=["Authorization", "Content-Type", "Accept", "Idempotency-Key"],
         )
 
     @app.middleware("http")
@@ -191,6 +195,9 @@ def create_app(
             envelope.locale,
             resolved,
             llm,
+            quota,
+            auth_context.user_id,
+            request.headers.get("Idempotency-Key"),
         )
 
     @app.post("/v1/transcribe", response_model=TranscribeResponse, openapi_extra={
@@ -217,27 +224,34 @@ def create_app(
         )
         async with bounded_upload(request, resolved.max_audio_bytes) as (file, locale):
             audio = await read_validated_audio(file, resolved.max_audio_bytes)
+            # No production duration verifier exists until P1.3. Only explicit
+            # trusted dependency injection (test fixture) may supply this proof.
+            proof = duration_verifier(audio) if duration_verifier is not None else None
+            record = await quota.begin_voice(auth_context.user_id, request.headers.get("Idempotency-Key"),
+                locale, audio, proof, resolved.stt_model, resolved.llm_model)
             try:
-                transcript = await stt.transcribe(
+                transcript = await quota.stt(record,
                     SttRequest(
                         data=audio.data,
                         filename=audio.safe_filename,
                         content_type=audio.content_type,
                         model=resolved.stt_model,
                         timeout_seconds=resolved.stt_timeout_seconds,
-                    )
+                    ), stt
                 )
             except (asyncio.TimeoutError, TimeoutError) as exc:
                 raise AppError("PROVIDER_TIMEOUT", 504, "The STT provider did not respond in time.", True) from exc
             except AppError:
+                await quota.cancel_unsent(record)
                 raise
             except Exception as exc:
                 raise AppError("PROVIDER_ERROR", 502, "The STT provider request failed.", True) from exc
 
             if not transcript.strip() or len(transcript) > 12_000:
+                await quota.cancel_unsent(record)
                 raise output_rejected()
             try:
-                raw_events = await llm.complete_json(
+                raw_events = await quota.llm(record, "parser",
                     LlmRequest(
                         operation="voice_event_parse",
                         system_prompt=voice_system_prompt(locale),
@@ -245,12 +259,16 @@ def create_app(
                         model=resolved.llm_model,
                         max_output_tokens=900,
                         timeout_seconds=resolved.llm_timeout_seconds,
-                    )
+                    ), llm
                 )
             except (asyncio.TimeoutError, TimeoutError) as exc:
                 raise AppError("PROVIDER_TIMEOUT", 504, "The event parser did not respond in time.", True) from exc
+            except AppError:
+                raise
             except Exception as exc:
                 raise AppError("PROVIDER_ERROR", 502, "The event parser request failed.", True) from exc
+            finally:
+                await quota.cancel_unsent(record)
             events = validate_voice_events(raw_events, transcript)
             return TranscribeResponse(
                 events=events.events,

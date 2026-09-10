@@ -4,7 +4,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from server.ai.app.factory import create_app
+from server.ai.tests.support import create_app
 from server.ai.tests.support import (
     FakeLlmProvider,
     FakeSttProvider,

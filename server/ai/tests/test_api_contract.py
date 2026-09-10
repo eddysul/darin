@@ -8,7 +8,7 @@ import unittest
 from fastapi.testclient import TestClient
 
 from server.ai.app.config import POLICY_VERSION
-from server.ai.app.factory import create_app
+from server.ai.tests.support import create_app
 from server.ai.app.privacy_log import PrivacyLogger
 from server.ai.tests.support import (
     FakeLlmProvider,

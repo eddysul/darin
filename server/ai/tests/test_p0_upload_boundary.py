@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from starlette.datastructures import UploadFile
 
-from server.ai.app.factory import create_app
+from server.ai.tests.support import create_app, auth_headers
 from server.ai.app.upload import BoundedMultipartParser, MULTIPART_OVERHEAD_BYTES
 from server.ai.tests.support import FakeLlmProvider, FakeSttProvider, FakeVerifier, VALID_M4A, test_settings
 
@@ -36,6 +36,7 @@ class UploadBoundaryTests(unittest.IsolatedAsyncioTestCase):
         app = create_app(settings=test_settings(max_audio_bytes=limit, ai_enabled=enabled),
                          verifier=FakeVerifier(), stt_provider=stt, llm_provider=llm, limiter=Limiter())
         headers = [(b'content-type', b'multipart/form-data; boundary=test')]
+        headers.append((b'idempotency-key', auth_headers()['Idempotency-Key'].encode()))
         if token is not None:
             headers.append((b'authorization', f'Bearer {token}'.encode()))
         if length is not None:
