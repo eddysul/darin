@@ -81,6 +81,14 @@ requires a valid signature plus `iss`, `aud`, `exp`, and `sub` claims. The
 issuer defaults to `${SUPABASE_URL}/auth/v1`, the audience defaults to
 `authenticated`, and the authenticated user is always taken from `sub`.
 
+JWKS snapshots expire after 300 seconds; individual signing keys are not cached
+indefinitely. Refreshes are serialized and limited to one attempt per 30 seconds
+per instance, including failures and unknown `kid` requests. Unsupported header
+algorithms and missing/oversized key IDs are rejected before JWKS fetching.
+Expired snapshots are never accepted during an outage. New signing keys may
+therefore require up to 30 seconds to become available; a removed key may remain
+usable for at most the snapshot lifetime. This is not instant token revocation.
+
 This v1 service does **not** read Care Logs or diaries from Supabase. It can
 verify the authenticated user, operation, schema, payload limits, policy, and
 output. It cannot prove that every client-supplied snapshot belongs to a
@@ -115,6 +123,15 @@ not sufficient evidence to safely render arbitrary claims. The public result
 shapes remain unchanged. The legacy text validators in `validators.py` are not
 used to approve execute responses. Voice-event validation is unchanged; its
 P1 field/event grounding gaps remain follow-up work.
+
+Voice numeric grounding now rejects signed, ranged, scientific-notation,
+thousands-separated and approximate quantity evidence instead of extracting a
+positive suffix. The check applies to the enclosing event clause even when the
+provider selects a shorter source span. Simple exact decimals remain supported.
+This deliberately rejects unsupported precision rather than converting it;
+complex multilingual assertions, clock field roles and date/timezone semantics
+still require further hardening. The finite notation checks are not a complete
+natural-language semantic proof.
 
 Rejected output is never returned as successful AI copy. The error tells the
 future client to retain its deterministic fallback.
@@ -181,6 +198,12 @@ abuse-sensitive scale, replace this adapter with a shared atomic limiter such as
 Redis/Memorystore or an API gateway quota while retaining the same user and
 operation keys. Cloud Run max instances should be a second cost ceiling, not a
 substitute for the shared limiter.
+
+The local limiter retains at most 10,000 user/operation keys, sweeps expired
+entries and denies new keys at capacity without evicting active quota history.
+`Retry-After` rounds up to avoid suggesting retries before the window expires.
+This bounds local storage; it does not implement shared quotas or a global cost
+ceiling. Capacity exhaustion can still deny new users until entries expire.
 
 ## Logging and retention
 

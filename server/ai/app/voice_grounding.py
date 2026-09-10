@@ -59,6 +59,15 @@ WORDS = dict(zip("zero one two three four five six seven eight nine ten eleven t
 WORDS.update(dict(zip("twenty thirty forty fifty sixty seventy eighty ninety".split(), range(20,100,10))))
 WORD_NUMBER = re.compile(r"\b(?:" + "|".join(WORDS) + r"|hundred)(?:[ -]+(?:" + "|".join(WORDS) + r"|hundred|and))*\b", re.I)
 
+# No exact quantity can be derived by stripping a sign, range, exponent or
+# approximation. Check the enclosing clause, so a shorter source span cannot
+# remove the qualifier. Unsupported numeric notation fails closed.
+INEXACT_QUANTITY = re.compile(
+    r"[+−–—~～<>±-]\s*\d|\d\s*(?:to|through|에서|부터|至|到|〜)\s*\d|"
+    r"\d[.,]\d{3}(?!\d)|\d\s*[eE]\s*[+-]?\d|"
+    r"\b(?:minus|negative|about|around|roughly|approximately|between|over|under)\b|"
+    r"대략|약\s*\d|정도|쯤|くらい|ぐらい|約|大约|大約|左右|aproximadamente|entre", re.I)
+
 
 def normalized(text: str) -> str:
     def convert(match):
@@ -161,6 +170,9 @@ def validate(raw: dict[str, Any], transcript: str) -> VoiceEventsOutput:
         # Values/units/text come only from selected evidence, never the global
         # transcript. Omitted source_text retains the unique-clause legacy path.
         evidence = normalized(copied if copied is not None else source)
+        numeric_fields = ("amount", "duration_min", "height_cm", "weight_kg", "body_temp", "room_temp", "humidity")
+        if any(getattr(event, field) is not None for field in numeric_fields) and INEXACT_QUANTITY.search(normalized(source)):
+            fail("NUMBER_UNIT_NOT_GROUNDED")
         def quantity(value, unit):
             # Mask clocks in the entire clause before selecting the evidence;
             # a span starting at "30분" must not hide the preceding "8시".

@@ -44,6 +44,7 @@ class AuthContractTests(unittest.TestCase):
         verifier = SupabaseJwksVerifier.__new__(SupabaseJwksVerifier)
         verifier._jwt = _JwtModule()
         verifier._client = _KeyClient()
+        verifier._signing_key = verifier._client.get_signing_key_from_jwt
         verifier._issuer = "https://example.supabase.co/auth/v1"
         verifier._audience = "authenticated"
 
@@ -63,9 +64,7 @@ class AuthContractTests(unittest.TestCase):
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         public_key = private_key.public_key()
 
-        verifier = SupabaseJwksVerifier.__new__(SupabaseJwksVerifier)
-        verifier._jwt = jwt
-        verifier._client = jwt.PyJWKClient("https://example.invalid/jwks")
+        verifier = SupabaseJwksVerifier(test_settings())
         jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(public_key))
         jwk.update(kid="test", use="sig", alg="RS256")
         # Exercise the real kid selection without network or production keys.
