@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import math
+
+from anyio import CancelScope, current_time
+from anyio.lowlevel import checkpoint
 
 from fastapi import Request
 from pydantic import TypeAdapter, ValidationError
@@ -15,6 +19,20 @@ from .models import Locale
 
 
 MULTIPART_OVERHEAD_BYTES = 64 * 1024
+# Code-owned, not an HTTP or environment override. 24 MiB / 120s is ~1.7 Mbit/s;
+# operational tuning remains a separate staging decision within the hard bound.
+UPLOAD_ABSOLUTE_TIMEOUT_SECONDS = 120.0
+MAX_UPLOAD_ABSOLUTE_TIMEOUT_SECONDS = 180.0
+
+
+def validate_upload_timeout(seconds: float) -> None:
+    if (type(seconds) not in (int, float) or not 0 < seconds <= MAX_UPLOAD_ABSOLUTE_TIMEOUT_SECONDS
+            or not math.isfinite(seconds)):
+        raise ValueError("upload timeout must be finite, positive and at most 180 seconds")
+
+
+def upload_timeout() -> AppError:
+    return AppError("AUDIO_UPLOAD_TIMEOUT", 408, "The audio upload did not finish in time.", True)
 
 
 def check_declared_size(request: Request, max_bytes: int) -> None:
@@ -60,7 +78,11 @@ class BoundedMultipartParser(MultiPartParser):
 
 
 @asynccontextmanager
-async def bounded_upload(request: Request, max_file_bytes: int):
+async def bounded_upload(request: Request, max_file_bytes: int, *,
+                         timeout_seconds: float = UPLOAD_ABSOLUTE_TIMEOUT_SECONDS):
+    # This helper is entered immediately after admission, before the first read.
+    # One monotonic deadline covers the entire body (including final ASGI EOF).
+    deadline = current_time() + timeout_seconds
     limit = max_file_bytes + MULTIPART_OVERHEAD_BYTES
     check_declared_size(request, limit)
     if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "multipart/form-data":
@@ -69,6 +91,11 @@ async def bounded_upload(request: Request, max_file_bytes: int):
     async def stream():
         consumed = 0
         async for chunk in request.stream():
+            # Also enforce time when buffered receives complete synchronously.
+            # A progress byte never resets the deadline.
+            if current_time() >= deadline:
+                raise upload_timeout()
+            await checkpoint()
             consumed += len(chunk)
             if consumed > limit:
                 raise AppError("REQUEST_TOO_LARGE", 413, "The request body is too large.")
@@ -78,7 +105,13 @@ async def bounded_upload(request: Request, max_file_bytes: int):
 
     parser = BoundedMultipartParser(request.headers, stream(), max_file_bytes)
     try:
-        form = await parser.parse()
+        # Same-task cancellation: no detached wait_for/read/parser task can
+        # survive the response. Starlette's spool writes await their worker.
+        with CancelScope(deadline=deadline) as upload_scope:
+            form = await parser.parse()
+        if upload_scope.cancel_called or current_time() >= deadline:
+            raise upload_timeout()
+        # The timer is gone BEFORE yielding to duration/quota/provider work.
         items = form.multi_items()
         if not parser.complete or any(k not in {"file", "locale"} for k, _ in items):
             raise invalid_input()
@@ -94,4 +127,5 @@ async def bounded_upload(request: Request, max_file_bytes: int):
         # Synchronous close also runs on CancelledError before/after parse returns.
         # Do not rely on request.form() registering cleanup only after success.
         for file in parser.owned_files:
-            file.close()
+            if not file.closed:
+                file.close()

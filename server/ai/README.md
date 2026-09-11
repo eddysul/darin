@@ -138,13 +138,18 @@ future client to retain its deterministic fallback.
 
 ## Audio handling
 
-`/v1/transcribe` accepts multipart field `file` and optional `locale`. Accepted
-types and signatures are:
+`/v1/transcribe` accepts multipart field `file` and optional `locale`. P1.3's
+supported subset (all paths require full validation, not just signatures) is:
 
-- `audio/m4a`, `audio/x-m4a`, `audio/mp4`: ISO BMFF `ftyp`
-- `audio/wav`: RIFF/WAVE
-- `audio/mpeg`: ID3 or MPEG frame header
-- `audio/webm`: EBML header
+- `audio/m4a`, `audio/x-m4a`, `audio/mp4`: non-fragmented ISO BMFF, one AAC-LC
+  audio stream, mono/stereo, no other tracks/cover art/external data references.
+- `audio/wav`: one RIFF/WAVE PCM16LE mono/stereo stream; strict chunk framing.
+
+Supported source sample rates are 8, 16, 22.05, 24, 32, 44.1 and 48 kHz.
+The old signature-only `audio/mpeg` (ID3/MPEG) and `audio/webm` (EBML) paths are
+now disabled. Unknown codecs, fragmented layouts and ambiguous streams fail
+closed. See [P1.3 duration contract](AUDIO_DURATION.md) for the threat model,
+exact limits, proof and billing semantics, and runtime/security review caveats.
 
 The route declares no FastAPI `File`/`Form` parameters: JWT authentication runs
 before any body consumption. Declared size, kill switch and per-user rate gates
@@ -155,8 +160,11 @@ when Content-Length is missing or false. One ASGI chunk crossing the limit is
 received from the transport but is not forwarded to the parser. The server
 cannot control buffering performed by an upstream proxy/ASGI server.
 
-The server replaces the client filename and sends validated bytes to Whisper
-under the existing timeout. Spools are explicitly owned and synchronously closed
+Before quota reservation, the server verifies actual PCM sample counts and emits
+a canonical PCM WAV. Only this exact hash-bound WAV is sent to Whisper under the
+existing timeout. Client durations and container duration tags cannot set the
+proof or reservation. No proof still means `COST_BOUND_UNAVAILABLE`, STT/parser 0.
+Spools are explicitly owned and synchronously closed
 in `finally`, including incomplete/malformed input, disconnect, cancellation
 during parsing or provider work, overflow, and provider error. A missing final
 multipart boundary is rejected. No persistent audio storage is added.
@@ -172,6 +180,7 @@ JWKS retrieval use their standard verified HTTPS transports.
 | --- | --- |
 | AI JSON request | 128 KiB |
 | Audio | 24 MiB |
+| Verified audio duration | 120 seconds inclusive, integer sample boundary |
 | Multipart total | 24 MiB + 64 KiB |
 | Multipart fields | one `file`, optional one `locale` (32-byte field limit) |
 | Consult facts | 80 items, 500 characters each |

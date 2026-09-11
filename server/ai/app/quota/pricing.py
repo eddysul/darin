@@ -54,8 +54,8 @@ class Profile:
 
 LLM = Profile("openai-gpt4omini-20260909", "gpt-4o-mini", "20260909.v1",
               150_000, 600_000, 1_000_000, 128_000, 16_384)
-# Duration profile only becomes reachable with a trusted proof. No production
-# verifier exists in P1.2; rounded-up full minutes deliberately over-reserve.
+# Duration profile only becomes reachable with a trusted proof for the exact
+# provider WAV; rounded-up full minutes deliberately over-reserve.
 STT = Profile("openai-whisper1-20260909", "whisper-1", "20260909.v1",
               6_000, 0, 60_000, 0, 0, True)
 PROFILES = {p.id: p for p in (LLM, STT)}
@@ -63,10 +63,13 @@ PROFILES = {p.id: p for p in (LLM, STT)}
 
 @dataclass(frozen=True)
 class VerifiedAudioDuration:
-    """Internal proof, never constructed from request fields. Test injection only until P1.3."""
+    """Internal proof for the exact provider bytes, never request duration fields."""
     audio_digest: str
     milliseconds: int
     proof_version: str
+    sample_count: int | None = None
+    sample_rate: int | None = None
+    extraction_method: str | None = None
 
 
 def make_stage(stage_id: str, model: str, output: int, payload_digest: str | None,

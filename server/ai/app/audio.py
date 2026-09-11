@@ -12,8 +12,6 @@ _MIME_EXTENSIONS = {
     "audio/x-m4a": "m4a",
     "audio/mp4": "mp4",
     "audio/wav": "wav",
-    "audio/mpeg": "mp3",
-    "audio/webm": "webm",
 }
 
 
@@ -29,10 +27,6 @@ def _signature_matches(content_type: str, data: bytes) -> bool:
         return len(data) >= 12 and data[4:8] == b"ftyp"
     if content_type == "audio/wav":
         return len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WAVE"
-    if content_type == "audio/mpeg":
-        return data.startswith(b"ID3") or (len(data) >= 2 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0)
-    if content_type == "audio/webm":
-        return data.startswith(b"\x1aE\xdf\xa3")
     return False
 
 

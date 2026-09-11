@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import time
 import uuid
@@ -14,6 +15,8 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from .audio import read_validated_audio
+from .audio_admission import AUDIO_REQUEST_ADMISSION, AudioRequestAdmission, MAX_INPUT_BYTES
+from .audio_duration import AudioDurationVerifier, VerifiedMedia
 from .auth import AuthContext, RequireAuth, SupabaseJwksVerifier, TokenVerifier
 from .config import POLICY_VERSION, SERVICE_NAME, SERVICE_VERSION, Settings
 from .errors import AppError, invalid_input, output_rejected
@@ -31,8 +34,12 @@ from .providers import (
 )
 from .rate_limit import InMemoryRateLimiter
 from .validators import validate_voice_events
-from .upload import MULTIPART_OVERHEAD_BYTES, bounded_upload, check_declared_size
+from .upload import (MULTIPART_OVERHEAD_BYTES, UPLOAD_ABSOLUTE_TIMEOUT_SECONDS,
+                     bounded_upload, check_declared_size, validate_upload_timeout)
 from .quota.service import QuotaService
+
+
+_DEFAULT_DURATION_VERIFIER = object()
 
 
 async def _read_json(request: Request, max_bytes: int) -> dict[str, Any]:
@@ -69,15 +76,24 @@ def create_app(
     limiter: InMemoryRateLimiter | None = None,
     privacy_logger: PrivacyLogger | None = None,
     quota_service: QuotaService | None = None,
-    duration_verifier=None,
+    duration_verifier=_DEFAULT_DURATION_VERIFIER,
+    audio_admission: AudioRequestAdmission | None = None,
+    upload_timeout_seconds: float = UPLOAD_ABSOLUTE_TIMEOUT_SECONDS,
 ) -> FastAPI:
+    # Composition/test DI only; never bound from request fields or headers.
+    validate_upload_timeout(upload_timeout_seconds)
     resolved = settings or Settings.from_env()
+    if type(resolved.max_audio_bytes) is not int or not 1 <= resolved.max_audio_bytes <= MAX_INPUT_BYTES:
+        raise ValueError("audio upload limit must fit the request memory reservation")
+    admission = audio_admission if audio_admission is not None else AUDIO_REQUEST_ADMISSION
     auth = RequireAuth(verifier or SupabaseJwksVerifier(resolved))
     llm = llm_provider or OpenAiLlmProvider(resolved.openai_api_key)
     stt = stt_provider or OpenAiSttProvider(resolved.openai_api_key)
     rate_limiter = limiter or InMemoryRateLimiter()
     audit = privacy_logger or PrivacyLogger(hash_salt=resolved.log_hash_salt)
     quota = quota_service or QuotaService.unavailable()
+    media_verifier = (AudioDurationVerifier() if duration_verifier is _DEFAULT_DURATION_VERIFIER
+                      else duration_verifier)
 
     app = FastAPI(title="Darin AI Backend", version=SERVICE_VERSION)
     if resolved.cors_allowed_origins:
@@ -200,33 +216,19 @@ def create_app(
             request.headers.get("Idempotency-Key"),
         )
 
-    @app.post("/v1/transcribe", response_model=TranscribeResponse, openapi_extra={
-        # Documentation only; never restore File/Form automatic parsing here.
-        "requestBody": {"required": True, "content": {"multipart/form-data": {"schema": {
-            "type": "object", "required": ["file"], "additionalProperties": False,
-            "properties": {
-                "file": {"type": "string", "format": "binary"},
-                "locale": {"type": "string", "enum": ["ko", "en", "ja", "es", "zh-CN"], "default": "ko"},
-            },
-        }}}},
-    })
-    async def transcribe(
-        request: Request,
-        auth_context: AuthContext = Depends(auth),
-    ) -> TranscribeResponse:
-        request.state.operation = "transcribe"
-        check_declared_size(request, resolved.max_audio_bytes + MULTIPART_OVERHEAD_BYTES)
-        await require_enabled()
-        await enforce_rate(
-            auth_context.user_id,
-            "transcribe",
-            resolved.transcribe_requests_per_minute,
-        )
-        async with bounded_upload(request, resolved.max_audio_bytes) as (file, locale):
+    async def transcribe_admitted(request: Request, auth_context: AuthContext) -> TranscribeResponse:
+        # Keep all large audio locals in this helper, not in the admission owner
+        # or response closure. On failure the owner clears unwound traceback frames.
+        async with bounded_upload(request, resolved.max_audio_bytes,
+                                  timeout_seconds=upload_timeout_seconds) as (file, locale):
             audio = await read_validated_audio(file, resolved.max_audio_bytes)
-            # No production duration verifier exists until P1.3. Only explicit
-            # trusted dependency injection (test fixture) may supply this proof.
-            proof = duration_verifier(audio) if duration_verifier is not None else None
+            # Explicit None preserves P1.2's proof-missing fail-closed gate. Only
+            # internal test DI can replace the real media verifier, never HTTP.
+            proof = media_verifier(audio) if media_verifier is not None else None
+            if inspect.isawaitable(proof):
+                proof = await proof
+            if isinstance(proof, VerifiedMedia):
+                audio, proof = proof.audio, proof.duration
             record = await quota.begin_voice(auth_context.user_id, request.headers.get("Idempotency-Key"),
                 locale, audio, proof, resolved.stt_model, resolved.llm_model)
             try:
@@ -275,5 +277,25 @@ def create_app(
                 date=datetime.now(timezone.utc).date().isoformat(),
                 raw_text=transcript,
             )
+
+    @app.post("/v1/transcribe", response_model=TranscribeResponse, openapi_extra={
+        # Documentation only; never restore File/Form automatic parsing here.
+        "requestBody": {"required": True, "content": {"multipart/form-data": {"schema": {
+            "type": "object", "required": ["file"], "additionalProperties": False,
+            "properties": {
+                "file": {"type": "string", "format": "binary"},
+                "locale": {"type": "string", "enum": ["ko", "en", "ja", "es", "zh-CN"], "default": "ko"},
+            },
+        }}}},
+    })
+    async def transcribe(
+        request: Request,
+        auth_context: AuthContext = Depends(auth),
+    ) -> TranscribeResponse:
+        request.state.operation = "transcribe"
+        check_declared_size(request, resolved.max_audio_bytes + MULTIPART_OVERHEAD_BYTES)
+        await require_enabled()
+        await enforce_rate(auth_context.user_id, "transcribe", resolved.transcribe_requests_per_minute)
+        return await admission.run(lambda: transcribe_admitted(request, auth_context))
 
     return app
