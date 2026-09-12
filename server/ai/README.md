@@ -290,3 +290,9 @@ digest, and verify `/version` after deployment.
 This build does not modify or deploy the existing `darin-ai` Cloud Run service,
 change traffic, create secrets, change Supabase, or point EAS/mobile clients to
 these `/v1` routes. Staging must use a separate service and separate endpoint.
+# Combined staging runtime
+
+See [STAGING_ENABLEMENT.md](STAGING_ENABLEMENT.md) for the explicit central versus
+bootstrap-off startup contract, mounted keyring, no-provider synthetic ledger CLI
+and internal observability hooks. This is local implementation only, not approval
+to provision GCP or deploy. Default runtime now requires `DARIN_QUOTA_MODE`.

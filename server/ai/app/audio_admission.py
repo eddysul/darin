@@ -18,6 +18,7 @@ except ImportError:  # Python 3.10 host: already required by the ASGI stack.
 
 from .audio_duration import DECODE_RATE, MAX_AUDIO_SECONDS, MAX_INPUT_BYTES, SAMPLE_RATES
 from .errors import AppError
+from .telemetry import METRICS
 from .upload import MULTIPART_OVERHEAD_BYTES
 
 
@@ -66,8 +67,11 @@ class AudioRequestAdmission:
 
     async def run(self, operation: Callable[[], Awaitable[T]]) -> T:
         if not self._slots.acquire(blocking=False):
+            METRICS.add("audio_capacity_rejected")
             raise AppError("AUDIO_CAPACITY_EXCEEDED", 503,
                            "Audio processing is busy. Try again later.", True)
+        METRICS.add("audio_acquire")
+        METRICS.add("audio_active")
         failure: BaseException | None = None
         try:
             try:
@@ -93,6 +97,8 @@ class AudioRequestAdmission:
             # no longer belongs to this frame. Never attach it to the safe error.
         finally:
             self._slots.release()
+            METRICS.add("audio_active", -1)
+            METRICS.add("audio_release")
         raise failure from None
 
 

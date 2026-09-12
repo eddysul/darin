@@ -16,6 +16,7 @@ from python_multipart.exceptions import MultipartParseError
 
 from .errors import AppError, invalid_input
 from .models import Locale
+from .telemetry import METRICS
 
 
 MULTIPART_OVERHEAD_BYTES = 64 * 1024
@@ -32,6 +33,7 @@ def validate_upload_timeout(seconds: float) -> None:
 
 
 def upload_timeout() -> AppError:
+    METRICS.add("upload_timeout")
     return AppError("AUDIO_UPLOAD_TIMEOUT", 408, "The audio upload did not finish in time.", True)
 
 
@@ -83,6 +85,7 @@ async def bounded_upload(request: Request, max_file_bytes: int, *,
     # This helper is entered immediately after admission, before the first read.
     # One monotonic deadline covers the entire body (including final ASGI EOF).
     deadline = current_time() + timeout_seconds
+    METRICS.add("upload_started")
     limit = max_file_bytes + MULTIPART_OVERHEAD_BYTES
     check_declared_size(request, limit)
     if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "multipart/form-data":
@@ -90,7 +93,11 @@ async def bounded_upload(request: Request, max_file_bytes: int, *,
 
     async def stream():
         consumed = 0
+        received = False
         async for chunk in request.stream():
+            if chunk and not received:
+                METRICS.add("upload_body_received")
+                received = True
             # Also enforce time when buffered receives complete synchronously.
             # A progress byte never resets the deadline.
             if current_time() >= deadline:

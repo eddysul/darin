@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Protocol, TypeVar
 
 from ..errors import AppError
+from ..telemetry import METRICS
 from .identity import Fingerprints, digest, nonce_end
 from .pricing import PROFILES
 from .types import Accounting, Counter, CounterMarker, Minute, QuotaConfig, Reservation, Stage, TERMINAL, add, reject
@@ -49,10 +50,23 @@ class CentralQuotaRepository:
 
     async def _run(self, name, action):
         try:
-            return await asyncio.to_thread(self.store.run, name, action)
-        except AppError:
+            result = await asyncio.to_thread(self.store.run, name, action)
+            if name == "reserve":
+                METRICS.add("quota_accepted")
+            else:
+                METRICS.add(name + "_completed")
+            return result
+        except AppError as error:
+            category = ("quota_idempotency" if error.code.startswith("IDEMPOTENCY_") else
+                        "quota_cost_bound" if error.code == "COST_BOUND_UNAVAILABLE" else
+                        "quota_limit" if error.status_code == 429 else "quota_integrity_or_config")
+            METRICS.add(category)
+            if name == "reserve":
+                METRICS.add("quota_rejected")
             raise
         except Exception:
+            if name == "reserve":
+                METRICS.add("quota_rejected")
             # Do not propagate driver errors, documents, or credential details.
             raise reject() from None
 

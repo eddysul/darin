@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from .audio import ValidatedAudio
 from .errors import AppError
 from .quota.pricing import VerifiedAudioDuration
+from .telemetry import METRICS
 
 
 MAX_AUDIO_SECONDS = 120
@@ -40,6 +41,9 @@ _WORKER = str(Path(__file__).with_name("media_worker.py"))
 
 def rejected(code: str = "AUDIO_DURATION_UNVERIFIED", status: int = 422) -> AppError:
     # No parser diagnostics, paths, filenames or audio content cross this boundary.
+    METRICS.add({"AUDIO_FORMAT_UNSUPPORTED": "duration_format",
+                 "AUDIO_METADATA_INVALID": "duration_metadata",
+                 "AUDIO_TOO_LONG": "duration_too_long"}.get(code, "duration_unverified"))
     return AppError(code, status, "The audio could not be safely verified.")
 
 
@@ -148,6 +152,8 @@ async def _run(tool: str, args: list[str], output_limit: int,
             env={"LC_ALL": "C", "PATH": os.defpath,
                  "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1"},
         )
+        METRICS.add("child_started")
+        METRICS.add("children_active")
         tasks = [asyncio.create_task(_capture(proc.stdout, output_limit, overflow_code)),
                  asyncio.create_task(_capture(proc.stderr, STDERR_BYTES, "AUDIO_DURATION_UNVERIFIED")),
                  asyncio.create_task(proc.wait())]
@@ -186,6 +192,9 @@ async def _run(tool: str, args: list[str], output_limit: int,
                 # A second disconnect/shutdown cancellation must not abandon reaping.
                 cancelled = True
         cleanup_task.result()
+        if proc is not None:
+            METRICS.add("children_active", -1)
+            METRICS.add("child_reaped")
         if cancelled:
             raise asyncio.CancelledError()
 
@@ -264,6 +273,15 @@ def _local_bmff(data: bytes) -> None:
 
 class AudioDurationVerifier:
     async def __call__(self, audio: ValidatedAudio) -> VerifiedMedia:
+        try:
+            result = await self._verify(audio)
+            METRICS.add("duration_verified")
+            return result
+        except BaseException:
+            METRICS.add("duration_rejected")
+            raise
+
+    async def _verify(self, audio: ValidatedAudio) -> VerifiedMedia:
         if not _WORKER_SLOTS.acquire(blocking=False):
             raise rejected("AUDIO_VERIFIER_BUSY", 503)
         try:

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from time import monotonic
+from ..telemetry import METRICS
 
 
 class _BoundedApi:
@@ -75,9 +76,16 @@ class FirestoreStore:
         from google.cloud.firestore_v1.transaction import Transaction
         deadline = monotonic() + 3.0
         transaction = Transaction(_BoundedClient(self.client, deadline), max_attempts=3)
+        attempts = 0
+        started = monotonic()
 
         @transactional
         def execute(tx):
+            nonlocal attempts
+            if attempts:
+                METRICS.add("transaction_retry")
+                METRICS.add("transaction_contention")
+            attempts += 1
             view = FirestoreTransaction(self.client, tx, deadline)
             result = action(view)
             view.flush()
@@ -85,4 +93,19 @@ class FirestoreStore:
 
         # Only Firestore's ABORTED transaction retries, no application replay on
         # ambiguous commit. Provider code is never reachable from this callback.
-        return execute(transaction)
+        try:
+            result = execute(transaction)
+            METRICS.add("transaction_success")
+            return result
+        except BaseException as error:
+            METRICS.add("transaction_failure")
+            # Finite class mapping only, never exception text or document paths.
+            from google.api_core.exceptions import PermissionDenied, DeadlineExceeded, ServiceUnavailable
+            category = ("transaction_permission_denied" if isinstance(error, PermissionDenied) else
+                        "transaction_timeout" if isinstance(error, (TimeoutError, DeadlineExceeded)) else
+                        "transaction_unavailable" if isinstance(error, ServiceUnavailable) else None)
+            if category:
+                METRICS.add(category)
+            raise
+        finally:
+            METRICS.add("transaction_latency_ms", max(0, int((monotonic() - started) * 1000)))

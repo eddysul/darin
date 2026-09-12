@@ -37,6 +37,8 @@ from .validators import validate_voice_events
 from .upload import (MULTIPART_OVERHEAD_BYTES, UPLOAD_ABSOLUTE_TIMEOUT_SECONDS,
                      bounded_upload, check_declared_size, validate_upload_timeout)
 from .quota.service import QuotaService
+from .quota.composition import compose_quota
+from .telemetry import METRICS
 
 
 _DEFAULT_DURATION_VERIFIER = object()
@@ -91,11 +93,26 @@ def create_app(
     stt = stt_provider or OpenAiSttProvider(resolved.openai_api_key)
     rate_limiter = limiter or InMemoryRateLimiter()
     audit = privacy_logger or PrivacyLogger(hash_salt=resolved.log_hash_salt)
-    quota = quota_service or QuotaService.unavailable()
+    # Explicit Settings is the existing local/unit-test DI boundary. The default
+    # production main path must select a validated mode even when AI is OFF.
+    quota = (quota_service if quota_service is not None else
+             QuotaService.unavailable() if settings is not None else
+             compose_quota(resolved.ai_enabled))
     media_verifier = (AudioDurationVerifier() if duration_verifier is _DEFAULT_DURATION_VERIFIER
                       else duration_verifier)
 
     app = FastAPI(title="Darin AI Backend", version=SERVICE_VERSION)
+    async def quota_readiness():
+        # Internal diagnostic only: no HTTP endpoint and no ledger writes. This
+        # reports current store readiness separately from process health/AI OFF.
+        try:
+            await quota.repository.configuration()
+            ready = True
+        except Exception:
+            ready = False
+        return {"central_ready": ready, "ai_enabled": resolved.ai_enabled}
+    app.state.quota_readiness = quota_readiness
+    app.state.operational_snapshot = METRICS.snapshot
     if resolved.cors_allowed_origins:
         app.add_middleware(
             CORSMiddleware,

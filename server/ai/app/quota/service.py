@@ -8,6 +8,7 @@ from dataclasses import replace
 from typing import Callable
 
 from ..config import POLICY_VERSION
+from ..telemetry import METRICS
 from ..providers.base import LlmRequest, ProviderResult, SttRequest
 from .identity import Fingerprints, digest
 from .pricing import VerifiedAudioDuration, make_stage
@@ -108,6 +109,7 @@ class QuotaService:
         # Never retry/reacquire after an ambiguous claim commit. Exceptions from
         # claim above leave provider calls at zero, even if the store committed.
         try:
+            METRICS.add("provider_dispatch")
             result = await invoke()
         except asyncio.CancelledError:
             await self._unknown_best_effort(record, stage, owner)
