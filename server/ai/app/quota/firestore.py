@@ -6,7 +6,8 @@ No ambient credentials or project discovery happens when this module is imported
 from __future__ import annotations
 
 from datetime import datetime
-from time import monotonic
+from time import monotonic, sleep
+from random import uniform
 from ..telemetry import METRICS
 
 
@@ -129,6 +130,14 @@ class FirestoreStore:
                     raise TimeoutError()
                 if attempt:
                     METRICS.add("transaction_retry")
+                    # ABORTED contenders must not immediately collide again.
+                    # Tiny jitter stays INSIDE the original shared deadline;
+                    # timeout/ambiguous commits still never reach this branch.
+                    remaining = deadline - 0.25 - monotonic()
+                    delay = uniform(0.01, 0.03) * (2 ** (attempt - 1))
+                    if remaining <= delay:
+                        raise TimeoutError()
+                    sleep(delay)
                 transaction._clean_up()
                 try:
                     transaction._begin(retry_id=retry_id)

@@ -144,6 +144,21 @@ class FirestoreAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.rpc.calls.count("commit"), 1)
         self.assertEqual(self.rpc.data[r.global_bucket]["admissions"], 1)
 
+    async def test_contention_backoff_is_bounded_and_only_for_aborts(self):
+        self.rpc.abort_reads = 2
+        with patch('server.ai.app.quota.firestore.sleep') as pause, \
+             patch('server.ai.app.quota.firestore.uniform', return_value=.02):
+            await reserve(self.s)
+        self.assertEqual([call.args[0] for call in pause.call_args_list], [.02, .04])
+        self.assertEqual(self.rpc.calls.count('commit'), 1)
+
+    async def test_ambiguous_commit_never_enters_backoff(self):
+        self.rpc.lose_commit = True
+        with patch('server.ai.app.quota.firestore.sleep') as pause:
+            with self.assertRaises(AppError):
+                await reserve(self.s)
+        pause.assert_not_called()
+
     async def test_read_abort_retries_are_bounded(self):
         self.rpc.abort_reads = 100
         with self.assertRaises(AppError):
