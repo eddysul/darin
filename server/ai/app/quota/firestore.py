@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from time import monotonic, sleep
 from random import uniform
+from threading import Lock
 from ..telemetry import METRICS
 
 
@@ -97,17 +98,33 @@ class FirestoreTransaction:
 class FirestoreStore:
     def __init__(self, client):
         self.client = client
+        # Backpressure only, never an accounting authority. Independent
+        # instances still arbitrate through the same Firestore transactions.
+        self._transaction_lock = Lock()
 
     def run(self, name, action):
+        deadline = monotonic() + 3.0
+        # The single hot global budget cannot benefit from this process opening
+        # many competing transactions. Include local queueing in the SAME bound.
+        if not self._transaction_lock.acquire(timeout=max(0, deadline - monotonic() - .25)):
+            METRICS.add("transaction_failure")
+            METRICS.add("transaction_timeout")
+            METRICS.add("transaction_latency_ms", max(0, int((monotonic() - (deadline - 3)) * 1000)))
+            raise TimeoutError()
+        try:
+            return self._run_transaction(name, action, deadline)
+        finally:
+            self._transaction_lock.release()
+
+    def _run_transaction(self, name, action, deadline):
         from google.api_core.exceptions import Aborted
         from google.cloud.firestore_v1.transaction import Transaction
-        deadline = monotonic() + 3.0
         # Reserve a small part of the existing deadline for releasing locks.
         # SDK2.29 retries only commit ABORTED, not read/begin ABORTED, and its
         # rollback can mask the original error (including a failed begin).
         client = _BoundedClient(self.client, deadline - 0.25)
         transaction = Transaction(client, max_attempts=1)
-        started = monotonic()
+        started = deadline - 3.0
         retry_id = None
 
         def rollback():

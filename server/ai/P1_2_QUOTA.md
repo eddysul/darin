@@ -31,6 +31,23 @@ supplied. Mobile/EAS idempotency-header integration is a later gate.
 - `service.py`: provider execution boundary and accounting integration.
 - `tests/quota_fake.py`: test-only transactional central backing store.
 
+### Staging contention follow-up (2026-09-13)
+
+The adapter batches known documents in a transaction snapshot, verifies the
+complete read envelope, and discards all cached reads between attempts. Only
+explicit Firestore ABORTED outcomes are retried, with short bounded jitter;
+ambiguous commit/timeouts are never replayed. Cleanup errors do not mask the
+original outcome. Each adapter serializes its own transaction entry to avoid
+self-contention on the shared budget document. Queue waiting, retries and RPCs
+share the original three-second deadline, including a cleanup allowance.
+
+This process-local backpressure is NOT a quota authority or distributed lock.
+Every accepted request still reads/updates the authoritative Firestore documents;
+independent instances still compete using Firestore's transaction protocol.
+There is no local budget cache, local approval, automatic refund or new nonce.
+Live-load measurements and staging approval must be reported separately from
+unit-test success; this note does not declare the operational gate passed.
+
 ## Authoritative configuration
 
 `control/current` must match `QuotaConfig`, without extra fields:

@@ -7,6 +7,9 @@ import unittest
 
 from google.api_core.exceptions import Aborted, DeadlineExceeded, PermissionDenied
 from unittest.mock import patch
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+from time import sleep
 from google.auth.credentials import AnonymousCredentials
 from google.cloud.firestore_v1 import Client, _helpers
 from google.cloud.firestore_v1.types import firestore, document
@@ -158,6 +161,50 @@ class FirestoreAdapterTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(AppError):
                 await reserve(self.s)
         pause.assert_not_called()
+
+    def test_process_backpressure_serializes_transactions_not_money(self):
+        store = self.repo.store
+        active = peak = 0
+        guard = Lock()
+        original = store._run_transaction
+        def tracked(name, action, deadline):
+            nonlocal active, peak
+            with guard:
+                active += 1
+                peak = max(peak, active)
+            try:
+                sleep(.005)
+                return original(name, action, deadline)
+            finally:
+                with guard: active -= 1
+        with patch.object(store, '_run_transaction', side_effect=tracked):
+            with ThreadPoolExecutor(max_workers=20) as pool:
+                results = list(pool.map(lambda _: store.run('read', lambda tx: tx.get('control/current')), range(20)))
+        self.assertEqual(peak, 1)
+        self.assertEqual(len(results), 20)
+        self.assertEqual(self.rpc.calls.count('begin'), 20)
+
+    def test_queue_timeout_never_starts_transaction(self):
+        from unittest.mock import Mock
+        lock = Mock()
+        lock.acquire.return_value = False
+        with patch.object(self.repo.store, '_transaction_lock', lock):
+            with self.assertRaises(TimeoutError):
+                self.repo.store.run('read', lambda tx: tx.get('control/current'))
+        self.assertNotIn('begin', self.rpc.calls)
+        lock.release.assert_not_called()
+
+    def test_queue_wait_does_not_reset_operation_deadline(self):
+        from unittest.mock import Mock
+        lock = Mock()
+        lock.acquire.return_value = True
+        clock = iter([100.0, 100.0, 103.0, 103.0])
+        with patch.object(self.repo.store, '_transaction_lock', lock), \
+             patch('server.ai.app.quota.firestore.monotonic', side_effect=lambda: next(clock)):
+            with self.assertRaises(TimeoutError):
+                self.repo.store.run('read', lambda tx: tx.get('control/current'))
+        self.assertNotIn('begin', self.rpc.calls)
+        lock.release.assert_called_once()
 
     async def test_read_abort_retries_are_bounded(self):
         self.rpc.abort_reads = 100
