@@ -72,29 +72,62 @@ class FirestoreStore:
         self.client = client
 
     def run(self, name, action):
-        from google.cloud.firestore_v1 import transactional
+        from google.api_core.exceptions import Aborted
         from google.cloud.firestore_v1.transaction import Transaction
         deadline = monotonic() + 3.0
-        transaction = Transaction(_BoundedClient(self.client, deadline), max_attempts=3)
-        attempts = 0
+        # Reserve a small part of the existing deadline for releasing locks.
+        # SDK2.29 retries only commit ABORTED, not read/begin ABORTED, and its
+        # rollback can mask the original error (including a failed begin).
+        client = _BoundedClient(self.client, deadline - 0.25)
+        transaction = Transaction(client, max_attempts=1)
         started = monotonic()
+        retry_id = None
 
-        @transactional
-        def execute(tx):
-            nonlocal attempts
-            if attempts:
-                METRICS.add("transaction_retry")
-                METRICS.add("transaction_contention")
-            attempts += 1
-            view = FirestoreTransaction(self.client, tx, deadline)
-            result = action(view)
-            view.flush()
-            return result
+        def rollback():
+            if transaction.id is None:
+                return
+            client._firestore_api.deadline = deadline
+            try:
+                transaction._rollback()
+            except BaseException:
+                # Cleanup never authorizes replay and must not replace the
+                # original outcome. Server-side lock expiry is the final bound.
+                METRICS.add("transaction_cleanup_failure")
+            finally:
+                client._firestore_api.deadline = deadline - 0.25
+
+        def execute():
+            nonlocal retry_id
+            for attempt in range(3):
+                if monotonic() >= deadline - 0.25:
+                    raise TimeoutError()
+                if attempt:
+                    METRICS.add("transaction_retry")
+                transaction._clean_up()
+                try:
+                    transaction._begin(retry_id=retry_id)
+                    if retry_id is None:
+                        retry_id = transaction.id
+                    view = FirestoreTransaction(self.client, transaction, deadline - 0.25)
+                    result = action(view)
+                    view.flush()
+                    transaction._commit()
+                    return result
+                except Aborted:
+                    # Firestore explicitly aborted this attempt: no commit is
+                    # ambiguous. Retry the WHOLE transaction, including reads.
+                    METRICS.add("transaction_contention")
+                    rollback()
+                    if attempt == 2:
+                        raise
+                except BaseException:
+                    rollback()
+                    raise
 
         # Only Firestore's ABORTED transaction retries, no application replay on
         # ambiguous commit. Provider code is never reachable from this callback.
         try:
-            result = execute(transaction)
+            result = execute()
             METRICS.add("transaction_success")
             return result
         except BaseException as error:

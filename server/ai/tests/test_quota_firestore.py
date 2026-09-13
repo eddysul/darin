@@ -5,7 +5,8 @@ from copy import deepcopy
 from datetime import timedelta
 import unittest
 
-from google.api_core.exceptions import Aborted, DeadlineExceeded
+from google.api_core.exceptions import Aborted, DeadlineExceeded, PermissionDenied
+from unittest.mock import patch
 from google.auth.credentials import AnonymousCredentials
 from google.cloud.firestore_v1 import Client, _helpers
 from google.cloud.firestore_v1.types import firestore, document
@@ -27,6 +28,7 @@ class FakeGapic:
         self.calls = []
         self.serial = 0
         self.abort_commits = 0
+        self.abort_reads = 0
         self.lose_commit = False
         self.snapshots = {}
         self.retry_advance = timedelta(0)
@@ -45,6 +47,9 @@ class FakeGapic:
 
     def batch_get_documents(self, request, **kwargs):
         self.check("read", kwargs)
+        if self.abort_reads:
+            self.abort_reads -= 1
+            raise Aborted("synthetic read contention")
         name = request["documents"][0]
         path = name.split("/documents/", 1)[1]
         data = self.snapshots[request["transaction"]].get(path)
@@ -97,6 +102,39 @@ class FirestoreAdapterTests(unittest.IsolatedAsyncioTestCase):
         r, _ = await reserve(self.s)
         self.assertEqual(self.rpc.calls.count("commit"), 2)
         self.assertEqual(r.admitted_at, NOW + timedelta(minutes=1))
+        self.assertEqual(self.rpc.data[r.global_bucket]["admissions"], 1)
+
+    async def test_read_abort_retries_entire_transaction_once(self):
+        self.rpc.abort_reads = 1
+        r, new = await reserve(self.s)
+        self.assertTrue(new)
+        self.assertEqual(self.rpc.calls.count("begin"), 2)
+        self.assertEqual(self.rpc.calls.count("commit"), 1)
+        self.assertEqual(self.rpc.data[r.global_bucket]["admissions"], 1)
+
+    async def test_read_abort_retries_are_bounded(self):
+        self.rpc.abort_reads = 100
+        with self.assertRaises(AppError):
+            await reserve(self.s)
+        self.assertEqual(self.rpc.calls.count("begin"), 3)
+        self.assertNotIn("commit", self.rpc.calls)
+
+    def test_begin_failure_is_not_masked_or_retried(self):
+        for error in (PermissionDenied("synthetic"), DeadlineExceeded("synthetic")):
+            with patch.object(self.rpc, "begin_transaction", side_effect=error) as begin:
+                with self.assertRaises(type(error)):
+                    self.repo.store.run("probe", lambda tx: tx.get("control/current"))
+                self.assertEqual(begin.call_count, 1)
+        self.assertNotIn("rollback", self.rpc.calls)
+
+    async def test_ambiguous_commit_cleanup_failure_does_not_replay(self):
+        self.rpc.lose_commit = True
+        with patch.object(self.rpc, "rollback", side_effect=DeadlineExceeded("synthetic cleanup")):
+            with self.assertRaises(AppError):
+                await reserve(self.s)
+        self.assertEqual(self.rpc.calls.count("commit"), 1)
+        r, new = await reserve(self.s)
+        self.assertFalse(new)
         self.assertEqual(self.rpc.data[r.global_bucket]["admissions"], 1)
 
     async def test_contention_is_bounded_to_three_attempts(self):

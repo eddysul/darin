@@ -22,6 +22,7 @@ EVENTS = frozenset({
     "claim_completed", "reconcile_completed", "unknown_completed", "cancel_completed",
     "recover_completed",
     "transaction_permission_denied", "transaction_contention", "transaction_timeout",
+    "transaction_cleanup_failure",
     "transaction_unavailable", "quota_limit", "quota_integrity_or_config",
     "quota_idempotency", "quota_cost_bound",
     "duration_format", "duration_metadata", "duration_too_long", "duration_unverified",
