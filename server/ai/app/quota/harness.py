@@ -33,6 +33,10 @@ class SyntheticStore:
                 def now(self): return tx.now
                 def get(self, path): return tx.get(prefix + path)
                 def set(self, path, value): tx.set(prefix + path, value)
+                def prefetch(self, paths):
+                    prefetch = getattr(tx, "prefetch", None)
+                    if prefetch is not None:
+                        prefetch([prefix + path for path in paths])
             return action(View())
         return self.base.run(name, isolated)
 

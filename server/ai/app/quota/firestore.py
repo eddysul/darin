@@ -46,8 +46,34 @@ class FirestoreTransaction:
         self.deadline = deadline
         self.now: datetime | None = None
         self.writes = {}
+        self.reads = {}
+
+    def prefetch(self, paths):
+        """Read known documents in one bounded snapshot RPC, not N lock round trips."""
+        paths = list(dict.fromkeys(path for path in paths if path not in self.reads))
+        if not paths:
+            return
+        remaining = self.deadline - monotonic()
+        if remaining <= 0 or len(paths) > 32:
+            raise TimeoutError()
+        expected = set(paths)
+        received = {}
+        snapshots = self.client.get_all([self.client.document(path) for path in paths],
+            transaction=self.transaction, retry=None, timeout=min(1.0, remaining))
+        for snapshot in snapshots:
+            path = snapshot.reference.path
+            if path not in expected or path in received or snapshot.read_time is None:
+                raise ValueError("Invalid transaction read envelope")
+            if self.now is None:
+                self.now = snapshot.read_time
+            received[path] = snapshot.to_dict() if snapshot.exists else None
+        if set(received) != expected:
+            raise ValueError("Incomplete transaction read envelope")
+        self.reads.update(received)
 
     def get(self, path):
+        if path in self.reads:
+            return self.reads[path]
         remaining = self.deadline - monotonic()
         if remaining <= 0:
             raise TimeoutError()

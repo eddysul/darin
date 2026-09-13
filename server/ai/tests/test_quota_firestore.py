@@ -50,14 +50,14 @@ class FakeGapic:
         if self.abort_reads:
             self.abort_reads -= 1
             raise Aborted("synthetic read contention")
-        name = request["documents"][0]
-        path = name.split("/documents/", 1)[1]
-        data = self.snapshots[request["transaction"]].get(path)
-        if data is None:
-            yield firestore.BatchGetDocumentsResponse(missing=name, read_time=self.now)
-        else:
-            yield firestore.BatchGetDocumentsResponse(found=document.Document(name=name,
-                fields=_helpers.encode_dict(data), create_time=self.now, update_time=self.now), read_time=self.now)
+        for name in reversed(request["documents"]):
+            path = name.split("/documents/", 1)[1]
+            data = self.snapshots[request["transaction"]].get(path)
+            if data is None:
+                yield firestore.BatchGetDocumentsResponse(missing=name, read_time=self.now)
+            else:
+                yield firestore.BatchGetDocumentsResponse(found=document.Document(name=name,
+                    fields=_helpers.encode_dict(data), create_time=self.now, update_time=self.now), read_time=self.now)
 
     def commit(self, request, **kwargs):
         self.check("commit", kwargs)
@@ -95,6 +95,38 @@ class FirestoreAdapterTests(unittest.IsolatedAsyncioTestCase):
         await self.repo.reconcile(r.id, "llm", digest("owner"), accounting())
         self.assertEqual(self.rpc.data[r.global_bucket]["charged"], 21)
         self.assertEqual(self.rpc.data[r.global_bucket]["held"], 0)
+
+    async def test_reserve_batches_reads_without_weakening_accounting(self):
+        record, fresh = await reserve(self.s)
+        self.assertTrue(fresh)
+        self.assertEqual(self.rpc.calls.count("read"), 2)
+        self.assertEqual(self.rpc.data[record.global_bucket]["admissions"], 1)
+        self.assertGreater(self.rpc.data[record.global_bucket]["held"], 0)
+
+    async def test_incomplete_batch_fails_closed_without_commit(self):
+        original = self.rpc.batch_get_documents
+        def incomplete(request, **kwargs):
+            yield next(original(request, **kwargs))
+        with patch.object(self.rpc, "batch_get_documents", side_effect=incomplete):
+            with self.assertRaises(AppError):
+                await reserve(self.s)
+        self.assertNotIn("commit", self.rpc.calls)
+
+    async def test_batch_abort_discards_cached_reads_before_retry(self):
+        original = self.rpc.batch_get_documents
+        batches = 0
+        def interrupted(request, **kwargs):
+            nonlocal batches
+            batches += 1
+            if batches == 1:
+                yield next(original(request, **kwargs))
+                self.rpc.now += timedelta(minutes=1)
+                raise Aborted("synthetic interrupted batch")
+            yield from original(request, **kwargs)
+        with patch.object(self.rpc, "batch_get_documents", side_effect=interrupted):
+            record, _ = await reserve(self.s)
+        self.assertEqual(record.admitted_at, NOW + timedelta(minutes=1))
+        self.assertEqual(self.rpc.calls.count("commit"), 1)
 
     async def test_aborted_commit_retry_uses_final_attempt_time(self):
         self.rpc.abort_commits = 1

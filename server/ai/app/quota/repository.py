@@ -48,6 +48,19 @@ class CentralQuotaRepository:
         self.environment = environment
         self.namespace = namespace
 
+    @staticmethod
+    def _prefetch(tx, paths):
+        # Optional adapter optimization only. No domain check or authoritative
+        # read is skipped when the store does not support snapshot batching.
+        prefetch = getattr(tx, "prefetch", None)
+        if prefetch is not None:
+            prefetch(paths)
+
+    @classmethod
+    def _prefetch_counters(cls, tx, paths, extra=()):
+        cls._prefetch(tx, [*extra, *paths,
+                          *("counterMarkers/" + digest(path) for path in paths)])
+
     async def _run(self, name, action):
         try:
             result = await asyncio.to_thread(self.store.run, name, action)
@@ -127,6 +140,8 @@ class CentralQuotaRepository:
         rid = digest("reservation-v1", self.environment, subject, operation, nonce)
 
         def action(tx):
+            self._prefetch(tx, ["control/current", f"reservations/{rid}",
+                               *(f"blocks/{stage.profile_id}" for stage in stages)])
             config = self._config(tx)
             now = tx.now
             if now < end - timedelta(days=1):
@@ -167,6 +182,7 @@ class CentralQuotaRepository:
             minute_path = "minute/" + digest(self.environment, subject, operation, now.strftime("%Y%m%d%H%M"))
             upath = "userDay/" + digest(self.environment, subject, day)
             gpath = "globalDay/" + digest(self.environment, day)
+            self._prefetch_counters(tx, [gpath, upath], [minute_path])
             minute_raw = tx.get(minute_path)
             minute = Minute.model_validate(minute_raw) if minute_raw is not None else Minute(count=0)
             glob = self._counter(tx, gpath, bootstrap=Counter(schema_version="counter.v1",
@@ -223,9 +239,12 @@ class CentralQuotaRepository:
 
     async def claim(self, rid, stage_id, owner, payload):
         def action(tx):
+            self._prefetch(tx, ["control/current", f"reservations/{rid}"])
             config = self._config(tx)
             record = self._record(tx, rid)
             stage = self._stage(record, stage_id)
+            self._prefetch_counters(tx, [record.user_bucket, record.global_bucket],
+                                    [f"blocks/{stage.profile_id}"])
             blocked = tx.get(f"blocks/{stage.profile_id}")
             if stage.state != "RESERVED":
                 return False
@@ -294,6 +313,7 @@ class CentralQuotaRepository:
                     tx.set(f"blocks/{stage.profile_id}", {"blocked": True})
                 self._save(tx, record)
                 return contradiction
+            self._prefetch_counters(tx, [record.user_bucket, record.global_bucket])
             account = self._counter(tx, record.user_bucket)
             glob = self._counter(tx, record.global_bucket)
             stage.observed_cost = actual
@@ -347,6 +367,7 @@ class CentralQuotaRepository:
         def action(tx):
             record = self._record(tx, rid)
             self._time(tx)
+            self._prefetch_counters(tx, [record.user_bucket, record.global_bucket])
             account = self._counter(tx, record.user_bucket)
             glob = self._counter(tx, record.global_bucket)
             for stage in record.stages:
