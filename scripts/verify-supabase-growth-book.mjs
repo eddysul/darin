@@ -90,12 +90,18 @@ try {
   pass("member read allowed and non-member read denied");
 
   const commentId = crypto.randomUUID();
-  const { error: commentError } = await viewer.sb.from("growth_book_comments").insert({
+  const { error: commentError } = await editor.sb.from("growth_book_comments").insert({
     id: commentId, growth_book_id: bookId, page_id: pageId, baby_id: babyId,
-    author_id: viewer.user.id, body: "가족 롤링페이퍼", comment_type: "rolling_paper",
+    author_id: editor.user.id, body: "편집자 롤링페이퍼", comment_type: "rolling_paper",
   });
-  if (commentError) throw new Error(`viewer comment: ${commentError.message}`);
-  pass("viewer comment allowed");
+  if (commentError) throw new Error(`editor comment: ${commentError.message}`);
+  pass("editor comment allowed");
+  const { error: viewerCommentError } = await viewer.sb.from("growth_book_comments").insert({
+    id: crypto.randomUUID(), growth_book_id: bookId, page_id: pageId, baby_id: babyId,
+    author_id: viewer.user.id, body: "blocked viewer", comment_type: "page_comment",
+  });
+  if (!viewerCommentError) throw new Error("viewer comment unexpectedly allowed");
+  pass("viewer comment denied");
   const { error: outsiderCommentError } = await outsider.sb.from("growth_book_comments").insert({
     id: crypto.randomUUID(), growth_book_id: bookId, page_id: pageId, baby_id: babyId,
     author_id: outsider.user.id, body: "blocked", comment_type: "page_comment",

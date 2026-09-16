@@ -1,0 +1,1917 @@
+{
+  "captured": "2026-09-14",
+  "environment": "production",
+  "projectRef": "efipxojpdirvkeyfdfzl",
+  "scope": "Read-only authorization catalog; no user rows. No remote attack execution.",
+  "policies": [
+    {
+      "schemaname": "public",
+      "tablename": "babies",
+      "policyname": "babies_delete_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(baby_permission(id) = 'admin'::permission_role)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "babies",
+      "policyname": "babies_insert_authenticated",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(created_by = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "babies",
+      "policyname": "babies_select_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "is_baby_member(id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "babies",
+      "policyname": "babies_update_admin_or_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(baby_permission(id) = ANY (ARRAY['admin'::permission_role, 'editor'::permission_role]))",
+      "with_check": "(baby_permission(id) = ANY (ARRAY['admin'::permission_role, 'editor'::permission_role]))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "baby_caution_foods",
+      "policyname": "baby_caution_foods_delete_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(baby_permission(baby_id) = 'admin'::permission_role)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "baby_caution_foods",
+      "policyname": "baby_caution_foods_insert_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(is_baby_member(baby_id) AND (created_by = auth.uid()))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "baby_caution_foods",
+      "policyname": "baby_caution_foods_select_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "is_baby_member(baby_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "baby_caution_foods",
+      "policyname": "baby_caution_foods_update_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "is_baby_member(baby_id)",
+      "with_check": "is_baby_member(baby_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "baby_members",
+      "policyname": "baby_members_delete_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(baby_permission(baby_id) = 'admin'::permission_role)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "baby_members",
+      "policyname": "baby_members_insert_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(baby_permission(baby_id) = 'admin'::permission_role)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "baby_members",
+      "policyname": "baby_members_select_same_baby",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "is_baby_member(baby_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "baby_members",
+      "policyname": "baby_members_update_admin_or_self",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "((baby_permission(baby_id) = 'admin'::permission_role) OR (user_id = auth.uid()))",
+      "with_check": "((baby_permission(baby_id) = 'admin'::permission_role) OR (user_id = auth.uid()))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "care_logs",
+      "policyname": "care_logs_delete_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "can_edit_care_logs(baby_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "care_logs",
+      "policyname": "care_logs_insert_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(can_edit_care_logs(baby_id) AND (created_by = auth.uid()))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "care_logs",
+      "policyname": "care_logs_select_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "is_baby_member(baby_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "care_logs",
+      "policyname": "care_logs_update_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "can_edit_care_logs(baby_id)",
+      "with_check": "(can_edit_care_logs(baby_id) AND care_log_creator_unchanged(id, created_by))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "darin_invite_requests",
+      "policyname": "darin_invite_requests_select_related",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((sender_id = auth.uid()) OR (receiver_id = auth.uid()))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "diary_entries",
+      "policyname": "diary_entries_insert_admin_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((author_id = auth.uid()) AND can_create_diary_entry(baby_id))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "diary_entries",
+      "policyname": "diary_entries_select_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((deleted_at IS NULL) AND is_baby_member(baby_id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "diary_entries",
+      "policyname": "diary_entries_update_author_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "((deleted_at IS NULL) AND ((author_id = auth.uid()) OR (baby_permission(baby_id) = 'admin'::permission_role)))",
+      "with_check": "((author_id = auth.uid()) OR (baby_permission(baby_id) = 'admin'::permission_role))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "diary_media",
+      "policyname": "diary_media_delete_author_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "can_manage_diary_entry(diary_entry_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "diary_media",
+      "policyname": "diary_media_insert_author_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "can_manage_diary_entry(diary_entry_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "diary_media",
+      "policyname": "diary_media_select_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "can_view_diary_entry(diary_entry_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "diary_media",
+      "policyname": "diary_media_update_author_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "can_manage_diary_entry(diary_entry_id)",
+      "with_check": "can_manage_diary_entry(diary_entry_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_book_comments",
+      "policyname": "growth_book_comments_insert_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((author_id = auth.uid()) AND (deleted_at IS NULL) AND (EXISTS ( SELECT 1\n   FROM growth_books b\n  WHERE ((b.id = growth_book_comments.growth_book_id) AND (b.baby_id = b.baby_id) AND (b.deleted_at IS NULL) AND is_baby_member(b.baby_id)))) AND ((page_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM growth_book_pages p\n  WHERE ((p.id = growth_book_comments.page_id) AND (p.growth_book_id = p.growth_book_id) AND (p.baby_id = p.baby_id) AND (p.deleted_at IS NULL))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_book_comments",
+      "policyname": "growth_book_comments_select_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((deleted_at IS NULL) AND can_view_growth_book(growth_book_id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_book_comments",
+      "policyname": "growth_book_comments_update_author_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "((deleted_at IS NULL) AND ((author_id = auth.uid()) OR (baby_permission(baby_id) = 'admin'::permission_role)))",
+      "with_check": "((author_id = auth.uid()) OR (baby_permission(baby_id) = 'admin'::permission_role))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_book_media",
+      "policyname": "growth_book_media_delete_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "can_edit_growth_book(growth_book_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_book_media",
+      "policyname": "growth_book_media_insert_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((created_by = auth.uid()) AND can_edit_growth_book(growth_book_id) AND (EXISTS ( SELECT 1\n   FROM growth_book_pages p\n  WHERE ((p.id = growth_book_media.page_id) AND (p.growth_book_id = p.growth_book_id) AND (p.baby_id = p.baby_id) AND (p.deleted_at IS NULL)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_book_media",
+      "policyname": "growth_book_media_select_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(can_view_growth_book(growth_book_id) AND can_view_growth_book_page(page_id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_book_pages",
+      "policyname": "growth_book_pages_insert_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((created_by = auth.uid()) AND (deleted_at IS NULL) AND can_edit_growth_book(growth_book_id) AND (EXISTS ( SELECT 1\n   FROM growth_books b\n  WHERE ((b.id = growth_book_pages.growth_book_id) AND (b.baby_id = b.baby_id) AND (b.deleted_at IS NULL)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_book_pages",
+      "policyname": "growth_book_pages_select_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((deleted_at IS NULL) AND can_view_growth_book(growth_book_id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_book_pages",
+      "policyname": "growth_book_pages_update_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "((deleted_at IS NULL) AND can_edit_growth_book(growth_book_id))",
+      "with_check": "can_edit_growth_book(growth_book_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_books",
+      "policyname": "growth_books_insert_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((created_by = auth.uid()) AND (deleted_at IS NULL) AND (baby_permission(baby_id) = ANY (ARRAY['admin'::permission_role, 'editor'::permission_role])))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_books",
+      "policyname": "growth_books_select_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((deleted_at IS NULL) AND is_baby_member(baby_id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_books",
+      "policyname": "growth_books_update_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "((deleted_at IS NULL) AND (baby_permission(baby_id) = ANY (ARRAY['admin'::permission_role, 'editor'::permission_role])))",
+      "with_check": "(baby_permission(baby_id) = ANY (ARRAY['admin'::permission_role, 'editor'::permission_role]))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_records",
+      "policyname": "growth_records_delete_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "can_edit_growth_records(baby_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_records",
+      "policyname": "growth_records_insert_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(can_edit_growth_records(baby_id) AND (created_by = auth.uid()))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_records",
+      "policyname": "growth_records_select_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "is_baby_member(baby_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "growth_records",
+      "policyname": "growth_records_update_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "can_edit_growth_records(baby_id)",
+      "with_check": "(can_edit_growth_records(baby_id) AND growth_record_creator_unchanged(id, created_by))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "invite_codes",
+      "policyname": "invite_codes_insert_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(baby_permission(baby_id) = 'admin'::permission_role)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "invite_codes",
+      "policyname": "invite_codes_select_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "is_baby_member(baby_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "invite_codes",
+      "policyname": "invite_codes_update_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(baby_permission(baby_id) = 'admin'::permission_role)",
+      "with_check": "(baby_permission(baby_id) = 'admin'::permission_role)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_comments",
+      "policyname": "memory_comments_delete_author_or_post_owner",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "((author_id = auth.uid()) OR can_delete_memory_post(memory_post_id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_comments",
+      "policyname": "memory_comments_insert_member",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((author_id = auth.uid()) AND (deleted_at IS NULL) AND can_interact_with_memory_post(memory_post_id) AND (((comment_type = 'text'::text) AND (sticker_id IS NULL)) OR ((comment_type = 'sticker'::text) AND can_use_baby_sticker_on_post(sticker_id, memory_post_id))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_comments",
+      "policyname": "memory_comments_select_visible",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((deleted_at IS NULL) AND can_view_memory_post(memory_post_id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_comments",
+      "policyname": "memory_comments_update_author",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(author_id = auth.uid())",
+      "with_check": "(author_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_friends",
+      "policyname": "memory_friends_delete_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(baby_permission(baby_id) = 'admin'::permission_role)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_friends",
+      "policyname": "memory_friends_insert_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((baby_permission(baby_id) = 'admin'::permission_role) AND (invited_by = auth.uid()))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_friends",
+      "policyname": "memory_friends_select_self_or_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((user_id = auth.uid()) OR (baby_permission(baby_id) = 'admin'::permission_role))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_friends",
+      "policyname": "memory_friends_update_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(baby_permission(baby_id) = 'admin'::permission_role)",
+      "with_check": "(baby_permission(baby_id) = 'admin'::permission_role)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_media",
+      "policyname": "memory_media_delete_manager",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(can_manage_memory_post(memory_post_id) AND (EXISTS ( SELECT 1\n   FROM memory_posts parent_post\n  WHERE ((parent_post.id = memory_media.memory_post_id) AND (parent_post.baby_id = memory_media.baby_id)))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_media",
+      "policyname": "memory_media_insert_manager",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(can_manage_memory_post(memory_post_id) AND (EXISTS ( SELECT 1\n   FROM memory_posts parent_post\n  WHERE ((parent_post.id = memory_media.memory_post_id) AND (parent_post.baby_id = memory_media.baby_id)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_media",
+      "policyname": "memory_media_select_visible",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(can_view_memory_post(memory_post_id) AND (EXISTS ( SELECT 1\n   FROM memory_posts parent_post\n  WHERE ((parent_post.id = memory_media.memory_post_id) AND (parent_post.baby_id = memory_media.baby_id)))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_media",
+      "policyname": "memory_media_update_manager",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(can_manage_memory_post(memory_post_id) AND (EXISTS ( SELECT 1\n   FROM memory_posts parent_post\n  WHERE ((parent_post.id = memory_media.memory_post_id) AND (parent_post.baby_id = memory_media.baby_id)))))",
+      "with_check": "(can_manage_memory_post(memory_post_id) AND (EXISTS ( SELECT 1\n   FROM memory_posts parent_post\n  WHERE ((parent_post.id = memory_media.memory_post_id) AND (parent_post.baby_id = memory_media.baby_id)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_posts",
+      "policyname": "memory_posts_delete_author_or_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "can_delete_memory_post(id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_posts",
+      "policyname": "memory_posts_insert_editor",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((author_id = auth.uid()) AND (baby_permission(baby_id) = ANY (ARRAY['admin'::permission_role, 'editor'::permission_role])) AND (deleted_at IS NULL))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_posts",
+      "policyname": "memory_posts_select_visible",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((deleted_at IS NULL) AND ((author_id = auth.uid()) OR can_view_memory_post(id)))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_posts",
+      "policyname": "memory_posts_update_author_or_admin",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "((deleted_at IS NULL) AND ((author_id = auth.uid()) OR (baby_permission(baby_id) = 'admin'::permission_role)))",
+      "with_check": "((deleted_at IS NULL) AND ((author_id = auth.uid()) OR (baby_permission(baby_id) = 'admin'::permission_role)))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_selected_people",
+      "policyname": "memory_selected_people_delete_manager",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "can_manage_memory_post(memory_post_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_selected_people",
+      "policyname": "memory_selected_people_insert_manager",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "can_manage_memory_post(memory_post_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_selected_people",
+      "policyname": "memory_selected_people_select_visible",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "can_view_memory_post(memory_post_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_tags",
+      "policyname": "memory_tags_delete_manager",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "can_manage_memory_post(memory_post_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_tags",
+      "policyname": "memory_tags_insert_manager",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((created_by = auth.uid()) AND can_manage_memory_post(memory_post_id) AND ((tag_type <> 'baby'::text) OR ((baby_id IS NOT NULL) AND is_baby_member(baby_id))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "memory_tags",
+      "policyname": "memory_tags_select_visible",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(can_view_memory_post(memory_post_id) AND ((tag_type = 'baby'::text) OR (EXISTS ( SELECT 1\n   FROM memory_posts mp\n  WHERE ((mp.id = memory_tags.memory_post_id) AND (is_baby_member(mp.baby_id) OR (mp.author_id = auth.uid())))))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_select_own_or_shared",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM (baby_members me\n     JOIN baby_members them ON (((them.baby_id = me.baby_id) AND (them.status = 'active'::member_status))))\n  WHERE ((me.user_id = auth.uid()) AND (me.status = 'active'::member_status) AND (them.user_id = profiles.id)))) OR (EXISTS ( SELECT 1\n   FROM memory_friends mf\n  WHERE ((mf.user_id = auth.uid()) AND (mf.status = 'active'::text) AND is_friend_visible_memory_contributor(mf.baby_id, profiles.id)))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(id = auth.uid())",
+      "with_check": "(id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user_friendships",
+      "policyname": "user_friendships_select_related",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((requester_id = auth.uid()) OR (receiver_id = auth.uid()))",
+      "with_check": null
+    }
+  ],
+  "functions": [
+    {
+      "proname": "accept_invite_code",
+      "definition": "CREATE OR REPLACE FUNCTION public.accept_invite_code(p_code text, p_display_name text, p_nickname text DEFAULT NULL::text, p_relation text DEFAULT '가족'::text)\n RETURNS TABLE(baby_id uuid, invite_type text, permission_role text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_invite public.invite_codes;\n  v_friendship public.user_friendships;\n  v_relation public.relationship_label;\n  v_name text := btrim(coalesce(p_display_name, ''));\nbegin\n  if auth.uid() is null then\n    raise exception 'Not authenticated' using errcode = '42501';\n  end if;\n  if v_name = '' then\n    raise exception 'display name required' using errcode = '22023';\n  end if;\n\n  select * into v_invite\n  from public.invite_codes ic\n  where ic.code = upper(btrim(p_code))\n  for update;\n  if not found then raise exception 'invalid invite code' using errcode = 'P0002'; end if;\n  if v_invite.created_by = auth.uid() then raise exception 'cannot accept your own invite' using errcode = '22023'; end if;\n  if v_invite.revoked_at is not null then raise exception 'invite revoked' using errcode = '22023'; end if;\n  if v_invite.expires_at is not null and v_invite.expires_at <= now() then raise exception 'invite expired' using errcode = '22023'; end if;\n  if v_invite.used_count >= v_invite.max_uses then raise exception 'invite already used' using errcode = '22023'; end if;\n\n  -- Bearer invite codes cannot outlive the issuer's authority. This also makes\n  -- any code forged through the former NULL fail-open guard unusable.\n  if v_invite.invite_type in ('family', 'baby_friend') then\n    if v_invite.baby_id is null or v_invite.created_by is null then\n      raise exception 'invite issuer no longer has permission' using errcode = '42501';\n    end if;\n\n    -- Hold the issuer membership row through the grant. A concurrent removal\n    -- or demotion must not race between authorization and membership insert.\n    perform 1\n    from public.baby_members issuer\n    where issuer.baby_id = v_invite.baby_id\n      and issuer.user_id = v_invite.created_by\n      and issuer.status = 'active'\n      and issuer.permission_role = 'admin'::public.permission_role\n    for update;\n    if not found then\n      raise exception 'invite issuer no longer has permission' using errcode = '42501';\n    end if;\n  end if;\n\n  begin\n    v_relation := coalesce(\n      nullif(btrim(p_relation), ''),\n      v_invite.relationship_label::text\n    )::public.relationship_label;\n  exception when invalid_text_representation then\n    raise exception 'invalid relationship' using errcode = '22023';\n  end;\n\n  update public.profiles p\n  set display_name = v_name,\n      nickname = nullif(btrim(p_nickname), ''),\n      default_relation = case\n        when v_invite.invite_type = 'family' then v_relation::text\n        else p.default_relation\n      end,\n      updated_at = now()\n  where p.id = auth.uid();\n\n  if v_invite.invite_type = 'family' then\n    if exists (\n      select 1 from public.baby_members bm\n      where bm.baby_id = v_invite.baby_id\n        and bm.user_id = auth.uid()\n        and bm.status = 'active'\n    ) then raise exception 'already connected to this baby' using errcode = '23505'; end if;\n\n    insert into public.baby_members (\n      baby_id, user_id, permission_role, relationship_label, status, display_name_override\n    ) values (\n      v_invite.baby_id, auth.uid(), v_invite.permission_role, v_relation, 'active', v_name\n    );\n  elsif v_invite.invite_type = 'baby_friend' then\n    insert into public.memory_friends (baby_id, user_id, invited_by, status)\n    values (v_invite.baby_id, auth.uid(), v_invite.created_by, 'active')\n    on conflict on constraint memory_friends_baby_id_user_id_key do update\n      set status = 'active', invited_by = excluded.invited_by, updated_at = now();\n  else\n    select * into v_friendship\n    from public.user_friendships uf\n    where (uf.requester_id = v_invite.created_by and uf.receiver_id = auth.uid())\n       or (uf.requester_id = auth.uid() and uf.receiver_id = v_invite.created_by)\n    for update;\n\n    if found and v_friendship.status = 'blocked' then\n      raise exception 'friendship is blocked' using errcode = '42501';\n    elsif found then\n      update public.user_friendships uf\n      set status = 'accepted', accepted_at = now(), blocked_at = null\n      where uf.id = v_friendship.id;\n    else\n      insert into public.user_friendships (\n        requester_id, receiver_id, status, accepted_at\n      ) values (\n        v_invite.created_by, auth.uid(), 'accepted', now()\n      );\n    end if;\n  end if;\n\n  update public.invite_codes ic\n  set used_count = ic.used_count + 1, used_by = auth.uid(), used_at = now()\n  where ic.id = v_invite.id;\n\n  return query select\n    v_invite.baby_id,\n    v_invite.invite_type,\n    case when v_invite.invite_type = 'family'\n      then v_invite.permission_role::text\n      else v_invite.invite_type\n    end;\nend;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "add_darin_friend_to_baby",
+      "definition": "CREATE OR REPLACE FUNCTION public.add_darin_friend_to_baby(p_baby_id uuid, p_friend_user_id uuid)\n RETURNS memory_friends\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_row public.memory_friends;\nbegin\n  if auth.uid() is null\n     or public.baby_permission(p_baby_id)\n        is distinct from 'admin'::public.permission_role then\n    raise exception 'only baby admin can invite memory friends' using errcode = '42501';\n  end if;\n  if not exists (\n    select 1\n    from public.user_friendships uf\n    where uf.status = 'accepted'\n      and (\n        (uf.requester_id = auth.uid() and uf.receiver_id = p_friend_user_id)\n        or (uf.receiver_id = auth.uid() and uf.requester_id = p_friend_user_id)\n      )\n  ) then\n    raise exception 'accepted Darin friendship required' using errcode = '42501';\n  end if;\n\n  insert into public.memory_friends (baby_id, user_id, invited_by, status)\n  values (p_baby_id, p_friend_user_id, auth.uid(), 'active')\n  on conflict (baby_id, user_id) do update\n    set invited_by = auth.uid(), status = 'active', updated_at = now()\n  returning * into v_row;\n\n  return v_row;\nend;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "baby_member_role_guard",
+      "definition": "CREATE OR REPLACE FUNCTION public.baby_member_role_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if new.permission_role is distinct from old.permission_role\n     and public.baby_permission(old.baby_id) is distinct from 'admin' then\n    raise exception 'only baby admin can change member roles'\n      using errcode = '42501';\n  end if;\n  if new.user_id is distinct from old.user_id or new.baby_id is distinct from old.baby_id then\n    raise exception 'baby member identity is immutable';\n  end if;\n  return new;\nend;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "baby_permission",
+      "definition": "CREATE OR REPLACE FUNCTION public.baby_permission(p_baby_id uuid)\n RETURNS permission_role\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select m.permission_role\n  from public.baby_members m\n  where m.baby_id = p_baby_id\n    and m.user_id = auth.uid()\n    and m.status = 'active'\n  limit 1;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_create_diary_entry",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_create_diary_entry(p_baby_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select public.baby_permission(p_baby_id) in ('admin', 'editor');\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_delete_memory_post",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_delete_memory_post(p_memory_post_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.memory_posts p\n    where p.id = p_memory_post_id\n      and (\n        p.author_id = auth.uid()\n        or public.baby_permission(p.baby_id) = 'admin'\n      )\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_edit_care_logs",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_edit_care_logs(p_baby_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select coalesce(public.baby_permission(p_baby_id) in ('admin', 'editor'), false);\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_edit_growth_book",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_edit_growth_book(p_growth_book_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1 from public.growth_books b\n    where b.id = p_growth_book_id and b.deleted_at is null\n      and public.baby_permission(b.baby_id) in ('admin', 'editor')\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_edit_growth_records",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_edit_growth_records(p_baby_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select coalesce(public.baby_permission(p_baby_id) in ('admin', 'editor'), false);\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_interact_with_memory_post",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_interact_with_memory_post(p_memory_post_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1 from public.memory_posts p\n    where p.id = p_memory_post_id\n      and public.can_view_memory_post(p.id)\n      and (public.is_baby_member(p.baby_id) or public.is_memory_friend(p.baby_id))\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_manage_diary_entry",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_manage_diary_entry(p_diary_entry_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.diary_entries d\n    where d.id = p_diary_entry_id\n      and d.deleted_at is null\n      and (\n        d.author_id = auth.uid()\n        or public.baby_permission(d.baby_id) = 'admin'\n      )\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_manage_memory_post",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_manage_memory_post(p_memory_post_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.memory_posts p\n    where p.id = p_memory_post_id\n      and p.deleted_at is null\n      and (\n        p.author_id = auth.uid()\n        or public.baby_permission(p.baby_id) = 'admin'\n      )\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_view_diary_entry",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_view_diary_entry(p_diary_entry_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.diary_entries d\n    where d.id = p_diary_entry_id\n      and d.deleted_at is null\n      and public.is_baby_member(d.baby_id)\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_view_growth_book",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_view_growth_book(p_growth_book_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1 from public.growth_books b\n    where b.id = p_growth_book_id and b.deleted_at is null and public.is_baby_member(b.baby_id)\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_view_growth_book_page",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_view_growth_book_page(p_page_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1 from public.growth_book_pages p\n    join public.growth_books b on b.id = p.growth_book_id\n    where p.id = p_page_id and p.deleted_at is null and b.deleted_at is null\n      and p.baby_id = b.baby_id and public.is_baby_member(p.baby_id)\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "can_view_memory_post",
+      "definition": "CREATE OR REPLACE FUNCTION public.can_view_memory_post(p_memory_post_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.memory_posts p\n    where p.id = p_memory_post_id\n      and p.deleted_at is null\n      and (\n        p.author_id = auth.uid()\n        or (p.privacy_type = 'family_circle' and public.is_baby_member(p.baby_id))\n        or (p.privacy_type = 'friend_circle' and (public.is_baby_member(p.baby_id) or public.is_memory_friend(p.baby_id)))\n        or (\n          p.privacy_type = 'tagged_family'\n          and exists (\n            select 1 from public.memory_tags t\n            where t.memory_post_id = p.id and t.tag_type = 'family_member'\n              and t.status = 'approved' and t.tagged_user_id = auth.uid()\n          )\n        )\n        or (\n          p.privacy_type = 'selected_people'\n          and exists (\n            select 1 from public.memory_selected_people s\n            where s.memory_post_id = p.id and s.user_id = auth.uid()\n          )\n        )\n      )\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "care_log_creator_unchanged",
+      "definition": "CREATE OR REPLACE FUNCTION public.care_log_creator_unchanged(p_id uuid, p_created_by uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.care_logs record\n    where record.id = p_id\n      and record.created_by is not distinct from p_created_by\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "create_invite_code",
+      "definition": "CREATE OR REPLACE FUNCTION public.create_invite_code(p_baby_id uuid, p_invite_type text, p_role text DEFAULT 'editor'::text, p_relation text DEFAULT '가족'::text, p_expires_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_max_uses integer DEFAULT 1)\n RETURNS invite_codes\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_code text;\n  v_invite public.invite_codes;\n  v_relation public.relationship_label;\nbegin\n  if auth.uid() is null then\n    raise exception 'Not authenticated' using errcode = '42501';\n  end if;\n  if p_invite_type not in ('family', 'baby_friend', 'darin_friend') then\n    raise exception 'invalid invite type' using errcode = '22023';\n  end if;\n  if p_invite_type <> 'darin_friend'\n     and (\n       p_baby_id is null\n       or public.baby_permission(p_baby_id)\n          is distinct from 'admin'::public.permission_role\n     ) then\n    raise exception 'only baby admin can create baby invites' using errcode = '42501';\n  end if;\n  if p_invite_type = 'family' and p_role not in ('admin', 'editor') then\n    raise exception 'family role must be admin or editor' using errcode = '22023';\n  end if;\n  if p_expires_at is not null and p_expires_at <= now() then\n    raise exception 'invite expiration must be in the future' using errcode = '22023';\n  end if;\n  if coalesce(p_max_uses, 1) < 1 then\n    raise exception 'max uses must be positive' using errcode = '22023';\n  end if;\n\n  begin\n    v_relation := coalesce(\n      nullif(btrim(p_relation), ''),\n      case when p_invite_type = 'family' then '가족' else '친구' end\n    )::public.relationship_label;\n  exception when invalid_text_representation then\n    raise exception 'invalid relationship' using errcode = '22023';\n  end;\n\n  loop\n    v_code := 'DARIN-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10));\n    begin\n      insert into public.invite_codes (\n        baby_id, code, created_by, invite_type, permission_role,\n        relationship_label, expires_at, max_uses, used_count\n      ) values (\n        case when p_invite_type = 'darin_friend' then null else p_baby_id end,\n        v_code,\n        auth.uid(),\n        p_invite_type,\n        case when p_invite_type = 'family'\n          then p_role::public.permission_role\n          else 'viewer'::public.permission_role\n        end,\n        v_relation,\n        p_expires_at,\n        p_max_uses,\n        0\n      ) returning * into v_invite;\n      return v_invite;\n    exception when unique_violation then\n      -- Only a generated-code collision is retried.\n    end;\n  end loop;\nend;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "diary_entry_identity_unchanged",
+      "definition": "CREATE OR REPLACE FUNCTION public.diary_entry_identity_unchanged()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  if new.id <> old.id\n    or new.baby_id <> old.baby_id\n    or new.author_id <> old.author_id\n    or new.client_generated_id is distinct from old.client_generated_id\n    or new.created_at <> old.created_at then\n    raise exception 'diary entry identity columns are immutable';\n  end if;\n  if old.deleted_at is not null and new.deleted_at is distinct from old.deleted_at then\n    raise exception 'deleted diary entries are immutable';\n  end if;\n  if old.deleted_at is null and new.deleted_at is not null\n    and not public.can_manage_diary_entry(old.id) then\n    raise exception 'diary entry delete permission denied';\n  end if;\n  return new;\nend;\n$function$\n",
+      "prosecdef": false,
+      "proconfig": null,
+      "authenticated_exec": true
+    },
+    {
+      "proname": "growth_book_identity_guard",
+      "definition": "CREATE OR REPLACE FUNCTION public.growth_book_identity_guard()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  if new.id <> old.id or new.baby_id <> old.baby_id or new.created_by <> old.created_by\n    or new.created_at <> old.created_at then\n    raise exception 'growth book identity columns are immutable';\n  end if;\n  if old.deleted_at is not null and new is distinct from old then\n    raise exception 'deleted growth books are immutable';\n  end if;\n  if old.deleted_at is null and new.deleted_at is not null\n    and public.baby_permission(old.baby_id) <> 'admin' then\n    raise exception 'growth book delete permission denied' using errcode = '42501';\n  end if;\n  return new;\nend;\n$function$\n",
+      "prosecdef": false,
+      "proconfig": null,
+      "authenticated_exec": true
+    },
+    {
+      "proname": "growth_book_page_identity_guard",
+      "definition": "CREATE OR REPLACE FUNCTION public.growth_book_page_identity_guard()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  if new.id <> old.id or new.growth_book_id <> old.growth_book_id\n    or new.baby_id <> old.baby_id or new.created_by <> old.created_by\n    or new.created_at <> old.created_at then\n    raise exception 'growth book page identity columns are immutable';\n  end if;\n  if old.deleted_at is not null and new is distinct from old then\n    raise exception 'deleted growth book pages are immutable';\n  end if;\n  return new;\nend;\n$function$\n",
+      "prosecdef": false,
+      "proconfig": null,
+      "authenticated_exec": true
+    },
+    {
+      "proname": "growth_record_creator_unchanged",
+      "definition": "CREATE OR REPLACE FUNCTION public.growth_record_creator_unchanged(p_id uuid, p_created_by uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.growth_records record\n    where record.id = p_id\n      and record.created_by is not distinct from p_created_by\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "has_friend_visible_memory",
+      "definition": "CREATE OR REPLACE FUNCTION public.has_friend_visible_memory(p_baby_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.memory_friends mf\n    join public.memory_posts mp on mp.baby_id = mf.baby_id\n    where mf.baby_id = p_baby_id\n      and mf.user_id = auth.uid()\n      and mf.status = 'active'\n      and mp.privacy_type = 'friend_circle'\n      and mp.status = 'published'\n      and mp.deleted_at is null\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "is_baby_member",
+      "definition": "CREATE OR REPLACE FUNCTION public.is_baby_member(p_baby_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.baby_members m\n    where m.baby_id = p_baby_id\n      and m.user_id = auth.uid()\n      and m.status = 'active'\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "is_friend_visible_memory_contributor",
+      "definition": "CREATE OR REPLACE FUNCTION public.is_friend_visible_memory_contributor(p_baby_id uuid, p_user_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select public.has_friend_visible_memory(p_baby_id) and (\n    exists (\n      select 1 from public.memory_posts mp\n      where mp.baby_id = p_baby_id\n        and mp.author_id = p_user_id\n        and mp.privacy_type = 'friend_circle'\n        and mp.status = 'published'\n        and mp.deleted_at is null\n    )\n    or exists (\n      select 1\n      from public.memory_comments mc\n      join public.memory_posts mp on mp.id = mc.memory_post_id\n      where mp.baby_id = p_baby_id\n        and mp.privacy_type = 'friend_circle'\n        and mp.status = 'published'\n        and mp.deleted_at is null\n        and mc.author_id = p_user_id\n        and mc.deleted_at is null\n    )\n    or exists (\n      select 1\n      from public.memory_reactions mr\n      join public.memory_posts mp on mp.id = mr.memory_post_id\n      where mp.baby_id = p_baby_id\n        and mp.privacy_type = 'friend_circle'\n        and mp.status = 'published'\n        and mp.deleted_at is null\n        and mr.author_id = p_user_id\n    )\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "is_memory_friend",
+      "definition": "CREATE OR REPLACE FUNCTION public.is_memory_friend(p_baby_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1 from public.memory_friends f\n    where f.baby_id = p_baby_id\n      and f.user_id = auth.uid()\n      and f.status = 'active'\n  );\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "list_baby_memory_friends",
+      "definition": "CREATE OR REPLACE FUNCTION public.list_baby_memory_friends(p_baby_id uuid)\n RETURNS TABLE(membership_id uuid, user_id uuid, display_name text, nickname text, status text)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if auth.uid() is null\n     or public.baby_permission(p_baby_id)\n        is distinct from 'admin'::public.permission_role then\n    raise exception 'only baby admin can list memory friends' using errcode = '42501';\n  end if;\n\n  return query\n    select mf.id, mf.user_id, coalesce(p.display_name, '친구'), p.nickname, mf.status\n    from public.memory_friends mf\n    join public.profiles p on p.id = mf.user_id\n    where mf.baby_id = p_baby_id and mf.status = 'active'\n    order by mf.created_at;\nend;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "memory_comment_identity_unchanged",
+      "definition": "CREATE OR REPLACE FUNCTION public.memory_comment_identity_unchanged()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  if new.id <> old.id\n    or new.memory_post_id <> old.memory_post_id\n    or new.author_id <> old.author_id\n    or new.created_at <> old.created_at\n    or new.comment_type <> old.comment_type\n    or new.sticker_id is distinct from old.sticker_id then\n    raise exception 'memory comment identity columns are immutable';\n  end if;\n  return new;\nend;\n$function$\n",
+      "prosecdef": false,
+      "proconfig": null,
+      "authenticated_exec": true
+    },
+    {
+      "proname": "memory_post_identity_unchanged",
+      "definition": "CREATE OR REPLACE FUNCTION public.memory_post_identity_unchanged()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  if new.id <> old.id\n    or new.baby_id <> old.baby_id\n    or new.author_id <> old.author_id\n    or new.created_at <> old.created_at then\n    raise exception 'memory post identity columns are immutable';\n  end if;\n  if new.deleted_at is distinct from old.deleted_at\n    and not public.can_delete_memory_post(old.id) then\n    raise exception 'memory post delete permission denied';\n  end if;\n  return new;\nend;\n$function$\n",
+      "prosecdef": false,
+      "proconfig": null,
+      "authenticated_exec": true
+    },
+    {
+      "proname": "respond_darin_id_invite_request",
+      "definition": "CREATE OR REPLACE FUNCTION public.respond_darin_id_invite_request(p_request_id uuid, p_accept boolean)\n RETURNS TABLE(baby_id uuid, request_type text, permission_role text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_request public.darin_invite_requests;\n  v_response_status text;\nbegin\n  if auth.uid() is null then\n    raise exception 'Not authenticated' using errcode = '42501';\n  end if;\n\n  select request_row.* into v_request\n  from public.darin_invite_requests as request_row\n  where request_row.id = p_request_id\n    and request_row.receiver_id = auth.uid()\n    and request_row.status = 'pending'\n  for update;\n  if not found then raise exception 'invite request unavailable' using errcode = 'P0002'; end if;\n  if v_request.expires_at <= now() then\n    raise exception 'invite request expired' using errcode = '22023';\n  end if;\n\n  v_response_status := case when p_accept then 'accepted' else 'declined' end;\n  if p_accept then\n    if v_request.request_type = 'family' then\n      insert into public.baby_members (\n        baby_id, user_id, permission_role, relationship_label, status, display_name_override\n      ) values (\n        v_request.baby_id, auth.uid(), v_request.permission_role,\n        v_request.relationship_label, 'active', null\n      ) on conflict on constraint baby_members_baby_id_user_id_key do update\n        set permission_role = excluded.permission_role,\n            relationship_label = excluded.relationship_label,\n            status = 'active';\n    else\n      insert into public.memory_friends (baby_id, user_id, invited_by, status)\n      values (v_request.baby_id, auth.uid(), v_request.sender_id, 'active')\n      on conflict on constraint memory_friends_baby_id_user_id_key do update\n        set status = 'active', invited_by = excluded.invited_by;\n    end if;\n\n    insert into public.notification_events (\n      recipient_id, actor_id, baby_id, event_type, title, body, data, dedupe_key, status\n    ) values (\n      v_request.sender_id,\n      auth.uid(),\n      v_request.baby_id,\n      'family_joined',\n      case when v_request.request_type = 'family' then '가족 초대가 수락됐어요' else '친구 요청이 수락됐어요' end,\n      case when v_request.request_type = 'family' then '새 공유 멤버가 연결됐어요.' else '친구 공개 순간을 함께 볼 수 있어요.' end,\n      jsonb_build_object('requestId', v_request.id, 'requestType', v_request.request_type, 'route', 'family'),\n      'darin-invite-response:' || v_request.id::text,\n      'pending'\n    ) on conflict (recipient_id, dedupe_key) where dedupe_key is not null do nothing;\n  else\n    insert into public.notification_events (\n      recipient_id, actor_id, baby_id, event_type, title, body, data, dedupe_key, status\n    ) values (\n      v_request.sender_id,\n      auth.uid(),\n      v_request.baby_id,\n      'invite_declined',\n      '초대 요청이 수락되지 않았어요',\n      '필요하면 새 초대를 보낼 수 있어요.',\n      jsonb_build_object('requestId', v_request.id, 'requestType', v_request.request_type, 'route', 'family'),\n      'darin-invite-response:' || v_request.id::text,\n      'pending'\n    ) on conflict (recipient_id, dedupe_key) where dedupe_key is not null do nothing;\n  end if;\n\n  update public.darin_invite_requests as request_row\n  set status = v_response_status, responded_at = now()\n  where request_row.id = v_request.id;\n\n  update public.notification_events as event_row\n  set read_at = now(),\n      data = jsonb_set(event_row.data, '{requestStatus}', to_jsonb(v_response_status), true)\n  where event_row.recipient_id = auth.uid()\n    and event_row.event_type = 'invite_request'\n    and event_row.data->>'requestId' = v_request.id::text;\n\n  return query select v_request.baby_id, v_request.request_type, v_request.permission_role::text;\nend;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "send_darin_id_invite_request",
+      "definition": "CREATE OR REPLACE FUNCTION public.send_darin_id_invite_request(p_baby_id uuid, p_darin_id text, p_request_type text, p_role text DEFAULT 'editor'::text, p_relation text DEFAULT '가족'::text)\n RETURNS TABLE(request_id uuid, recipient_nickname text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_receiver public.profiles;\n  v_request public.darin_invite_requests;\n  v_role public.permission_role;\n  v_relation public.relationship_label;\nbegin\n  if auth.uid() is null\n     or public.baby_permission(p_baby_id) is distinct from 'admin'::public.permission_role then\n    raise exception 'only baby admin can send requests' using errcode = '42501';\n  end if;\n  if p_request_type not in ('family', 'friend') then\n    raise exception 'invalid request type' using errcode = '22023';\n  end if;\n\n  select * into v_receiver\n  from public.profiles\n  where lower(darin_id) = lower(btrim(p_darin_id));\n  if not found then raise exception 'Darin ID not found' using errcode = 'P0002'; end if;\n  if v_receiver.id = auth.uid() then raise exception 'cannot invite yourself' using errcode = '22023'; end if;\n\n  if p_request_type = 'family' then\n    if p_role not in ('admin', 'editor') then\n      raise exception 'invalid family role' using errcode = '22023';\n    end if;\n    v_role := p_role::public.permission_role;\n    v_relation := coalesce(nullif(btrim(p_relation), ''), '가족')::public.relationship_label;\n  else\n    v_role := 'viewer';\n    v_relation := '친구';\n  end if;\n\n  if (p_request_type = 'family' and exists (\n    select 1 from public.baby_members\n    where baby_id = p_baby_id and user_id = v_receiver.id and status = 'active'\n  )) or (p_request_type = 'friend' and exists (\n    select 1 from public.memory_friends\n    where baby_id = p_baby_id and user_id = v_receiver.id and status = 'active'\n  )) then\n    raise exception 'already connected' using errcode = '23505';\n  end if;\n\n  update public.darin_invite_requests\n  set status = 'cancelled', responded_at = now()\n  where baby_id = p_baby_id\n    and sender_id = auth.uid()\n    and receiver_id = v_receiver.id\n    and request_type = p_request_type\n    and status = 'pending'\n    and expires_at <= now();\n\n  if exists (\n    select 1 from public.darin_invite_requests\n    where baby_id = p_baby_id\n      and sender_id = auth.uid()\n      and receiver_id = v_receiver.id\n      and request_type = p_request_type\n      and status = 'pending'\n      and expires_at > now()\n  ) then\n    raise exception 'invite request already pending' using errcode = '23505';\n  end if;\n\n  insert into public.darin_invite_requests (\n    baby_id, sender_id, receiver_id, request_type, permission_role,\n    relationship_label, expires_at\n  ) values (\n    p_baby_id, auth.uid(), v_receiver.id, p_request_type, v_role,\n    v_relation, now() + interval '30 days'\n  ) returning * into v_request;\n\n  insert into public.notification_events (\n    recipient_id, actor_id, baby_id, event_type, title, body, data, dedupe_key, status\n  ) values (\n    v_receiver.id,\n    auth.uid(),\n    p_baby_id,\n    'invite_request',\n    case when p_request_type = 'family' then '가족 초대 요청' else '친구 추가 요청' end,\n    (select coalesce(display_name, '돌봄 멤버') from public.profiles where id = auth.uid()) || '님이 요청을 보냈어요.',\n    jsonb_build_object(\n      'requestId', v_request.id,\n      'requestType', p_request_type,\n      'requestStatus', 'pending',\n      'route', 'family'\n    ),\n    'darin-invite:' || v_request.id::text,\n    'pending'\n  );\n\n  return query select v_request.id, v_receiver.display_name;\nend;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "soft_delete_diary_entry",
+      "definition": "CREATE OR REPLACE FUNCTION public.soft_delete_diary_entry(p_diary_entry_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if not public.can_manage_diary_entry(p_diary_entry_id) then\n    raise exception 'diary entry not found or delete permission denied';\n  end if;\n  update public.diary_entries\n  set deleted_at = now()\n  where id = p_diary_entry_id\n    and deleted_at is null;\n  if not found then\n    raise exception 'diary entry not found or delete permission denied';\n  end if;\nend;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "soft_delete_growth_book",
+      "definition": "CREATE OR REPLACE FUNCTION public.soft_delete_growth_book(p_growth_book_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if not exists (\n    select 1 from public.growth_books b where b.id = p_growth_book_id\n      and b.deleted_at is null and public.baby_permission(b.baby_id) = 'admin'\n  ) then raise exception 'growth book not found or delete permission denied' using errcode = '42501'; end if;\n  update public.growth_books set deleted_at = now() where id = p_growth_book_id and deleted_at is null;\nend;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "soft_delete_growth_book_page",
+      "definition": "CREATE OR REPLACE FUNCTION public.soft_delete_growth_book_page(p_page_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if not exists (\n    select 1 from public.growth_book_pages p join public.growth_books b on b.id = p.growth_book_id\n    where p.id = p_page_id and p.deleted_at is null and b.deleted_at is null\n      and public.baby_permission(p.baby_id) in ('admin', 'editor')\n  ) then raise exception 'growth book page not found or delete permission denied' using errcode = '42501'; end if;\n  update public.growth_book_pages set deleted_at = now() where id = p_page_id and deleted_at is null;\nend;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    },
+    {
+      "proname": "soft_delete_memory_post",
+      "definition": "CREATE OR REPLACE FUNCTION public.soft_delete_memory_post(p_memory_post_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  affected_rows integer;\nbegin\n  if not public.can_delete_memory_post(p_memory_post_id) then\n    raise exception 'memory post not found or delete permission denied'\n      using errcode = '42501';\n  end if;\n\n  update public.memory_posts\n  set deleted_at = now()\n  where id = p_memory_post_id\n    and deleted_at is null;\n\n  get diagnostics affected_rows = row_count;\n  if affected_rows <> 1 then\n    raise exception 'memory post not found or delete permission denied'\n      using errcode = '42501';\n  end if;\nend;\n$function$\n",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "authenticated_exec": true
+    }
+  ],
+  "constraints": [
+    {
+      "relname": "care_logs",
+      "conname": "care_logs_baby_id_client_generated_id_key",
+      "definition": "UNIQUE (baby_id, client_generated_id)"
+    },
+    {
+      "relname": "care_logs",
+      "conname": "care_logs_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "care_logs",
+      "conname": "care_logs_created_by_fkey",
+      "definition": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "care_logs",
+      "conname": "care_logs_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "growth_records",
+      "conname": "growth_records_baby_id_client_generated_id_key",
+      "definition": "UNIQUE (baby_id, client_generated_id)"
+    },
+    {
+      "relname": "growth_records",
+      "conname": "growth_records_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "growth_records",
+      "conname": "growth_records_created_by_fkey",
+      "definition": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "growth_records",
+      "conname": "growth_records_input_method_check",
+      "definition": "CHECK ((input_method = ANY (ARRAY['manual'::text, 'ai_extract'::text])))"
+    },
+    {
+      "relname": "growth_records",
+      "conname": "growth_records_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "growth_records",
+      "conname": "growth_records_source_check",
+      "definition": "CHECK ((source = ANY (ARRAY['hospital'::text, 'home'::text])))"
+    },
+    {
+      "relname": "invite_codes",
+      "conname": "invite_codes_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "invite_codes",
+      "conname": "invite_codes_code_key",
+      "definition": "UNIQUE (code)"
+    },
+    {
+      "relname": "invite_codes",
+      "conname": "invite_codes_created_by_fkey",
+      "definition": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "invite_codes",
+      "conname": "invite_codes_invite_type_check",
+      "definition": "CHECK ((invite_type = ANY (ARRAY['family'::text, 'baby_friend'::text, 'darin_friend'::text])))"
+    },
+    {
+      "relname": "invite_codes",
+      "conname": "invite_codes_max_uses_check",
+      "definition": "CHECK ((max_uses > 0))"
+    },
+    {
+      "relname": "invite_codes",
+      "conname": "invite_codes_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "invite_codes",
+      "conname": "invite_codes_used_by_fkey",
+      "definition": "FOREIGN KEY (used_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "invite_codes",
+      "conname": "invite_codes_used_count_check",
+      "definition": "CHECK ((used_count >= 0))"
+    },
+    {
+      "relname": "profiles",
+      "conname": "profiles_id_fkey",
+      "definition": "FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "profiles",
+      "conname": "profiles_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "profiles",
+      "conname": "profiles_preferred_language_check",
+      "definition": "CHECK ((preferred_language = ANY (ARRAY['system'::text, 'ko'::text, 'en'::text, 'ja'::text, 'es'::text, 'zh-CN'::text])))"
+    },
+    {
+      "relname": "profiles",
+      "conname": "profiles_residence_country_check",
+      "definition": "CHECK (((residence_country IS NULL) OR (residence_country = ANY (ARRAY['US'::text, 'KR'::text, 'OTHER'::text])))) NOT VALID"
+    },
+    {
+      "relname": "babies",
+      "conname": "babies_created_by_fkey",
+      "definition": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "babies",
+      "conname": "babies_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "baby_members",
+      "conname": "baby_members_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "baby_members",
+      "conname": "baby_members_baby_id_user_id_key",
+      "definition": "UNIQUE (baby_id, user_id)"
+    },
+    {
+      "relname": "baby_members",
+      "conname": "baby_members_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "baby_members",
+      "conname": "baby_members_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_media",
+      "conname": "memory_media_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_media",
+      "conname": "memory_media_check",
+      "definition": "CHECK (((split_part(storage_path, '/'::text, 1) = (baby_id)::text) AND (((split_part(storage_path, '/'::text, 2) = (memory_post_id)::text) AND (split_part(storage_path, '/'::text, 3) <> ''::text)) OR is_temp_media_path(storage_path))))"
+    },
+    {
+      "relname": "memory_media",
+      "conname": "memory_media_height_check",
+      "definition": "CHECK (((height IS NULL) OR (height > 0)))"
+    },
+    {
+      "relname": "memory_media",
+      "conname": "memory_media_media_type_check",
+      "definition": "CHECK ((media_type = ANY (ARRAY['image'::text, 'video'::text])))"
+    },
+    {
+      "relname": "memory_media",
+      "conname": "memory_media_memory_post_id_fkey",
+      "definition": "FOREIGN KEY (memory_post_id) REFERENCES memory_posts(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_media",
+      "conname": "memory_media_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "memory_media",
+      "conname": "memory_media_post_baby_fkey",
+      "definition": "FOREIGN KEY (memory_post_id, baby_id) REFERENCES memory_posts(id, baby_id) ON DELETE CASCADE NOT VALID"
+    },
+    {
+      "relname": "memory_media",
+      "conname": "memory_media_storage_path_key",
+      "definition": "UNIQUE (storage_path)"
+    },
+    {
+      "relname": "memory_media",
+      "conname": "memory_media_upload_status_check",
+      "definition": "CHECK ((upload_status = ANY (ARRAY['uploading'::text, 'ready'::text, 'failed'::text])))"
+    },
+    {
+      "relname": "memory_media",
+      "conname": "memory_media_width_check",
+      "definition": "CHECK (((width IS NULL) OR (width > 0)))"
+    },
+    {
+      "relname": "memory_tags",
+      "conname": "memory_tags_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_tags",
+      "conname": "memory_tags_check",
+      "definition": "CHECK ((((tag_type = 'baby'::text) AND (baby_id IS NOT NULL)) OR ((tag_type = 'family_member'::text) AND (tagged_user_id IS NOT NULL)) OR ((tag_type = 'friend_baby'::text) AND (tagged_baby_id IS NOT NULL)) OR ((tag_type = 'manual_guest'::text) AND (NULLIF(btrim(manual_label), ''::text) IS NOT NULL))))"
+    },
+    {
+      "relname": "memory_tags",
+      "conname": "memory_tags_created_by_fkey",
+      "definition": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "memory_tags",
+      "conname": "memory_tags_memory_post_id_fkey",
+      "definition": "FOREIGN KEY (memory_post_id) REFERENCES memory_posts(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_tags",
+      "conname": "memory_tags_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "memory_tags",
+      "conname": "memory_tags_status_check",
+      "definition": "CHECK ((status = ANY (ARRAY['approved'::text, 'pending'::text, 'rejected'::text])))"
+    },
+    {
+      "relname": "memory_tags",
+      "conname": "memory_tags_tag_type_check",
+      "definition": "CHECK ((tag_type = ANY (ARRAY['baby'::text, 'family_member'::text, 'friend_baby'::text, 'manual_guest'::text])))"
+    },
+    {
+      "relname": "memory_tags",
+      "conname": "memory_tags_tagged_baby_id_fkey",
+      "definition": "FOREIGN KEY (tagged_baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_tags",
+      "conname": "memory_tags_tagged_user_id_fkey",
+      "definition": "FOREIGN KEY (tagged_user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_selected_people",
+      "conname": "memory_selected_people_memory_post_id_fkey",
+      "definition": "FOREIGN KEY (memory_post_id) REFERENCES memory_posts(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_selected_people",
+      "conname": "memory_selected_people_memory_post_id_user_id_key",
+      "definition": "UNIQUE (memory_post_id, user_id)"
+    },
+    {
+      "relname": "memory_selected_people",
+      "conname": "memory_selected_people_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "memory_selected_people",
+      "conname": "memory_selected_people_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_posts",
+      "conname": "memory_posts_author_id_fkey",
+      "definition": "FOREIGN KEY (author_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "memory_posts",
+      "conname": "memory_posts_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_posts",
+      "conname": "memory_posts_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "memory_posts",
+      "conname": "memory_posts_privacy_type_check",
+      "definition": "CHECK ((privacy_type = ANY (ARRAY['only_me'::text, 'family_circle'::text, 'friend_circle'::text, 'tagged_family'::text, 'selected_people'::text])))"
+    },
+    {
+      "relname": "memory_posts",
+      "conname": "memory_posts_status_check",
+      "definition": "CHECK ((status = ANY (ARRAY['posting'::text, 'published'::text, 'failed'::text])))"
+    },
+    {
+      "relname": "diary_entries",
+      "conname": "diary_entries_author_id_fkey",
+      "definition": "FOREIGN KEY (author_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "diary_entries",
+      "conname": "diary_entries_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "diary_entries",
+      "conname": "diary_entries_id_baby_id_key",
+      "definition": "UNIQUE (id, baby_id)"
+    },
+    {
+      "relname": "diary_entries",
+      "conname": "diary_entries_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "diary_media",
+      "conname": "diary_media_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "diary_media",
+      "conname": "diary_media_check",
+      "definition": "CHECK (((split_part(storage_path, '/'::text, 1) = (baby_id)::text) AND (((split_part(storage_path, '/'::text, 2) = (diary_entry_id)::text) AND (split_part(storage_path, '/'::text, 3) <> ''::text)) OR is_temp_media_path(storage_path))))"
+    },
+    {
+      "relname": "diary_media",
+      "conname": "diary_media_diary_entry_id_baby_id_fkey",
+      "definition": "FOREIGN KEY (diary_entry_id, baby_id) REFERENCES diary_entries(id, baby_id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "diary_media",
+      "conname": "diary_media_height_check",
+      "definition": "CHECK (((height IS NULL) OR (height > 0)))"
+    },
+    {
+      "relname": "diary_media",
+      "conname": "diary_media_media_type_check",
+      "definition": "CHECK ((media_type = 'image'::text))"
+    },
+    {
+      "relname": "diary_media",
+      "conname": "diary_media_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "diary_media",
+      "conname": "diary_media_storage_path_key",
+      "definition": "UNIQUE (storage_path)"
+    },
+    {
+      "relname": "diary_media",
+      "conname": "diary_media_upload_status_check",
+      "definition": "CHECK ((upload_status = ANY (ARRAY['uploading'::text, 'ready'::text, 'failed'::text])))"
+    },
+    {
+      "relname": "diary_media",
+      "conname": "diary_media_width_check",
+      "definition": "CHECK (((width IS NULL) OR (width > 0)))"
+    },
+    {
+      "relname": "memory_comments",
+      "conname": "memory_comments_author_id_fkey",
+      "definition": "FOREIGN KEY (author_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "memory_comments",
+      "conname": "memory_comments_body_check",
+      "definition": "CHECK ((NULLIF(btrim(body), ''::text) IS NOT NULL))"
+    },
+    {
+      "relname": "memory_comments",
+      "conname": "memory_comments_comment_type_check",
+      "definition": "CHECK ((comment_type = ANY (ARRAY['text'::text, 'sticker'::text])))"
+    },
+    {
+      "relname": "memory_comments",
+      "conname": "memory_comments_content_check",
+      "definition": "CHECK ((((comment_type = 'text'::text) AND (sticker_id IS NULL) AND (NULLIF(btrim(body), ''::text) IS NOT NULL)) OR ((comment_type = 'sticker'::text) AND (sticker_id IS NOT NULL) AND (NULLIF(btrim(sticker_label), ''::text) IS NOT NULL))))"
+    },
+    {
+      "relname": "memory_comments",
+      "conname": "memory_comments_memory_post_id_fkey",
+      "definition": "FOREIGN KEY (memory_post_id) REFERENCES memory_posts(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_comments",
+      "conname": "memory_comments_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "memory_comments",
+      "conname": "memory_comments_sticker_id_fkey",
+      "definition": "FOREIGN KEY (sticker_id) REFERENCES baby_stickers(id) ON DELETE RESTRICT"
+    },
+    {
+      "relname": "growth_books",
+      "conname": "growth_books_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "growth_books",
+      "conname": "growth_books_created_by_fkey",
+      "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "growth_books",
+      "conname": "growth_books_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "growth_books",
+      "conname": "growth_books_status_check",
+      "definition": "CHECK ((status = ANY (ARRAY['draft'::text, 'ready'::text, 'exported'::text])))"
+    },
+    {
+      "relname": "growth_book_pages",
+      "conname": "growth_book_pages_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "growth_book_pages",
+      "conname": "growth_book_pages_check",
+      "definition": "CHECK (((page_type <> 'diary'::text) OR (diary_entry_id IS NOT NULL)))"
+    },
+    {
+      "relname": "growth_book_pages",
+      "conname": "growth_book_pages_created_by_fkey",
+      "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "growth_book_pages",
+      "conname": "growth_book_pages_diary_entry_id_fkey",
+      "definition": "FOREIGN KEY (diary_entry_id) REFERENCES diary_entries(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "growth_book_pages",
+      "conname": "growth_book_pages_growth_book_id_fkey",
+      "definition": "FOREIGN KEY (growth_book_id) REFERENCES growth_books(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "growth_book_pages",
+      "conname": "growth_book_pages_id_baby_id_key",
+      "definition": "UNIQUE (id, baby_id)"
+    },
+    {
+      "relname": "growth_book_pages",
+      "conname": "growth_book_pages_page_order_check",
+      "definition": "CHECK ((page_order >= 0))"
+    },
+    {
+      "relname": "growth_book_pages",
+      "conname": "growth_book_pages_page_type_check",
+      "definition": "CHECK ((page_type = ANY (ARRAY['cover'::text, 'diary'::text, 'letter'::text, 'rolling_paper'::text, 'custom'::text])))"
+    },
+    {
+      "relname": "growth_book_pages",
+      "conname": "growth_book_pages_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "growth_book_media",
+      "conname": "growth_book_media_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "growth_book_media",
+      "conname": "growth_book_media_check",
+      "definition": "CHECK (((page_id IS NOT NULL) AND (split_part(storage_path, '/'::text, 1) = (baby_id)::text) AND (split_part(storage_path, '/'::text, 2) = (growth_book_id)::text) AND (split_part(storage_path, '/'::text, 3) = (page_id)::text) AND (split_part(storage_path, '/'::text, 4) <> ''::text)))"
+    },
+    {
+      "relname": "growth_book_media",
+      "conname": "growth_book_media_created_by_fkey",
+      "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "growth_book_media",
+      "conname": "growth_book_media_growth_book_id_fkey",
+      "definition": "FOREIGN KEY (growth_book_id) REFERENCES growth_books(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "growth_book_media",
+      "conname": "growth_book_media_height_check",
+      "definition": "CHECK (((height IS NULL) OR (height > 0)))"
+    },
+    {
+      "relname": "growth_book_media",
+      "conname": "growth_book_media_media_type_check",
+      "definition": "CHECK ((media_type = 'image'::text))"
+    },
+    {
+      "relname": "growth_book_media",
+      "conname": "growth_book_media_page_id_fkey",
+      "definition": "FOREIGN KEY (page_id) REFERENCES growth_book_pages(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "growth_book_media",
+      "conname": "growth_book_media_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "growth_book_media",
+      "conname": "growth_book_media_storage_path_key",
+      "definition": "UNIQUE (storage_path)"
+    },
+    {
+      "relname": "growth_book_media",
+      "conname": "growth_book_media_width_check",
+      "definition": "CHECK (((width IS NULL) OR (width > 0)))"
+    },
+    {
+      "relname": "growth_book_comments",
+      "conname": "growth_book_comments_author_id_fkey",
+      "definition": "FOREIGN KEY (author_id) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "growth_book_comments",
+      "conname": "growth_book_comments_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "growth_book_comments",
+      "conname": "growth_book_comments_body_check",
+      "definition": "CHECK ((NULLIF(btrim(body), ''::text) IS NOT NULL))"
+    },
+    {
+      "relname": "growth_book_comments",
+      "conname": "growth_book_comments_comment_type_check",
+      "definition": "CHECK ((comment_type = ANY (ARRAY['page_comment'::text, 'rolling_paper'::text, 'letter'::text])))"
+    },
+    {
+      "relname": "growth_book_comments",
+      "conname": "growth_book_comments_diary_entry_id_fkey",
+      "definition": "FOREIGN KEY (diary_entry_id) REFERENCES diary_entries(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "growth_book_comments",
+      "conname": "growth_book_comments_growth_book_id_fkey",
+      "definition": "FOREIGN KEY (growth_book_id) REFERENCES growth_books(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "growth_book_comments",
+      "conname": "growth_book_comments_page_id_fkey",
+      "definition": "FOREIGN KEY (page_id) REFERENCES growth_book_pages(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "growth_book_comments",
+      "conname": "growth_book_comments_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "memory_friends",
+      "conname": "memory_friends_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "memory_friends",
+      "conname": "memory_friends_baby_id_user_id_key",
+      "definition": "UNIQUE (baby_id, user_id)"
+    },
+    {
+      "relname": "memory_friends",
+      "conname": "memory_friends_invited_by_fkey",
+      "definition": "FOREIGN KEY (invited_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "relname": "memory_friends",
+      "conname": "memory_friends_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "memory_friends",
+      "conname": "memory_friends_status_check",
+      "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'active'::text, 'revoked'::text])))"
+    },
+    {
+      "relname": "memory_friends",
+      "conname": "memory_friends_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "baby_caution_foods",
+      "conname": "baby_caution_foods_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "baby_caution_foods",
+      "conname": "baby_caution_foods_created_by_fkey",
+      "definition": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE RESTRICT"
+    },
+    {
+      "relname": "baby_caution_foods",
+      "conname": "baby_caution_foods_food_name_check",
+      "definition": "CHECK (((char_length(btrim(food_name)) >= 1) AND (char_length(btrim(food_name)) <= 40)))"
+    },
+    {
+      "relname": "baby_caution_foods",
+      "conname": "baby_caution_foods_normalized_food_name_check",
+      "definition": "CHECK (((char_length(btrim(normalized_food_name)) >= 1) AND (char_length(btrim(normalized_food_name)) <= 40)))"
+    },
+    {
+      "relname": "baby_caution_foods",
+      "conname": "baby_caution_foods_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "baby_caution_foods",
+      "conname": "baby_caution_foods_source_check",
+      "definition": "CHECK ((source = ANY (ARRAY['preset'::text, 'custom'::text])))"
+    },
+    {
+      "relname": "user_friendships",
+      "conname": "user_friendships_check",
+      "definition": "CHECK ((requester_id <> receiver_id))"
+    },
+    {
+      "relname": "user_friendships",
+      "conname": "user_friendships_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "user_friendships",
+      "conname": "user_friendships_receiver_id_fkey",
+      "definition": "FOREIGN KEY (receiver_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "user_friendships",
+      "conname": "user_friendships_requester_id_fkey",
+      "definition": "FOREIGN KEY (requester_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "user_friendships",
+      "conname": "user_friendships_status_check",
+      "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'blocked'::text, 'declined'::text])))"
+    },
+    {
+      "relname": "darin_invite_requests",
+      "conname": "darin_invite_requests_baby_id_fkey",
+      "definition": "FOREIGN KEY (baby_id) REFERENCES babies(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "darin_invite_requests",
+      "conname": "darin_invite_requests_check",
+      "definition": "CHECK ((sender_id <> receiver_id))"
+    },
+    {
+      "relname": "darin_invite_requests",
+      "conname": "darin_invite_requests_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "relname": "darin_invite_requests",
+      "conname": "darin_invite_requests_receiver_id_fkey",
+      "definition": "FOREIGN KEY (receiver_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "darin_invite_requests",
+      "conname": "darin_invite_requests_request_type_check",
+      "definition": "CHECK ((request_type = ANY (ARRAY['family'::text, 'friend'::text])))"
+    },
+    {
+      "relname": "darin_invite_requests",
+      "conname": "darin_invite_requests_sender_id_fkey",
+      "definition": "FOREIGN KEY (sender_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "relname": "darin_invite_requests",
+      "conname": "darin_invite_requests_status_check",
+      "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'declined'::text, 'cancelled'::text])))"
+    }
+  ],
+  "triggers": [
+    {
+      "relname": "care_logs",
+      "tgname": "care_logs_set_updated_at",
+      "definition": "CREATE TRIGGER care_logs_set_updated_at BEFORE UPDATE ON public.care_logs FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "care_logs",
+      "tgname": "care_logs_sync_care_reminders",
+      "definition": "CREATE TRIGGER care_logs_sync_care_reminders AFTER INSERT OR DELETE OR UPDATE ON public.care_logs FOR EACH ROW EXECUTE FUNCTION on_care_log_sync_reminders()"
+    },
+    {
+      "relname": "growth_records",
+      "tgname": "growth_records_set_updated_at",
+      "definition": "CREATE TRIGGER growth_records_set_updated_at BEFORE UPDATE ON public.growth_records FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "invite_codes",
+      "tgname": "invite_codes_set_updated_at",
+      "definition": "CREATE TRIGGER invite_codes_set_updated_at BEFORE UPDATE ON public.invite_codes FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "profiles",
+      "tgname": "profiles_set_updated_at",
+      "definition": "CREATE TRIGGER profiles_set_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "profiles",
+      "tgname": "profiles_validate_darin_id",
+      "definition": "CREATE TRIGGER profiles_validate_darin_id BEFORE INSERT OR UPDATE OF darin_id ON public.profiles FOR EACH ROW EXECUTE FUNCTION validate_profile_darin_id()"
+    },
+    {
+      "relname": "babies",
+      "tgname": "babies_set_updated_at",
+      "definition": "CREATE TRIGGER babies_set_updated_at BEFORE UPDATE ON public.babies FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "baby_members",
+      "tgname": "baby_members_care_reminder_default",
+      "definition": "CREATE TRIGGER baby_members_care_reminder_default AFTER INSERT OR UPDATE OF status, permission_role ON public.baby_members FOR EACH ROW EXECUTE FUNCTION on_baby_member_care_reminder_default()"
+    },
+    {
+      "relname": "baby_members",
+      "tgname": "baby_members_role_guard",
+      "definition": "CREATE TRIGGER baby_members_role_guard BEFORE UPDATE ON public.baby_members FOR EACH ROW EXECUTE FUNCTION baby_member_role_guard()"
+    },
+    {
+      "relname": "baby_members",
+      "tgname": "baby_members_set_updated_at",
+      "definition": "CREATE TRIGGER baby_members_set_updated_at BEFORE UPDATE ON public.baby_members FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "memory_posts",
+      "tgname": "memory_posts_identity_unchanged",
+      "definition": "CREATE TRIGGER memory_posts_identity_unchanged BEFORE UPDATE ON public.memory_posts FOR EACH ROW EXECUTE FUNCTION memory_post_identity_unchanged()"
+    },
+    {
+      "relname": "memory_posts",
+      "tgname": "memory_posts_set_updated_at",
+      "definition": "CREATE TRIGGER memory_posts_set_updated_at BEFORE UPDATE ON public.memory_posts FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "diary_entries",
+      "tgname": "diary_entries_identity_unchanged",
+      "definition": "CREATE TRIGGER diary_entries_identity_unchanged BEFORE UPDATE ON public.diary_entries FOR EACH ROW EXECUTE FUNCTION diary_entry_identity_unchanged()"
+    },
+    {
+      "relname": "diary_entries",
+      "tgname": "diary_entries_set_updated_at",
+      "definition": "CREATE TRIGGER diary_entries_set_updated_at BEFORE UPDATE ON public.diary_entries FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "memory_comments",
+      "tgname": "memory_comments_identity_unchanged",
+      "definition": "CREATE TRIGGER memory_comments_identity_unchanged BEFORE UPDATE ON public.memory_comments FOR EACH ROW EXECUTE FUNCTION memory_comment_identity_unchanged()"
+    },
+    {
+      "relname": "memory_comments",
+      "tgname": "memory_comments_set_updated_at",
+      "definition": "CREATE TRIGGER memory_comments_set_updated_at BEFORE UPDATE ON public.memory_comments FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "growth_books",
+      "tgname": "growth_books_identity_guard",
+      "definition": "CREATE TRIGGER growth_books_identity_guard BEFORE UPDATE ON public.growth_books FOR EACH ROW EXECUTE FUNCTION growth_book_identity_guard()"
+    },
+    {
+      "relname": "growth_books",
+      "tgname": "growth_books_set_updated_at",
+      "definition": "CREATE TRIGGER growth_books_set_updated_at BEFORE UPDATE ON public.growth_books FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "growth_book_pages",
+      "tgname": "growth_book_pages_identity_guard",
+      "definition": "CREATE TRIGGER growth_book_pages_identity_guard BEFORE UPDATE ON public.growth_book_pages FOR EACH ROW EXECUTE FUNCTION growth_book_page_identity_guard()"
+    },
+    {
+      "relname": "growth_book_pages",
+      "tgname": "growth_book_pages_set_updated_at",
+      "definition": "CREATE TRIGGER growth_book_pages_set_updated_at BEFORE UPDATE ON public.growth_book_pages FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "growth_book_comments",
+      "tgname": "growth_book_comments_set_updated_at",
+      "definition": "CREATE TRIGGER growth_book_comments_set_updated_at BEFORE UPDATE ON public.growth_book_comments FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "memory_friends",
+      "tgname": "memory_friends_set_updated_at",
+      "definition": "CREATE TRIGGER memory_friends_set_updated_at BEFORE UPDATE ON public.memory_friends FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "relname": "darin_invite_requests",
+      "tgname": "darin_invite_requests_set_updated_at",
+      "definition": "CREATE TRIGGER darin_invite_requests_set_updated_at BEFORE UPDATE ON public.darin_invite_requests FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    }
+  ]
+}

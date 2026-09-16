@@ -174,15 +174,17 @@ try {
 
   const posts = [];
   for (const [actor, babyId, label] of [[a, babyA, "A"], [d, babyB, "B"]]) {
-    const { data, error } = await actor.sb.from("memory_posts").insert({
+    const postId = crypto.randomUUID();
+    const { error } = await actor.sb.from("memory_posts").insert({
+      id: postId,
       baby_id: babyId,
       author_id: actor.user.id,
       caption: `B04a synthetic ${label}`,
       privacy_type: "family_circle",
       status: "published",
-    }).select("id").single();
-    if (error || !data) throw error ?? new Error("memory post fixture failed");
-    posts.push(data.id);
+    });
+    if (error) throw error;
+    posts.push(postId);
   }
   const [postA, postB] = posts;
   const mediaAResult = await insertMedia(a, babyA, postA);

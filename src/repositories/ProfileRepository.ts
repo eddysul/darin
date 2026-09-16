@@ -31,10 +31,9 @@ function extensionForMime(mimeType?: string): string {
 }
 
 function rowToDisplay(
-  row: Pick<
-    ProfileRow,
-    "id" | "display_name" | "nickname" | "avatar_storage_path" | "default_relation"
-  >,
+  row: Pick<ProfileRow, "id" | "nickname" | "avatar_storage_path" | "default_relation"> & {
+    display_name: string | null;
+  },
   avatarUrl?: string,
 ): DisplayProfile {
   return {
@@ -64,13 +63,16 @@ export const ProfileRepository = {
     const ids = [...new Set(userIds.filter(Boolean))];
     if (!ids.length) return [];
     const sb = requireSupabase();
-    const { data, error } = await sb
-      .from("profiles")
-      .select("id,display_name,nickname,avatar_storage_path,default_relation")
-      .in("id", ids);
+    const { data, error } = await sb.rpc("list_visible_profile_display", { p_user_ids: ids });
     if (error) throw error;
     return Promise.all((data ?? []).map(async (row) => rowToDisplay(
-      row,
+      {
+        id: row.user_id,
+        display_name: row.display_name,
+        nickname: row.nickname,
+        avatar_storage_path: row.avatar_storage_path,
+        default_relation: row.default_relation,
+      },
       row.avatar_storage_path
         ? await this.createProfileAvatarSignedUrl(row.avatar_storage_path).catch(() => undefined)
         : undefined,
@@ -221,17 +223,20 @@ export const ProfileRepository = {
     if (membersError) throw membersError;
     const ids = [...new Set((members ?? []).map((row) => row.user_id).filter(Boolean))];
     if (!ids.length) return [];
-    const { data, error } = await sb
-      .from("profiles")
-      .select("id, display_name, nickname, avatar_storage_path, default_relation, avatar_url, preferred_language, created_at, updated_at")
-      .in("id", ids);
+    const { data, error } = await sb.rpc("list_visible_profile_display", { p_user_ids: ids });
     if (error) throw error;
     return Promise.all(
       (data ?? []).map(async (row) => {
         const avatarUrl = row.avatar_storage_path
           ? await this.createProfileAvatarSignedUrl(row.avatar_storage_path).catch(() => undefined)
           : undefined;
-        return rowToDisplay(row, avatarUrl);
+        return rowToDisplay({
+          id: row.user_id,
+          display_name: row.display_name,
+          nickname: row.nickname,
+          avatar_storage_path: row.avatar_storage_path,
+          default_relation: row.default_relation,
+        }, avatarUrl);
       }),
     );
   },
