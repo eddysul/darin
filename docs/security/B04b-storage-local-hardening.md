@@ -325,12 +325,10 @@ this backend rollout. A compatible replacement was prepared without weakening
 the Storage boundary: Production iOS build 20 was built from
 `9f5461341474dec8b92bdf216380a2c9af142695` and successfully uploaded to App Store
 Connect. EAS build `d0a91b3e-108d-44ca-bd33-78af8dae61ff` finished and submission
-`b29be1fa-e328-42a9-946e-f696a527d92e` finished on 2026-09-16. Apple processing,
-TestFlight/App Store distribution and installed-client uptake remain external
-release operations; old installed binaries must update to use the new contract.
-Until distribution and an installed-client compatibility smoke are confirmed,
-the operational P1 remains open. Successful App Store Connect upload alone is
-not evidence that users received build 20.
+`b29be1fa-e328-42a9-946e-f696a527d92e` finished on 2026-09-16. Distribution and
+installed-client compatibility were then manually confirmed by the release
+owner. The operational P1 is closed without restoring native signing. Old
+installed binaries must still update to use the new contract.
 
 Remaining P2/operational work: classify existing orphan/missing refs; review
 metadata-only vs byte existence; monitor the deployed cleanup schedule and
@@ -356,4 +354,6 @@ Deployment provenance:
   rollback. The pre-deployment read-only inventory classified these as stale,
   unattached temp objects. No linked object was queued by this sweep.
 
-**B0.4b SERVER SECURITY PASS — CLIENT ROLLOUT P1 OPEN**
+**B0.4b STORAGE SECURITY CLOSED — QA AND PRODUCTION PASS**
+
+`NEXT: B0.4c NOTIFICATION SECURITY`
