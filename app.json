@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.darin.childcare",
-      "buildNumber": "19",
+      "buildNumber": "20",
       "usesAppleSignIn": true,
       "splash": {
         "image": "./assets/darin-logo.png",
