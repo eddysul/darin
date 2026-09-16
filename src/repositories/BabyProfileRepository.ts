@@ -1,7 +1,10 @@
 import type { BabyRow } from "../types/database";
 import type { BabyProfile, UpdateBabyProfileInput, UploadAvatarInput } from "../types/profileSettings";
 import { MAX_PROFILE_AVATAR_BYTES } from "../types/profileSettings";
-import { requireSupabase } from "../lib/supabase";
+import { captureSessionScope, requireSupabase } from "../lib/supabase";
+import { createPrivateMediaSignedUrl } from "../utils/privateMediaUrl";
+import { retireUnattachedStorageUpload } from "../utils/privateMediaUrl";
+import { createId } from "../utils/id";
 import { AuthRepository } from "./AuthRepository";
 
 const BUCKET = "profile-media";
@@ -48,8 +51,10 @@ function rowToBabyProfile(row: BabyRow, avatarUrl?: string): BabyProfile {
 
 export const BabyProfileRepository = {
   async getBabyProfile(babyId: string): Promise<BabyProfile | null> {
-    const sb = requireSupabase();
-    await AuthRepository.ensureSession();
+    const scope = await captureSessionScope();
+    const sb = scope.client;
+    const session = await AuthRepository.ensureSession();
+    if (session.user.id !== scope.accountId) throw new BabyProfileError("permission_denied");
     const { data, error } = await sb.from("babies").select("*").eq("id", babyId).maybeSingle();
     if (error) throw error;
     if (!data) return null;
@@ -113,19 +118,22 @@ export const BabyProfileRepository = {
     if (input.fileSize !== undefined && input.fileSize > MAX_PROFILE_AVATAR_BYTES) {
       throw new BabyProfileError("photo_too_large");
     }
-    const sb = requireSupabase();
-    await AuthRepository.ensureSession();
+    const scope = await captureSessionScope();
+    const sb = scope.client;
+    const session = await AuthRepository.ensureSession();
+    if (session.user.id !== scope.accountId) throw new BabyProfileError("permission_denied");
     const ext = extensionForMime(input.mimeType);
-    const storagePath = `babies/${babyId}/avatar.${ext}`;
+    const storagePath = `babies/${babyId}/${createId()}.${ext}`;
     const response = await fetch(input.uri);
     const bytes = await response.arrayBuffer();
     if (!bytes.byteLength) throw new BabyProfileError("photo_upload_failed");
     if (bytes.byteLength > MAX_PROFILE_AVATAR_BYTES) {
       throw new BabyProfileError("photo_too_large");
     }
+    await scope.assertCurrent();
     const { error: uploadError } = await sb.storage.from(BUCKET).upload(storagePath, bytes, {
       contentType: input.mimeType ?? "image/jpeg",
-      upsert: true,
+      upsert: false,
     });
     if (uploadError) {
       if (/policy|permission|row-level/i.test(uploadError.message)) {
@@ -133,6 +141,7 @@ export const BabyProfileRepository = {
       }
       throw new BabyProfileError("photo_upload_failed");
     }
+    await scope.assertCurrent();
     const { data, error } = await sb
       .from("babies")
       .update({
@@ -143,7 +152,7 @@ export const BabyProfileRepository = {
       .select("*")
       .single();
     if (error) {
-      await sb.storage.from(BUCKET).remove([storagePath]);
+      await retireUnattachedStorageUpload(sb, BUCKET, storagePath);
       if (error.code === "42501" || /permission|policy/i.test(error.message)) {
         throw new BabyProfileError("permission_denied");
       }
@@ -153,10 +162,9 @@ export const BabyProfileRepository = {
     return rowToBabyProfile(data, avatarUrl);
   },
 
-  async createBabyAvatarSignedUrl(storagePath: string, expiresInSeconds = SIGNED_URL_TTL_SECONDS): Promise<string> {
-    const sb = requireSupabase();
-    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(storagePath, expiresInSeconds);
-    if (error || !data?.signedUrl) throw error ?? new BabyProfileError("photo_load_failed");
-    return data.signedUrl;
+  async createBabyAvatarSignedUrl(storagePath: string, _expiresInSeconds = SIGNED_URL_TTL_SECONDS): Promise<string> {
+    const match = storagePath.match(/^babies\/([0-9a-f-]{36})\/(?:avatar|[0-9a-f-]{36})\.(?:jpg|jpeg|png|heic|heif|webp)$/i);
+    if (!match) throw new BabyProfileError("photo_load_failed");
+    return createPrivateMediaSignedUrl("baby_avatar", match[1]);
   },
 };

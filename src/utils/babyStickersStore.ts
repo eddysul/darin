@@ -12,7 +12,6 @@ import { reportStorageIssue } from "./storageIssues";
 import {
   isValidLocalDataScope,
   localDataScopeId,
-  readScopedWithLegacyMigration,
   scopedStorageKey,
   type LocalDataScope,
 } from "./scopedLocalStorage";
@@ -118,19 +117,13 @@ export async function hydrateBabyStickers(scope: LocalDataScope | null, force = 
     const requestedScopeId = nextScopeId;
     hydratePromise = (async () => {
       try {
-        const result = await readScopedWithLegacyMigration({
-          baseKey: STORAGE_KEY,
-          scope,
-          parse: (raw) => normalize(JSON.parse(raw)),
-          serialize: JSON.stringify,
-          merge: (scoped, legacy) => {
-            const byId = new Map(legacy.map((item) => [item.id, { ...item, babyId: scope.babyId }]));
-            for (const item of scoped ?? []) byId.set(item.id, item);
-            return [...byId.values()];
-          },
-        });
+        // The legacy global sticker cache has no verifiable account/baby owner.
+        // Never claim or relabel its local file references for the current login.
+        await qaStorage.removeItem(STORAGE_KEY);
+        const scopedRaw = await qaStorage.getItem(scopedStorageKey(STORAGE_KEY, scope));
+        const scopedValue = scopedRaw ? normalize(JSON.parse(scopedRaw)) : null;
         if (activeScopeId !== requestedScopeId) return false;
-        memory = result.value;
+        memory = scopedValue;
         hydrated = true;
         return true;
       } catch {

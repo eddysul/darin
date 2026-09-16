@@ -34,6 +34,7 @@ import { MemoryPeoplePicker } from "./MemoryPeoplePicker";
 import { MemoryPrivacyPicker } from "./MemoryPrivacyPicker";
 import type { BabyRow } from "../../types/database";
 import { useLanguage } from "../../LanguageContext";
+import { useBabyLog } from "../../context/BabyLogContext";
 
 const MAX_MEMORY_PHOTOS = 5;
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
@@ -72,6 +73,7 @@ export function MemoryUploadModal({
 }) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
+  const { logAuthor } = useBabyLog();
   const sessionIdRef = useRef(createUploadSessionId());
   const postIdRef = useRef(createId());
   const postedRef = useRef(false);
@@ -152,6 +154,7 @@ export function MemoryUploadModal({
       });
       if (result.canceled) return;
       enqueuePickedPhotos({
+        accountId: logAuthor.userId,
         babyId,
         bucket: "memories",
         sessionId: sessionIdRef.current,

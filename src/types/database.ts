@@ -852,6 +852,14 @@ export type Database = {
         Args: { p_baby_id: string; p_friend_user_id: string };
         Returns: MemoryFriendRow;
       };
+      verify_owned_storage_upload: {
+        Args: { p_bucket: string; p_path: string };
+        Returns: boolean;
+      };
+      retire_unattached_storage_upload: {
+        Args: { p_bucket: string; p_path: string };
+        Returns: boolean;
+      };
     };
     Enums: {
       permission_role: PermissionRole;

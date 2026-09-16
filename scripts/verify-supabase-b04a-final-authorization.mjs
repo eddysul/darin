@@ -10,6 +10,7 @@ const accounts = await createQaAccounts([
 const [admin, editor, viewer, removed, friend, outsider, otherAdmin, deletedActor] = accounts;
 const service = createAdminClient();
 const babyIds = [];
+const storageObjects = [];
 let deletedActorRemoved = false;
 
 function assert(condition, message) {
@@ -66,6 +67,13 @@ async function setMember(actor, babyId, account, values) {
   const result = await actor.sb.from("baby_members").update(values)
     .eq("baby_id", babyId).eq("user_id", account.user.id).select("id");
   if (result.error || result.data?.length !== 1) throw result.error ?? new Error("membership update failed");
+}
+
+async function uploadGrowthFixture(actor, path) {
+  const pixel=Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=","base64"));
+  const result=await actor.sb.storage.from("growth-book-media").upload(path,pixel,{contentType:"image/png",upsert:false});
+  if(result.error) throw result.error;
+  storageObjects.push(["growth-book-media",path]);
 }
 
 async function insertDiary(actor, babyId, body) {
@@ -237,9 +245,11 @@ try {
     content_json: { fixture: true }, created_by: editor.user.id,
   });
   for (const result of [pageInsertOne, pageInsertTwo, hiddenPageInsert]) if (result.error) throw result.error;
+  const mediaOnePath=`${babyOne}/${bookOne}/${pageOne}/${mediaOne}.png`;
+  await uploadGrowthFixture(editor,mediaOnePath);
   const mediaInsert = await editor.sb.from("growth_book_media").insert({
     id: mediaOne, growth_book_id: bookOne, page_id: pageOne, baby_id: babyOne,
-    storage_path: `${babyOne}/${bookOne}/${pageOne}/${mediaOne}.png`, media_type: "image", created_by: editor.user.id,
+    storage_path: mediaOnePath, media_type: "image", created_by: editor.user.id,
   });
   if (mediaInsert.error) throw mediaInsert.error;
   const commentInsert = await editor.sb.from("growth_book_comments").insert({
@@ -351,9 +361,11 @@ try {
     diary_entry_id: cleanupDiary, created_by: deletedActor.user.id,
   });
   if (cleanupPageResult.error) throw cleanupPageResult.error;
+  const cleanupMediaPath=`${cleanupBaby}/${cleanupBook}/${cleanupPage}/${cleanupMedia}.png`;
+  await uploadGrowthFixture(deletedActor,cleanupMediaPath);
   const cleanupMediaResult = await deletedActor.sb.from("growth_book_media").insert({
     id: cleanupMedia, growth_book_id: cleanupBook, page_id: cleanupPage, baby_id: cleanupBaby,
-    storage_path: `${cleanupBaby}/${cleanupBook}/${cleanupPage}/${cleanupMedia}.png`,
+    storage_path: cleanupMediaPath,
     media_type: "image", created_by: deletedActor.user.id,
   });
   if (cleanupMediaResult.error) throw cleanupMediaResult.error;
@@ -385,6 +397,9 @@ try {
 
   console.log("B0.4a final authorization QA integrated attack regression passed");
 } finally {
+  for(const [bucket,path] of storageObjects) {
+    try { await service.storage.from(bucket).remove([path]); } catch {}
+  }
   await cleanupBabies(babyIds).catch((error) => {
     console.error(`QA fixture baby cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
   });

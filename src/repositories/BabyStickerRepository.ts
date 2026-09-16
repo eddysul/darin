@@ -1,4 +1,4 @@
-import { requireSupabase } from "../lib/supabase";
+import { captureSessionScope, requireSupabase } from "../lib/supabase";
 import type { BabyStickerRow, Json } from "../types/database";
 import type { BabySticker } from "../types/babySticker";
 import {
@@ -10,13 +10,16 @@ import {
 } from "../types/babySticker";
 import { mergeBabyStickerLists, withLocalStickerAssets } from "../utils/babyStickersStore";
 import { qaStorage } from "../utils/qaStorage";
+import { createPrivateMediaSignedUrl } from "../utils/privateMediaUrl";
+import { retireUnattachedStorageUpload } from "../utils/privateMediaUrl";
+import { createId } from "../utils/id";
 import { scopedStorageKey, type LocalDataScope } from "../utils/scopedLocalStorage";
 import { STORAGE_KEYS } from "../utils/storageKeys";
 import { AuthRepository } from "./AuthRepository";
 
 const BUCKET = "baby-stickers";
 const MAX_STICKER_BYTES = 10 * 1024 * 1024;
-const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24;
+const SIGNED_URL_TTL_SECONDS = 180;
 const STICKER_COLUMNS = "id,baby_id,created_by,label,storage_path,source,metadata,created_at,updated_at,deleted_at";
 
 type StickerMetadata = Pick<
@@ -57,10 +60,7 @@ async function requireUserId(): Promise<string> {
 }
 
 async function signedUrlForRow(row: BabyStickerRow): Promise<string> {
-  const sb = requireSupabase();
-  const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(row.storage_path, SIGNED_URL_TTL_SECONDS);
-  if (error) throw error;
-  return data.signedUrl;
+  return createPrivateMediaSignedUrl("baby_sticker", row.id);
 }
 
 function rowToSticker(row: BabyStickerRow, imageUri: string): BabySticker {
@@ -94,16 +94,10 @@ function rowToSticker(row: BabyStickerRow, imageUri: string): BabySticker {
 
 async function rowsToStickers(rows: BabyStickerRow[]): Promise<BabySticker[]> {
   if (!rows.length) return [];
-  const { data, error } = await requireSupabase().storage
-    .from(BUCKET)
-    .createSignedUrls(rows.map((row) => row.storage_path), SIGNED_URL_TTL_SECONDS);
-  if (error) throw error;
-  const signedUrlByPath = new Map(
-    (data ?? [])
-      .filter((item): item is typeof item & { path: string; signedUrl: string } => Boolean(item.path && item.signedUrl && !item.error))
-      .map((item) => [item.path, item.signedUrl]),
-  );
-  return rows.map((row) => rowToSticker(row, signedUrlByPath.get(row.storage_path) ?? ""));
+  return Promise.all(rows.map(async (row) => rowToSticker(
+    row,
+    await createPrivateMediaSignedUrl("baby_sticker", row.id).catch(() => ""),
+  )));
 }
 
 export const BabyStickerRepository = {
@@ -112,13 +106,11 @@ export const BabyStickerRepository = {
     // The table lookup and Storage policy both enforce sticker visibility.
     const { data: row, error: rowError } = await sb
       .from("baby_stickers")
-      .select("storage_path")
+      .select("id, storage_path")
       .eq("storage_path", storagePath)
       .single();
     if (rowError || !row) throw rowError ?? new Error("Sticker not found or not accessible.");
-    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
-    if (error) throw error;
-    return data.signedUrl;
+    return createPrivateMediaSignedUrl("baby_sticker", row.id);
   },
 
   async listByBabyId(babyId: string): Promise<BabySticker[]> {
@@ -156,19 +148,23 @@ export const BabyStickerRepository = {
   },
 
   async uploadSticker(sticker: BabySticker, source = "app"): Promise<BabySticker> {
-    const sb = requireSupabase();
+    const scope = await captureSessionScope();
+    const sb = scope.client;
     const createdBy = await requireUserId();
+    if (createdBy !== scope.accountId) throw new Error("Account changed during media operation.");
     const response = await fetch(sticker.finalStickerImageUri || sticker.cutoutImageUri || sticker.originalImageUri);
     const bytes = await response.arrayBuffer();
     if (!bytes.byteLength) throw new Error("스티커 이미지를 읽지 못했어요.");
     if (bytes.byteLength > MAX_STICKER_BYTES) throw new Error("스티커 이미지는 10MB 이하만 저장할 수 있어요.");
-    const storagePath = `${sticker.babyId}/${sticker.id}.png`;
+    await scope.assertCurrent();
+    const storagePath = `${sticker.babyId}/${createId()}.png`;
     const { error: uploadError } = await sb.storage.from(BUCKET).upload(storagePath, bytes, {
       contentType: "image/png",
-      upsert: true,
+      upsert: false,
     });
     if (uploadError) throw uploadError;
 
+    await scope.assertCurrent();
     const { data, error } = await sb.from("baby_stickers").upsert({
       id: sticker.id,
       baby_id: sticker.babyId,
@@ -182,7 +178,7 @@ export const BabyStickerRepository = {
       deleted_at: null,
     }, { onConflict: "id" }).select(STICKER_COLUMNS).single();
     if (error) {
-      await sb.storage.from(BUCKET).remove([storagePath]);
+      await retireUnattachedStorageUpload(sb, BUCKET, storagePath);
       throw error;
     }
     const row = data as BabyStickerRow;

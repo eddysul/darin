@@ -1,11 +1,12 @@
-import { requireSupabase } from "../lib/supabase";
+import { captureSessionScope, requireSupabase, type CapturedSessionScope } from "../lib/supabase";
 import type { DiaryEntry } from "../types/babyLog";
 import type { DiaryMedia, DiaryMigrationResult } from "../types/diary";
 import type { DiaryMediaRow } from "../types/database";
 import { compressImageForUpload } from "../utils/compressImage";
-import { bindJobsToDiaryEntry, findJobByLocalUri } from "../utils/eagerMediaUpload";
+import { bindJobsToDiaryEntry, findJobByLocalUri, requireCompletedEagerPhoto } from "../utils/eagerMediaUpload";
 import { createId } from "../utils/id";
 import { isAllowedMediaStoragePath } from "../utils/tempMediaPath";
+import { createPrivateMediaSignedUrl, retireUnattachedStorageUpload } from "../utils/privateMediaUrl";
 import {
   diaryEntryColumns,
   diaryEntryRowToModel,
@@ -49,27 +50,97 @@ async function requireUserId(): Promise<string> {
 async function signedPhotos(media: DiaryMediaRow[]): Promise<Map<string, string[]>> {
   const result = new Map<string, string[]>();
   const ready = media.filter((row) => !row.upload_status || row.upload_status === "ready");
-  const paths = [...new Set(ready.map((row) => row.storage_path))];
-  if (!paths.length) return result;
-  const { data, error } = await requireSupabase().storage
-    .from(DIARY_MEDIA_BUCKET)
-    .createSignedUrls(paths, DIARY_SIGNED_URL_TTL_SECONDS);
-  if (error) return result;
-  const urlByPath = new Map(
-    (data ?? [])
-      .filter((item): item is typeof item & { path: string; signedUrl: string } => (
-        Boolean(item.path && item.signedUrl && !item.error)
-      ))
-      .map((item) => [item.path, item.signedUrl]),
-  );
-  for (const row of ready) {
-    const url = urlByPath.get(row.storage_path);
+  const resolved = await Promise.all(ready.map(async (row) => ({
+    row,
+    url: await createPrivateMediaSignedUrl("diary_media", row.id).catch(() => undefined),
+  })));
+  for (const { row, url } of resolved) {
     if (!url) continue;
     const current = result.get(row.diary_entry_id) ?? [];
     current.push(url);
     result.set(row.diary_entry_id, current);
   }
   return result;
+}
+
+type AddDiaryMediaInput = {
+  id?: string; diaryEntryId: string; babyId: string; storagePath: string;
+  uploadStatus?: "uploading" | "ready" | "failed"; width?: number; height?: number;
+};
+
+async function addDiaryMediaScoped(input: AddDiaryMediaInput, scope: CapturedSessionScope): Promise<DiaryMedia> {
+  if (!isAllowedMediaStoragePath(input.babyId, input.diaryEntryId, input.storagePath)) {
+    throw new Error("Diary storage path is not allowed for this baby.");
+  }
+  await requireCompletedEagerPhoto(input.id, scope.accountId);
+  await scope.assertCurrent();
+  const { data, error } = await scope.client.from("diary_media").insert({
+    id: input.id ?? createId(), diary_entry_id: input.diaryEntryId,
+    baby_id: input.babyId, storage_path: input.storagePath,
+    media_type: "image", upload_status: "ready",
+    width: input.width ?? null, height: input.height ?? null,
+  }).select("*").single();
+  if (error) throw error;
+  return diaryMediaRowToModel(data);
+}
+
+async function createDiaryScoped(babyId: string, entry: DiaryEntry, scope: CapturedSessionScope): Promise<DiaryEntry> {
+  await scope.assertCurrent();
+  const sb=scope.client;
+  const existing=await sb.from("diary_entries").select("*").eq("baby_id",babyId)
+    .eq("client_generated_id",entry.id).is("deleted_at",null).maybeSingle();
+  if(existing.error) throw existing.error;
+  if(existing.data) return diaryEntryRowToModel(existing.data);
+  const inserted=await sb.from("diary_entries").insert({
+    id:entry.id,baby_id:babyId,author_id:scope.accountId,client_generated_id:entry.id,
+    ...diaryEntryColumns({...entry,babyId}),
+  }).select("*").single();
+  if(inserted.error) {
+    if(inserted.error.code==="23505") {
+      const raced=await sb.from("diary_entries").select("*").eq("baby_id",babyId)
+        .eq("client_generated_id",entry.id).is("deleted_at",null).single();
+      if(!raced.error && raced.data) return diaryEntryRowToModel(raced.data);
+    }
+    throw inserted.error;
+  }
+  return diaryEntryRowToModel(inserted.data);
+}
+
+async function updateDiaryScoped(babyId:string,diaryEntryId:string,entry:DiaryEntry,scope:CapturedSessionScope):Promise<DiaryEntry>{
+  await scope.assertCurrent();
+  const result=await scope.client.from("diary_entries").update(diaryEntryColumns(entry))
+    .eq("baby_id",babyId).eq("id",diaryEntryId).is("deleted_at",null).select("*").single();
+  if(result.error) throw result.error;
+  return diaryEntryRowToModel(result.data);
+}
+
+async function uploadLocalDiaryPhoto(input:{babyId:string;diaryEntryId:string;photoUri:string;width?:number;height?:number},scope:CapturedSessionScope):Promise<DiaryMedia>{
+  const compressed=await compressImageForUpload(input.photoUri,input.width,input.height);
+  const mediaId=createId();
+  const storagePath=`${input.babyId}/${input.diaryEntryId}/${mediaId}.jpg`;
+  const response=await fetch(compressed.uri);
+  const bytes=await response.arrayBuffer();
+  if(bytes.byteLength===0) throw new Error("선택한 일기 사진을 읽지 못했어요.");
+  if(bytes.byteLength>MAX_IMAGE_BYTES) throw new Error("일기 사진은 25MB 이하만 올릴 수 있어요.");
+  await scope.assertCurrent();
+  const uploaded=await scope.client.storage.from(DIARY_MEDIA_BUCKET).upload(storagePath,bytes,{contentType:compressed.mimeType,upsert:false});
+  if(uploaded.error) throw uploaded.error;
+  await scope.assertCurrent();
+  try {
+    return await addDiaryMediaScoped({id:mediaId,diaryEntryId:input.diaryEntryId,babyId:input.babyId,
+      storagePath,uploadStatus:"ready",width:compressed.width,height:compressed.height},scope);
+  } catch(error) {
+    await retireUnattachedStorageUpload(scope.client,DIARY_MEDIA_BUCKET,storagePath);
+    throw error;
+  }
+}
+
+async function deleteDiaryMediaScoped(mediaId:string,scope:CapturedSessionScope):Promise<void>{
+  await scope.assertCurrent();
+  const existing=await scope.client.from("diary_media").select("id").eq("id",mediaId).single();
+  if(existing.error) throw existing.error;
+  const removed=await scope.client.from("diary_media").delete().eq("id",mediaId);
+  if(removed.error) throw removed.error;
 }
 
 export const DiaryRepository = {
@@ -130,58 +201,11 @@ export const DiaryRepository = {
   },
 
   async create(babyId: string, entry: DiaryEntry): Promise<DiaryEntry> {
-    const sb = requireSupabase();
-    const authorId = await requireUserId();
-    const { data: existing, error: lookupError } = await sb
-      .from("diary_entries")
-      .select("*")
-      .eq("baby_id", babyId)
-      .eq("client_generated_id", entry.id)
-      .is("deleted_at", null)
-      .maybeSingle();
-    if (lookupError) throw lookupError;
-    if (existing) return diaryEntryRowToModel(existing);
-    const insertRow = {
-        id: entry.id,
-        baby_id: babyId,
-        author_id: authorId,
-        client_generated_id: entry.id,
-        ...diaryEntryColumns({ ...entry, babyId }),
-      };
-    const { data, error } = await sb
-      .from("diary_entries")
-      .insert(insertRow)
-      .select("*")
-      .single();
-    if (error) {
-      // A concurrent/retried local migration may win the partial unique index race.
-      if (error.code === "23505") {
-        const { data: raced, error: racedError } = await sb
-          .from("diary_entries")
-          .select("*")
-          .eq("baby_id", babyId)
-          .eq("client_generated_id", entry.id)
-          .is("deleted_at", null)
-          .single();
-        if (!racedError && raced) return diaryEntryRowToModel(raced);
-      }
-      throw error;
-    }
-    return diaryEntryRowToModel(data);
+    return createDiaryScoped(babyId,entry,await captureSessionScope());
   },
 
   async update(babyId: string, diaryEntryId: string, entry: DiaryEntry): Promise<DiaryEntry> {
-    const sb = requireSupabase();
-    const { data, error } = await sb
-      .from("diary_entries")
-      .update(diaryEntryColumns(entry))
-      .eq("baby_id", babyId)
-      .eq("id", diaryEntryId)
-      .is("deleted_at", null)
-      .select("*")
-      .single();
-    if (error) throw error;
-    return diaryEntryRowToModel(data);
+    return updateDiaryScoped(babyId,diaryEntryId,entry,await captureSessionScope());
   },
 
   async softDelete(diaryEntryId: string): Promise<void> {
@@ -201,54 +225,24 @@ export const DiaryRepository = {
     return (data ?? []).map(diaryMediaRowToModel);
   },
 
-  async addMedia(input: {
-    id?: string;
-    diaryEntryId: string;
-    babyId: string;
-    storagePath: string;
-    uploadStatus?: "uploading" | "ready" | "failed";
-    width?: number;
-    height?: number;
-  }): Promise<DiaryMedia> {
-    if (!isAllowedMediaStoragePath(input.babyId, input.diaryEntryId, input.storagePath)) {
-      throw new Error("Diary storage path is not allowed for this baby.");
-    }
-    const sb = requireSupabase();
-    const { data, error } = await sb.from("diary_media").insert({
-      id: input.id ?? createId(),
-      diary_entry_id: input.diaryEntryId,
-      baby_id: input.babyId,
-      storage_path: input.storagePath,
-      media_type: "image",
-      upload_status: input.uploadStatus ?? "ready",
-      width: input.width ?? null,
-      height: input.height ?? null,
-    }).select("*").single();
-    if (error) throw error;
-    return diaryMediaRowToModel(data);
+  async addMedia(input: AddDiaryMediaInput): Promise<DiaryMedia> {
+    return addDiaryMediaScoped(input, await captureSessionScope());
   },
 
   async deleteMedia(mediaId: string): Promise<void> {
-    const sb = requireSupabase();
-    const { data, error } = await sb.from("diary_media").select("*").eq("id", mediaId).single();
-    if (error) throw error;
-    const { error: removeError } = await sb.storage.from(DIARY_MEDIA_BUCKET).remove([data.storage_path]);
-    if (removeError) throw removeError;
-    const { error: rowError } = await sb.from("diary_media").delete().eq("id", mediaId);
-    if (rowError) throw rowError;
+    return deleteDiaryMediaScoped(mediaId,await captureSessionScope());
   },
 
-  async createSignedUrl(storagePath: string, expiresInSeconds = DIARY_SIGNED_URL_TTL_SECONDS): Promise<string> {
+  async createSignedUrl(storagePath: string, _expiresInSeconds = DIARY_SIGNED_URL_TTL_SECONDS): Promise<string> {
     const sb = requireSupabase();
     const { data: media, error: mediaError } = await sb
       .from("diary_media")
-      .select("id")
+      .select("id, upload_status")
       .eq("storage_path", storagePath)
       .single();
     if (mediaError || !media) throw mediaError ?? new Error("Diary media not found or not accessible.");
-    const { data, error } = await sb.storage.from(DIARY_MEDIA_BUCKET).createSignedUrl(storagePath, expiresInSeconds);
-    if (error) throw error;
-    return data.signedUrl;
+    if (media.upload_status !== "ready") throw new Error("Diary media is not ready.");
+    return createPrivateMediaSignedUrl("diary_media", media.id);
   },
 
   async uploadLocalPhoto(input: {
@@ -258,33 +252,7 @@ export const DiaryRepository = {
     width?: number;
     height?: number;
   }): Promise<DiaryMedia> {
-    const compressed = await compressImageForUpload(input.photoUri, input.width, input.height);
-    const mediaId = createId();
-    const storagePath = `${input.babyId}/${input.diaryEntryId}/${mediaId}.jpg`;
-    const response = await fetch(compressed.uri);
-    const bytes = await response.arrayBuffer();
-    if (bytes.byteLength === 0) throw new Error("선택한 일기 사진을 읽지 못했어요.");
-    if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("일기 사진은 25MB 이하만 올릴 수 있어요.");
-    const sb = requireSupabase();
-    const { error: uploadError } = await sb.storage.from(DIARY_MEDIA_BUCKET).upload(storagePath, bytes, {
-      contentType: compressed.mimeType,
-      upsert: false,
-    });
-    if (uploadError) throw uploadError;
-    try {
-      return await this.addMedia({
-        id: mediaId,
-        diaryEntryId: input.diaryEntryId,
-        babyId: input.babyId,
-        storagePath,
-        uploadStatus: "ready",
-        width: compressed.width,
-        height: compressed.height,
-      });
-    } catch (error) {
-      await sb.storage.from(DIARY_MEDIA_BUCKET).remove([storagePath]);
-      throw error;
-    }
+    return uploadLocalDiaryPhoto(input,await captureSessionScope());
   },
 
   async replacePhotos(babyId: string, diaryEntryId: string, photoUris: string[]): Promise<number> {
@@ -314,7 +282,8 @@ export const DiaryRepository = {
   },
 
   async createWithPhotos(babyId: string, entry: DiaryEntry): Promise<DiaryWriteResult> {
-    const created = await this.create(babyId, entry);
+    const scope=await captureSessionScope();
+    const created = await createDiaryScoped(babyId, entry,scope);
     const existingMedia = await this.listMedia(created.id);
     let photoUploadFailed = 0;
     const attachedIds: string[] = [];
@@ -329,7 +298,7 @@ export const DiaryRepository = {
           continue;
         }
         try {
-          await this.addMedia({
+          await addDiaryMediaScoped({
             id: job.id,
             diaryEntryId: created.id,
             babyId,
@@ -337,7 +306,7 @@ export const DiaryRepository = {
             uploadStatus: job.status === "uploaded" ? "ready" : job.status === "failed" ? "failed" : "uploading",
             width: job.width,
             height: job.height,
-          });
+          },scope);
           attachedIds.push(job.id);
           if (job.status === "failed") photoUploadFailed += 1;
         } catch {
@@ -346,7 +315,7 @@ export const DiaryRepository = {
         continue;
       }
       try {
-        await this.uploadLocalPhoto({ babyId, diaryEntryId: created.id, photoUri });
+        await uploadLocalDiaryPhoto({ babyId, diaryEntryId: created.id, photoUri },scope);
       } catch {
         photoUploadFailed += 1;
       }
@@ -362,7 +331,8 @@ export const DiaryRepository = {
   },
 
   async updateWithPhotos(babyId: string, entry: DiaryEntry): Promise<DiaryWriteResult> {
-    const updated = await this.update(babyId, entry.id, entry);
+    const scope=await captureSessionScope();
+    const updated = await updateDiaryScoped(babyId, entry.id, entry,scope);
     const existing = await this.listMedia(entry.id);
     const desiredRemotePaths = new Set(entry.photos.map(signedDiaryStoragePath).filter((path): path is string => Boolean(path)));
     const localPhotos = entry.photos.filter((uri) => !isRemotePhoto(uri));
@@ -374,7 +344,7 @@ export const DiaryRepository = {
         desiredRemotePaths.add(job.storagePath);
         if (!existing.some((media) => media.id === job.id || media.storagePath === job.storagePath)) {
           try {
-            uploaded.push(await this.addMedia({
+            uploaded.push(await addDiaryMediaScoped({
               id: job.id,
               diaryEntryId: entry.id,
               babyId,
@@ -382,7 +352,7 @@ export const DiaryRepository = {
               uploadStatus: job.status === "uploaded" ? "ready" : job.status === "failed" ? "failed" : "uploading",
               width: job.width,
               height: job.height,
-            }));
+            },scope));
           } catch {
             return { entry: { ...updated, photos: entry.photos }, photoUploadFailed: 1 };
           }
@@ -391,17 +361,17 @@ export const DiaryRepository = {
         continue;
       }
       try {
-        uploaded.push(await this.uploadLocalPhoto({ babyId, diaryEntryId: entry.id, photoUri }));
+        uploaded.push(await uploadLocalDiaryPhoto({ babyId, diaryEntryId: entry.id, photoUri },scope));
       } catch {
         for (const media of uploaded) {
-          try { await this.deleteMedia(media.id); } catch { /* keep tracked cleanup failures */ }
+          try { await deleteDiaryMediaScoped(media.id,scope); } catch { /* keep tracked cleanup failures */ }
         }
         return { entry: { ...updated, photos: entry.photos }, photoUploadFailed: 1 };
       }
     }
     bindJobsToDiaryEntry(attachedIds, entry.id);
     for (const media of existing) {
-      if (!desiredRemotePaths.has(media.storagePath)) await this.deleteMedia(media.id);
+      if (!desiredRemotePaths.has(media.storagePath)) await deleteDiaryMediaScoped(media.id,scope);
     }
     return { entry: { ...updated, photos: entry.photos }, photoUploadFailed: 0 };
   },

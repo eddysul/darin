@@ -20,7 +20,8 @@ assert.doesNotMatch(listCards, /this\.list(Media|Tags|Comments|Reactions)\(post\
 assert.match(listCards, /\.eq\("baby_id", babyId\)\.eq\("user_id", userId\)\.in\("memory_post_id", postIds\)/);
 assert.match(memories, /query\.range\(offset, offset \+ limit - 1\)/);
 assert.match(memories, /\.order\("created_at", \{ ascending: false \}\)\s*\.order\("id", \{ ascending: false \}\)/);
-assert.match(diary, /createSignedUrls\(paths, DIARY_SIGNED_URL_TTL_SECONDS\)/);
+assert.match(diary, /createPrivateMediaSignedUrl\("diary_media", row\.id\)/);
+assert.doesNotMatch(diary, /\.storage\.from\([^)]*\)\.createSignedUrl/);
 assert.match(diary, /DIARY_HYDRATION_PAGE_SIZE = 100/);
 assert.match(diary, /\.order\("entry_date", \{ ascending: false \}\)\s*\.order\("created_at", \{ ascending: false \}\)\s*\.order\("id", \{ ascending: false \}\)/);
 assert.match(diary, /\.range\(offset, offset \+ DIARY_HYDRATION_PAGE_SIZE - 1\)/);

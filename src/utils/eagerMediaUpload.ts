@@ -1,13 +1,15 @@
-import { requireSupabase } from "../lib/supabase";
+import { requireSupabase, sessionScopedSupabase } from "../lib/supabase";
 import { compressImageForUpload } from "./compressImage";
 import { createId } from "./id";
 import { buildTempMediaPath } from "./tempMediaPath";
+import { retireUnattachedStorageUpload } from "./privateMediaUrl";
 import { isUnownedEagerMedia } from "./eagerMediaOwnership";
 
 export type MediaBucket = "memories" | "diary-media";
 export type PhotoUploadStatus = "local" | "compressing" | "uploading" | "uploaded" | "failed";
 
 export type EagerPhoto = {
+  accountId: string;
   id: string;
   babyId: string;
   bucket: MediaBucket;
@@ -84,6 +86,10 @@ export async function waitForEagerPhotosToSettle(
   const ids = photoUris
     .map((uri) => findJobByLocalUri(uri)?.id)
     .filter((id): id is string => Boolean(id));
+  return waitForEagerPhotoIdsToSettle(ids, timeoutMs);
+}
+
+async function waitForEagerPhotoIdsToSettle(ids: string[], timeoutMs: number): Promise<boolean> {
   if (!ids.length) return true;
 
   const status = () => {
@@ -114,7 +120,23 @@ export async function waitForEagerPhotosToSettle(
   });
 }
 
+/** Attachment is only legal after Storage has acknowledged the object. */
+export async function requireCompletedEagerPhoto(id: string | undefined, expectedAccountId?: string): Promise<void> {
+  const job = id ? jobs.get(id) : undefined;
+  if (!job) return; // Restored uploads are independently verified by the DB trigger.
+  const { data } = await requireSupabase().auth.getSession();
+  if (data.session?.user.id !== job.accountId || (expectedAccountId && job.accountId !== expectedAccountId)) {
+    throw new Error("Upload account changed.");
+  }
+  if (!await waitForEagerPhotoIdsToSettle([job.id], 90_000)) throw new Error("Photo upload is not ready.");
+  const current = await requireSupabase().auth.getSession();
+  if (current.data.session?.user.id !== job.accountId || (expectedAccountId && job.accountId !== expectedAccountId)) {
+    throw new Error("Upload account changed.");
+  }
+}
+
 export function enqueuePickedPhotos(input: {
+  accountId: string;
   babyId: string;
   bucket: MediaBucket;
   sessionId: string;
@@ -127,6 +149,7 @@ export function enqueuePickedPhotos(input: {
     }
     const id = createId();
     const job: Job = {
+      accountId: input.accountId,
       id,
       babyId: input.babyId,
       bucket: input.bucket,
@@ -157,7 +180,7 @@ export function removeEagerPhoto(id: string): void {
   jobs.delete(id);
   notify(sessionId);
   if (job.status === "uploaded" || job.status === "uploading") {
-    void requireSupabase().storage.from(bucket).remove([path]).catch(() => undefined);
+    void removeScopedPaths(job.accountId, bucket, [path]);
   }
 }
 
@@ -167,20 +190,22 @@ export async function discardSession(sessionId: string): Promise<void> {
   ));
   const uploadedPaths = sessionJobs
     .filter((job) => job.status === "uploaded" || job.status === "uploading")
-    .map((job) => ({ bucket: job.bucket, path: job.storagePath }));
+    .map((job) => ({ accountId: job.accountId, bucket: job.bucket, path: job.storagePath }));
   for (const job of sessionJobs) {
     job.generation += 1;
     jobs.delete(job.id);
   }
   notify(sessionId);
-  const byBucket = new Map<MediaBucket, string[]>();
-  for (const item of uploadedPaths) {
-    const paths = byBucket.get(item.bucket) ?? [];
-    paths.push(item.path);
-    byBucket.set(item.bucket, paths);
-  }
-  const sb = requireSupabase();
-  await Promise.all([...byBucket.entries()].map(([bucket, paths]) => sb.storage.from(bucket).remove(paths).catch(() => undefined)));
+  await Promise.all(uploadedPaths.map((item) => removeScopedPaths(item.accountId, item.bucket, [item.path])));
+}
+
+async function removeScopedPaths(accountId: string, bucket: MediaBucket, paths: string[]): Promise<void> {
+  try {
+    const { data } = await requireSupabase().auth.getSession();
+    if (data.session?.user.id !== accountId) return; // Expiry worker owns abandoned uploads.
+    const scoped = sessionScopedSupabase(data.session);
+    await Promise.all(paths.map((path) => retireUnattachedStorageUpload(scoped, bucket, path)));
+  } catch { /* durable expiry sweep retries unclaimed uploads */ }
 }
 
 export function retryEagerPhoto(id: string): void {
@@ -245,6 +270,9 @@ async function runJob(id: string): Promise<void> {
   if (!job) return;
   const generation = job.generation;
   try {
+    const sb = requireSupabase();
+    const { data: initial } = await sb.auth.getSession();
+    if (!initial.session || initial.session.user.id !== job.accountId) throw new Error("Upload account changed.");
     job.status = "compressing";
     notify(job.sessionId);
     const compressed = await compressImageForUpload(job.localUri, job.width, job.height);
@@ -262,18 +290,30 @@ async function runJob(id: string): Promise<void> {
     if (bytes.byteLength === 0) throw new Error("선택한 사진을 읽지 못했어요.");
     if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("사진은 25MB 이하만 올릴 수 있어요.");
 
-    const sb = requireSupabase();
-    await sb.storage.from(job.bucket).remove([job.storagePath]).catch(() => undefined);
-    const { error } = await sb.storage.from(job.bucket).upload(job.storagePath, bytes, {
+    const { data: current } = await sb.auth.getSession();
+    if (!current.session || current.session.user.id !== job.accountId) throw new Error("Upload account changed.");
+    const scoped = sessionScopedSupabase(current.session);
+    const { error } = await scoped.storage.from(job.bucket).upload(job.storagePath, bytes, {
       contentType: job.mimeType,
       upsert: false,
     });
-    if (error) throw error;
+    if (error) {
+      // A lost acknowledgement may leave our immutable upload in place.
+      // Verify current uploader authority server-side instead of deleting or
+      // replacing a possibly linked asset.
+      if ((error as { statusCode?: string }).statusCode !== "409") throw error;
+      const verified = await scoped.rpc("verify_owned_storage_upload", {
+        p_bucket: job.bucket,
+        p_path: job.storagePath,
+      });
+      if (verified.error || verified.data !== true) throw verified.error ?? error;
+    }
+    const { data: completed } = await sb.auth.getSession();
+    if (completed.session?.user.id !== job.accountId) throw new Error("Upload account changed.");
     if (!jobs.has(id) || jobs.get(id)?.generation !== generation) {
       // The compose session was discarded while the upload request was in
-      // flight. A pre-upload remove can race and finish first, so clean up once
-      // more after the upload has definitely completed.
-      await sb.storage.from(job.bucket).remove([job.storagePath]).catch(() => undefined);
+      // flight. Only clean up after completion, with the original account JWT.
+      await removeScopedPaths(job.accountId, job.bucket, [job.storagePath]);
       return;
     }
 
@@ -294,7 +334,9 @@ async function runJob(id: string): Promise<void> {
 async function persistMemoryStatus(job: Job, uploadStatus: "ready" | "failed"): Promise<void> {
   if (!job.memoryPostId) return;
   try {
-    const sb = requireSupabase();
+    const { data: sessionData } = await requireSupabase().auth.getSession();
+    if (sessionData.session?.user.id !== job.accountId) return;
+    const sb = sessionScopedSupabase(sessionData.session);
     await sb.from("memory_media").update({
       upload_status: uploadStatus,
       width: job.width ?? null,
@@ -313,7 +355,9 @@ async function persistMemoryStatus(job: Job, uploadStatus: "ready" | "failed"): 
 async function persistDiaryStatus(job: Job, uploadStatus: "ready" | "failed"): Promise<void> {
   if (!job.diaryEntryId) return;
   try {
-    const sb = requireSupabase();
+    const { data: sessionData } = await requireSupabase().auth.getSession();
+    if (sessionData.session?.user.id !== job.accountId) return;
+    const sb = sessionScopedSupabase(sessionData.session);
     await sb.from("diary_media").update({
       upload_status: uploadStatus,
       width: job.width ?? null,

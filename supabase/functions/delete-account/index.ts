@@ -1,4 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "npm:@supabase/supabase-js@2.110.8";
+import { drainStorageCleanup } from "../_shared/storageCleanup.ts";
 
 const jsonHeaders = {
   "Content-Type": "application/json",
@@ -53,47 +54,43 @@ Deno.serve(async (request) => {
   }
   if (confirmationText !== "삭제") return json(400, { error: "Confirmation text does not match" });
 
-  // Remove private media belonging only to babies that will be deleted. Shared
-  // baby media must remain available to the other active family members.
-  const { data: memberships, error: membershipsError } = await adminClient
-    .from("baby_members").select("baby_id").eq("user_id", userData.user.id);
-  if (membershipsError) return json(500, { error: "Account membership lookup failed", retryable: true });
-  const babyIds = [...new Set((memberships ?? []).map((row) => row.baby_id))];
-  const soloBabyIds: string[] = [];
-  for (const babyId of babyIds) {
-    const { count, error } = await adminClient.from("baby_members").select("id", { count: "exact", head: true })
-      .eq("baby_id", babyId).neq("user_id", userData.user.id).eq("status", "active");
-    if (error) return json(500, { error: "Shared data ownership check failed", retryable: true });
-    if ((count ?? 0) === 0) soloBabyIds.push(babyId);
-  }
-  if (soloBabyIds.length) {
-    const mediaSources = [
-      { table: "diary_media", bucket: "diary-media" },
-      { table: "growth_book_media", bucket: "growth-book-media" },
-      { table: "memory_media", bucket: "memories" },
-    ] as const;
-    for (const source of mediaSources) {
-      const { data: rows, error } = await adminClient.from(source.table).select("storage_path").in("baby_id", soloBabyIds);
-      if (error) return json(500, { error: "Account media lookup failed", retryable: true });
-      const paths = (rows ?? []).map((row) => row.storage_path).filter(Boolean);
-      if (paths.length) {
-        const { error: removeError } = await adminClient.storage.from(source.bucket).remove(paths);
-        if (removeError) return json(500, { error: "Account media cleanup failed", retryable: true });
-      }
-    }
-  }
-
+  // B0.4a determines which DB resources are actually deleted. Transactional
+  // deletion triggers enqueue only those resources; never delete bytes using
+  // a pre-deletion membership snapshot that may have become stale.
   const { error: cleanupError } = await userClient.rpc("prepare_account_deletion");
   if (cleanupError) {
-    console.error("account cleanup failed", cleanupError);
+    console.error("account cleanup failed");
     return json(500, { error: "Account data cleanup failed", retryable: true });
   }
 
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(userData.user.id);
   if (deleteError) {
-    console.error("auth user deletion failed", deleteError);
+    console.error("auth user deletion failed");
     return json(500, { error: "Auth account deletion failed", retryable: true });
   }
 
-  return json(200, { deleted: true, soloBabiesDeleted: soloBabyIds.length });
+  let mediaCleanupPending = true;
+  try {
+    const result = await drainStorageCleanup({
+      claim: async () => {
+        const { data, error } = await adminClient.rpc("claim_media_cleanup", { p_requested_by: userData.user.id, p_limit: 100 });
+        if (error) throw error;
+        return data ?? [];
+      },
+      remove: async (bucket, path) => {
+        const { error } = await adminClient.storage.from(bucket).remove([path]);
+        if (error) throw error;
+      },
+      finish: async (intent) => {
+        const { data, error } = await adminClient.rpc("finish_media_cleanup", {
+          p_bucket: intent.bucket_id, p_path: intent.storage_path, p_lease: intent.lease_id,
+        });
+        if (error) throw error;
+        return data === true;
+      },
+    });
+    // Bounded request work; >100 or crashed requests are drained by maintenance.
+    mediaCleanupPending = result.pending > 0 || result.completed === 100;
+  } catch { /* durable intents survive account deletion */ }
+  return json(200, { deleted: true, mediaCleanupPending });
 });

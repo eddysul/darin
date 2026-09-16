@@ -393,6 +393,7 @@ export function DiaryComposeModal({
       if (!result.canceled && result.assets.length > 0) {
         setPhotoError("");
         enqueuePickedPhotos({
+          accountId: logAuthor.userId,
           babyId: activeBabyId,
           bucket: "diary-media",
           sessionId: sessionIdRef.current,

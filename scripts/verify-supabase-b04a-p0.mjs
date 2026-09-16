@@ -76,6 +76,12 @@ function mediaPath(babyId, postId) {
 }
 
 async function insertMedia(actor, babyId, postId, path = mediaPath(babyId, postId)) {
+  if (!arguments[3]) {
+    const pixel = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"));
+    const uploaded = await actor.sb.storage.from("memories").upload(path, pixel, { contentType: "image/png", upsert: false });
+    if (uploaded.error) return { data: null, error: uploaded.error };
+    uploadedObjects.push({ bucket: "memories", path });
+  }
   return actor.sb.from("memory_media").insert({
     baby_id: babyId,
     memory_post_id: postId,
@@ -197,10 +203,10 @@ try {
   const pixel = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"));
   const upload = await d.sb.storage.from("memories").upload(tempPathB, pixel, { contentType: "image/png", upsert: false });
   if (upload.error) throw upload.error;
-  uploadedObjects.push({ actor: d, bucket: "memories", path: tempPathB });
+  uploadedObjects.push({ bucket: "memories", path: tempPathB });
 
   expectDenied(await insertMedia(a, babyB, postA, tempPathB), "cross-baby temp media attach");
-  const tempStillOwned = await d.sb.storage.from("memories").download(tempPathB);
+  const tempStillOwned = await fixtureAdmin.storage.from("memories").download(tempPathB);
   if (tempStillOwned.error) throw new Error("blocked attach changed the original temp object");
 
   expectNoRows(await a.sb.from("memory_media").select("id").eq("id", mediaB.id), "cross-baby select");
@@ -270,7 +276,7 @@ try {
 } finally {
   for (const object of uploadedObjects) {
     try {
-      await object.actor.sb.storage.from(object.bucket).remove([object.path]);
+      await fixtureAdmin.storage.from(object.bucket).remove([object.path]);
     } catch {
       // Account cleanup below must still run if best-effort object cleanup fails.
     }

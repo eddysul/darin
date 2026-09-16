@@ -1,4 +1,4 @@
-import { requireSupabase } from "../lib/supabase";
+import { captureSessionScope, requireSupabase } from "../lib/supabase";
 import type { GrowthBookCommentRow, GrowthBookPageRow, Json } from "../types/database";
 import type {
   GrowthBookComment,
@@ -10,6 +10,7 @@ import type {
   GrowthBookServerPage,
 } from "../types/growthBook";
 import { createId } from "../utils/id";
+import { createPrivateMediaSignedUrl, retireUnattachedStorageUpload } from "../utils/privateMediaUrl";
 import {
   coverPageContent,
   diaryPageContent,
@@ -27,7 +28,7 @@ import { ProfileRepository } from "./ProfileRepository";
 
 const BUCKET = "growth-book-media";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
-export const GROWTH_BOOK_SIGNED_URL_TTL_SECONDS = 600;
+export const GROWTH_BOOK_SIGNED_URL_TTL_SECONDS = 300;
 
 type UpsertPageInput = {
   id?: string;
@@ -209,10 +210,12 @@ export const GrowthBookRepository = {
     id?: string; growthBookId: string; pageId: string; babyId: string; storagePath: string;
     width?: number; height?: number;
   }): Promise<GrowthBookServerMedia> {
+    const scope = await captureSessionScope();
+    await scope.assertCurrent();
     const expected = `${input.babyId}/${input.growthBookId}/${input.pageId}/`;
     if (!input.storagePath.startsWith(expected)) throw new Error(`Growth Book media path must start with ${expected}`);
-    const createdBy = await userId();
-    const { data, error } = await requireSupabase().from("growth_book_media").insert({
+    const createdBy = scope.accountId;
+    const { data, error } = await scope.client.from("growth_book_media").insert({
       id: input.id ?? createId(), growth_book_id: input.growthBookId, page_id: input.pageId,
       baby_id: input.babyId, storage_path: input.storagePath, media_type: "image",
       width: input.width ?? null, height: input.height ?? null, created_by: createdBy,
@@ -228,6 +231,7 @@ export const GrowthBookRepository = {
   async uploadGrowthBookMedia(input: {
     growthBookId: string; pageId: string; babyId: string; uri: string; width?: number; height?: number;
   }): Promise<GrowthBookServerMedia> {
+    const scope = await captureSessionScope();
     const type = contentType(input.uri);
     const id = createId();
     const storagePath = `${input.babyId}/${input.growthBookId}/${input.pageId}/${id}.${extension(type)}`;
@@ -235,13 +239,26 @@ export const GrowthBookRepository = {
     const bytes = await response.arrayBuffer();
     if (!bytes.byteLength) throw new Error("growth_book_media_empty");
     if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("growth_book_media_too_large");
-    const sb = requireSupabase();
+    await scope.assertCurrent();
+    const sb = scope.client;
     const { error: uploadError } = await sb.storage.from(BUCKET).upload(storagePath, bytes, { contentType: type, upsert: false });
     if (uploadError) throw uploadError;
+    await scope.assertCurrent();
     try {
-      return await this.addMedia({ ...input, id, storagePath });
+      const createdBy = scope.accountId;
+      const { data, error } = await sb.from("growth_book_media").insert({
+        id, growth_book_id: input.growthBookId, page_id: input.pageId,
+        baby_id: input.babyId, storage_path: storagePath, media_type: "image",
+        width: input.width ?? null, height: input.height ?? null, created_by: createdBy,
+      }).select("*").single();
+      if (error) throw error;
+      return {
+        id: data.id, growthBookId: data.growth_book_id, pageId: data.page_id!, babyId: data.baby_id,
+        storagePath: data.storage_path, width: data.width ?? undefined, height: data.height ?? undefined,
+        createdBy: data.created_by ?? createdBy, createdAt: data.created_at,
+      };
     } catch (error) {
-      await sb.storage.from(BUCKET).remove([storagePath]);
+      await retireUnattachedStorageUpload(sb, BUCKET, storagePath);
       throw error;
     }
   },
@@ -255,23 +272,19 @@ export const GrowthBookRepository = {
 
   async createSignedUrls(
     storagePaths: string[],
-    expiresIn = GROWTH_BOOK_SIGNED_URL_TTL_SECONDS,
+    _expiresIn = GROWTH_BOOK_SIGNED_URL_TTL_SECONDS,
   ): Promise<Map<string, string>> {
     const paths = [...new Set(storagePaths.filter(Boolean))];
     if (!paths.length) return new Map();
     const sb = requireSupabase();
-    const { data: media, error: mediaError } = await sb.from("growth_book_media").select("storage_path")
+    const { data: media, error: mediaError } = await sb.from("growth_book_media").select("id, storage_path")
       .in("storage_path", paths);
     if (mediaError) throw mediaError;
-    const allowedPaths = [...new Set((media ?? []).map((item) => item.storage_path))];
-    if (!allowedPaths.length) return new Map();
-    const { data, error } = await sb.storage.from(BUCKET).createSignedUrls(allowedPaths, expiresIn);
-    if (error) throw error;
-    return new Map(
-      (data ?? [])
-        .filter((item): item is typeof item & { path: string; signedUrl: string } => Boolean(item.path && item.signedUrl && !item.error))
-        .map((item) => [item.path, item.signedUrl]),
-    );
+    const signed = await Promise.all((media ?? []).map(async (item) => [
+      item.storage_path,
+      await createPrivateMediaSignedUrl("growth_book_media", item.id),
+    ] as const));
+    return new Map(signed);
   },
 
   async listComments(growthBookId: string): Promise<GrowthBookCommentRow[]> {

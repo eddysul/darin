@@ -5,7 +5,10 @@ import type {
   UploadAvatarInput,
 } from "../types/profileSettings";
 import { MAX_PROFILE_AVATAR_BYTES } from "../types/profileSettings";
-import { requireSupabase } from "../lib/supabase";
+import { captureSessionScope, requireSupabase } from "../lib/supabase";
+import { createPrivateMediaSignedUrl } from "../utils/privateMediaUrl";
+import { retireUnattachedStorageUpload } from "../utils/privateMediaUrl";
+import { createId } from "../utils/id";
 import { toDbRelationshipLabel } from "../utils/supabaseMappers";
 import { AuthRepository } from "./AuthRepository";
 import type { Locale } from "../i18n";
@@ -172,22 +175,26 @@ export const ProfileRepository = {
     if (input.fileSize !== undefined && input.fileSize > MAX_PROFILE_AVATAR_BYTES) {
       throw new Error("사진은 5MB 이하만 올릴 수 있어요.");
     }
-    const sb = requireSupabase();
+    const scope = await captureSessionScope();
+    const sb = scope.client;
     const session = await AuthRepository.ensureSession();
+    if (session.user.id !== scope.accountId) throw new Error("Account changed during media operation.");
     const ext = extensionForMime(input.mimeType);
-    const storagePath = `users/${session.user.id}/avatar.${ext}`;
+    const storagePath = `users/${session.user.id}/${createId()}.${ext}`;
     const response = await fetch(input.uri);
     const bytes = await response.arrayBuffer();
     if (!bytes.byteLength) throw new Error("사진을 올리지 못했어요. 다른 사진으로 다시 시도해 주세요.");
     if (bytes.byteLength > MAX_PROFILE_AVATAR_BYTES) {
       throw new Error("사진은 5MB 이하만 올릴 수 있어요.");
     }
+    await scope.assertCurrent();
     const { error: uploadError } = await sb.storage.from(BUCKET).upload(storagePath, bytes, {
       contentType: input.mimeType ?? "image/jpeg",
-      upsert: true,
+      upsert: false,
     });
     if (uploadError) throw new Error("사진을 올리지 못했어요. 다른 사진으로 다시 시도해 주세요.");
 
+    await scope.assertCurrent();
     const { data, error } = await sb
       .from("profiles")
       .update({
@@ -199,18 +206,17 @@ export const ProfileRepository = {
       .select("*")
       .single();
     if (error) {
-      await sb.storage.from(BUCKET).remove([storagePath]);
+      await retireUnattachedStorageUpload(sb, BUCKET, storagePath);
       throw new Error("프로필을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
     }
     const avatarUrl = await this.createProfileAvatarSignedUrl(storagePath);
     return rowToDisplay(data, avatarUrl);
   },
 
-  async createProfileAvatarSignedUrl(storagePath: string, expiresInSeconds = SIGNED_URL_TTL_SECONDS): Promise<string> {
-    const sb = requireSupabase();
-    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(storagePath, expiresInSeconds);
-    if (error || !data?.signedUrl) throw error ?? new Error("사진을 불러오지 못했어요.");
-    return data.signedUrl;
+  async createProfileAvatarSignedUrl(storagePath: string, _expiresInSeconds = SIGNED_URL_TTL_SECONDS): Promise<string> {
+    const match = storagePath.match(/^users\/([0-9a-f-]{36})\/(?:avatar|[0-9a-f-]{36})\.(?:jpg|jpeg|png|heic|heif|webp)$/i);
+    if (!match) throw new Error("사진을 불러오지 못했어요.");
+    return createPrivateMediaSignedUrl("profile_avatar", match[1]);
   },
 
   async listDisplayProfilesForBaby(babyId: string): Promise<DisplayProfile[]> {
