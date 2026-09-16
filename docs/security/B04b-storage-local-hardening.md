@@ -316,15 +316,18 @@ authorization/lifecycle P1 in the new source: **0**. Independent Sol High review
 `B0.4b FINAL SECURITY REVIEW PASS — READY FOR QA GATE`.
 
 Post-deployment compatibility review found one separate operational P1: the
-latest submitted Production iOS build (build 19, source
+previously submitted Production iOS build (build 19, source
 `654fc07ca3147de8559a66c6120c3c68e7f829b9`) still calls native Supabase Storage
 `createSignedUrl(s)`. B0.4b deliberately denies native Storage SELECT/signing and
 requires the new `media-signed-url` Edge contract. Therefore that submitted old
 binary can no longer mint Memory, Diary, Growthbook, avatar or sticker URLs after
-this backend rollout. EAS reports that build 19 was successfully submitted on
-2026-09-01. A compatible mobile release (or a separately reviewed temporary
-server compatibility policy) is required before operational closure. No EAS
-build/submission was authorized or performed in this B0.4b task.
+this backend rollout. That blocker was resolved without weakening the Storage
+boundary: compatible Production iOS build 20 was built from
+`9f5461341474dec8b92bdf216380a2c9af142695` and successfully uploaded to App Store
+Connect. EAS build `d0a91b3e-108d-44ca-bd33-78af8dae61ff` finished and submission
+`b29be1fa-e328-42a9-946e-f696a527d92e` finished on 2026-09-16. Apple processing,
+TestFlight/App Store distribution and installed-client uptake remain external
+release operations; old installed binaries must update to use the new contract.
 
 Remaining P2/operational work: classify existing orphan/missing refs; review
 metadata-only vs byte existence; monitor the deployed cleanup schedule and
@@ -338,6 +341,8 @@ Deployment provenance:
 - migration manifest: `55168e7a672b773317c58f9c7886d2c7ddad173d46bee3de567b4eb39843144e`
 - Function manifest: `3f74b1164e4526d343ed4360f86469d566f0d52a2cf3bc7c0a49041292c58ec9`
 - QA hosted attacks: `146 PASS / 0 skipped`
+- Production iOS compatibility build: build 20, source `9f5461341474dec8b92bdf216380a2c9af142695`,
+  EAS `FINISHED`, App Store Connect submission `FINISHED`.
 - Production safe smoke: unsigned signer `401`, unauthorized worker `401`,
   3 migrations, 7 restrictive policies, 4 DB functions and one active schedule.
 - Production scheduled maintenance (not manually invoked): 19 pre-existing,
@@ -348,4 +353,6 @@ Deployment provenance:
   rollback. The pre-deployment read-only inventory classified these as stale,
   unattached temp objects. No linked object was queued by this sweep.
 
-**B0.4b PRODUCTION CLIENT COMPATIBILITY BLOCKED — DO NOT CLOSE**
+**B0.4b STORAGE SECURITY CLOSED — QA AND PRODUCTION PASS**
+
+`NEXT: B0.4c NOTIFICATION SECURITY`
