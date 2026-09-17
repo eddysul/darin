@@ -106,6 +106,18 @@ try {
   }
   denied("compatibility RPC rejects cross-account claim", asUser(uid(2),
     `select register_current_push_token('legacy-device','ExpoPushToken[token-legacy]','ios','${attackerSecret}',null,null)`));
+  run("psql", [...connection, "-f", "supabase/migrations/202609160002_b04c_push_same_account_rebind.sql"]);
+  denied("private rebind implementation is not directly callable", asUser(uid(3),
+    `select register_current_push_token_v2('replacement-device','ExpoPushToken[token-legacy]','ios','${physicalSecret}',null,null)`));
+  exec(asUser(uid(3),
+    `select register_current_push_token('replacement-device','ExpoPushToken[token-legacy]','ios','${physicalSecret}',null,null)`));
+  if (query(`select count(*) from push_tokens where user_id='${uid(3)}' and device_id='replacement-device' and disabled_at is null`) !== "1"
+      || query(`select count(*) from push_tokens where user_id='${uid(3)}' and device_id='legacy-device'`) !== "0") {
+    throw new Error("same-account installation ID rotation did not retain one active token");
+  }
+  exec(asUser(uid(3),
+    `select register_current_push_token('legacy-device','ExpoPushToken[token-legacy]','ios','${physicalSecret}',null,null)`));
+  console.log("PASS same-account device ID rotation preserves one active token");
   if (query(`select count(*) from pg_policies where tablename='push_tokens' and cmd in ('INSERT','UPDATE','DELETE')`) !== "3") {
     throw new Error("compatibility migration changed old-client write policies");
   }
@@ -117,6 +129,7 @@ try {
     run("psql", [...connection, "-f", "supabase/migrations/202609160001_b04c_notification_security.sql"]);
     console.log(`PASS B0.4c migration replay ${i}/2`);
   }
+  run("psql", [...connection, "-f", "supabase/migrations/202609160003_b04c_push_rebind_post_cutover.sql"]);
 
   if (query(`select count(*) from push_tokens where user_id='${uid(2)}' and device_id='unproven-device' and disabled_at is not null`) !== "1") {
     throw new Error("legacy token without installation proof remained active");
@@ -133,6 +146,13 @@ try {
     throw new Error("legacy token owner could not re-register with installation proof");
   }
   console.log("PASS legacy owner can bind proof without cross-account reassignment");
+  exec(asUser(uid(3),
+    `select register_current_push_token('final-device','ExpoPushToken[token-legacy]','ios','${physicalSecret}',null,null)`));
+  if (query(`select count(*) from push_tokens where user_id='${uid(3)}' and device_id='final-device' and disabled_at is null`) !== "1"
+      || query(`select count(*) from push_tokens where user_id='${uid(3)}' and device_id='legacy-device'`) !== "0") {
+    throw new Error("post-cutover same-account installation ID rotation failed");
+  }
+  console.log("PASS post-cutover same-account device ID rotation");
 
   denied("direct token insert revoked", asUser(uid(1), `insert into push_tokens(user_id,device_id,expo_push_token,platform) values('${uid(1)}','d','ExpoPushToken[token-direct]','ios')`));
   denied("direct token update revoked", asUser(uid(3), `update push_tokens set user_id='${uid(3)}' where device_id='legacy-device'`));

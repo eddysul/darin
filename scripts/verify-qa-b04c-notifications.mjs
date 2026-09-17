@@ -84,6 +84,15 @@ try {
   if ((await register(outsider, deviceId, installationSecret)).error) throw new Error("same-installation account transfer failed");
   if ((await register(recipient, deviceId, installationSecret)).error) throw new Error("token return to recipient failed");
   pass("token RPC ownership, known-token attack and account switch");
+  const replacementDeviceId = `qa-b04c-replacement-${marker}`;
+  if ((await register(recipient, replacementDeviceId, installationSecret)).error) {
+    throw new Error("same-account device ID replacement failed");
+  }
+  const { data: reboundTokens, error: reboundError } = await recipient.sb.from("push_tokens")
+    .select("device_id,disabled_at").eq("expo_push_token", token);
+  if (reboundError || reboundTokens?.length !== 1 || reboundTokens[0].device_id !== replacementDeviceId
+      || reboundTokens[0].disabled_at) throw new Error("same-account token was not uniquely rebound");
+  pass("same-account device ID replacement keeps one active token");
 
   const { error: settingError } = await recipient.sb.from("notification_settings").insert({
     user_id: recipient.user.id, baby_id: babyId, family_activity_enabled: false,
@@ -118,10 +127,10 @@ try {
   if (repeat.status !== 200 || repeat.body?.results?.[0]?.status !== "deduplicated") throw new Error("replay was not deduplicated");
   pass("synthetic Expo-token dispatch claimed once; replay deduplicated; no private text");
 
-  const { error: revokeError } = await recipient.sb.rpc("unregister_current_push_token", { p_device_id: deviceId });
+  const { error: revokeError } = await recipient.sb.rpc("unregister_current_push_token", { p_device_id: replacementDeviceId });
   if (revokeError) throw new Error("token revoke failed");
   const { data: revokedToken } = await recipient.sb.from("push_tokens")
-    .select("disabled_at").eq("device_id", deviceId).single();
+    .select("disabled_at").eq("device_id", replacementDeviceId).single();
   if (!revokedToken?.disabled_at) throw new Error("revoked token stayed active");
   pass("authenticated per-device token revocation");
 

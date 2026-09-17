@@ -13,6 +13,8 @@ import {
 } from "../supabase/functions/send-push-notification/securityPolicy.ts";
 
 const migration = readFileSync("supabase/migrations/202609160001_b04c_notification_security.sql", "utf8");
+const rebind = readFileSync("supabase/migrations/202609160002_b04c_push_same_account_rebind.sql", "utf8");
+const postCutover = readFileSync("supabase/migrations/202609160003_b04c_push_rebind_post_cutover.sql", "utf8");
 const push = readFileSync("supabase/functions/send-push-notification/index.ts", "utf8");
 const reminder = readFileSync("supabase/functions/process-care-reminders/index.ts", "utf8");
 const repository = readFileSync("src/repositories/NotificationRepository.ts", "utf8");
@@ -115,6 +117,12 @@ assert.match(migration, /revoke insert, update, delete on table public\.push_tok
 assert.match(migration, /status = 'dispatching'[\s\S]*attempt_count = 1/);
 assert.match(migration, /status = 'pending'[\s\S]*attempt_count = 0[\s\S]*expires_at > now\(\)/);
 assert.match(migration, /case[\s\S]*data->>'memoryPostId'[\s\S]*public\.can_view_memory_post\(\(data->>'memoryPostId'\)::uuid\)[\s\S]*else false/);
+assert.match(rebind, /pg_advisory_xact_lock\(hashtextextended\(p_expo_push_token, 0\)\)/);
+assert.match(rebind, /installation_secret_hash is distinct from v_secret_hash[\s\S]*raise exception 'push token ownership conflict'/);
+assert.match(rebind, /delete from public\.push_tokens\s+where expo_push_token = p_expo_push_token\s+and user_id = v_user_id\s+and device_id <> p_device_id/);
+assert.match(rebind, /revoke all on function public\.register_current_push_token_v2[\s\S]*from authenticated/);
+assert.match(rebind, /select public\.register_current_push_token_v2\(\$1, \$2, \$3, \$4, \$5, \$6\)/);
+assert.match(postCutover, /select public\.register_current_push_token_v2\(\$1, \$2, \$3, \$4, \$5, \$6\)/);
 
 assert.match(repository, /rpc\("register_current_push_token"/);
 assert.match(push, /eventType, babyId: body\.babyId, targetId: body\.babyId, actorId/);
