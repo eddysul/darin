@@ -117,6 +117,7 @@ assert.match(migration, /status = 'pending'[\s\S]*attempt_count = 0[\s\S]*expire
 assert.match(migration, /case[\s\S]*data->>'memoryPostId'[\s\S]*public\.can_view_memory_post\(\(data->>'memoryPostId'\)::uuid\)[\s\S]*else false/);
 
 assert.match(repository, /rpc\("register_current_push_token"/);
+assert.match(push, /eventType, babyId: body\.babyId, targetId: body\.babyId, actorId/);
 assert.match(repository, /rpc\("unregister_current_push_token"/);
 assert.doesNotMatch(repository, /from\("push_tokens"\)\.upsert/);
 assert.match(repository, /captureSessionScope\(\)/);

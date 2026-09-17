@@ -61,6 +61,15 @@ try {
   }
   pass("server-like type, arbitrary recipient and missing resource rejected");
 
+  const selfTest = { action: "sendToUser", eventType: "test", babyId, recipientId: owner.user.id };
+  const firstSelfTest = await invoke(owner, { ...selfTest, targetId: crypto.randomUUID() });
+  const repeatSelfTest = await invoke(owner, { ...selfTest, targetId: crypto.randomUUID() });
+  if (firstSelfTest.status !== 200 || repeatSelfTest.status !== 200
+      || repeatSelfTest.body?.results?.[0]?.status !== "deduplicated") {
+    throw new Error("random self-test target bypassed dedupe");
+  }
+  pass("self-test Push dedupe ignores caller-controlled target ID");
+
   const { error: directTokenError } = await recipient.sb.from("push_tokens").insert({
     user_id: recipient.user.id, device_id: `direct-${marker}`, expo_push_token: token, platform: "ios",
   });

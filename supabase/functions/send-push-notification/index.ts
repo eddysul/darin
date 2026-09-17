@@ -175,7 +175,8 @@ async function resolveClientDispatch(
     const members = await activeMembers(service, body.babyId);
     if (!members.some((row) => row.user_id === actorId)) return null;
     return {
-      eventType, babyId: body.babyId, targetId: body.targetId, actorId,
+      // A caller-provided random target must not bypass self-test deduplication.
+      eventType, babyId: body.babyId, targetId: body.babyId, actorId,
       recipientIds: [actorId], routeData: safeRouteData(eventType, { babyId: body.babyId, targetId: body.targetId }),
       createdAt: new Date().toISOString(),
     };
