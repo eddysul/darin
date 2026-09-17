@@ -118,6 +118,8 @@ assert.match(migration, /case[\s\S]*data->>'memoryPostId'[\s\S]*public\.can_view
 
 assert.match(repository, /rpc\("register_current_push_token"/);
 assert.match(push, /eventType, babyId: body\.babyId, targetId: body\.babyId, actorId/);
+assert.doesNotMatch(push, /results\.push\(\{ recipientId/);
+assert.doesNotMatch(push, /error: (?:inviteError|eventError|tokenError)\.message/);
 assert.match(repository, /rpc\("unregister_current_push_token"/);
 assert.doesNotMatch(repository, /from\("push_tokens"\)\.upsert/);
 assert.match(repository, /captureSessionScope\(\)/);

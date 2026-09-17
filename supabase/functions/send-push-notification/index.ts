@@ -250,7 +250,7 @@ async function sendExistingInviteResponse(
   const { data: invite, error: inviteError } = await service.from("darin_invite_requests")
     .select("id,baby_id,sender_id,receiver_id,request_type,status")
     .eq("id", requestId).maybeSingle();
-  if (inviteError) return json(500, { error: inviteError.message });
+  if (inviteError) return json(500, { error: "Invite lookup unavailable" });
   if (!invite || invite.receiver_id !== actorId || !["accepted", "declined"].includes(invite.status)) {
     return json(403, { error: "Invite response unavailable" });
   }
@@ -260,9 +260,9 @@ async function sendExistingInviteResponse(
   const { data: event, error: eventError } = await service.from("notification_events")
     .select("id,title,body,data,status,created_at")
     .eq("recipient_id", invite.sender_id).eq("dedupe_key", dedupeKey).maybeSingle();
-  if (eventError) return json(500, { error: eventError.message });
+  if (eventError) return json(500, { error: "Notification event unavailable" });
   if (!event) return json(409, { error: "Invite response event missing" });
-  if (event.status !== "pending") return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "deduplicated" }] });
+  if (event.status !== "pending") return json(200, { ok: true, results: [{ status: "deduplicated" }] });
 
   const [settingsResult, profileResult] = await Promise.all([
     service.from("notification_settings").select(NOTIFICATION_SETTINGS_COLUMNS)
@@ -286,24 +286,24 @@ async function sendExistingInviteResponse(
   if (!enabled || quiet) {
     const reason = enabled ? "quiet_hours" : "invite_activity_disabled";
     await service.from("notification_events").update({ status: "skipped", error_message: reason }).eq("id", event.id);
-    return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "skipped", reason }] });
+    return json(200, { ok: true, results: [{ status: "skipped", reason }] });
   }
 
   const { data: tokens, error: tokenError } = await service.from("push_tokens")
     .select("id,expo_push_token").eq("user_id", invite.sender_id).is("disabled_at", null);
-  if (tokenError) return json(500, { error: tokenError.message });
+  if (tokenError) return json(500, { error: "Push token lookup unavailable" });
   const validTokens = (tokens ?? []).filter((token) => isExpoPushToken(token.expo_push_token));
   if (!validTokens.length) {
     await service.from("notification_events").update({ status: "skipped", error_message: "no_active_token" }).eq("id", event.id);
-    return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "skipped", reason: "no_active_token" }] });
+    return json(200, { ok: true, results: [{ status: "skipped", reason: "no_active_token" }] });
   }
 
   if (!isFreshResource(event.created_at, Date.now(), 24 * 60 * 60 * 1000)) {
     await service.from("notification_events").update({ status: "skipped", suppression_reason: "event_expired" }).eq("id", event.id).eq("status", "pending");
-    return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "skipped", reason: "event_expired" }] });
+    return json(200, { ok: true, results: [{ status: "skipped", reason: "event_expired" }] });
   }
   if (!await claimEvent(service, event.id, invite.sender_id)) {
-    return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "deduplicated" }] });
+    return json(200, { ok: true, results: [{ status: "deduplicated" }] });
   }
   const body = settings?.show_preview === false
     ? PRIVATE_BODY[localeFor(recipientProfile?.preferred_language)]
@@ -322,10 +322,10 @@ async function sendExistingInviteResponse(
     await service.from("notification_events").update(ok
       ? { status: "sent", sent_at: new Date().toISOString(), error_message: null }
       : { status: "failed", error_message: "expo_push_rejected" }).eq("id", event.id);
-    return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: ok ? "sent" : "failed" }] });
+    return json(200, { ok: true, results: [{ status: ok ? "sent" : "failed" }] });
   } catch (error) {
     await service.from("notification_events").update({ status: "failed", error_message: providerFailureCode() }).eq("id", event.id);
-    return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "failed" }] });
+    return json(200, { ok: true, results: [{ status: "failed" }] });
   }
 }
 
@@ -361,7 +361,7 @@ Deno.serve(async (request) => {
     return json(403, { error: "Notification resource unavailable" });
   }
 
-  const results: Array<{ recipientId: string; status: string }> = [];
+  const results: Array<{ status: string }> = [];
   for (const recipientId of spec.recipientIds) {
     const [settingsResult, profileResult] = await Promise.all([
       service.from("notification_settings").select(NOTIFICATION_SETTINGS_COLUMNS)
@@ -369,7 +369,7 @@ Deno.serve(async (request) => {
       service.from("profiles").select("preferred_language").eq("id", recipientId).maybeSingle(),
     ]);
     if (settingsResult.error || profileResult.error) {
-      results.push({ recipientId, status: "failed" });
+      results.push({ status: "failed" });
       continue;
     }
     const settings = settingsResult.data;
@@ -390,11 +390,11 @@ Deno.serve(async (request) => {
       suppression_reason: !enabled ? "recipient_disabled" : quiet ? "quiet_hours" : null,
     }).select("id,status").single();
     if (eventError) {
-      if (eventError.code === "23505") results.push({ recipientId, status: "deduplicated" });
-      else results.push({ recipientId, status: "failed" });
+      if (eventError.code === "23505") results.push({ status: "deduplicated" });
+      else results.push({ status: "failed" });
       continue;
     }
-    if (!enabled || quiet) { results.push({ recipientId, status: "skipped" }); continue; }
+    if (!enabled || quiet) { results.push({ status: "skipped" }); continue; }
 
     // Re-resolve actor, resource and recipients immediately before claiming the
     // provider attempt. A removed member, deleted item or visibility downgrade
@@ -405,7 +405,7 @@ Deno.serve(async (request) => {
       await service.from("notification_events").update({
         status: "skipped", suppression_reason: "recipient_or_resource_stale", error_message: null,
       }).eq("id", event.id).eq("status", "pending");
-      results.push({ recipientId, status: "skipped" });
+      results.push({ status: "skipped" });
       continue;
     }
 
@@ -416,12 +416,12 @@ Deno.serve(async (request) => {
         status: "failed",
         error_message: "push_token_lookup_failed",
       }).eq("id", event.id);
-      results.push({ recipientId, status: "failed" });
+      results.push({ status: "failed" });
       continue;
     }
     if (!tokens?.length) {
       await service.from("notification_events").update({ status: "skipped", suppression_reason: "no_active_token", error_message: null }).eq("id", event.id);
-      results.push({ recipientId, status: "skipped" });
+      results.push({ status: "skipped" });
       continue;
     }
 
@@ -430,11 +430,11 @@ Deno.serve(async (request) => {
       await service.from("notification_events").update({
         status: "skipped", suppression_reason: "no_active_token", error_message: null,
       }).eq("id", event.id);
-      results.push({ recipientId, status: "skipped" });
+      results.push({ status: "skipped" });
       continue;
     }
     if (!await claimEvent(service, event.id, recipientId)) {
-      results.push({ recipientId, status: "deduplicated" });
+      results.push({ status: "deduplicated" });
       continue;
     }
     const messages = validTokens.map((token) => ({
@@ -452,10 +452,10 @@ Deno.serve(async (request) => {
       await service.from("notification_events").update(ok
         ? { status: "sent", sent_at: new Date().toISOString(), error_message: null }
         : { status: "failed", error_message: "expo_push_rejected" }).eq("id", event.id);
-      results.push({ recipientId, status: ok ? "sent" : "failed" });
+      results.push({ status: ok ? "sent" : "failed" });
     } catch {
       await service.from("notification_events").update({ status: "failed", error_message: providerFailureCode() }).eq("id", event.id);
-      results.push({ recipientId, status: "failed" });
+      results.push({ status: "failed" });
     }
   }
   return json(200, { ok: true, results });
