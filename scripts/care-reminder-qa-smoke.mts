@@ -44,7 +44,7 @@ assert.match(workerPolicy, /current\.version === claim\.version/);
 assert.match(workerPolicy, /current\.lastRelevantLogId === claim\.lastRelevantLogId/);
 assert.match(workerPolicy, /current\.processingStartedAt === claim\.processingStartedAt/);
 assert.match(workerPolicy, /current && enabled && current\.sendStatus === "scheduled"/);
-assert.match(worker, /await assertCurrentDelivery\(\);\s*let deliveryStatus/);
+assert.match(worker, /await assertCurrentDelivery\(\);[\s\S]*await assertCurrentRecipient\(\);[\s\S]*claim_notification_event_dispatch[\s\S]*let deliveryStatus/);
 assert.match(notificationRuntime, /AbortSignal\.timeout\(10_000\)/);
 assert.match(worker, /retryScheduled = counts\.failed_retryable > 0/);
 assert.match(worker, /REMINDER_COPY\[localeFor\(profile\?\.preferred_language\)\]\[state\.reminder_type\]/);

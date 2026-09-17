@@ -2,6 +2,10 @@ import { spawnSync } from "node:child_process";
 import { PRODUCTION_PROJECT_REF, QA_PROJECT_REF } from "./lib/qa-project-config.mjs";
 
 const target = process.argv[2];
+const functionName = process.argv[3] ?? "send-push-notification";
+if (!["send-push-notification", "process-care-reminders"].includes(functionName)) {
+  throw new Error("Unsupported B0.4c function name");
+}
 const expectedRef = target === "qa"
   ? QA_PROJECT_REF
   : target === "production"
@@ -24,7 +28,7 @@ const result = spawnSync("pnpm", [
   "supabase@latest",
   "functions",
   "deploy",
-  "send-push-notification",
+  functionName,
   "--project-ref",
   expectedRef,
   "--use-api",

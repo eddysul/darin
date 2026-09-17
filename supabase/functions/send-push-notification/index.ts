@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "npm:@supabase/supabase-js@2.110.8";
 import {
   inQuietHours,
   isExpoPushToken,
@@ -6,6 +6,17 @@ import {
   sendExpoPush,
   type SupportedLocale,
 } from "../_shared/notificationRuntime.ts";
+import {
+  canActorInteractWithMemory,
+  dedupeRecipients,
+  deriveMemoryRecipients,
+  isClientEventType,
+  isFreshResource,
+  isUuid,
+  providerFailureCode,
+  safeRouteData,
+  type ClientEventType,
+} from "./securityPolicy.ts";
 
 type EventType =
   | "memory_comment" | "memory_reaction" | "growth_book_comment"
@@ -16,11 +27,21 @@ type EventType =
 
 type RequestBody = {
   action: "sendToBabyMembers" | "sendToUser" | "sendInviteResponse";
-  eventType?: EventType;
+  eventType?: unknown;
   babyId?: string;
   recipientId?: string;
   targetId?: string;
-  routeData?: Record<string, unknown>;
+};
+
+type ServiceClient = ReturnType<typeof createClient>;
+type DispatchSpec = {
+  eventType: ClientEventType;
+  babyId: string;
+  targetId: string;
+  actorId: string;
+  recipientIds: string[];
+  routeData: Record<string, string>;
+  createdAt: string;
 };
 
 type Copy = { title: string; body: string; privateBody?: string };
@@ -87,11 +108,137 @@ const COPY: Record<SupportedLocale, Record<EventType, Copy>> = {
   },
 };
 
+const PRIVATE_BODY: Record<SupportedLocale, string> = {
+  ko: "새로운 알림이 있습니다.",
+  en: "You have a new notification.",
+  ja: "新しい通知があります。",
+  es: "Tienes una notificación nueva.",
+  "zh-CN": "你有一条新通知。",
+};
+
 function json(status: number, value: unknown) {
   return new Response(JSON.stringify(value), {
     status,
     headers: { "content-type": "application/json", "access-control-allow-origin": "*" },
   });
+}
+
+async function activeMembers(service: ServiceClient, babyId: string): Promise<Array<{ user_id: string; permission_role: string }>> {
+  const { data, error } = await service.from("baby_members").select("user_id,permission_role")
+    .eq("baby_id", babyId).eq("status", "active");
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function resolveMemoryRecipients(
+  service: ServiceClient,
+  post: { id: string; baby_id: string; author_id: string; privacy_type: string; status: string; deleted_at: string | null },
+  actorId: string,
+): Promise<string[] | null> {
+  if (post.status !== "published" || post.deleted_at) return null;
+  const [members, friendsResult] = await Promise.all([
+    activeMembers(service, post.baby_id),
+    service.from("memory_friends").select("user_id").eq("baby_id", post.baby_id).eq("status", "active"),
+  ]);
+  if (friendsResult.error) throw friendsResult.error;
+  const memberIds = members.map((row) => row.user_id);
+  const editorIds = members.filter((row) => row.permission_role === "admin" || row.permission_role === "editor").map((row) => row.user_id);
+  const friendIds = (friendsResult.data ?? []).map((row) => row.user_id);
+  const [tagged, selected] = await Promise.all([
+    service.from("memory_tags").select("tagged_user_id").eq("memory_post_id", post.id)
+      .eq("tag_type", "family_member").eq("status", "approved"),
+    service.from("memory_selected_people").select("user_id").eq("memory_post_id", post.id),
+  ]);
+  if (tagged.error || selected.error) throw tagged.error ?? selected.error;
+  const audience = {
+    privacyType: post.privacy_type,
+    postAuthorId: post.author_id,
+    memberIds,
+    editorIds,
+    friendIds,
+    taggedIds: (tagged.data ?? []).map((row) => row.tagged_user_id),
+    selectedIds: (selected.data ?? []).map((row) => row.user_id),
+  };
+  if (!canActorInteractWithMemory(audience, actorId)) return null;
+  return deriveMemoryRecipients(audience, actorId);
+}
+
+async function resolveClientDispatch(
+  service: ServiceClient,
+  actorId: string,
+  body: RequestBody,
+): Promise<DispatchSpec | null> {
+  if (!isClientEventType(body.eventType) || !isUuid(body.babyId) || !isUuid(body.targetId)) return null;
+  const eventType = body.eventType;
+  if (eventType === "test") {
+    if (body.action !== "sendToUser" || body.recipientId !== actorId) return null;
+    const members = await activeMembers(service, body.babyId);
+    if (!members.some((row) => row.user_id === actorId)) return null;
+    return {
+      eventType, babyId: body.babyId, targetId: body.targetId, actorId,
+      recipientIds: [actorId], routeData: safeRouteData(eventType, { babyId: body.babyId, targetId: body.targetId }),
+      createdAt: new Date().toISOString(),
+    };
+  }
+  if (body.action !== "sendToBabyMembers") return null;
+
+  if (eventType === "new_shared_log") {
+    const { data } = await service.from("care_logs").select("id,baby_id,created_by,created_at")
+      .eq("id", body.targetId).eq("baby_id", body.babyId).maybeSingle();
+    const members = await activeMembers(service, body.babyId);
+    if (!data || data.created_by !== actorId || !members.some((row) => row.user_id === actorId && ["admin", "editor"].includes(row.permission_role))) return null;
+    return { eventType, babyId: data.baby_id, targetId: data.id, actorId,
+      recipientIds: dedupeRecipients(members.map((row) => row.user_id), actorId),
+      routeData: safeRouteData(eventType, { babyId: data.baby_id, targetId: data.id }), createdAt: data.created_at };
+  }
+  if (eventType === "new_diary") {
+    const { data } = await service.from("diary_entries").select("id,baby_id,author_id,created_at,deleted_at")
+      .eq("id", body.targetId).eq("baby_id", body.babyId).is("deleted_at", null).maybeSingle();
+    const members = await activeMembers(service, body.babyId);
+    if (!data || data.author_id !== actorId || !members.some((row) => row.user_id === actorId && ["admin", "editor"].includes(row.permission_role))) return null;
+    return { eventType, babyId: data.baby_id, targetId: data.id, actorId,
+      recipientIds: dedupeRecipients(members.map((row) => row.user_id), actorId),
+      routeData: safeRouteData(eventType, { babyId: data.baby_id, targetId: data.id }), createdAt: data.created_at };
+  }
+  if (eventType === "growth_book_comment" || eventType === "growth_book_rolling_paper") {
+    const { data } = await service.from("growth_book_comments")
+      .select("id,growth_book_id,page_id,baby_id,author_id,comment_type,created_at,deleted_at")
+      .eq("id", body.targetId).eq("baby_id", body.babyId).is("deleted_at", null).maybeSingle();
+    const members = await activeMembers(service, body.babyId);
+    const typeMatches = data && (eventType === "growth_book_rolling_paper"
+      ? data.comment_type === "rolling_paper"
+      : data.comment_type === "page_comment" || data.comment_type === "letter");
+    if (!data || data.author_id !== actorId || !typeMatches || !members.some((row) => row.user_id === actorId)) return null;
+    const { data: book } = await service.from("growth_books").select("id").eq("id", data.growth_book_id)
+      .eq("baby_id", data.baby_id).is("deleted_at", null).maybeSingle();
+    if (!book) return null;
+    return { eventType, babyId: data.baby_id, targetId: data.id, actorId,
+      recipientIds: dedupeRecipients(members.map((row) => row.user_id), actorId),
+      routeData: safeRouteData(eventType, { babyId: data.baby_id, targetId: data.id, growthBookId: data.growth_book_id, pageId: data.page_id }),
+      createdAt: data.created_at };
+  }
+
+  const table = eventType === "memory_comment" ? "memory_comments" : "memory_reactions";
+  let query = service.from(table).select("id,memory_post_id,author_id,created_at")
+    .eq("id", body.targetId).eq("author_id", actorId);
+  if (eventType === "memory_comment") query = query.is("deleted_at", null);
+  const { data: child } = await query.maybeSingle();
+  if (!child) return null;
+  const { data: post } = await service.from("memory_posts")
+    .select("id,baby_id,author_id,privacy_type,status,deleted_at")
+    .eq("id", child.memory_post_id).eq("baby_id", body.babyId).maybeSingle();
+  if (!post) return null;
+  const recipients = await resolveMemoryRecipients(service, post, actorId);
+  if (!recipients) return null;
+  return { eventType, babyId: post.baby_id, targetId: child.id, actorId, recipientIds: recipients,
+    routeData: safeRouteData(eventType, { babyId: post.baby_id, targetId: child.id, memoryPostId: post.id }),
+    createdAt: child.created_at };
+}
+
+async function claimEvent(service: ServiceClient, eventId: string, recipientId: string): Promise<boolean> {
+  const { data, error } = await service.rpc("claim_notification_event_dispatch", { p_event_id: eventId });
+  if (error) throw error;
+  return Array.isArray(data) && data.some((row) => row.event_id === eventId && row.recipient_id === recipientId);
 }
 
 async function sendExistingInviteResponse(
@@ -110,11 +257,11 @@ async function sendExistingInviteResponse(
   const eventType: EventType = invite.status === "accepted" ? "family_joined" : "invite_declined";
   const dedupeKey = `darin-invite-response:${invite.id}`;
   const { data: event, error: eventError } = await service.from("notification_events")
-    .select("id,title,body,data,status")
+    .select("id,title,body,data,status,created_at")
     .eq("recipient_id", invite.sender_id).eq("dedupe_key", dedupeKey).maybeSingle();
   if (eventError) return json(500, { error: eventError.message });
   if (!event) return json(409, { error: "Invite response event missing" });
-  if (event.status === "sent") return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "deduplicated" }] });
+  if (event.status !== "pending") return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "deduplicated" }] });
 
   const [settingsResult, profileResult] = await Promise.all([
     service.from("notification_settings").select(NOTIFICATION_SETTINGS_COLUMNS)
@@ -150,8 +297,15 @@ async function sendExistingInviteResponse(
     return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "skipped", reason: "no_active_token" }] });
   }
 
+  if (!isFreshResource(event.created_at, Date.now(), 24 * 60 * 60 * 1000)) {
+    await service.from("notification_events").update({ status: "skipped", suppression_reason: "event_expired" }).eq("id", event.id).eq("status", "pending");
+    return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "skipped", reason: "event_expired" }] });
+  }
+  if (!await claimEvent(service, event.id, invite.sender_id)) {
+    return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "deduplicated" }] });
+  }
   const body = settings?.show_preview === false
-    ? COPY[localeFor(recipientProfile?.preferred_language)].test.body
+    ? PRIVATE_BODY[localeFor(recipientProfile?.preferred_language)]
     : localizedCopy.body;
   try {
     const pushResult = await sendExpoPush(validTokens.map((token) => ({
@@ -169,7 +323,7 @@ async function sendExistingInviteResponse(
       : { status: "failed", error_message: "expo_push_rejected" }).eq("id", event.id);
     return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: ok ? "sent" : "failed" }] });
   } catch (error) {
-    await service.from("notification_events").update({ status: "failed", error_message: String(error) }).eq("id", event.id);
+    await service.from("notification_events").update({ status: "failed", error_message: providerFailureCode() }).eq("id", event.id);
     return json(200, { ok: true, results: [{ recipientId: invite.sender_id, status: "failed" }] });
   }
 }
@@ -195,62 +349,22 @@ Deno.serve(async (request) => {
     const service = createClient(url, serviceKey);
     return sendExistingInviteResponse(service, auth.user.id, body.targetId);
   }
-  if (!body.babyId || !body.eventType || !Object.hasOwn(COPY.ko, body.eventType)) return json(400, { error: "Invalid notification request" });
-
   const service = createClient(url, serviceKey);
-  const { data: actorMembership } = await service.from("baby_members").select("permission_role,status")
-    .eq("baby_id", body.babyId).eq("user_id", auth.user.id).eq("status", "active").maybeSingle();
-  if (!actorMembership) {
-    const memoryPostId = typeof body.routeData?.memoryPostId === "string" ? body.routeData.memoryPostId : "";
-    const friendEvent = body.action === "sendToBabyMembers"
-      && (body.eventType === "memory_comment" || body.eventType === "memory_reaction")
-      && Boolean(memoryPostId);
-    if (!friendEvent) return json(403, { error: "Baby membership required" });
-
-    const [{ data: friend }, { data: post }] = await Promise.all([
-      service.from("memory_friends").select("id").eq("baby_id", body.babyId)
-        .eq("user_id", auth.user.id).eq("status", "active").maybeSingle(),
-      service.from("memory_posts").select("id,baby_id,privacy_type,status,deleted_at")
-        .eq("id", memoryPostId).eq("baby_id", body.babyId).maybeSingle(),
-    ]);
-    if (!friend || !post || post.privacy_type !== "friend_circle" || post.status !== "published" || post.deleted_at) {
-      return json(403, { error: "Friend memory access required" });
-    }
-
-    if (body.eventType === "memory_comment") {
-      const { data: comment } = await service.from("memory_comments").select("id")
-        .eq("id", body.targetId ?? "").eq("memory_post_id", memoryPostId)
-        .eq("author_id", auth.user.id).is("deleted_at", null).maybeSingle();
-      if (!comment) return json(403, { error: "Comment actor mismatch" });
-    } else {
-      const { data: reaction } = await service.from("memory_reactions").select("id")
-        .eq("memory_post_id", memoryPostId).eq("author_id", auth.user.id).maybeSingle();
-      if (!reaction) return json(403, { error: "Reaction actor mismatch" });
-    }
+  let spec: DispatchSpec | null;
+  try {
+    spec = await resolveClientDispatch(service, auth.user.id, body);
+  } catch {
+    return json(500, { error: "Notification authorization unavailable" });
   }
-
-  let recipientIds: string[] = [];
-  if (body.action === "sendToUser") {
-    if (!body.recipientId) return json(400, { error: "recipientId required" });
-    const { data: target } = await service.from("baby_members").select("user_id")
-      .eq("baby_id", body.babyId).eq("user_id", body.recipientId).eq("status", "active").maybeSingle();
-    if (!target) return json(403, { error: "Recipient is not an active member" });
-    recipientIds = [body.recipientId];
-  } else {
-    const { data: members, error } = await service.from("baby_members").select("user_id,permission_role")
-      .eq("baby_id", body.babyId).eq("status", "active");
-    if (error) return json(500, { error: error.message });
-    recipientIds = (members ?? [])
-      .filter((member) => member.user_id !== auth.user.id)
-      .filter((member) => body.eventType !== "family_joined" || member.permission_role === "admin")
-      .map((member) => member.user_id);
+  if (!spec || !isFreshResource(spec.createdAt)) {
+    return json(403, { error: "Notification resource unavailable" });
   }
 
   const results: Array<{ recipientId: string; status: string }> = [];
-  for (const recipientId of recipientIds) {
+  for (const recipientId of spec.recipientIds) {
     const [settingsResult, profileResult] = await Promise.all([
       service.from("notification_settings").select(NOTIFICATION_SETTINGS_COLUMNS)
-        .eq("user_id", recipientId).eq("baby_id", body.babyId).maybeSingle(),
+        .eq("user_id", recipientId).eq("baby_id", spec.babyId).maybeSingle(),
       service.from("profiles").select("preferred_language").eq("id", recipientId).maybeSingle(),
     ]);
     if (settingsResult.error || profileResult.error) {
@@ -260,28 +374,39 @@ Deno.serve(async (request) => {
     const settings = settingsResult.data;
     const recipientProfile = profileResult.data;
     const locale = localeFor(recipientProfile?.preferred_language);
-    const copy = COPY[locale][body.eventType];
-    const enabled = body.eventType === "family_joined"
-      ? settings?.invite_activity_enabled !== false
-      : settings?.family_activity_enabled !== false;
+    const copy = COPY[locale][spec.eventType];
+    const enabled = settings?.family_activity_enabled !== false;
     const quiet = settings?.quiet_hours_enabled === true && inQuietHours(
       new Date(), settings.timezone, settings.quiet_hours_start, settings.quiet_hours_end,
     );
-    const fiveMinuteBucket = Math.floor(Date.now() / (5 * 60 * 1000));
-    const dedupeKey = `${body.eventType}:${body.targetId ?? "none"}:${auth.user.id}:${fiveMinuteBucket}`;
-    const eventBody = settings?.show_preview === false ? COPY[locale].test.body : copy.body;
+    const dedupeKey = `${spec.eventType}:${spec.targetId}:${auth.user.id}`;
+    const eventBody = settings?.show_preview === false ? PRIVATE_BODY[locale] : copy.body;
     const { data: event, error: eventError } = await service.from("notification_events").insert({
-      recipient_id: recipientId, actor_id: auth.user.id, baby_id: body.babyId,
-      event_type: body.eventType, title: copy.title, body: eventBody,
-      data: body.routeData ?? {}, dedupe_key: dedupeKey,
+      recipient_id: recipientId, actor_id: spec.actorId, baby_id: spec.babyId,
+      event_type: spec.eventType, title: copy.title, body: eventBody,
+      data: spec.routeData, dedupe_key: dedupeKey,
       status: enabled && !quiet ? "pending" : "skipped",
-    }).select("id").single();
+      suppression_reason: !enabled ? "recipient_disabled" : quiet ? "quiet_hours" : null,
+    }).select("id,status").single();
     if (eventError) {
       if (eventError.code === "23505") results.push({ recipientId, status: "deduplicated" });
       else results.push({ recipientId, status: "failed" });
       continue;
     }
     if (!enabled || quiet) { results.push({ recipientId, status: "skipped" }); continue; }
+
+    // Re-resolve actor, resource and recipients immediately before claiming the
+    // provider attempt. A removed member, deleted item or visibility downgrade
+    // suppresses this event instead of relying on the earlier snapshot.
+    let current: DispatchSpec | null = null;
+    try { current = await resolveClientDispatch(service, auth.user.id, body); } catch { /* fail closed below */ }
+    if (!current || !isFreshResource(current.createdAt) || !current.recipientIds.includes(recipientId)) {
+      await service.from("notification_events").update({
+        status: "skipped", suppression_reason: "recipient_or_resource_stale", error_message: null,
+      }).eq("id", event.id).eq("status", "pending");
+      results.push({ recipientId, status: "skipped" });
+      continue;
+    }
 
     const { data: tokens, error: tokenError } = await service.from("push_tokens").select("id,expo_push_token")
       .eq("user_id", recipientId).is("disabled_at", null);
@@ -294,7 +419,7 @@ Deno.serve(async (request) => {
       continue;
     }
     if (!tokens?.length) {
-      await service.from("notification_events").update({ status: "skipped", error_message: "no_active_token" }).eq("id", event.id);
+      await service.from("notification_events").update({ status: "skipped", suppression_reason: "no_active_token", error_message: null }).eq("id", event.id);
       results.push({ recipientId, status: "skipped" });
       continue;
     }
@@ -302,15 +427,18 @@ Deno.serve(async (request) => {
     const validTokens = tokens.filter((token) => isExpoPushToken(token.expo_push_token));
     if (!validTokens.length) {
       await service.from("notification_events").update({
-        status: "skipped",
-        error_message: "no_active_token",
+        status: "skipped", suppression_reason: "no_active_token", error_message: null,
       }).eq("id", event.id);
       results.push({ recipientId, status: "skipped" });
       continue;
     }
+    if (!await claimEvent(service, event.id, recipientId)) {
+      results.push({ recipientId, status: "deduplicated" });
+      continue;
+    }
     const messages = validTokens.map((token) => ({
       to: token.expo_push_token, sound: "default", title: copy.title, body: eventBody,
-      data: { ...(body.routeData ?? {}), eventId: event.id },
+      data: { ...spec.routeData, eventId: event.id, eventType: spec.eventType },
     }));
     try {
       const pushResult = await sendExpoPush(messages);
@@ -324,8 +452,8 @@ Deno.serve(async (request) => {
         ? { status: "sent", sent_at: new Date().toISOString(), error_message: null }
         : { status: "failed", error_message: "expo_push_rejected" }).eq("id", event.id);
       results.push({ recipientId, status: ok ? "sent" : "failed" });
-    } catch (error) {
-      await service.from("notification_events").update({ status: "failed", error_message: String(error) }).eq("id", event.id);
+    } catch {
+      await service.from("notification_events").update({ status: "failed", error_message: providerFailureCode() }).eq("id", event.id);
       results.push({ recipientId, status: "failed" });
     }
   }

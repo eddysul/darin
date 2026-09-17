@@ -14,7 +14,8 @@ assert.match(push, /action: "sendToBabyMembers" \| "sendToUser" \| "sendInviteRe
 assert.match(push, /invite\.receiver_id !== actorId/);
 assert.match(push, /\["accepted", "declined"\]\.includes\(invite\.status\)/);
 assert.match(push, /darin-invite-response:\$\{invite\.id\}/);
-assert.match(push, /event\.status === "sent"/);
+assert.match(push, /event\.status !== "pending"/);
+assert.match(push, /claimEvent\(service, event\.id, invite\.sender_id\)/);
 assert.match(push, /invite_activity_enabled !== false/);
 assert.match(push, /no_active_token/);
 assert.match(notificationRuntime, /DeviceNotRegistered/);

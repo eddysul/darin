@@ -48,7 +48,7 @@ export type NotificationEventType =
   | "feeding_reminder"
   | "sleep_reminder"
   | "test";
-export type NotificationEventStatus = "pending" | "sent" | "failed" | "skipped";
+export type NotificationEventStatus = "pending" | "dispatching" | "sent" | "failed" | "skipped";
 export type NotificationDeliveryStatus =
   | "sent"
   | "skipped_quiet_hours"
@@ -435,6 +435,7 @@ export type PushTokenRow = {
   build_number: string | null;
   last_seen_at: string;
   disabled_at: string | null;
+  installation_secret_hash: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -469,6 +470,10 @@ export type NotificationEventRow = {
   status: NotificationEventStatus;
   delivery_status: NotificationDeliveryStatus | null;
   error_message: string | null;
+  suppression_reason: string | null;
+  dispatch_started_at: string | null;
+  attempt_count: number;
+  expires_at: string;
   sent_at: string | null;
   read_at: string | null;
   created_at: string;
@@ -826,6 +831,21 @@ export type Database = {
       };
       mark_notification_event_read: {
         Args: { p_event_id: string };
+        Returns: undefined;
+      };
+      register_current_push_token: {
+        Args: {
+          p_device_id: string;
+          p_expo_push_token: string;
+          p_platform: "ios" | "android";
+          p_installation_secret: string;
+          p_app_version?: string | null;
+          p_build_number?: string | null;
+        };
+        Returns: string;
+      };
+      unregister_current_push_token: {
+        Args: { p_device_id: string };
         Returns: undefined;
       };
       sync_care_reminder_state: {

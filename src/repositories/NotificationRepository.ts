@@ -2,7 +2,7 @@ import { Platform } from "react-native";
 import type { Database } from "../types/database";
 import type { NotificationSettings, SendNotificationInput } from "../types/notifications";
 import { notificationSettingsFromRow } from "../types/notifications";
-import { requireSupabase } from "../lib/supabase";
+import { captureSessionScope, requireSupabase } from "../lib/supabase";
 import { AuthRepository } from "./AuthRepository";
 
 function timeValue(hour: number, minute: number): string {
@@ -20,30 +20,38 @@ async function requireUserId(): Promise<string> {
 export const NotificationRepository = {
   async registerToken(input: {
     deviceId: string;
+    installationSecret: string;
     expoPushToken: string;
     appVersion?: string | null;
     buildNumber?: string | null;
   }): Promise<void> {
     if (Platform.OS !== "ios" && Platform.OS !== "android") throw new Error("Push is unavailable on this platform.");
-    const userId = await requireUserId();
-    const { error } = await requireSupabase().from("push_tokens").upsert({
-      user_id: userId,
-      device_id: input.deviceId,
-      expo_push_token: input.expoPushToken,
-      platform: Platform.OS,
-      app_version: input.appVersion ?? null,
-      build_number: input.buildNumber ?? null,
-      last_seen_at: new Date().toISOString(),
-      disabled_at: null,
-    }, { onConflict: "user_id,device_id" });
+    const scope = await captureSessionScope();
+    await scope.assertCurrent();
+    const { error } = await scope.client.rpc("register_current_push_token", {
+      p_device_id: input.deviceId,
+      p_expo_push_token: input.expoPushToken,
+      p_platform: Platform.OS,
+      p_installation_secret: input.installationSecret,
+      p_app_version: input.appVersion ?? null,
+      p_build_number: input.buildNumber ?? null,
+    });
     if (error) throw error;
+    try {
+      await scope.assertCurrent();
+    } catch (scopeError) {
+      // A session switch after dispatch must not leave this device subscribed
+      // to the previous account while its replacement registration is queued.
+      await scope.client.rpc("unregister_current_push_token", { p_device_id: input.deviceId });
+      throw scopeError;
+    }
   },
 
   async unregisterToken(deviceId: string): Promise<void> {
-    const userId = await requireUserId();
-    const { error } = await requireSupabase().from("push_tokens")
-      .update({ disabled_at: new Date().toISOString() })
-      .eq("user_id", userId).eq("device_id", deviceId);
+    const scope = await captureSessionScope();
+    const { error } = await scope.client.rpc("unregister_current_push_token", {
+      p_device_id: deviceId,
+    });
     if (error) throw error;
   },
 

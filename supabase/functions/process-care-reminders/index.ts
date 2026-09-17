@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "npm:@supabase/supabase-js@2.110.8";
 import {
   inQuietHours,
   isExpoPushToken,
@@ -146,6 +146,12 @@ Deno.serve(async (request) => {
         }
         if (!event) throw new Error("notification_event_missing");
 
+        if (event.status !== "pending") {
+          const prior = event.delivery_status as DeliveryStatus | null;
+          if (prior) counts[prior] += 1;
+          continue;
+        }
+
         if (initialDeliveryStatus) {
           const { error } = await service.from("notification_events").update({
             status: genericEventStatus(initialDeliveryStatus), delivery_status: initialDeliveryStatus,
@@ -153,6 +159,35 @@ Deno.serve(async (request) => {
           }).eq("id", event.id);
           if (error) throw error;
           counts[initialDeliveryStatus] += 1;
+          continue;
+        }
+
+        const assertCurrentRecipient = async () => {
+          const [{ data: currentMember, error: currentMemberError }, { data: currentPreference, error: currentPreferenceError }] = await Promise.all([
+            service.from("baby_members").select("user_id").eq("baby_id", state.baby_id)
+              .eq("user_id", member.user_id).eq("status", "active").maybeSingle(),
+            service.from("care_reminder_member_preferences").select("delivery_enabled,quiet_hours_enabled,quiet_start,quiet_end,timezone")
+              .eq("baby_id", state.baby_id).eq("user_id", member.user_id)
+              .eq("reminder_type", state.reminder_type).maybeSingle(),
+          ]);
+          if (currentMemberError || currentPreferenceError) throw currentMemberError ?? currentPreferenceError;
+          if (!currentMember || !currentPreference?.delivery_enabled) return "recipient_no_longer_authorized";
+          if (currentPreference.quiet_hours_enabled && inQuietHours(
+            new Date(), currentPreference.timezone, currentPreference.quiet_start, currentPreference.quiet_end,
+          )) return "quiet_hours";
+          return null;
+        };
+
+        const staleRecipientReason = await assertCurrentRecipient();
+        if (staleRecipientReason) {
+          const deliveryStatus: DeliveryStatus = staleRecipientReason === "quiet_hours"
+            ? "skipped_quiet_hours" : "skipped_permission_or_disabled";
+          const { error } = await service.from("notification_events").update({
+            status: "skipped", delivery_status: deliveryStatus,
+            suppression_reason: staleRecipientReason, error_message: null,
+          }).eq("id", event.id).eq("status", "pending");
+          if (error) throw error;
+          counts[deliveryStatus] += 1;
           continue;
         }
 
@@ -173,6 +208,26 @@ Deno.serve(async (request) => {
         }
 
         await assertCurrentDelivery();
+        const finalRecipientReason = await assertCurrentRecipient();
+        if (finalRecipientReason) {
+          const deliveryStatus: DeliveryStatus = finalRecipientReason === "quiet_hours"
+            ? "skipped_quiet_hours" : "skipped_permission_or_disabled";
+          const { error } = await service.from("notification_events").update({
+            status: "skipped", delivery_status: deliveryStatus,
+            suppression_reason: finalRecipientReason, error_message: null,
+          }).eq("id", event.id).eq("status", "pending");
+          if (error) throw error;
+          counts[deliveryStatus] += 1;
+          continue;
+        }
+        const { data: claimedEvent, error: claimEventError } = await service.rpc(
+          "claim_notification_event_dispatch",
+          { p_event_id: event.id },
+        );
+        if (claimEventError) throw claimEventError;
+        if (!Array.isArray(claimedEvent) || !claimedEvent.some((row) => row.event_id === event.id && row.recipient_id === member.user_id)) {
+          continue;
+        }
         let deliveryStatus: DeliveryStatus;
         let disabledTokenCount = 0;
         try {
@@ -189,9 +244,11 @@ Deno.serve(async (request) => {
             }
           }
           deliveryStatus = expoDeliveryStatus(pushResult.successCount, disabledTokenCount, validTokens.length);
-        } catch (error) {
-          console.error("care reminder Expo request failed", state.id, member.user_id, error);
-          deliveryStatus = "failed_retryable";
+        } catch {
+          console.error("care reminder Expo request failed", state.id);
+          // A timeout/transport failure is billing/delivery-ambiguous. Do not
+          // automatically issue a second provider request for this event.
+          deliveryStatus = "failed_permanent";
         }
 
         const { error: eventUpdateError } = await service.from("notification_events").update({

@@ -3,9 +3,11 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { createId } from "./id";
 import { NotificationRepository } from "../repositories/NotificationRepository";
+import { queuePushTokenOperation } from "./pushTokenOperationQueue";
 import type { PushPermissionState } from "../types/notifications";
 
 const DEVICE_ID_KEY = "darin:push-device-id";
+const INSTALLATION_SECRET_KEY = "darin:push-installation-secret";
 
 export async function getPushPermissionState(): Promise<PushPermissionState> {
   if (Platform.OS !== "ios" && Platform.OS !== "android") return "unavailable";
@@ -39,10 +41,19 @@ export async function getPushDeviceId(): Promise<string> {
   return next;
 }
 
+async function getPushInstallationSecret(): Promise<string> {
+  const current = await AsyncStorage.getItem(INSTALLATION_SECRET_KEY);
+  if (current && current.length >= 32) return current;
+  const next = `${createId()}${createId()}`;
+  await AsyncStorage.setItem(INSTALLATION_SECRET_KEY, next);
+  return next;
+}
+
 /** Registers only after permission is already granted. It never prompts on app launch. */
 export async function registerCurrentPushToken(): Promise<boolean> {
-  if (await getPushPermissionState() !== "granted") return false;
-  try {
+  return queuePushTokenOperation(async () => {
+    if (await getPushPermissionState() !== "granted") return false;
+    try {
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("default", {
         name: "Darin",
@@ -54,19 +65,20 @@ export async function registerCurrentPushToken(): Promise<boolean> {
     if (!/^Expo(nent)?PushToken\[[^\]]+\]$/.test(token)) return false;
     await NotificationRepository.registerToken({
       deviceId: await getPushDeviceId(),
+      installationSecret: await getPushInstallationSecret(),
       expoPushToken: token,
     });
-    return true;
-  } catch {
-    // Simulator, Expo Go and builds without an EAS project id may not provide a token.
-    return false;
-  }
+      return true;
+    } catch {
+      // Simulator, Expo Go and builds without an EAS project id may not provide a token.
+      return false;
+    }
+  });
 }
 
 export async function unregisterCurrentPushToken(): Promise<void> {
-  try {
-    await NotificationRepository.unregisterToken(await getPushDeviceId());
-  } catch {
-    // Logout must continue even when the device is offline.
-  }
+  await queuePushTokenOperation(async () => {
+    const deviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    if (deviceId) await NotificationRepository.unregisterToken(deviceId);
+  });
 }

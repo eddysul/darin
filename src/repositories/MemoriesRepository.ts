@@ -544,7 +544,7 @@ export const MemoriesRepository = {
     void this.getById(input.memoryPostId).then((post) => post && NotificationRepository.sendPushToBabyMembers({
       eventType: "memory_reaction",
       babyId: post.babyId,
-      targetId: `${input.memoryPostId}:${authorId}:${input.reactionType}`,
+      targetId: reaction.id,
       routeData: { route: "memory", memoryPostId: input.memoryPostId, babyId: post.babyId },
     })).catch(() => undefined);
     return reaction;
