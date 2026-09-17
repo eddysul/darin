@@ -74,17 +74,41 @@ const preflight = JSON.parse(psql(`select json_build_object(
   'existingEvents',(select count(*) from public.notification_events)
 )::text;`, "dependency preflight"));
 if (!preflight.digest || !preflight.member || !preflight.memory) throw new Error("B0.4c dependency preflight failed");
-if (target === "production" && (preflight.legacyActiveTokens < 1 || preflight.unprovenActiveTokens !== 0)) {
-  throw new Error("production real-device installation proof gate has not passed");
+let approvedTesterOutage = false;
+if (target === "production" && preflight.unprovenActiveTokens !== 0) {
+  const approvedEmail = process.env.B04C_APPROVED_TESTER_EMAIL?.trim().toLowerCase() ?? "";
+  if (process.env.B04C_TESTER_OUTAGE_CONFIRM === "APPROVE_ONE_TESTER_PUSH_OUTAGE"
+      && /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(approvedEmail)
+      && preflight.legacyActiveTokens === 1 && preflight.unprovenActiveTokens === 1) {
+    const matchedCount = Number(psql(`select count(*) from public.push_tokens p
+      join auth.users u on u.id=p.user_id
+      where p.disabled_at is null and p.installation_secret_hash is null
+        and lower(u.email)=lower('${approvedEmail}');`, "approved tester ownership"));
+    approvedTesterOutage = matchedCount === 1;
+  }
+  if (!approvedTesterOutage) throw new Error("production real-device proof or exact approved tester-outage gate has not passed");
 }
 console.log(JSON.stringify({ target, projectRef, execute, identity, version, sha256,
-  restoreSha256, pending, preflight }));
+  restoreSha256, pending, preflight, approvedTesterOutage }));
 if (!execute) process.exit(0);
 if (history.has(version)) throw new Error("B0.4c migration already applied; refusing to replay against remote project");
 const confirm = target === "qa" ? "APPLY_B04C_QA" : "APPLY_B04C_PRODUCTION";
 if (process.env.B04C_APPLY_CONFIRM !== confirm) throw new Error(`${target} B0.4c explicit confirmation missing`);
 const name = "b04c_notification_security";
-const sql = `begin; set local lock_timeout='5s'; set local statement_timeout='120s';\n${source}\n`
+const atomicTokenGate = target === "production" ? `
+lock table public.push_tokens in share row exclusive mode;
+do $b04c_gate$
+begin
+  if (select count(*) from public.push_tokens where disabled_at is null and installation_secret_hash is null) <> ${approvedTesterOutage ? 1 : 0}
+     or ${approvedTesterOutage ? `(select count(*) from public.push_tokens where disabled_at is null) <> 1
+     or (select count(*) from public.push_tokens p join auth.users u on u.id=p.user_id
+       where p.disabled_at is null and p.installation_secret_hash is null
+         and lower(u.email)=lower('${process.env.B04C_APPROVED_TESTER_EMAIL?.trim().toLowerCase()}')) <> 1` : "false"} then
+    raise exception 'production push token approval state changed';
+  end if;
+end;
+$b04c_gate$;\n` : "";
+const sql = `begin; set local lock_timeout='5s'; set local statement_timeout='120s';\n${atomicTokenGate}${source}\n`
   + `insert into supabase_migrations.schema_migrations(version,name) values ('${version}','${name}');\n`
   + `${restoreSource}\ninsert into supabase_migrations.schema_migrations(version,name) values ('202609160003','b04c_push_rebind_post_cutover');\ncommit;`;
 psql(sql, `atomic ${target} B0.4c apply`, false);

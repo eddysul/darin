@@ -130,6 +130,8 @@ try {
     console.log(`PASS B0.4c migration replay ${i}/2`);
   }
   run("psql", [...connection, "-f", "supabase/migrations/202609160003_b04c_push_rebind_post_cutover.sql"]);
+  run("psql", [...connection, "-f", "supabase/migrations/202609160004_b04c_release_disabled_legacy_device_ids.sql"]);
+  run("psql", [...connection, "-f", "supabase/migrations/202609160005_b04c_recover_disabled_unproven_legacy_tokens.sql"]);
 
   if (query(`select count(*) from push_tokens where user_id='${uid(2)}' and device_id='unproven-device' and disabled_at is not null`) !== "1") {
     throw new Error("legacy token without installation proof remained active");
@@ -153,6 +155,37 @@ try {
     throw new Error("post-cutover same-account installation ID rotation failed");
   }
   console.log("PASS post-cutover same-account device ID rotation");
+
+  exec(`insert into push_tokens(user_id,device_id,expo_push_token,platform,disabled_at)
+    values('${uid(2)}','released-legacy-device','ExpoPushToken[token-disabled-legacy]','ios',now())`);
+  exec(asUser(uid(1),
+    `select register_current_push_token('released-legacy-device','ExpoPushToken[token-new-owner]','ios','${physicalSecret}',null,null)`));
+  if (query(`select count(*) from push_tokens where user_id='${uid(1)}' and device_id='released-legacy-device'
+      and expo_push_token='ExpoPushToken[token-new-owner]' and disabled_at is null`) !== "1"
+      || query(`select count(*) from push_tokens where user_id='${uid(2)}' and device_id='released-legacy-device'
+      and disabled_at is not null and installation_secret_hash is null`) !== "1") {
+    throw new Error("disabled proofless legacy device ID still blocked a new account");
+  }
+  exec(asUser(uid(1),
+    `select register_current_push_token('different-device','ExpoPushToken[token-disabled-legacy]','ios','${physicalSecret}',null,null)`));
+  if (query(`select count(*) from push_tokens where user_id='${uid(2)}' and expo_push_token='ExpoPushToken[token-disabled-legacy]'`) !== "0"
+      || query(`select count(*) from push_tokens where user_id='${uid(1)}' and expo_push_token='ExpoPushToken[token-disabled-legacy]'
+      and disabled_at is null and installation_secret_hash is not null`) !== "1") {
+    throw new Error("disabled proofless legacy Expo token was not recovered exactly once");
+  }
+  denied("recovered Expo token becomes proof-bound", asUser(uid(2),
+    `select register_current_push_token('attacker-device','ExpoPushToken[token-disabled-legacy]','ios','${attackerSecret}',null,null)`));
+  exec(`insert into push_tokens(user_id,device_id,expo_push_token,platform,disabled_at,installation_secret_hash)
+    values('${uid(2)}','proof-bound-disabled','ExpoPushToken[token-proof-bound-disabled]','ios',now(),
+      encode(extensions.digest('${physicalSecret}','sha256'),'hex'))`);
+  denied("disabled proof-bound Expo token remains protected", asUser(uid(1),
+    `select register_current_push_token('proof-bound-claim','ExpoPushToken[token-proof-bound-disabled]','ios','${attackerSecret}',null,null)`));
+  exec(`insert into push_tokens(user_id,device_id,expo_push_token,platform)
+    values('${uid(2)}','active-unproven','ExpoPushToken[token-active-unproven]','ios')`);
+  denied("active unproven Expo token remains protected", asUser(uid(1),
+    `select register_current_push_token('active-claim','ExpoPushToken[token-active-unproven]','ios','${physicalSecret}',null,null)`));
+  console.log("PASS disabled proofless legacy recovery is one-time; active and proof-bound ownership stays protected");
+  exec("delete from push_tokens where device_id in ('released-legacy-device','different-device','proof-bound-disabled','active-unproven')");
 
   denied("direct token insert revoked", asUser(uid(1), `insert into push_tokens(user_id,device_id,expo_push_token,platform) values('${uid(1)}','d','ExpoPushToken[token-direct]','ios')`));
   denied("direct token update revoked", asUser(uid(3), `update push_tokens set user_id='${uid(3)}' where device_id='legacy-device'`));

@@ -94,6 +94,49 @@ try {
       || reboundTokens[0].disabled_at) throw new Error("same-account token was not uniquely rebound");
   pass("same-account device ID replacement keeps one active token");
 
+  const releasedLegacyDevice = `qa-b04c-released-${marker}`;
+  const disabledLegacyToken = `ExpoPushToken[qa-disabled-legacy-${marker}]`;
+  const replacementToken = `ExpoPushToken[qa-replacement-${marker}]`;
+  const { error: legacyInsertError } = await service.from("push_tokens").insert({
+    user_id: outsider.user.id,
+    device_id: releasedLegacyDevice,
+    expo_push_token: disabledLegacyToken,
+    platform: "ios",
+    disabled_at: new Date().toISOString(),
+  });
+  if (legacyInsertError) throw new Error("disabled legacy token fixture failed");
+  if ((await register(recipient, releasedLegacyDevice, installationSecret, replacementToken)).error) {
+    throw new Error("disabled proofless legacy device ID blocked registration");
+  }
+  const recoveredDevice = `qa-b04c-token-recovery-${marker}`;
+  if ((await register(recipient, recoveredDevice, installationSecret, disabledLegacyToken)).error) {
+    throw new Error("disabled proofless legacy Expo token was not recoverable");
+  }
+  if (!(await register(owner, `qa-b04c-token-claim-${marker}`, attackerSecret, disabledLegacyToken)).error) {
+    throw new Error("recovered proof-bound Expo token was claimable");
+  }
+  const activeUnprovenToken = `ExpoPushToken[qa-active-unproven-${marker}]`;
+  const proofBoundDisabledToken = `ExpoPushToken[qa-proof-disabled-${marker}]`;
+  const { error: protectedFixtureError } = await service.from("push_tokens").insert([{
+    user_id: outsider.user.id,
+    device_id: `qa-b04c-active-unproven-${marker}`,
+    expo_push_token: activeUnprovenToken,
+    platform: "ios",
+  }, {
+    user_id: outsider.user.id,
+    device_id: `qa-b04c-proof-disabled-${marker}`,
+    expo_push_token: proofBoundDisabledToken,
+    platform: "ios",
+    disabled_at: new Date().toISOString(),
+    installation_secret_hash: "a".repeat(64),
+  }]);
+  if (protectedFixtureError) throw new Error("protected legacy token fixtures failed");
+  if (!(await register(owner, `qa-b04c-active-claim-${marker}`, installationSecret, activeUnprovenToken)).error
+      || !(await register(owner, `qa-b04c-proof-claim-${marker}`, installationSecret, proofBoundDisabledToken)).error) {
+    throw new Error("active or proof-bound legacy token ownership was released");
+  }
+  pass("disabled proofless legacy recovery is one-time; active and proof-bound tokens stay protected");
+
   const { error: settingError } = await recipient.sb.from("notification_settings").insert({
     user_id: recipient.user.id, baby_id: babyId, family_activity_enabled: false,
   });

@@ -52,6 +52,8 @@
     "qa:b04c:notifications:qa": "node --env-file=.env.qa --import ./scripts/lib/qa-project-preload.mjs scripts/verify-qa-b04c-notifications.mjs",
     "apply:b04c:push-compat:qa": "node --env-file=.env.qa scripts/apply-b04c-push-compat.mjs qa",
     "apply:b04c:push-compat:production": "node --env-file=.env.production-backend scripts/apply-b04c-push-compat.mjs production",
+    "apply:b04c:legacy-device-release:qa": "node --env-file=.env.qa scripts/apply-b04c-push-legacy-device-release.mjs qa --execute",
+    "apply:b04c:legacy-device-release:production": "node --env-file=.env.production-backend scripts/apply-b04c-push-legacy-device-release.mjs production --execute",
     "deploy:care-reminders:qa": "node --env-file=.env.qa scripts/deploy-push-function.mjs qa process-care-reminders",
     "deploy:care-reminders:production": "node --env-file=.env.production-backend scripts/deploy-push-function.mjs production process-care-reminders",
     "qa:b04a:p0": "node --experimental-strip-types scripts/b04a-p0-authorization-smoke.mts",
