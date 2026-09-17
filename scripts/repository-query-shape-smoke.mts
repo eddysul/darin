@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const memories = readFileSync("src/repositories/MemoriesRepository.ts", "utf8");
+const profiles = readFileSync("src/repositories/ProfileRepository.ts", "utf8");
 const diary = readFileSync("src/repositories/DiaryRepository.ts", "utf8");
 const careLogs = readFileSync("src/repositories/CareLogRepository.ts", "utf8");
 const notifications = readFileSync("src/repositories/NotificationRepository.ts", "utf8");
@@ -46,5 +47,11 @@ assert.match(careLogs, /offset \+ CARE_LOG_HYDRATION_PAGE_SIZE - 1/);
 assert.doesNotMatch(notifications, /\.select\("\*"\)/);
 assert.match(notifications, /NOTIFICATION_SETTINGS_SELECT/);
 assert.doesNotMatch(contactRequests, /\.select\(/);
+assert.match(profiles, /rpc\("list_memory_author_display"/);
+assert.match(profiles, /rpc\("list_visible_profile_display"/);
+assert.doesNotMatch(
+  profiles.slice(profiles.indexOf("listMemoryAuthorDisplayProfiles"), profiles.indexOf("getMyProfile")),
+  /\.from\("profiles"\)/,
+);
 
 console.log("Repository query shape smoke passed");

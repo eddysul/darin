@@ -12,6 +12,13 @@ import { createId } from "../utils/id";
 import { toDbRelationshipLabel } from "../utils/supabaseMappers";
 import { AuthRepository } from "./AuthRepository";
 import type { Locale } from "../i18n";
+import { collectMemoryAuthorUserIds } from "../utils/memoryAuthorDisplay";
+
+function isMissingRpc(error: { code?: string; message?: string }): boolean {
+  const message = error.message ?? "";
+  return error.code === "PGRST202" || error.code === "42883"
+    || /could not find the function|does not exist|schema cache/i.test(message);
+}
 
 const BUCKET = "profile-media";
 const SIGNED_URL_TTL_SECONDS = 180;
@@ -75,6 +82,34 @@ export const ProfileRepository = {
         nickname: row.nickname,
         avatar_storage_path: row.avatar_storage_path,
         default_relation: row.default_relation,
+      },
+      row.avatar_storage_path
+        ? await this.createProfileAvatarSignedUrl(row.avatar_storage_path).catch(() => undefined)
+        : undefined,
+    )));
+  },
+
+  /**
+   * Author identity for posts the caller can already view.
+   * Independent of the author's current family/friend membership.
+   * Projection is display_name + avatar only.
+   */
+  async listMemoryAuthorDisplayProfiles(userIds: string[]): Promise<DisplayProfile[]> {
+    const ids = collectMemoryAuthorUserIds(userIds);
+    if (!ids.length) return [];
+    const sb = requireSupabase();
+    const { data, error } = await sb.rpc("list_memory_author_display", { p_user_ids: ids });
+    if (error) {
+      if (isMissingRpc(error)) return this.listVisibleDisplayProfiles(ids);
+      throw error;
+    }
+    return Promise.all((data ?? []).map(async (row) => rowToDisplay(
+      {
+        id: row.user_id,
+        display_name: row.display_name,
+        nickname: null,
+        avatar_storage_path: row.avatar_storage_path,
+        default_relation: null,
       },
       row.avatar_storage_path
         ? await this.createProfileAvatarSignedUrl(row.avatar_storage_path).catch(() => undefined)

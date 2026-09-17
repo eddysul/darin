@@ -751,6 +751,14 @@ export type Database = {
           default_relation: string | null;
         }>;
       };
+      list_memory_author_display: {
+        Args: { p_user_ids: string[] };
+        Returns: Array<{
+          user_id: string;
+          display_name: string | null;
+          avatar_storage_path: string | null;
+        }>;
+      };
       can_edit_care_logs: { Args: { p_baby_id: string }; Returns: boolean };
       can_edit_growth_records: { Args: { p_baby_id: string }; Returns: boolean };
       can_create_diary_entry: { Args: { p_baby_id: string }; Returns: boolean };

@@ -41,6 +41,11 @@ import type { RelationshipLabel } from "../types/growthBook";
 import type { MessageKey } from "../i18n";
 import { colors, radius } from "../theme";
 import { caughtErrorMessage } from "../utils/familyDisplay";
+import {
+  memoryAuthorIdsFromBundle,
+  resolveMemoryAuthorAvatarUrl,
+  resolveMemoryAuthorName,
+} from "../utils/memoryAuthorDisplay";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MemoryDetail">;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -78,17 +83,18 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
       if (friendView && next.post.privacyType !== "friend_circle") throw new Error(t("memory.critical.156"));
       setBundle(next);
       setIsSaved(friendView ? false : await MemoriesRepository.isSaved(next.post.id));
+      const profileIds = memoryAuthorIdsFromBundle(next);
       if (friendView) {
         const [profiles, contexts] = await Promise.all([
-          ProfileRepository.listVisibleDisplayProfiles([
-            next.post.authorId,
-            ...next.comments.map((item) => item.authorId),
-            ...next.reactions.map((item) => item.authorId),
-          ]),
+          ProfileRepository.listMemoryAuthorDisplayProfiles(profileIds).catch(() => [] as DisplayProfile[]),
           MemoriesRepository.listMyFriendMemoryContexts(),
         ]);
         setVisibleProfiles(profiles);
         setFriendBabyName(contexts.find((item) => item.babyId === next.post.babyId)?.babyName ?? "");
+      } else {
+        setVisibleProfiles(
+          await ProfileRepository.listMemoryAuthorDisplayProfiles(profileIds).catch(() => [] as DisplayProfile[]),
+        );
       }
       setImageUrls(await Promise.all(next.media.map(async (media) => {
         const localUri = getLocalUriForMedia(media.id);
@@ -117,20 +123,30 @@ export function MemoryDetailScreen({ route, navigation }: Props) {
     return () => clearTimeout(timer);
   }, [commentStatus, t]);
 
-  const authorName = (id: string) => {
-    if (id === logAuthor.userId || id === userId) return logAuthor.name;
-    return familyMembers.find((member) => member.id === id)?.name
-      ?? visibleProfiles.find((profile) => profile.userId === id)?.displayName
-      ?? t("memory.critical.050");
-  };
+  const authorProfileById = useMemo(
+    () => new Map(visibleProfiles.map((profile) => [profile.userId, profile])),
+    [visibleProfiles],
+  );
+  const viewerAvatarUrl = familyMembers.find((member) => member.isMe)?.avatarUrl;
+  const authorName = (id: string) => resolveMemoryAuthorName({
+    authorId: id,
+    profile: authorProfileById.get(id),
+    viewerUserId: userId || logAuthor.userId,
+    viewerName: logAuthor.name,
+    missingLabel: t("memory.critical.050"),
+  });
 
-  const authorAvatar = (id: string) => familyMembers.find((member) => member.id === id)?.avatarUrl
-    ?? visibleProfiles.find((profile) => profile.userId === id)?.avatarUrl;
+  const authorAvatar = (id: string) => resolveMemoryAuthorAvatarUrl({
+    authorId: id,
+    profile: authorProfileById.get(id),
+    viewerUserId: userId || logAuthor.userId,
+    viewerAvatarUrl,
+  });
 
   const commentAuthorLabel = (id: string) => {
     if (id === logAuthor.userId || id === userId) return t("memory.critical.125", { name: logAuthor.name });
     const member = familyMembers.find((item) => item.id === id);
-    const visible = visibleProfiles.find((item) => item.userId === id);
+    const visible = authorProfileById.get(id);
     if (visible) return visible.displayName;
     if (!member) return t("memory.critical.050");
     const suffixes = ["mom", "dad", "grandmother", "grandfather", "aunt", "uncle", "guardian", "family", "sitter", "friend", "other"] as const;

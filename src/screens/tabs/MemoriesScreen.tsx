@@ -20,14 +20,21 @@ import { MemoryViewFilterSheet, memoryViewFilterMessageKey, type MemoryViewFilte
 import { memoryPrivacyPresentation } from "../../components/memories/memoryPresentation";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { MemoriesRepository, MEMORY_FEED_PAGE_SIZE } from "../../repositories/MemoriesRepository";
+import { ProfileRepository } from "../../repositories/ProfileRepository";
 import { createId } from "../../utils/id";
 import { getEagerPhoto, getLocalUriForMedia, subscribeEagerUploads } from "../../utils/eagerMediaUpload";
 import { formatLocalizedDate } from "../../utils/localeFormat";
 import type { MemoryCard, MemoryTag, MemoryTagDraft, PublishEagerMemoryInput } from "../../types/memory";
+import type { DisplayProfile } from "../../types/profileSettings";
 import { colors, fontScaleCap, radius } from "../../theme";
 import { NotificationBellButton } from "../../components/NotificationBellButton";
 import { useLanguage } from "../../LanguageContext";
 import { caughtErrorMessage } from "../../utils/familyDisplay";
+import {
+  memoryAuthorIdsFromCards,
+  mergeDisplayProfiles,
+  resolveMemoryAuthorName,
+} from "../../utils/memoryAuthorDisplay";
 
 import type { MemoryCriticalKey } from "../../i18nMemoriesCriticalMessages";
 
@@ -239,6 +246,7 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
   const [expandedCaptions, setExpandedCaptions] = useState<Set<string>>(() => new Set());
   const [likingPostIds, setLikingPostIds] = useState<Set<string>>(() => new Set());
   const [savingPostIds, setSavingPostIds] = useState<Set<string>>(() => new Set());
+  const [authorProfiles, setAuthorProfiles] = useState<DisplayProfile[]>([]);
   const likingPostIdsRef = useRef<Set<string>>(new Set());
   const savingPostIdsRef = useRef<Set<string>>(new Set());
   const pendingPublishesRef = useRef<Map<string, PublishEagerMemoryInput>>(new Map());
@@ -341,6 +349,9 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
       pageOffsetsRef.current = new Map(feedBabyIds.map((id, index) => [id, lists[index]?.length ?? 0]));
       exhaustedBabyIdsRef.current = new Set(feedBabyIds.filter((id, index) => (lists[index]?.length ?? 0) < MEMORY_FEED_PAGE_SIZE));
       const unique = new Map(lists.flat().map((card) => [card.post.id, card]));
+      setAuthorProfiles(await ProfileRepository.listMemoryAuthorDisplayProfiles(
+        memoryAuthorIdsFromCards([...unique.values()]),
+      ).catch(() => [] as DisplayProfile[]));
       setCards((current) => {
         const optimistic = current.filter((card) => card.isOptimistic && !unique.has(card.post.id));
         const merged = [...optimistic, ...unique.values()].sort((a, b) => b.post.createdAt.localeCompare(a.post.createdAt));
@@ -378,9 +389,14 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
         pageOffsetsRef.current.set(id, (pageOffsetsRef.current.get(id) ?? 0) + count);
         if (count < MEMORY_FEED_PAGE_SIZE) exhaustedBabyIdsRef.current.add(id);
       });
+      const incoming = lists.flat();
+      const incomingProfiles = await ProfileRepository.listMemoryAuthorDisplayProfiles(
+        memoryAuthorIdsFromCards(incoming),
+      ).catch(() => [] as DisplayProfile[]);
+      setAuthorProfiles((current) => mergeDisplayProfiles(current, incomingProfiles));
       setCards((current) => {
         const unique = new Map(current.map((card) => [card.post.id, card]));
-        for (const card of lists.flat()) {
+        for (const card of incoming) {
           const localCover = localCoversRef.current.get(card.post.id);
           const coverFromMedia = card.coverMedia?.id ? getLocalUriForMedia(card.coverMedia.id) : undefined;
           unique.set(card.post.id, {
@@ -488,10 +504,17 @@ export function MemoriesScreen({ onOpenSettings, onOpenNotifications, onOpenFami
     setCards((current) => current.map((item) => item.post.id === card.post.id ? { ...item, hasFailedMedia: false } : item));
   }, [publishMemory]);
 
-  const authorName = (authorId: string) => {
-    if (authorId === logAuthor.userId) return logAuthor.name;
-    return familyMembers.find((member) => member.id === authorId)?.name ?? t("memory.critical.050");
-  };
+  const authorProfileById = useMemo(
+    () => new Map(authorProfiles.map((profile) => [profile.userId, profile])),
+    [authorProfiles],
+  );
+  const authorName = (authorId: string) => resolveMemoryAuthorName({
+    authorId,
+    profile: authorProfileById.get(authorId),
+    viewerUserId: logAuthor.userId,
+    viewerName: logAuthor.name,
+    missingLabel: t("memory.critical.050"),
+  });
 
   const toggleLike = useCallback(async (card: MemoryCard) => {
     if (card.publishError || likingPostIdsRef.current.has(card.post.id)) return;

@@ -31,6 +31,7 @@
     "qa:build12": "pnpm dlx tsx scripts/build12-multibaby-qa-smoke.mts",
     "qa:build14-stickers": "pnpm dlx tsx scripts/growth-sticker-qa-smoke.mts",
     "qa:memory-zoom": "node --experimental-strip-types scripts/memory-media-zoom-qa.mts",
+    "qa:memory-author": "node --experimental-strip-types scripts/memory-author-display-qa.mts",
     "qa:mobile-ui": "node scripts/mobile-ui-qa-smoke.mjs",
     "qa:repository-queries": "node --experimental-strip-types scripts/repository-query-shape-smoke.mts",
     "qa:architecture": "node --experimental-strip-types scripts/architecture-boundary-smoke.mts",

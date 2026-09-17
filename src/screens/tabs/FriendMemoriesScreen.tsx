@@ -14,6 +14,11 @@ import { colors, radius } from "../../theme";
 import { useLanguage } from "../../LanguageContext";
 import { formatLocalizedDate } from "../../utils/localeFormat";
 import { caughtErrorMessage } from "../../utils/familyDisplay";
+import {
+  memoryAuthorIdsFromCards,
+  mergeDisplayProfiles,
+  resolveMemoryAuthorName,
+} from "../../utils/memoryAuthorDisplay";
 
 type Props = {
   onOpenNotifications: () => void;
@@ -51,7 +56,9 @@ export function FriendMemoriesScreen({ onOpenNotifications, onOpenDetail }: Prop
       const nextCards = lists.flat()
         .filter((item) => item.post.privacyType === "friend_circle" && item.post.status === "published" && !item.post.deletedAt)
         .sort((a, b) => b.post.createdAt.localeCompare(a.post.createdAt));
-      const nextProfiles = await ProfileRepository.listVisibleDisplayProfiles(nextCards.map((item) => item.post.authorId));
+      const nextProfiles = await ProfileRepository.listMemoryAuthorDisplayProfiles(
+        memoryAuthorIdsFromCards(nextCards),
+      ).catch(() => [] as DisplayProfile[]);
       setContexts(nextContexts);
       setCards(nextCards);
       setProfiles(nextProfiles);
@@ -84,17 +91,15 @@ export function FriendMemoriesScreen({ onOpenNotifications, onOpenDetail }: Prop
       });
       const incoming = lists.flat()
         .filter((item) => item.post.privacyType === "friend_circle" && item.post.status === "published" && !item.post.deletedAt);
-      const incomingProfiles = await ProfileRepository.listVisibleDisplayProfiles(incoming.map((item) => item.post.authorId));
+      const incomingProfiles = await ProfileRepository.listMemoryAuthorDisplayProfiles(
+        memoryAuthorIdsFromCards(incoming),
+      ).catch(() => [] as DisplayProfile[]);
       setCards((current) => {
         const unique = new Map(current.map((card) => [card.post.id, card]));
         incoming.forEach((card) => unique.set(card.post.id, card));
         return [...unique.values()].sort((a, b) => b.post.createdAt.localeCompare(a.post.createdAt));
       });
-      setProfiles((current) => {
-        const unique = new Map(current.map((profile) => [profile.userId, profile]));
-        incomingProfiles.forEach((profile) => unique.set(profile.userId, profile));
-        return [...unique.values()];
-      });
+      setProfiles((current) => mergeDisplayProfiles(current, incomingProfiles));
     } catch (cause) {
       setError(caughtErrorMessage(t, cause, "memory.critical.177"));
     } finally {
@@ -107,6 +112,11 @@ export function FriendMemoriesScreen({ onOpenNotifications, onOpenDetail }: Prop
 
   const contextByBabyId = useMemo(() => new Map(contexts.map((item) => [item.babyId, item])), [contexts]);
   const profileById = useMemo(() => new Map(profiles.map((item) => [item.userId, item])), [profiles]);
+  const authorName = useCallback((authorId: string) => resolveMemoryAuthorName({
+    authorId,
+    profile: profileById.get(authorId),
+    missingLabel: t("memory.critical.050"),
+  }), [profileById, t]);
 
   const toggleLike = async (card: MemoryCard) => {
     if (workingIds.has(card.post.id)) return;
@@ -161,7 +171,7 @@ export function FriendMemoriesScreen({ onOpenNotifications, onOpenDetail }: Prop
                 <View style={styles.metaRow}>
                   <ProfileAvatar uri={author?.avatarUrl ?? context?.avatarUrl} size={34} />
                   <View style={styles.metaCopy}>
-                    <Text style={styles.author}>{author?.displayName ?? t("memory.critical.155")}</Text>
+                    <Text style={styles.author}>{authorName(item.post.authorId)}</Text>
                     <Text style={styles.date}>{formatLocalizedDate(item.post.createdAt, locale, { year: "numeric", month: "long", day: "numeric" })}</Text>
                   </View>
                   <View style={styles.badge}><Text style={styles.badgeText}>{t("memory.critical.058")}</Text></View>
