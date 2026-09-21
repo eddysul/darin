@@ -2,7 +2,7 @@
 
 계획: [DARIN-BABY-SCOPED-SHARING-UI-STABILIZATION-PLAN-2026-09-20.md](./DARIN-BABY-SCOPED-SHARING-UI-STABILIZATION-PLAN-2026-09-20.md)
 
-상태: G4 focused security review와 전체 로컬 회귀까지 완료하고 G5 직전에 중단. QA/Production 적용은 미실행이다. 이 문서는 적용·배포 증빙이 아니다.
+상태: G0–G6 로컬/QA 실행과 최종 provenance·잔여 위험 정리를 완료했다. Production 적용은 수행하지 않았다.
 
 ## G0 변경 inventory와 기준선
 
@@ -154,21 +154,107 @@ G0–G3 source 기준점은 `96891a4833ae009b8d95ab0dfda76c5562c86731`이다. G4
 
 focused review 기준 변경 경로에 남은 P0/P1은 확인되지 않았다. 이미 발급된 signed URL은 승인된 계약대로 최대 180–300초 만료까지 유효하며, 새 발급은 철회 즉시 차단한다.
 
-## 아직 통과로 판정하지 않은 항목
+## G5 QA migration 및 실제 API 통합 공격 회귀
 
-- G1의 로컬 코드/정적/기존 iOS simulator 회귀는 PASS다. 다만 실제 account X→Y 수동 UI, 작은 Android 화면, media 부분 실패의 실제 UI, 장시간 메모리/중복 subscription 계측은 이번 정지점에서 실행하지 않았다. 실기기는 계획 범위에서 제외되어 있다.
-- G2/G3 변경은 G4 focused security review와 전체 로컬 공격 회귀까지 PASS다. 실제 QA schema/data preflight는 G5 전 단계이므로 아직 수행하지 않았다.
-- G5–G6: QA/Production migration/API 공격 회귀와 release gate는 미실행이다.
-- 기존 signed URL의 만료 전 강제 철회는 승인된 계약상 제공하지 않는다. 신규 발급은 권한 철회 즉시 차단한다.
+### QA preflight와 적용 범위
 
-## 일시 중단 인계 — 재개 시 여기서 시작
+- 대상은 QA project `rkveopusmgleuarbcrnt`로 고정했고 Production ref가 포함되면 중단하는 guard를 사용했다.
+- QA에는 target 직전 migration 중 `202609170004_search_invite_profiles.sql`과 `202609180002_delete_created_baby.sql`이 적용되지 않은 상태였다. 전자는 현재 G3 invite 검색 RPC의 직접 dependency이고, 후자는 G2/G4 lifecycle migration이 전제하는 creator-only 삭제·guard의 직접 dependency라 target과 같은 transaction에 포함했다.
+- `202608220002`, `202608260003`, `202609170001`, `202609170002`는 target과 독립이므로 적용하지 않았다. fake history mark, timestamp 변경, rename/delete는 하지 않았다.
+- 아래 다섯 source를 하나의 transaction에서 실제 SQL 실행 후 실제 migration history에 기록했다. 실패 시 전체가 rollback되는 경계로 적용했다.
 
-1. G5에서 QA project identity·pending migration dependency·synthetic fixture를 read-only 확인한 뒤 migration/API 공격 회귀로 이동한다. Production은 별도 승인 전 변경하지 않는다.
-2. G5에서 migration source SHA와 적용 대상을 다시 고정하고, admin/family/friend/cross-baby/removed/concurrency/Storage matrix의 실제 QA API 결과를 기록한다.
-3. 별도 UI release gate 전에 아직 미실행인 authenticated sharing/timeline 수동 확인, account X→Y 전환, 작은 Android, media partial failure UI, 장시간 subscription 계측을 보완한다.
+| migration | source SHA-256 |
+| --- | --- |
+| `202609170004_search_invite_profiles.sql` | `6f3b9387942e878610bea8a6363729b4b4ad200e1dde9a54f0cf71990f78964c` |
+| `202609180002_delete_created_baby.sql` | `01513d38192bcb3288ef0228387d74c92d543d82c28ec1d99b10b4bcfe76680d` |
+| `202609200001_baby_scoped_permissions.sql` | `2afc4e56f690c0ecc0cd6aae79643db07999637b6ca1c80588275de5ed2e1b22` |
+| `202609200002_baby_scoped_extended_enforcement.sql` | `69893e760a7572b5154d5ea5f324f3b0315927e285a21cd74eaad1722de4c03a` |
+| `202609200003_baby_scoped_account_lifecycle.sql` | `f6404149414716a586835e2682b51c3431db2a8d9bbc52edc8718d03e1ee3935` |
 
-현재 소스에서 `typecheck`, mobile UI, Overview growth/category, weekly AI cache, report, build12, Diary, Voice scope, architecture, repository query, invite, i18n coverage/release/audit, secrets, B0.4a/B0.4b/B0.4c 정적 회귀와 `git diff --check`가 PASS했다.
+적용 직후 `baby_access_permissions`, invite search, creator delete/cleanup, access toggle, Full Admin promotion, account lifecycle, 내부 helper grant 회수, 기존 3-column media resolver가 실제 QA schema에 존재하는지 확인했다. permission dependency 위반 행과 현재 관계가 없는 orphan permission 행은 모두 0이다.
 
-G4에서는 QA/Production migration, Supabase 변경, 배포를 하지 않았다. 기존 무관한 dirty worktree 변경은 그대로 보존한다.
+### 데이터 integrity와 fail-closed 처리
 
-현재 verdict: `G4 SECURITY/LOCAL REGRESSION PASS — READY FOR G5 QA PREFLIGHT`
+- preflight에서 membership/friend의 NULL status·role, 중복 membership/friend는 0이었다.
+- 기존 QA에는 active Full Admin이 없는 legacy baby가 있었다. 신뢰할 수 있는 creator/current-authority 근거 없이 누구에게도 권한을 추정·부여하지 않았다. 최종 broader postflight 기준 28개가 계속 fail-closed 상태다.
+- 이 legacy data는 기존에도 현재 RLS에서 접근 불가능했으며 이번 migration이 노출하거나 자동 승격하지 않았다. 별도 운영 data-cleanup 결정으로 남긴다.
+
+### 실제 QA API 공격 회귀
+
+- B0.4b 실제 Storage API/signed-URL/cleanup matrix: `146 PASS / 0 skipped`.
+- G5 disposable authenticated account API matrix: `26 PASS / 0 skipped`.
+- Full Admin backfill, 독립 `care.read/write`, friend moments-only, no-moments family, social comment/react positive control을 확인했다.
+- cross-baby care read/write, arbitrary-user helper 호출, 직접 Full Admin role grant, non-admin invite search, 초대 Full Admin의 creator-only 삭제를 차단했다.
+- 전용 Full Admin promotion, creator 삭제, last noncreator Full Admin account-lifecycle 정리를 정상 control로 확인했다.
+- permission 철회 후 새 Moment 조회와 comment가 즉시 거부됐고, B0.4b matrix에서 새 signed URL 발급도 즉시 거부됐다. 이미 발급된 URL의 bounded TTL 계약은 그대로다.
+- 두 인증 세션의 Full Admin 이탈을 동시에 실행해 정확히 한 membership만 제거되고 active Full Admin 1명이 남는 것을 실제 QA에서 확인했다.
+- 일회용 synthetic fixture만 사용했고 종료 후 `G5 baby scoped %` baby와 `qa-g5*@darin.invalid` Auth 사용자는 모두 0이다.
+
+### postflight와 Production isolation
+
+- 적용 migration history는 `202609170004`, `202609180002`, `202609200001`, `202609200002`, `202609200003` 다섯 건과 일치한다.
+- 의도적으로 제외한 `202608220002`, `202608260003`, `202609170001`, `202609170002`는 계속 pending이다.
+- `typecheck`, baby-scoped static, permissions/extended/lifecycle local PostgreSQL, B0.4b static, architecture, repository-query, secrets, `git diff --check`가 PASS했다. sandbox 안의 PostgreSQL 최초 실행은 OS shared-memory 제한으로 시작 전에 실패했으며, 동일 명령을 정상 local execution boundary에서 재실행해 세 suite 모두 PASS했다.
+- Production project `efipxojpdirvkeyfdfzl`에는 위 다섯 target migration이 여전히 0건임을 read-only로 확인했다. Production schema/data mutation, EAS/mobile, Storage object, Supabase function 배포는 수행하지 않았다.
+
+G5에서 새 P0/P1은 확인되지 않았다. QA runtime에 남은 운영 항목은 기존 legacy orphan baby의 별도 cleanup 판단과, 미래 `202609170001`/`002` 적용 전에 현재 media resolver와의 migration ordering을 다시 검증하는 것이다.
+
+## G6 최종 provenance 및 Phase 1–4 인계 기준선
+
+### Source / QA provenance
+
+| 범위 | 기준 |
+| --- | --- |
+| G0–G3 구현 | commit `96891a4833ae009b8d95ab0dfda76c5562c86731` |
+| G4 security hardening | commit `741546f4237a01a1347d7198cb4375bacbaa3de4` |
+| QA 권한 runtime source | `741546f...`의 `170004`, `200001`, `200002`, `200003` + 이 문서와 함께 provenance commit된 `180002` |
+| QA migration history | `170004`, `180002`, `200001`, `200002`, `200003` applied |
+| Production migration history | 위 target 5개 모두 unapplied |
+| QA API 증거 | Storage/API `146 PASS`, baby-scoped authenticated API `26 PASS`, postflight `5 PASS` |
+
+`202609180002_delete_created_baby.sql`은 SHA-256 `01513d38192bcb3288ef0228387d74c92d543d82c28ec1d99b10b4bcfe76680d`로 QA 적용 source와 일치하며 이 문서·G5 재현 도구와 같은 provenance commit에 포함했다. 재현 도구의 exact SHA는 다음과 같다.
+
+- `verify-qa-baby-scoped-g5.mjs`: `59c895b436e262d8ceb42c5bc1b3321e75d3cec93282bd2926c9d109e5e1fae0`
+- `verify-qa-baby-scoped-g5-postflight.mjs`: `785246223133bdd50e290570bede33b010b667080c7b632ccad5eebd899cfdb6`
+- `verify-production-baby-scoped-g5-untouched.mjs`: `e1cf045ac45c4278b5457fa781ae22c80aba8691da4e1af6398cc68c90f2f57b`
+
+최종 기준선은 **commit `741546f...` + 이 문서와 `180002`·G5 증빙 도구를 포함하는 provenance commit**이다. 사용자의 commit 요청에 따라 이 범위만 stage했고 무관한 worktree 변경은 stage/revert하지 않았다.
+
+### 최종 자동·보안 gate
+
+- `typecheck`, mobile UI, Overview growth/category/category-compare, pregnancy Overview, baby switch responsiveness, baby deletion UI, logout timeout: PASS
+- weekly AI cache, report, build12 multi-baby, Diary save, Voice scope, architecture, repository query: PASS
+- invite search/response, five-locale i18n audit/coverage/release, secrets: PASS
+- B0.4a P0, ID invite, ownership/visibility, final authorization 정적 및 local PostgreSQL authorization/concurrency: PASS
+- baby-scoped permission/extended/lifecycle 정적 및 local PostgreSQL authorization/concurrency: PASS
+- B0.4b Storage 정적 + G4 local API `184 PASS` + G5 actual QA API `146 PASS`: PASS
+- B0.4c Notification 정적 및 local PostgreSQL: PASS
+- G5 QA postflight와 Production target-unapplied read-only 확인: PASS
+- `git diff --check`: PASS
+
+샌드박스 안에서 `pnpm dlx`의 registry/IPC와 local PostgreSQL shared-memory가 차단된 실행은 코드 실패로 분류하지 않았다. 동일 명령을 정상 local execution boundary에서 재실행해 모두 PASS를 확인했다.
+
+### Phase 1–4가 따라야 할 확정 계약
+
+1. 모든 sharing/data/cache/mutation은 account+active baby scope에 귀속하고 늦은 응답의 화면·저장을 차단한다.
+2. 관계 label은 표시 metadata다. authorization은 current relation과 baby-scoped capability의 교집합으로 결정한다.
+3. Full Admin은 기존 admin의 전용 승인 RPC로만 추가한다. 직접 role 변경이나 관계 label로 승격하지 않는다.
+4. care와 moments/social 권한은 독립적이며 write→read, social→moments.read dependency를 UI와 서버 모두 검증한다.
+5. Care/Diary/Growth/Moment의 기존 author ownership, published/privacy/recipient 조건을 capability가 우회하지 않는다.
+6. 직접 baby 삭제는 creator-only다. 계정 삭제의 last-admin cleanup은 parent lock, graph cascade, Storage cleanup queue 계약을 따른다.
+7. 철회 후 신규 query/mutation/upload/signed URL은 즉시 거부한다. 기존 signed URL은 승인된 180–300초 TTL 만료까지 유효할 수 있다.
+8. Overview rhythm은 오늘 현재 시각 vs 어제 같은 시각, 독립 row cursor, 실제 동적 category와 원본 event 의미를 유지한다.
+9. 현재 polished UI와 동일 오리 identity를 기준선으로 유지하며 전체 redesign이나 관계 기반 공개 SNS 확장을 하지 않는다.
+
+### 남은 위험과 미실행 범위
+
+- QA의 기존 legacy orphan baby 28개는 fail-closed다. 임의 사용자에게 권한을 부여하지 않았으며 별도 data cleanup/보존 결정을 내려야 한다.
+- pending `202609170001_memory_video_media.sql`과 `202609170002_dismiss_notification_event.sql`은 적용 전 현재 media resolver 반환형·capability enforcement와 migration ordering을 다시 확인해야 한다.
+- 실제 account X→Y 수동 UI, 작은 Android 화면, media partial-failure UI, 장시간 메모리/중복 subscription 계측은 별도 UI release gate다. 실기기 검증은 승인된 계획 범위에서 제외했다.
+- signed URL 즉시 강제 철회는 제공하지 않는다. 승인된 계약은 신규 발급 즉시 차단 + 기존 bearer의 bounded expiry다.
+- QA PASS는 Production release approval이 아니다. Production migration, EAS/mobile, Supabase function 배포는 모두 수행하지 않았다.
+- QA 적용 source와 G5 증빙은 동일 provenance commit으로 고정했다.
+
+위 항목은 현재 검증 범위에서 권한 우회나 데이터 노출로 재현된 미해결 P0/P1이 아니다. Production 전에는 orphan-data disposition, pending migration ordering과 별도 Production migration gate를 승인해야 한다.
+
+현재 verdict: `DARIN BABY-SCOPED SHARING MODEL LOCAL/QA PASS`
