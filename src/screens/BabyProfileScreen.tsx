@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,9 +18,11 @@ import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "../LanguageContext";
 import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
-import { BabySwitcher } from "../components/babylog/BabySwitcher";
 import { RecordDatePickerModal } from "../components/babylog/RecordDatePickerModal";
 import { ProfileAvatar } from "../components/profile/ProfileAvatar";
+import { ProfileEditFieldRow } from "../components/profile/ProfileEditFieldRow";
+import { ProfileEditLinkRow } from "../components/profile/ProfileEditLinkRow";
+import { NavigationHeader } from "../components/navigation/NavigationHeader";
 import { EmptyState } from "../components/states/FeedbackStates";
 import { useApp } from "../context/AppContext";
 import { useAppSettings } from "../context/AppSettingsContext";
@@ -37,15 +39,30 @@ import type { FamilyMemberDisplay, UploadAvatarInput } from "../types/profileSet
 import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
 import { familyRoleToPermission, permissionToFamilyRole } from "../utils/supabaseMappers";
 import { BabyRepository } from "../repositories/BabyRepository";
+import { captureSessionScope } from "../lib/supabase";
 import { formatBabyAge, formatDueCountdown, formatGestationalAge, isPregnancyStage } from "../utils/childDisplay";
 import { isValidBirthDate, isValidCalendarDate } from "../utils/dateInput";
 import { formatDateKey, offsetDateKey } from "../utils/dateKey";
+import { canOfferBabyDeletion } from "../utils/babyDeletionEligibility";
 import { localDataScopeId } from "../utils/scopedLocalStorage";
 import { presentAvatarPicker } from "../utils/profileAvatarPicker";
-import { colors, radius } from "../theme";
+import { colors, fontScaleCap, radius } from "../theme";
 import { CAUTION_FOOD_PRESETS } from "../types/cautionFood";
 
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
+
+type BabyEditSnapshot = {
+  name: string;
+  nickname: string;
+  note: string;
+  birthDate: string;
+  dueDate: string;
+  gender: string;
+  birthWeight: string;
+  avatarUrl?: string;
+};
+
+type BabyEditPanel = "main" | "details";
 
 const MEMBER_COLORS = [colors.amber, "#7c83fd", "#5CB87A", "#c98a54"];
 
@@ -82,6 +99,7 @@ export function BabyProfileScreen() {
     activeBabyId,
     localDataScope,
     addBaby,
+    deleteCreatedBaby,
   } = useBabyLog();
 
   const babyId = activeBabyId;
@@ -111,6 +129,19 @@ export function BabyProfileScreen() {
   const [members, setMembers] = useState<FamilyMemberDisplay[]>([]);
   const [customCautionFood, setCustomCautionFood] = useState("");
   const [pendingAvatar, setPendingAvatar] = useState<UploadAvatarInput | null>(null);
+  const [pendingClear, setPendingClear] = useState(false);
+  const [editPanel, setEditPanel] = useState<BabyEditPanel>("main");
+  const [snapshot, setSnapshot] = useState<BabyEditSnapshot | null>(null);
+  const [verifiedCreator, setVerifiedCreator] = useState<{ babyId: string; accountId: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const loadRunRef = useRef(0);
+  const canDeleteBaby = canOfferBabyDeletion({
+    babyId,
+    accountId: localDataScope?.userId ?? null,
+    creatorProof: verifiedCreator,
+    familyRole: myFamilyRole,
+    busy: isCreating || editing || loading || deleting,
+  });
 
   const localizedError = useCallback((cause: unknown, fallback: Parameters<typeof t>[0]) =>
     cause instanceof BabyProfileError ? t(BABY_PROFILE_ERROR_KEYS[cause.code]) : t(fallback), [t]);
@@ -123,6 +154,8 @@ export function BabyProfileScreen() {
     return index >= 0 ? t(`profileSetup.relation.${keys[index]}` as Parameters<typeof t>[0]) : relation;
   }, [t]);
 
+  const identityEditing = editing && !isCreating;
+
   useLayoutEffect(() => {
     const goHome = () => {
       if (convertBirth) navigation.setParams({ mode: undefined });
@@ -130,6 +163,7 @@ export function BabyProfileScreen() {
       else navigation.navigate("MainTabs");
     };
     navigation.setOptions({
+      headerShown: !identityEditing,
       title: isCreating ? t("babyProfile.title.add") : convertBirth ? t("babyProfile.title.birth") : t("babyProfile.title.profile"),
       headerLeft: () => (
         <Pressable
@@ -143,7 +177,7 @@ export function BabyProfileScreen() {
         </Pressable>
       ),
     });
-  }, [convertBirth, isCreating, navigation, t]);
+  }, [convertBirth, identityEditing, isCreating, navigation, t]);
 
   const pregnancy = isCreating ? createStage === "pregnancy" : isPregnancyStage({
     childStatus: careSetup.child.childStatus,
@@ -158,8 +192,10 @@ export function BabyProfileScreen() {
       );
 
   const load = useCallback(async (opts?: { skipBirthConvert?: boolean }) => {
+    const run = ++loadRunRef.current;
     setLoading(true);
     setError("");
+    setVerifiedCreator(null);
     if (isCreating) {
       setName("");
       setNickname("");
@@ -172,6 +208,8 @@ export function BabyProfileScreen() {
       setNote("");
       setAvatarUrl(undefined);
       setPendingAvatar(null);
+      setPendingClear(false);
+      setSnapshot(null);
       setEditing(true);
       setMembers([]);
       setLoading(false);
@@ -189,13 +227,18 @@ export function BabyProfileScreen() {
         setConverting(true);
         setEditing(true);
         setBirthDate("");
+        setEditPanel("details");
       } else {
         setConverting(false);
       }
     };
     try {
       if (babyId) {
+        const scope = await captureSessionScope();
         const profile = await BabyProfileRepository.getBabyProfile(babyId);
+        await scope.assertCurrent();
+        if (run !== loadRunRef.current) return;
+        if (profile?.createdBy === scope.accountId) setVerifiedCreator({ babyId, accountId: scope.accountId });
         if (profile) {
           setName(profile.name);
           setNickname(profile.nickname ?? "");
@@ -205,6 +248,8 @@ export function BabyProfileScreen() {
           setGender((profile.gender as typeof gender) || "unknown");
           setNote(profile.note ?? "");
           setAvatarUrl(profile.avatarUrl ?? profile.photoUrl);
+          setPendingAvatar(null);
+          setPendingClear(false);
           applyBirthConvert(profile.birthDate, profile.childStatus);
         } else {
           applyBirthConvert(careSetup.child.birthDate, careSetup.child.childStatus);
@@ -222,13 +267,91 @@ export function BabyProfileScreen() {
         applyBirthConvert(careSetup.child.birthDate, careSetup.child.childStatus);
       }
     } catch (cause) {
+      if (run !== loadRunRef.current) return;
+      setVerifiedCreator(null);
       setError(localizedError(cause, "babyProfile.error.load"));
     } finally {
-      setLoading(false);
+      if (run === loadRunRef.current) setLoading(false);
     }
   }, [babyId, careSetup.child, convertBirth, isCreating, localizedError]);
 
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    if (identityEditing && snapshot) return;
+    void load();
+  }, [identityEditing, load, snapshot]));
+
+  const currentSnapshot = useMemo<BabyEditSnapshot>(() => ({
+    name: name.trim(),
+    nickname: nickname.trim(),
+    note: note.trim(),
+    birthDate,
+    dueDate,
+    gender,
+    birthWeight: birthWeight.trim(),
+    avatarUrl,
+  }), [avatarUrl, birthDate, birthWeight, dueDate, gender, name, nickname, note]);
+
+  const dirty = Boolean(snapshot) && (
+    currentSnapshot.name !== snapshot?.name
+    || currentSnapshot.nickname !== snapshot.nickname
+    || currentSnapshot.note !== snapshot.note
+    || currentSnapshot.birthDate !== snapshot.birthDate
+    || currentSnapshot.dueDate !== snapshot.dueDate
+    || currentSnapshot.gender !== snapshot.gender
+    || currentSnapshot.birthWeight !== snapshot.birthWeight
+    || Boolean(pendingAvatar)
+    || pendingClear
+  );
+
+  const canSaveIdentity = dirty && Boolean(name.trim()) && !saving && !loading;
+
+  const captureSnapshot = useCallback(() => {
+    setSnapshot({
+      name: name.trim(),
+      nickname: nickname.trim(),
+      note: note.trim(),
+      birthDate,
+      dueDate,
+      gender,
+      birthWeight: birthWeight.trim(),
+      avatarUrl,
+    });
+  }, [avatarUrl, birthDate, birthWeight, dueDate, gender, name, nickname, note]);
+
+  const beginEdit = (nextPanel: BabyEditPanel = "main") => {
+    captureSnapshot();
+    setPendingAvatar(null);
+    setPendingClear(false);
+    setEditPanel(nextPanel);
+    setEditing(true);
+  };
+
+  const exitEdit = () => {
+    setEditing(false);
+    setConverting(false);
+    setPendingAvatar(null);
+    setPendingClear(false);
+    setEditPanel("main");
+    setSnapshot(null);
+    if (convertBirth) navigation.setParams({ mode: undefined });
+    void load({ skipBirthConvert: true });
+  };
+
+  const requestCloseEdit = () => {
+    if (saving) return;
+    if (!dirty) {
+      exitEdit();
+      return;
+    }
+    Alert.alert(t("settings.critical.335"), t("settings.critical.336"), [
+      { text: t("settings.critical.338"), style: "cancel" },
+      { text: t("settings.critical.337"), style: "destructive", onPress: exitEdit },
+    ]);
+  };
+
+  useEffect(() => {
+    if (!loading && identityEditing && !snapshot) captureSnapshot();
+  }, [captureSnapshot, identityEditing, loading, snapshot]);
 
   const syncLocal = (next: {
     name: string;
@@ -335,12 +458,16 @@ export function BabyProfileScreen() {
         return;
       }
       const becomingBorn = converting || Boolean(birthDate.trim() && careSetup.child.childStatus === "unborn");
+      if (pendingAvatar) {
+        await BabyProfileRepository.uploadBabyAvatar(babyId, pendingAvatar);
+      }
       const next = await BabyProfileRepository.updateBabyProfile({
         babyId,
         name: trimmed,
         nickname,
         gender: gender === "unknown" ? null : gender,
         note,
+        clearAvatar: pendingClear && !pendingAvatar,
         ...(pregnancy || converting || dueDate.trim()
           ? { dueDate: dueDate.trim() || careSetup.child.dueDate || null }
           : {}),
@@ -375,6 +502,10 @@ export function BabyProfileScreen() {
       });
       setConverting(false);
       setEditing(false);
+      setSnapshot(null);
+      setPendingAvatar(null);
+      setPendingClear(false);
+      setEditPanel("main");
       if (convertBirth) navigation.setParams({ mode: undefined });
       await rehydrateFromServer().catch(() => undefined);
     } catch (cause) {
@@ -393,61 +524,47 @@ export function BabyProfileScreen() {
       hasAvatar: Boolean(avatarUrl),
       t,
       onPick: (avatar) => {
-        if (isCreating) {
-          setPendingAvatar(avatar);
-          setAvatarUrl(avatar.uri);
-          return;
-        }
-        if (!babyId) return;
-        setSaving(true);
-        setError("");
-        void BabyProfileRepository.uploadBabyAvatar(babyId, avatar)
-          .then((next) => {
-            setAvatarUrl(next.avatarUrl);
-            syncLocal({
-              name: next.name,
-              nickname: next.nickname,
-              birthDate: next.birthDate,
-              gender: (next.gender as typeof gender) || gender,
-              note: next.note,
-              photoUri: next.avatarUrl,
-            });
-          })
-          .catch((cause) => setError(localizedError(cause, "babyProfile.error.photoUpload")))
-          .finally(() => setSaving(false));
+        setPendingAvatar(avatar);
+        setPendingClear(false);
+        setAvatarUrl(avatar.uri);
+        if (!editing) setEditing(true);
       },
       onClear: () => {
-        if (isCreating) {
-          setPendingAvatar(null);
-          setAvatarUrl(undefined);
-          return;
-        }
-        if (!babyId) return;
-        setSaving(true);
-        void BabyProfileRepository.updateBabyProfile({
-          babyId,
-          name: name.trim() || babyName,
-          nickname,
-          birthDate: birthDate.trim() || null,
-          gender: gender === "unknown" ? null : gender,
-          note,
-          clearAvatar: true,
-        })
-          .then((next) => {
-            setAvatarUrl(undefined);
-            syncLocal({
-              name: next.name,
-              nickname: next.nickname,
-              birthDate: next.birthDate,
-              gender: (next.gender as typeof gender) || "unknown",
-              note: next.note,
-              photoUri: undefined,
-            });
-          })
-          .catch((cause) => setError(localizedError(cause, "babyProfile.error.save")))
-          .finally(() => setSaving(false));
+        setPendingAvatar(null);
+        setPendingClear(true);
+        setAvatarUrl(undefined);
+        if (!editing) setEditing(true);
       },
     });
+  };
+
+  const confirmDeleteBaby = () => {
+    if (!canDeleteBaby || !babyId) return;
+    const targetId = babyId;
+    Alert.alert(
+      t("babyProfile.deleteBaby.title", { babyName: name || babyName }),
+      t("babyProfile.deleteBaby.body"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("babyProfile.deleteBaby.confirm"),
+          style: "destructive",
+          onPress: () => {
+            setDeleting(true);
+            setError("");
+            void deleteCreatedBaby(targetId)
+              .then((hasOtherBabies) => navigation.reset({
+                index: hasOtherBabies ? 0 : 1,
+                routes: hasOtherBabies
+                  ? [{ name: "MainTabs", params: { screen: "Record" } }]
+                  : [{ name: "MainTabs", params: { screen: "Record" } }, { name: "BabyProfile", params: { mode: "create" } }],
+              }))
+              .catch(() => setError(t("babyProfile.deleteBaby.error")))
+              .finally(() => setDeleting(false));
+          },
+        },
+      ],
+    );
   };
 
   const roleOptions = useMemo(() => (["admin", "editor", "caregiver", "viewer"] as FamilyRole[]), []);
@@ -495,21 +612,39 @@ export function BabyProfileScreen() {
           </View>
 
           {createStage ? (
-          <View style={styles.babyCard}>
-            <ProfileAvatar
-              uri={avatarUrl}
-              size={96}
-              fallback="baby"
-              editable
-              onPress={pickAvatar}
-              label={t("babyProfile.photoAdd")}
-              imageFit="contain"
-            />
-            <View style={styles.babyCopy}>
-              <Text style={styles.label}>{createStage === "pregnancy" ? t("babyProfile.prenatalName") : t("babyProfile.nameRequired")}</Text>
-              <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={createStage === "pregnancy" ? t("babyProfile.prenatalNameExample") : t("babyProfile.name")} placeholderTextColor={colors.faint} maxLength={40} />
-              <Text style={styles.label}>{t("babyProfile.nickname")}</Text>
-              <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder={t("babyProfile.optional")} placeholderTextColor={colors.faint} maxLength={40} />
+          <View style={styles.createIdentity}>
+            <View style={styles.photo}>
+              <ProfileAvatar
+                uri={avatarUrl}
+                size={96}
+                fallback="baby"
+                onPress={pickAvatar}
+                label={t("settings.critical.348")}
+                imageFit="contain"
+              />
+              <Pressable onPress={pickAvatar} accessibilityRole="button" accessibilityLabel={t("settings.critical.348")}>
+                <Text style={styles.photoAction} maxFontSizeMultiplier={fontScaleCap.chrome}>
+                  {t("settings.critical.348")}
+                </Text>
+              </Pressable>
+            </View>
+            <View style={styles.group}>
+              <ProfileEditFieldRow
+                label={t("babyProfile.name")}
+                value={name}
+                onChangeText={setName}
+                placeholder={createStage === "pregnancy" ? t("babyProfile.prenatalNameExample") : t("babyProfile.name")}
+                helper={t("settings.critical.350")}
+                maxLength={40}
+              />
+              <ProfileEditFieldRow
+                label={t("babyProfile.nickname")}
+                value={nickname}
+                onChangeText={setNickname}
+                placeholder={t("babyProfile.optional")}
+                helper={t("settings.critical.351")}
+                maxLength={40}
+              />
             </View>
           </View>
           ) : null}
@@ -564,62 +699,218 @@ export function BabyProfileScreen() {
     );
   }
 
+  if (identityEditing) {
+    const detailsValue = pregnancy
+      ? dueDate || t("babyProfile.dueDate")
+      : birthDate || t("babyProfile.birthDate");
+    const saveFromPanel = editPanel === "main" || converting;
+    return (
+      <View style={styles.root}>
+        <NavigationHeader
+          title={
+            editPanel === "details" && !converting
+              ? t("settings.critical.349")
+              : converting
+                ? t("babyProfile.title.birth")
+                : t("settings.critical.353")
+          }
+          leftLabel={saveFromPanel ? t("common.cancel") : undefined}
+          onBack={saveFromPanel ? requestCloseEdit : () => setEditPanel("main")}
+          rightLabel={saveFromPanel ? t("common.done") : undefined}
+          onRightPress={saveFromPanel ? () => void save() : undefined}
+          rightDisabled={!canSaveIdentity}
+          rightBusy={saving}
+        />
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? undefined : "padding"}>
+          <ScrollView
+            contentContainerStyle={[styles.editContent, { paddingBottom: Math.max(insets.bottom + 24, 36) }]}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
+          >
+            {editPanel === "main" ? (
+              <>
+                <View style={styles.photo}>
+                  <ProfileAvatar
+                    uri={avatarUrl}
+                    size={96}
+                    fallback="baby"
+                    onPress={canEditBaby ? pickAvatar : undefined}
+                    label={t("settings.critical.348")}
+                    imageFit="contain"
+                  />
+                  {canEditBaby ? (
+                    <Pressable onPress={pickAvatar} accessibilityRole="button" accessibilityLabel={t("settings.critical.348")}>
+                      <Text style={styles.photoAction} maxFontSizeMultiplier={fontScaleCap.chrome}>
+                        {t("settings.critical.348")}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <View style={styles.group}>
+                  <ProfileEditFieldRow
+                    label={t("babyProfile.name")}
+                    value={name}
+                    onChangeText={setName}
+                    placeholder={t("babyProfile.name")}
+                    helper={t("settings.critical.350")}
+                    maxLength={40}
+                  />
+                  <ProfileEditFieldRow
+                    label={t("babyProfile.nickname")}
+                    value={nickname}
+                    onChangeText={setNickname}
+                    placeholder={t("babyProfile.optional")}
+                    helper={t("settings.critical.351")}
+                    maxLength={40}
+                  />
+                  <ProfileEditFieldRow
+                    label={t("babyProfile.note")}
+                    value={note}
+                    onChangeText={setNote}
+                    placeholder={t("babyProfile.notePlaceholder")}
+                    helper={t("settings.critical.352")}
+                    maxLength={80}
+                  />
+                </View>
+                <View style={styles.group}>
+                  <ProfileEditLinkRow
+                    label={t("settings.critical.349")}
+                    value={detailsValue}
+                    onPress={() => setEditPanel("details")}
+                  />
+                </View>
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+              </>
+            ) : (
+              <View style={styles.panel}>
+                {pregnancy ? (
+                  <>
+                    <Text style={styles.fieldTitle}>{t("babyProfile.dueDate")}</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t("babyProfile.selectDueDate")}
+                      style={styles.dateBtn}
+                      onPress={() => setDuePickerOpen(true)}
+                    >
+                      <Text style={[styles.dateBtnText, !dueDate && styles.datePlaceholder]}>
+                        {dueDate || t("babyProfile.selectDate")}
+                      </Text>
+                      <BabyLogIcon kind="calendar" size={18} color={colors.muted} />
+                    </Pressable>
+                    <Text style={styles.panelHint}>{t("babyProfile.dueDateHint")}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.fieldTitle}>{converting ? t("babyProfile.actualBirthDate") : t("babyProfile.birthDate")}</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={converting ? t("babyProfile.selectActualBirthDate") : t("babyProfile.selectBirthDate")}
+                      style={styles.dateBtn}
+                      onPress={() => setBirthPickerOpen(true)}
+                    >
+                      <Text style={[styles.dateBtnText, !birthDate && styles.datePlaceholder]}>
+                        {birthDate || t("babyProfile.selectDate")}
+                      </Text>
+                      <BabyLogIcon kind="calendar" size={18} color={colors.muted} />
+                    </Pressable>
+                    {converting ? (
+                      <>
+                        <Text style={styles.panelHint}>{t("babyProfile.actualBirthHint")}</Text>
+                        <View style={styles.metaRow}>
+                          <Text style={styles.metaRowLabel}>{t("babyProfile.dueDate")}</Text>
+                          <Text style={styles.metaRowValue}>{dueDate || t("babyProfile.notEntered")}</Text>
+                        </View>
+                        <Text style={styles.fieldTitle}>{t("babyProfile.birthWeight")}</Text>
+                        <TextInput
+                          style={styles.weightInput}
+                          value={birthWeight}
+                          onChangeText={setBirthWeight}
+                          placeholder={t("babyProfile.birthWeightExample")}
+                          placeholderTextColor={colors.faint}
+                        />
+                      </>
+                    ) : null}
+                  </>
+                )}
+                <Text style={styles.fieldTitle}>{t("babyProfile.gender")}</Text>
+                <View style={styles.chips}>
+                  {(["unknown", "girl", "boy"] as const).map((value) => (
+                    <Pressable key={value} style={[styles.chip, gender === value && styles.chipActive]} onPress={() => setGender(value)}>
+                      <Text style={[styles.chipText, gender === value && styles.chipTextActive]}>{genderLabel(value)}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+              </View>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+        <RecordDatePickerModal
+          visible={birthPickerOpen}
+          selectedDateKey={birthDate || formatDateKey()}
+          minDateKey={formatDateKey(new Date(new Date().getFullYear() - 18, 0, 1), "midnight")}
+          maxDateKey={formatDateKey()}
+          title={converting ? t("babyProfile.selectActualBirthDate") : t("babyProfile.selectBirthDate")}
+          onSelect={setBirthDate}
+          onClose={() => setBirthPickerOpen(false)}
+        />
+        <RecordDatePickerModal
+          visible={duePickerOpen}
+          selectedDateKey={dueDate || formatDateKey()}
+          minDateKey={formatDateKey(new Date(new Date().getFullYear() - 1, 0, 1), "midnight")}
+          maxDateKey={offsetDateKey(formatDateKey(), 365)}
+          title={t("babyProfile.selectDueDate")}
+          onSelect={setDueDate}
+          onClose={() => setDuePickerOpen(false)}
+        />
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? undefined : "padding"} keyboardVerticalOffset={0}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 24, 36) }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-        <View style={styles.babyCard}>
-          <View style={styles.switcherBtn}>
-            <BabySwitcher variant="switchButton" />
-          </View>
+        <View style={styles.identity}>
           <ProfileAvatar
             uri={avatarUrl}
             size={96}
             fallback="baby"
-            editable={canEditBaby}
-            onPress={canEditBaby ? pickAvatar : undefined}
-            label={t("babyProfile.photoAdd")}
+            onPress={canEditBaby ? () => beginEdit() : undefined}
+            label={t("settings.critical.353")}
             imageFit="contain"
           />
-          <View style={styles.babyCopy}>
-            {editing ? (
-              <>
-                <Text style={styles.label}>{t("babyProfile.name")}</Text>
-                <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={t("babyProfile.name")} placeholderTextColor={colors.faint} maxLength={40} />
-                <Text style={styles.label}>{t("babyProfile.nickname")}</Text>
-                <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder={t("babyProfile.optional")} placeholderTextColor={colors.faint} maxLength={40} />
-              </>
-            ) : (
-              <>
-                <Text style={styles.babyName}>{name || babyName}</Text>
-                {nickname ? <Text style={styles.nickname}>{nickname}</Text> : null}
-                <Text style={styles.babyAge}>{configuredAge ?? babyBirthMeta}</Text>
-              </>
-            )}
-          </View>
           {canEditBaby ? (
-            <Pressable
-              style={styles.editBtn}
-              onPress={() => {
-                if (editing) {
-                  setEditing(false);
-                  setConverting(false);
-                  if (convertBirth) navigation.setParams({ mode: undefined });
-                  void load({ skipBirthConvert: true });
-                } else setEditing(true);
-              }}
-            >
-              <Text style={styles.editBtnText}>{editing ? t("babyProfile.cancel") : t("babyProfile.edit")}</Text>
+            <Pressable onPress={() => beginEdit()} accessibilityRole="button" accessibilityLabel={t("settings.critical.353")}>
+              <Text style={styles.photoAction} maxFontSizeMultiplier={fontScaleCap.chrome}>
+                {t("settings.critical.353")}
+              </Text>
             </Pressable>
           ) : null}
+          <Text style={styles.babyName}>{name || babyName}</Text>
+          {nickname ? <Text style={styles.nickname}>{nickname}</Text> : null}
+          <Text style={styles.babyAge}>{configuredAge ?? babyBirthMeta}</Text>
         </View>
 
-        {canEditBaby && !editing && isPregnancyStage(careSetup.child) ? (
+        {canEditBaby && isPregnancyStage(careSetup.child) ? (
           <Pressable
             style={styles.save}
             onPress={() => {
               setConverting(true);
-              setEditing(true);
               setBirthDate("");
+              setPendingAvatar(null);
+              setPendingClear(false);
+              setEditPanel("details");
+              setSnapshot({
+                name: name.trim(),
+                nickname: nickname.trim(),
+                note: note.trim(),
+                birthDate: "",
+                dueDate,
+                gender,
+                birthWeight: birthWeight.trim(),
+                avatarUrl,
+              });
+              setEditing(true);
             }}
             accessibilityRole="button"
             accessibilityLabel={t("babyProfile.bornCta")}
@@ -628,100 +919,37 @@ export function BabyProfileScreen() {
           </Pressable>
         ) : null}
 
-        {editing ? (
-          <View style={styles.card}>
-            {pregnancy ? (
-              <>
-                <Text style={styles.label}>{t("babyProfile.dueDate")}</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t("babyProfile.selectDueDate")}
-                  style={styles.dateInput}
-                  onPress={() => setDuePickerOpen(true)}
-                >
-                  <Text style={[styles.dateInputText, !dueDate && styles.datePlaceholder]}>
-                    {dueDate || t("babyProfile.selectDate")}
-                  </Text>
-                  <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
-                </Pressable>
-                <Text style={styles.inputHint}>{t("babyProfile.dueDateHint")}</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.label}>{converting ? t("babyProfile.actualBirthDate") : t("babyProfile.birthDate")}</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={converting ? t("babyProfile.selectActualBirthDate") : t("babyProfile.selectBirthDate")}
-                  style={styles.dateInput}
-                  onPress={() => setBirthPickerOpen(true)}
-                >
-                  <Text style={[styles.dateInputText, !birthDate && styles.datePlaceholder]}>
-                    {birthDate || t("babyProfile.selectDate")}
-                  </Text>
-                  <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
-                </Pressable>
-                {converting ? (
-                  <>
-                    <Text style={styles.inputHint}>{t("babyProfile.actualBirthHint")}</Text>
-                    <Text style={styles.label}>{t("babyProfile.dueDate")}</Text>
-                    <Text style={styles.metaValue}>{dueDate || t("babyProfile.notEntered")}</Text>
-                    <Text style={styles.label}>{t("babyProfile.birthWeight")}</Text>
-                    <TextInput style={styles.input} value={birthWeight} onChangeText={setBirthWeight} placeholder={t("babyProfile.birthWeightExample")} placeholderTextColor={colors.faint} />
-                  </>
-                ) : null}
-              </>
-            )}
-            <Text style={styles.label}>{t("babyProfile.gender")}</Text>
-            <View style={styles.chips}>
-              {(["unknown", "girl", "boy"] as const).map((value) => (
-                <Pressable key={value} style={[styles.chip, gender === value && styles.chipActive]} onPress={() => setGender(value)}>
-                  <Text style={[styles.chipText, gender === value && styles.chipTextActive]}>{genderLabel(value)}</Text>
-                </Pressable>
-              ))}
+        <View style={styles.viewMeta}>
+          {isPregnancyStage(careSetup.child) ? (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaRowLabel}>{t("babyProfile.dueDate")}</Text>
+              <Text style={styles.metaRowValue}>{dueDate || t("babyProfile.notEntered")}</Text>
             </View>
-            <Text style={styles.label}>{t("babyProfile.note")}</Text>
-            <TextInput
-              style={[styles.input, styles.note]}
-              value={note}
-              onChangeText={setNote}
-              placeholder={t("babyProfile.notePlaceholder")}
-              placeholderTextColor={colors.faint}
-              multiline
-              maxLength={400}
-            />
-            <Pressable style={[styles.save, saving && styles.disabled]} onPress={() => void save()} disabled={saving}>
-              {saving ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.saveText}>{converting ? t("babyProfile.registerBirth") : t("babyProfile.save")}</Text>}
-            </Pressable>
+          ) : (
+            <>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaRowLabel}>{t("babyProfile.birthDate")}</Text>
+                <Text style={styles.metaRowValue}>{birthDate || t("babyProfile.notEntered")}</Text>
+              </View>
+              {dueDate ? (
+                <View style={styles.metaRow}>
+                  <Text style={styles.metaRowLabel}>{t("babyProfile.dueDate")}</Text>
+                  <Text style={styles.metaRowValue}>{dueDate}</Text>
+                </View>
+              ) : null}
+            </>
+          )}
+          <View style={styles.metaRow}>
+            <Text style={styles.metaRowLabel}>{t("babyProfile.gender")}</Text>
+            <Text style={styles.metaRowValue}>{gender === "unknown" ? t("babyProfile.notEntered") : genderLabel(gender)}</Text>
           </View>
-        ) : (
-          <View style={styles.card}>
-            {isPregnancyStage(careSetup.child) ? (
-              <>
-                <Text style={styles.metaLabel}>{t("babyProfile.dueDate")}</Text>
-                <Text style={styles.metaValue}>{dueDate || t("babyProfile.notEntered")}</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.metaLabel}>{t("babyProfile.birthDate")}</Text>
-                <Text style={styles.metaValue}>{birthDate || t("babyProfile.notEntered")}</Text>
-                {dueDate ? (
-                  <>
-                    <Text style={styles.metaLabel}>{t("babyProfile.dueDate")}</Text>
-                    <Text style={styles.metaValue}>{dueDate}</Text>
-                  </>
-                ) : null}
-              </>
-            )}
-            <Text style={styles.metaLabel}>{t("babyProfile.gender")}</Text>
-            <Text style={styles.metaValue}>{gender === "unknown" ? t("babyProfile.notEntered") : genderLabel(gender)}</Text>
-            {note ? (
-              <>
-                <Text style={styles.metaLabel}>{t("babyProfile.note")}</Text>
-                <Text style={styles.metaValue}>{note}</Text>
-              </>
-            ) : null}
-          </View>
-        )}
+          {note ? (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaRowLabel}>{t("babyProfile.note")}</Text>
+              <Text style={styles.metaRowValue}>{note}</Text>
+            </View>
+          ) : null}
+        </View>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>{t("babyProfile.caution.title")}</Text>
@@ -895,6 +1123,20 @@ export function BabyProfileScreen() {
           <Text style={styles.viewerHint}>{t("babyProfile.noInvitePermission")}</Text>
         )}
 
+        {canDeleteBaby ? (
+          <Pressable
+            style={styles.deleteBabyButton}
+            onPress={confirmDeleteBaby}
+            accessibilityRole="button"
+            accessibilityLabel={t("babyProfile.deleteBaby.action")}
+            accessibilityHint={t("babyProfile.deleteBaby.body")}
+            accessibilityState={{ disabled: deleting, busy: deleting }}
+            disabled={deleting}
+          >
+            <Text style={styles.deleteBabyText}>{t("babyProfile.deleteBaby.action")}</Text>
+          </Pressable>
+        ) : null}
+
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </ScrollView>
 
@@ -922,9 +1164,94 @@ export function BabyProfileScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  deleteBabyButton: { minHeight: TOUCH_MIN, alignItems: "center", justifyContent: "center", marginTop: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  deleteBabyText: { color: colors.brandCoral, fontSize: 14, fontWeight: "700" },
+  flex: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: colors.background },
   muted: { color: colors.muted, fontSize: 13 },
   content: { padding: 20, gap: 14 },
+  editContent: { paddingTop: 8 },
+  identity: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 18,
+    paddingBottom: 18,
+    paddingTop: 54,
+    alignItems: "center",
+    gap: 8,
+  },
+  photo: { alignItems: "center", paddingTop: 18, paddingBottom: 20, gap: 10 },
+  photoAction: { color: colors.amberText, fontSize: 15, fontWeight: "700" },
+  createIdentity: { marginHorizontal: -20 },
+  group: {
+    backgroundColor: colors.card,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    marginBottom: 18,
+  },
+  panel: { paddingTop: 8, paddingBottom: 16 },
+  panelHint: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  fieldTitle: {
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 8,
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  dateBtn: {
+    marginHorizontal: 16,
+    minHeight: TOUCH_MIN,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  dateBtnText: { color: colors.text, fontSize: 15, fontWeight: "600" },
+  weightInput: {
+    marginHorizontal: 16,
+    minHeight: TOUCH_MIN,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    color: colors.text,
+    fontSize: 15,
+  },
+  metaRow: {
+    minHeight: TOUCH_MIN,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  metaRowLabel: { color: colors.text, fontSize: 15, fontWeight: "600" },
+  metaRowValue: { flex: 1, textAlign: "right", color: colors.muted, fontSize: 15 },
+  viewMeta: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden",
+  },
   babyCard: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,
@@ -940,7 +1267,6 @@ const styles = StyleSheet.create({
   babyName: { color: colors.text, fontSize: 22, fontWeight: "800" },
   nickname: { color: colors.amberText, fontSize: 13, fontWeight: "700" },
   babyAge: { color: colors.muted, fontSize: 13 },
-  switcherBtn: { position: "absolute", top: 14, left: 14, zIndex: 2 },
   editBtn: { position: "absolute", top: 14, right: 14, minHeight: 36, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
   editBtnText: { color: colors.muted, fontWeight: "700", fontSize: 12.5 },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 10 },

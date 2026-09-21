@@ -26,6 +26,7 @@ import { NotificationCenterScreen } from "../screens/NotificationCenterScreen";
 import { SettingsHomeScreen } from "../screens/SettingsHomeScreen";
 import { ConsultScreen } from "../screens/tabs/ConsultScreen";
 import { darkThemeColors, lightThemeColors } from "../theme";
+import { TEXT_PRIMARY, VOICE_AMBER } from "../themePalette";
 import type { UserProfile } from "../types/profile";
 import type { RootStackParamList } from "./types";
 
@@ -58,12 +59,12 @@ export function MainNavigator({
       ...base,
       colors: {
         ...base.colors,
-        primary: "#B65B55",
+        primary: TEXT_PRIMARY,
         background: palette.background,
         card: palette.card,
         text: palette.text,
         border: palette.border,
-        notification: "#E8918A",
+        notification: VOICE_AMBER,
       },
     };
   }, [colorScheme]);
@@ -206,8 +207,8 @@ export function MainNavigator({
           <>
             <RootStack.Screen name="Consult" component={ConsultScreen} options={{ headerShown: false }} />
             <RootStack.Screen name="BabyProfile" component={BabyProfileScreen} options={{ title: t("babyProfile.title.profile") }} />
-            <RootStack.Screen name="FamilyShare" component={FamilyShareScreen} options={{ title: t("babyProfile.family.invite") }} />
-            <RootStack.Screen name="MyProfile" component={MyProfileScreen} options={{ title: t("babyProfile.myProfile") }} />
+            <RootStack.Screen name="FamilyShare" component={FamilyShareScreen} options={{ headerShown: false }} />
+            <RootStack.Screen name="MyProfile" component={MyProfileScreen} options={{ headerShown: false }} />
             <RootStack.Screen name="SettingsHome" component={SettingsHomeScreen} options={{ title: t("chrome.critical.035") }} />
             <RootStack.Screen
               name="SettingsDetail"

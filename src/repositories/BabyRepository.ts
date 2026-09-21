@@ -1,6 +1,6 @@
 import type { CareSetup } from "../types/careSetup";
 import type { BabyRow } from "../types/database";
-import { requireSupabase } from "../lib/supabase";
+import { captureSessionScope, requireSupabase } from "../lib/supabase";
 import { toDbRelationshipLabel } from "../utils/supabaseMappers";
 import { AuthRepository } from "./AuthRepository";
 import { ProfileRepository } from "./ProfileRepository";
@@ -23,11 +23,14 @@ export type CreateBabyInput = {
 };
 
 export const BabyRepository = {
-  async listMyBabies(): Promise<BabyRow[]> {
-    const sb = requireSupabase();
-    await AuthRepository.ensureSession();
+  async listMyBabies(expectedAccountId?: string): Promise<BabyRow[]> {
+    const scope = expectedAccountId ? await captureSessionScope() : null;
+    if (scope && scope.accountId !== expectedAccountId) throw new Error("Account changed during baby list refresh.");
+    const sb = scope?.client ?? requireSupabase();
+    if (!scope) await AuthRepository.ensureSession();
     const { data, error } = await sb.from("babies").select("*").order("created_at", { ascending: true });
     if (error) throw error;
+    if (scope) await scope.assertCurrent();
     return data ?? [];
   },
 
@@ -36,6 +39,15 @@ export const BabyRepository = {
     const { data, error } = await sb.from("babies").select("*").eq("id", babyId).maybeSingle();
     if (error) throw error;
     return data;
+  },
+
+  async deleteCreatedBaby(babyId: string): Promise<void> {
+    const scope = await captureSessionScope();
+    await scope.assertCurrent();
+    const { data, error } = await scope.client.rpc("delete_created_baby", { p_baby_id: babyId });
+    if (error) throw error;
+    if (data !== true) throw new Error("Baby profile was not found or could not be deleted.");
+    await scope.assertCurrent();
   },
 
   async createBaby(input: CreateBabyInput): Promise<BabyRow> {

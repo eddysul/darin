@@ -1,192 +1,205 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
+  ActionSheetIOS,
+  Alert,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ProfileAvatar } from "../components/profile/ProfileAvatar";
-import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
-import { RecordDatePickerModal } from "../components/babylog/RecordDatePickerModal";
+import { MyBabiesSection } from "../components/profile/MyBabiesSection";
+import { MyMomentsSection } from "../components/profile/MyMomentsSection";
+import { MyProfileEditForm } from "../components/profile/MyProfileEditForm";
+import { ProfileHeader } from "../components/profile/ProfileHeader";
+import { ProfileQuoteCard } from "../components/profile/ProfileQuoteCard";
+import { ProfileStatsCard } from "../components/profile/ProfileStatsCard";
+import { ProfileSummarySection } from "../components/profile/ProfileSummarySection";
+import { ErrorBanner } from "../components/states/FeedbackStates";
 import { useApp } from "../context/AppContext";
-import { useAppSettings } from "../context/AppSettingsContext";
 import { useBabyLog } from "../context/BabyLogContext";
 import { useLanguage } from "../LanguageContext";
+import type { RootStackParamList } from "../navigation/types";
 import { AuthRepository } from "../repositories/AuthRepository";
+import { BabyProfileRepository } from "../repositories/BabyProfileRepository";
+import { FriendRepository } from "../repositories/DarinFriendRepository";
 import { FamilyRepository } from "../repositories/FamilyRepository";
+import { MemoriesRepository } from "../repositories/MemoriesRepository";
 import { ProfileRepository } from "../repositories/ProfileRepository";
-import {
-  createDarinIdentity,
-  DarinIdentityRepository,
-  generateDarinTag,
-  validateDarinNickname,
-} from "../repositories/DarinIdentityRepository";
+import type { BabyRow } from "../types/database";
+import type { FamilyRole } from "../types/family";
+import type { MemoryMomentPreview } from "../types/memory";
+import type { MyProfileBabyItem, MyProfileStatKey } from "../types/myProfileShowcase";
 import { PROFILE_RELATION_OPTIONS } from "../types/profileSettings";
 import type { RelationshipLabel } from "../types/growthBook";
+import { colors } from "../theme";
+import { isPregnancyStage } from "../utils/childDisplay";
+import { localizedErrorMessage } from "../utils/familyDisplay";
 import { presentAvatarPicker } from "../utils/profileAvatarPicker";
-import { colors, radius } from "../theme";
-import { FAMILY_ROLE_LABELS, familyRoleMessageKey } from "../types/family";
-import {
-  getVisibleAppLanguageOptions,
-  RESIDENCE_COUNTRY_OPTIONS,
-  isAppLanguagePreference,
-  isResidenceCountry,
-  resolveAppLocale,
-  type AppLanguagePreference,
-  type ResidenceCountry,
-} from "../types/profilePreferences";
-import { canShowLanguagePicker } from "../config/featureFlags";
-import { formatDateKey } from "../utils/dateKey";
-import { localizedErrorMessage, storedRelationshipLabel } from "../utils/familyDisplay";
+import { readProfileBio } from "../utils/profileBioStore";
+import { permissionToFamilyRole } from "../utils/supabaseMappers";
 import type { MessageKey } from "../i18n";
 
-const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
+type Props = NativeStackScreenProps<RootStackParamList, "MyProfile">;
 
-export function MyProfileScreen() {
+function formatHandle(darinId?: string | null): string | undefined {
+  const value = darinId?.trim();
+  if (!value) return undefined;
+  return value.startsWith("@") ? value : `@${value}`;
+}
+
+function babyCardAge(
+  baby: Pick<BabyRow, "birth_date" | "child_status">,
+  t: (key: MessageKey, params?: Record<string, string | number>) => string,
+): string {
+  if (isPregnancyStage({ childStatus: baby.child_status, birthDate: baby.birth_date ?? undefined })) {
+    return t("home.switcher.pregnant");
+  }
+  if (!baby.birth_date) return t("home.switcher.noBirthDate");
+  const birth = new Date(`${baby.birth_date}T00:00:00`);
+  if (!Number.isFinite(birth.getTime())) return baby.birth_date;
+  const days = Math.floor((Date.now() - birth.getTime()) / 86_400_000);
+  if (days < 0) return `D-${Math.abs(days)}`;
+  if (days < 31) return `D+${days}`;
+  const months = Math.max(1, Math.floor(days / 30.4375));
+  if (months < 24) return t("home.switcher.months", { count: months });
+  return t("home.switcher.years", { count: Math.floor(months / 12) });
+}
+
+function displayFamilyRole(role: FamilyRole): FamilyRole {
+  return role === "owner" ? "admin" : role;
+}
+
+function roleForBaby(
+  baby: BabyRow,
+  meId: string | undefined,
+  permissionRole: FamilyRole | undefined,
+  activeBabyId: string | null,
+  myFamilyRole: FamilyRole,
+): FamilyRole {
+  if (permissionRole) return displayFamilyRole(permissionRole);
+  if (baby.id === activeBabyId) return displayFamilyRole(myFamilyRole);
+  if (baby.created_by && meId && baby.created_by === meId) return "admin";
+  return "editor";
+}
+
+export function MyProfileScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
+  const editing = Boolean(route.params?.edit);
   const { careSetup, setCareSetup } = useApp();
-  const { setSettings } = useAppSettings();
-  const { activeBabyId, myFamilyRole, applyOwnerFromSetup, rehydrateFromServer } = useBabyLog();
-  const { t, setLocale } = useLanguage();
-  const [nickname, setNickname] = useState(careSetup.parent.parentName);
-  const [realName, setRealName] = useState(careSetup.parent.nickname ?? "");
+  const { babies, activeBabyId, myFamilyRole, switchActiveBaby, applyOwnerFromSetup } = useBabyLog();
+  const { t } = useLanguage();
+  const [name, setName] = useState(careSetup.parent.parentName);
+  const [handle, setHandle] = useState<string | undefined>();
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(careSetup.parent.avatarUri);
   const [relation, setRelation] = useState<RelationshipLabel>(PROFILE_RELATION_OPTIONS[0]);
-  const [residenceCountry, setResidenceCountry] = useState<ResidenceCountry | null>(null);
-  const [preferredLanguage, setPreferredLanguage] = useState<AppLanguagePreference>("system");
-  const [guardianBirthDate, setGuardianBirthDate] = useState("");
-  const [birthDatePickerOpen, setBirthDatePickerOpen] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
-  const [email, setEmail] = useState("");
-  const [provider, setProvider] = useState(t("settings.critical.002"));
-  const [darinTag, setDarinTag] = useState(generateDarinTag());
+  const [realName, setRealName] = useState(careSetup.parent.nickname ?? "");
+  const [familyCount, setFamilyCount] = useState<number | null>(null);
+  const [friendCount, setFriendCount] = useState<number | null>(null);
+  const [babyItems, setBabyItems] = useState<MyProfileBabyItem[]>([]);
+  const [moments, setMoments] = useState<MemoryMomentPreview[]>([]);
+  const [customBio, setCustomBio] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const bio = useMemo(() => {
+    if (customBio.trim()) return customBio.trim();
+    const names = babyItems.map((baby) => baby.name).filter(Boolean);
+    if (!names.length) return t("memory.critical.219");
+    return t("memory.critical.224", { names: names.join(" · ") });
+  }, [babyItems, customBio, t]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    setFamilyCount(null);
+    setFriendCount(null);
+    let partialFailure = false;
+    const safe = async <T,>(operation: Promise<T>, fallback: T): Promise<T> => {
+      try {
+        return await operation;
+      } catch {
+        partialFailure = true;
+        return fallback;
+      }
+    };
     try {
-      const user = await AuthRepository.getUser();
-      setEmail(user?.email ?? "");
-      const identities = user?.identities?.map((item) => item.provider) ?? [];
-      if (identities.includes("apple")) setProvider("Apple");
-      else if (identities.includes("google")) setProvider("Google");
-      else if (identities.includes("kakao")) setProvider("Kakao");
-      else setProvider(t("settings.critical.002"));
-      if (user) {
-        const identity = await DarinIdentityRepository.get(user.id);
-        if (identity) setDarinTag(identity.tag);
-      }
-
-      const profile = await ProfileRepository.getMyProfile();
+      const [user, profile, recentMoments] = await Promise.all([
+        safe(AuthRepository.getUser(), null),
+        safe(ProfileRepository.getMyProfile(), null),
+        safe(MemoriesRepository.listRecentAuthoredPreviews(3, babies.map((baby) => baby.id)), []),
+      ]);
+      const meId = user?.id;
+      setCustomBio(meId ? await readProfileBio(meId) : "");
       if (profile) {
-        setNickname(profile.display_name);
-        setRealName(profile.nickname ?? "");
-        setResidenceCountry(isResidenceCountry(profile.residence_country) ? profile.residence_country : null);
-        setPreferredLanguage(isAppLanguagePreference(profile.preferred_language) ? profile.preferred_language : "system");
-        setGuardianBirthDate(profile.guardian_birth_date ?? "");
-        setAvatarUrl(
-          profile.avatar_storage_path
-            ? await ProfileRepository.createProfileAvatarSignedUrl(profile.avatar_storage_path).catch(() => undefined)
-            : profile.avatar_url ?? undefined,
-        );
+        setName(profile.display_name || careSetup.parent.parentName);
+        setHandle(formatHandle(profile.darin_id));
+        setRealName(profile.nickname ?? careSetup.parent.nickname ?? "");
         if (profile.default_relation) setRelation(profile.default_relation as RelationshipLabel);
+        const signedAvatarUrl = profile.avatar_storage_path
+          ? await safe(
+            ProfileRepository.createProfileAvatarSignedUrl(profile.avatar_storage_path),
+            profile.avatar_url ?? careSetup.parent.avatarUri,
+          )
+          : profile.avatar_url ?? careSetup.parent.avatarUri;
+        setAvatarUrl(signedAvatarUrl);
       } else {
-        setNickname(careSetup.parent.parentName);
-        setRealName(careSetup.parent.nickname ?? "");
+        setName(careSetup.parent.parentName);
+        setHandle(undefined);
+        setAvatarUrl(careSetup.parent.avatarUri);
       }
+      setMoments(recentMoments);
 
-      const babyId = activeBabyId;
-      if (babyId && user?.id) {
-        const members = await FamilyRepository.listMembers(babyId);
-        const mine = members.find((row) => row.user_id === user.id);
-        if (mine?.relationship_label) setRelation(mine.relationship_label as RelationshipLabel);
-      }
+      const familyIds = new Set<string>();
+      const friendIds = new Set<string>();
+      const nextBabies = await Promise.all(babies.map(async (baby) => {
+        const [members, friends, babyProfile] = await Promise.all([
+          safe(FamilyRepository.listMembers(baby.id), []),
+          safe(FriendRepository.listFriendsByBabyId(baby.id), []),
+          safe(BabyProfileRepository.getBabyProfile(baby.id), null),
+        ]);
+        for (const member of members) {
+          if (member.status === "active" && member.user_id !== meId) familyIds.add(member.user_id);
+        }
+        for (const friend of friends) {
+          if (friend.status === "active") friendIds.add(friend.userId);
+        }
+        const mine = members.find((member) => member.user_id === meId);
+        return {
+          id: baby.id,
+          name: baby.name,
+          ageLabel: babyCardAge(baby, t),
+          role: roleForBaby(
+            baby,
+            meId,
+            mine ? permissionToFamilyRole(mine.permission_role) : undefined,
+            activeBabyId,
+            myFamilyRole,
+          ),
+          avatarUrl: babyProfile?.avatarUrl ?? babyProfile?.photoUrl ?? baby.photo_url ?? undefined,
+        } satisfies MyProfileBabyItem;
+      }));
+      setBabyItems(nextBabies);
+      setFamilyCount(partialFailure ? null : familyIds.size);
+      setFriendCount(partialFailure ? null : friendIds.size);
+      if (partialFailure) setError(t("settings.critical.003"));
     } catch (cause) {
       setError(cause instanceof Error ? localizedErrorMessage(t, cause.message) : t("settings.critical.003"));
     } finally {
       setLoading(false);
     }
-  }, [activeBabyId, careSetup.parent.nickname, careSetup.parent.parentName]);
+  }, [activeBabyId, babies, careSetup.parent.avatarUri, careSetup.parent.nickname, careSetup.parent.parentName, myFamilyRole, t]);
 
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    if (editing) return;
+    void load();
+  }, [editing, load]));
 
-  const save = async () => {
-    if (saving) return;
-    const displayNickname = nickname.trim();
-    const confirmedRealName = realName.trim();
-    const nicknameError = validateDarinNickname(displayNickname);
-    if (nicknameError) {
-      setError(nicknameError);
-      return;
-    }
-    if (!confirmedRealName) {
-      setError(t("settings.critical.004"));
-      return;
-    }
-    if (!residenceCountry || !guardianBirthDate) {
-      setError(t("settings.critical.005"));
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const identity = createDarinIdentity({ realNameFromProvider: confirmedRealName || displayNickname, nickname: displayNickname, tag: darinTag });
-      const next = await ProfileRepository.updateMyProfile({
-        displayName: displayNickname,
-        darinId: identity.darinId,
-        nickname: confirmedRealName,
-        defaultRelation: relation,
-        preferredLanguage,
-        residenceCountry,
-        guardianBirthDate,
-      });
-      const babyId = activeBabyId;
-      const user = await AuthRepository.getUser();
-      if (user) {
-        await DarinIdentityRepository.save(user.id, identity);
-      }
-      if (babyId && user?.id) {
-        await FamilyRepository.updateMemberRelation({
-          babyId,
-          userId: user.id,
-          relation,
-        }).catch(() => undefined);
-      }
-      const resolvedLanguage = resolveAppLocale(preferredLanguage);
-      const nextSetup = {
-        ...careSetup,
-        parent: {
-          ...careSetup.parent,
-          parentName: next.displayName,
-          nickname: confirmedRealName,
-          preferredLanguage: resolvedLanguage,
-          avatarUri: next.avatarUrl,
-        },
-      };
-      setCareSetup(nextSetup);
-      applyOwnerFromSetup(nextSetup);
-      setLocale(resolvedLanguage);
-      setSettings((current) => ({
-        ...current,
-        account: { ...current.account, language: preferredLanguage },
-      }));
-      setAvatarUrl(next.avatarUrl);
-      await rehydrateFromServer().catch(() => undefined);
-    } catch (cause) {
-      setError(cause instanceof Error ? localizedErrorMessage(t, cause.message) : t("settings.critical.006"));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const openEdit = () => navigation.setParams({ edit: true });
+  const closeEdit = () => navigation.setParams({ edit: undefined });
 
   const pickAvatar = () => {
     presentAvatarPicker({
@@ -211,7 +224,7 @@ export function MyProfileScreen() {
       onClear: () => {
         setSaving(true);
         void ProfileRepository.updateMyProfile({
-          displayName: nickname.trim() || careSetup.parent.parentName || t("settings.critical.008"),
+          displayName: name.trim() || careSetup.parent.parentName || t("settings.critical.008"),
           nickname: realName,
           defaultRelation: relation,
           clearAvatar: true,
@@ -229,124 +242,119 @@ export function MyProfileScreen() {
     });
   };
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.amberText} />
-        <Text style={styles.muted}>{t("settings.critical.009")}</Text>
-      </View>
-    );
+  const openFamily = (filter: "family" | "friend") => {
+    navigation.navigate("FamilyShare", { tab: "people", peopleFilter: filter });
+  };
+
+  const openBabyManage = () => {
+    navigation.navigate("BabyProfile", { mode: babies.length ? undefined : "create" });
+  };
+
+  const openBaby = async (babyId: string) => {
+    if (babyId !== activeBabyId) {
+      const switched = await switchActiveBaby(babyId).catch(() => false);
+      if (!switched) return;
+    }
+    navigation.navigate("BabyProfile", { mode: undefined });
+  };
+
+  const openMemories = () => {
+    navigation.navigate("MainTabs", { screen: "Memories" });
+  };
+
+  const onPressStat = (key: MyProfileStatKey) => {
+    if (key === "baby") {
+      openBabyManage();
+      return;
+    }
+    openFamily(key);
+  };
+
+  const openMore = () => {
+    const editLabel = t("memory.critical.223");
+    const settingsLabel = t("chrome.critical.035");
+    const familyLabel = t("memory.critical.211");
+    const cancelLabel = t("common.cancel");
+    const run = (index: number) => {
+      if (index === 0) openEdit();
+      if (index === 1) navigation.navigate("SettingsHome");
+      if (index === 2) navigation.navigate("FamilyShare", { tab: "people" });
+    };
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: [editLabel, settingsLabel, familyLabel, cancelLabel],
+          cancelButtonIndex: 3,
+        },
+        (index) => {
+          if (typeof index === "number") run(index);
+        },
+      );
+      return;
+    }
+    Alert.alert(t("memory.critical.236"), undefined, [
+      { text: editLabel, onPress: () => run(0) },
+      { text: settingsLabel, onPress: () => run(1) },
+      { text: cancelLabel, style: "cancel" },
+    ]);
+  };
+
+  if (editing) {
+    return <MyProfileEditForm onClose={closeEdit} />;
   }
 
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? undefined : "padding"} keyboardVerticalOffset={0}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-        <ProfileAvatar uri={avatarUrl} size={104} editable onPress={pickAvatar} label={t("settings.critical.010")} />
-
-        <View style={styles.card}>
-          <Text style={styles.label}>{t("settings.critical.011")}</Text>
-          <Text style={styles.help}>{t("settings.critical.012")}</Text>
-          <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder={t("settings.critical.013")} placeholderTextColor={colors.faint} maxLength={12} />
-          <Text style={styles.label}>Darin ID</Text>
-          <Text style={styles.help}>{t("settings.critical.014")}</Text>
-          <View style={styles.darinIdRow}><View style={styles.darinIdField}><Text style={styles.darinIdText}>{nickname.trim() ? `${nickname.trim()}#${darinTag}` : t("settings.critical.015")}</Text></View><Pressable style={styles.regenerateButton} onPress={() => setDarinTag(generateDarinTag())} accessibilityRole="button" accessibilityLabel={t("settings.critical.016")}><Text style={styles.regenerateText}>{t("settings.critical.017")}</Text></Pressable></View>
-          <Text style={styles.label}>{t("settings.critical.018")}</Text>
-          <Text style={styles.help}>{t("settings.critical.019")}</Text>
-          <View style={styles.readonlyField}><Text style={[styles.readonlyText, !realName && styles.datePlaceholder]}>{realName || t("settings.critical.020")}</Text></View>
-          <Text style={styles.label}>{t("settings.critical.021")}</Text>
-          <View style={styles.chips}>
-            {PROFILE_RELATION_OPTIONS.map((option) => {
-              const active = relation === option;
-              return (
-                <Pressable key={option} style={[styles.chip, active && styles.chipActive]} onPress={() => setRelation(option)}>
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{storedRelationshipLabel(t, option)}</Text>
-                </Pressable>
-              );
-            })}
+    <View style={styles.root}>
+      <ProfileHeader
+        title={t("babyProfile.myProfile")}
+        onBack={() => navigation.goBack()}
+        onMore={openMore}
+      />
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {error ? (
+          <View style={styles.banner}>
+            <ErrorBanner message={error} />
           </View>
-          <Text style={styles.label}>{t("settings.critical.022")}</Text>
-          <View style={styles.chips}>
-            {RESIDENCE_COUNTRY_OPTIONS.map((option) => (
-              <Pressable key={option.value} style={[styles.chip, residenceCountry === option.value && styles.chipActive]} onPress={() => setResidenceCountry(option.value)}>
-                <Text style={[styles.chipText, residenceCountry === option.value && styles.chipTextActive]}>{t(`profileSetup.country.${option.value.toLowerCase()}` as MessageKey)}</Text>
-              </Pressable>
-            ))}
-          </View>
-          {canShowLanguagePicker() ? (
-            <>
-              <Text style={styles.label}>{t("settings.critical.023")}</Text>
-              <View style={styles.chips}>
-                {getVisibleAppLanguageOptions().map((option) => (
-                  <Pressable key={option.value} style={[styles.chip, preferredLanguage === option.value && styles.chipActive, option.disabled && styles.chipDisabled]} onPress={() => setPreferredLanguage(option.value)} disabled={option.disabled} accessibilityState={{ disabled: option.disabled, selected: preferredLanguage === option.value }}>
-                    <Text style={[styles.chipText, preferredLanguage === option.value && styles.chipTextActive]}>{t(`profileSetup.language.${option.value}` as MessageKey)}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </>
-          ) : null}
-          <Text style={styles.label}>{t("settings.critical.024")}</Text>
-          <Pressable style={[styles.input, styles.dateInput]} onPress={() => setBirthDatePickerOpen(true)} accessibilityRole="button" accessibilityLabel={t("settings.critical.025")}>
-            <Text style={[styles.dateInputText, !guardianBirthDate && styles.datePlaceholder]}>{guardianBirthDate || "YYYY-MM-DD"}</Text>
-            <BabyLogIcon kind="calendar" size={18} color={colors.amberText} />
-          </Pressable>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.metaLabel}>{t("settings.critical.002")}</Text>
-          <Text style={styles.metaValue}>{email || t("settings.critical.026")}</Text>
-          <Text style={styles.metaLabel}>{t("settings.critical.027")}</Text>
-          <Text style={styles.metaValue}>{provider}</Text>
-          <Text style={styles.metaLabel}>{t("settings.critical.028")}</Text>
-          <Text style={styles.metaValue}>{t(familyRoleMessageKey(myFamilyRole))}</Text>
-        </View>
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable style={[styles.save, saving && styles.disabled]} onPress={() => void save()} disabled={saving}>
-          {saving ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.saveText}>{t("settings.critical.029")}</Text>}
-        </Pressable>
-        <RecordDatePickerModal
-          visible={birthDatePickerOpen}
-          selectedDateKey={guardianBirthDate || formatDateKey(new Date(new Date().getFullYear() - 30, 0, 1), "midnight")}
-          minDateKey={formatDateKey(new Date(new Date().getFullYear() - 120, 0, 1), "midnight")}
-          maxDateKey={formatDateKey()}
-          title={t("settings.critical.025")}
-          onSelect={setGuardianBirthDate}
-          onClose={() => setBirthDatePickerOpen(false)}
+        ) : null}
+        <ProfileSummarySection
+          name={name || careSetup.parent.parentName}
+          handle={handle}
+          bio={bio}
+          avatarUrl={avatarUrl}
+          saving={saving}
+          onChangePhoto={pickAvatar}
+          onEditProfile={openEdit}
         />
+        <ProfileStatsCard
+          babyCount={babies.length}
+          familyCount={familyCount}
+          friendCount={friendCount}
+          loading={loading}
+          onPressStat={onPressStat}
+        />
+        <MyBabiesSection
+          babies={babyItems}
+          loading={loading}
+          onPressManage={openBabyManage}
+          onPressBaby={(babyId) => { void openBaby(babyId); }}
+        />
+        <MyMomentsSection
+          moments={moments}
+          loading={loading}
+          onPressSeeAll={openMemories}
+          onPressMoment={(memoryPostId) => navigation.navigate("MemoryDetail", { memoryPostId })}
+        />
+        <ProfileQuoteCard />
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background, gap: 10 },
-  muted: { color: colors.muted, fontSize: 13 },
-  content: { padding: 20, gap: 16, alignItems: "stretch" },
-  card: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 10 },
-  label: { color: colors.text, fontSize: 13, fontWeight: "800" },
-  help: { color: colors.faint, fontSize: 11.5, lineHeight: 17, marginTop: -4 },
-  input: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, paddingHorizontal: 13, color: colors.text, fontSize: 15 },
-  readonlyField: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundSecondary, paddingHorizontal: 13, justifyContent: "center" },
-  readonlyText: { color: colors.text, fontSize: 15 },
-  darinIdRow: { flexDirection: "row", gap: 8 },
-  darinIdField: { flex: 1, minHeight: 48, paddingHorizontal: 13, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardHi, justifyContent: "center" },
-  darinIdText: { color: colors.amberText, fontSize: 15, fontWeight: "800" },
-  regenerateButton: { minHeight: 48, paddingHorizontal: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberSoft, justifyContent: "center" },
-  regenerateText: { color: colors.amberText, fontSize: 13, fontWeight: "800" },
-  dateInput: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  dateInputText: { color: colors.text, fontSize: 15 },
-  datePlaceholder: { color: colors.faint },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { minHeight: TOUCH_MIN, paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
-  chipDisabled: { opacity: 0.48 },
-  chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  chipText: { color: colors.muted, fontWeight: "700", fontSize: 12.5 },
-  chipTextActive: { color: colors.amberText },
-  metaLabel: { color: colors.faint, fontSize: 11.5, fontWeight: "700", marginTop: 4 },
-  metaValue: { color: colors.text, fontSize: 14, fontWeight: "600" },
-  error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12.5 },
-  save: { minHeight: 52, borderRadius: radius.full, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  saveText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 15 },
-  disabled: { opacity: 0.55 },
+  content: { paddingTop: 8, gap: 22 },
+  banner: { paddingHorizontal: 20 },
 });

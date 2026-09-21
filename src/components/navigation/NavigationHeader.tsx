@@ -1,5 +1,5 @@
 import { ChevronLeft } from "lucide-react-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../../theme";
 import { useLanguage } from "../../LanguageContext";
@@ -11,6 +11,7 @@ type Props = {
   rightLabel?: string;
   onRightPress?: () => void;
   rightDisabled?: boolean;
+  rightBusy?: boolean;
   includeSafeArea?: boolean;
 };
 
@@ -22,6 +23,7 @@ export function NavigationHeader({
   rightLabel,
   onRightPress,
   rightDisabled = false,
+  rightBusy = false,
   includeSafeArea = true,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -58,11 +60,13 @@ export function NavigationHeader({
         accessibilityRole="button"
         accessibilityLabel={rightLabel}
         onPress={onRightPress}
-        disabled={!onRightPress || rightDisabled}
+        disabled={!onRightPress || rightDisabled || rightBusy}
         style={styles.sideButton}
         hitSlop={10}
       >
-        {rightLabel ? (
+        {rightBusy ? (
+          <ActivityIndicator color={colors.amberText} />
+        ) : rightLabel ? (
           <Text style={[styles.rightLabel, rightDisabled && styles.disabled]}>{rightLabel}</Text>
         ) : null}
       </Pressable>
@@ -82,7 +86,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
   },
   sideButton: {
-    width: 64,
+    width: 72,
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",

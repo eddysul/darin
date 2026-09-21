@@ -30,6 +30,7 @@ import {
   syncCareLogUpdate,
 } from "../utils/careLogServerSync";
 import { clearSupabaseSync, getSupabaseSync, saveSupabaseSync } from "../utils/supabaseSyncStore";
+import { qaStorage } from "../utils/qaStorage";
 import { AuthRepository } from "../repositories/AuthRepository";
 import { isSupabaseConfigured } from "../lib/supabase";
 import {
@@ -182,6 +183,7 @@ type BabyLogContextValue = {
   activeBabyId: string | null;
   switchActiveBaby: (babyId: string) => Promise<boolean>;
   addBaby: (input: CreateBabyInput) => Promise<BabyRow>;
+  deleteCreatedBaby: (babyId: string) => Promise<boolean>;
   refreshBabies: () => Promise<BabyRow[]>;
   cautionFoods: CautionFood[];
   addCautionFood: (foodName: string, source: CautionFoodSource) => Promise<CautionFood>;
@@ -256,7 +258,7 @@ export type DiaryPersistenceOutcome = {
 const BabyLogContext = createContext<BabyLogContextValue | null>(null);
 
 export function BabyLogProvider({ children }: { children: ReactNode }) {
-  const { careSetup, hasSavedCareSetup, setCareSetup } = useApp();
+  const { careSetup, hasSavedCareSetup, setCareSetup, resetCareSetup } = useApp();
   const [logs, setLogs] = useState<BabyLogEntry[]>([]);
   const logsRef = useRef<BabyLogEntry[]>([]);
   const [careLogCoverage, setCareLogCoverage] = useState<CareLogHistoryCoverage | null>(null);
@@ -1452,6 +1454,34 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     return created;
   }, [switchActiveBaby]);
 
+  const deleteCreatedBaby = useCallback(async (babyId: string): Promise<boolean> => {
+    const deletingScope = localDataScopeRef.current;
+    if (!deletingScope || deletingScope.babyId !== babyId) throw new Error("Baby scope changed.");
+    await BabyRepository.deleteCreatedBaby(babyId);
+    const remaining = await BabyRepository.listMyBabies(deletingScope.userId);
+    if (localDataScopeRef.current?.userId !== deletingScope.userId) return remaining.length > 0;
+    setBabies(remaining);
+    if (remaining.length) {
+      await switchActiveBaby(remaining[0].id);
+    } else {
+      await resetCareSetup();
+      await clearSupabaseSync();
+      await hydrateStorageState(true, undefined, true);
+    }
+    // Scoped device caches are no longer needed after the server-owned cascade.
+    // Limit removal to keys ending in the exact account:baby scope.
+    const suffix = `:${localDataScopeId(deletingScope)}`;
+    try {
+      const keys = await qaStorage.getAllKeys();
+      await qaStorage.multiRemove(keys.filter((key) =>
+        key.endsWith(suffix) && Object.values(STORAGE_KEYS).some((base) => key.startsWith(`${base}:`)),
+      ));
+    } catch {
+      // Storage cleanup can retry later; the deleted baby is no longer selected.
+    }
+    return remaining.length > 0;
+  }, [hydrateStorageState, resetCareSetup, switchActiveBaby]);
+
   const addCautionFood = useCallback(async (foodName: string, source: CautionFoodSource): Promise<CautionFood> => {
     const scope = localDataScopeRef.current;
     if (!scope) throw new Error("현재 선택된 아기가 없어요.");
@@ -1660,6 +1690,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       activeBabyId: localDataScope?.babyId ?? null,
       switchActiveBaby,
       addBaby,
+      deleteCreatedBaby,
       refreshBabies,
       cautionFoods,
       addCautionFood,
@@ -1729,6 +1760,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       babies,
       switchActiveBaby,
       addBaby,
+      deleteCreatedBaby,
       refreshBabies,
       cautionFoods,
       addCautionFood,

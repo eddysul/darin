@@ -26,6 +26,7 @@ export type DisplayProfile = {
 
 export type BabyProfile = {
   id: string;
+  createdBy?: string;
   name: string;
   nickname?: string;
   birthDate?: string;

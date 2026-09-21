@@ -35,6 +35,7 @@ function extensionForMime(mimeType?: string): string {
 function rowToBabyProfile(row: BabyRow, avatarUrl?: string): BabyProfile {
   return {
     id: row.id,
+    createdBy: row.created_by ?? undefined,
     name: row.name,
     nickname: row.nickname ?? undefined,
     birthDate: row.birth_date ?? undefined,
