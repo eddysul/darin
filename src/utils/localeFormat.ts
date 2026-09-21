@@ -38,7 +38,14 @@ export function formatRelativeTime(value: Date | string, locale: Locale, now = n
       : abs < 86_400
         ? [Math.round(seconds / 3_600), "hour"]
         : [Math.round(seconds / 86_400), "day"];
-  return new Intl.RelativeTimeFormat(toIntlLocale(locale), { numeric: "auto" }).format(amount, unit);
+  try {
+    if (typeof Intl === "undefined" || typeof Intl.RelativeTimeFormat !== "function") return "";
+    const intlLocale = toIntlLocale(locale);
+    if (!intlLocale) return "";
+    return new Intl.RelativeTimeFormat(intlLocale, { numeric: "auto" }).format(amount, unit);
+  } catch {
+    return "";
+  }
 }
 
 export function formatDurationMinutes(totalMinutes: number, locale: Locale): string {

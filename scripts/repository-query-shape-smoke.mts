@@ -46,6 +46,8 @@ assert.match(careLogs, /\.eq\("baby_id", babyId\)\s*\.in\("category", \[\.\.\.ca
 assert.match(careLogs, /offset \+ CARE_LOG_HYDRATION_PAGE_SIZE - 1/);
 assert.doesNotMatch(notifications, /\.select\("\*"\)/);
 assert.match(notifications, /NOTIFICATION_SETTINGS_SELECT/);
+assert.match(notifications, /rpc\("dismiss_notification_event"/);
+assert.doesNotMatch(notifications, /\.from\("notification_events"\)[\s\S]*\.delete\(/);
 assert.doesNotMatch(contactRequests, /\.select\(/);
 assert.match(profiles, /rpc\("list_memory_author_display"/);
 assert.match(profiles, /rpc\("list_visible_profile_display"/);

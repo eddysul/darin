@@ -30,7 +30,7 @@ export function ProfileAvatar({
       {uri ? (
         <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit={imageFit} contentPosition="center" transition={120} />
       ) : (
-        <BabyLogIcon kind={fallback} size={Math.round(size * 0.42)} color={colors.amberText} />
+        <BabyLogIcon kind={fallback} size={Math.round(size * 0.42)} color={colors.muted} />
       )}
     </View>
   );

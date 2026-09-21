@@ -35,6 +35,14 @@ const rows = [
   ["034","아빠가 수유 기록을 공유했어요.","Dad shared a feeding log.","パパが授乳記録を共有しました。","Papá compartió un registro de toma.","爸爸分享了一次喂奶记录。"],
   ["035","오늘의 수유와 수면 기록을 확인해 보세요.","Check today's feeding and sleep logs.","今日の授乳と睡眠の記録を確認しましょう。","Revisa las tomas y el sueño de hoy.","查看今天的喂奶和睡眠记录。"],
   ["036","내일 오전 10시, 예방접종 일정이 있어요.","There's a vaccination appointment tomorrow at 10 a.m.","明日午前10時に予防接種の予定があります。","Mañana a las 10 hay una cita de vacunación.","明天上午10点有预防接种安排。"],
+  ["037","읽지 않음","Unread","未読","No leído","未读"],
+  ["038","삭제","Delete","削除","Eliminar","删除"],
+  ["039","이 알림을 목록에서 삭제할까요?","Delete this notification from the list?","この通知を一覧から削除しますか？","¿Eliminar esta notificación de la lista?","要从列表中删除这条通知吗？"],
+  ["040","왼쪽으로 밀면 삭제할 수 있어요","Swipe left to delete","左にスワイプすると削除できます","Desliza a la izquierda para eliminar","向左滑动即可删除"],
+  ["041","알림을 삭제하지 못했어요","Couldn't delete the notification","通知を削除できませんでした","No se pudo eliminar la notificación","无法删除通知"],
+  ["042","{name}님이 {babyName} 가족에 “{role}” 권한으로 초대했어요.","{name} invited you to {babyName}'s family with “{role}” access.","{name}さんが{babyName}の家族に「{role}」権限で招待しました。","{name} te invitó a la familia de {babyName} con permiso “{role}”.","{name}已用“{role}”权限邀请你加入{babyName}的家庭。"],
+  ["043","{name}님이 {babyName}의 우리의 순간을 함께 보도록 친구로 초대했어요.","{name} invited you as a friend to see {babyName}'s shared moments.","{name}さんが{babyName}の私たちの瞬間を一緒に見る友だちとして招待しました。","{name} te invitó como amigo para ver los recuerdos de {babyName}.","{name}邀请你作为朋友一起查看{babyName}的我们的瞬间。"],
+  ["044","초대 요청","Invite request","招待リクエスト","Solicitud de invitación","邀请请求"],
 ] as const;
 
 type NoticeId = typeof rows[number][0];

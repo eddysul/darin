@@ -3,6 +3,7 @@ import type { Database } from "../types/database";
 import type { NotificationSettings, SendNotificationInput } from "../types/notifications";
 import { notificationSettingsFromRow } from "../types/notifications";
 import { captureSessionScope, requireSupabase } from "../lib/supabase";
+import { readDismissedNotificationEventIds, rememberDismissedNotificationEvent } from "../utils/dismissedNotificationEventsStore";
 import { AuthRepository } from "./AuthRepository";
 
 function timeValue(hour: number, minute: number): string {
@@ -15,6 +16,11 @@ async function requireUserId(): Promise<string> {
   const user = await AuthRepository.getUser();
   if (!user) throw new Error("로그인이 필요해요.");
   return user.id;
+}
+
+function isMissingDismissRpc(error: { code?: string; message?: string }): boolean {
+  const message = error.message ?? "";
+  return error.code === "PGRST202" || error.code === "42883" || /could not find the function|does not exist|schema cache/i.test(message);
 }
 
 export const NotificationRepository = {
@@ -93,14 +99,17 @@ export const NotificationRepository = {
 
   async listInAppEvents() {
     const userId = await requireUserId();
-    const { data, error } = await requireSupabase()
-      .from("notification_events")
-      .select("id, event_type, title, body, data, read_at, created_at")
-      .eq("recipient_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(50);
+    const [{ data, error }, dismissed] = await Promise.all([
+      requireSupabase()
+        .from("notification_events")
+        .select("id, event_type, actor_id, baby_id, title, body, data, read_at, created_at")
+        .eq("recipient_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(50),
+      readDismissedNotificationEventIds(userId),
+    ]);
     if (error) throw error;
-    return data ?? [];
+    return (data ?? []).filter((event) => !dismissed.has(event.id));
   },
 
   async markInAppEventRead(eventId: string): Promise<void> {
@@ -108,6 +117,23 @@ export const NotificationRepository = {
       p_event_id: eventId,
     });
     if (error) throw error;
+  },
+
+  async dismissInAppEvent(eventId: string): Promise<void> {
+    const userId = await requireUserId();
+    if (eventId.startsWith("qa-")) {
+      await rememberDismissedNotificationEvent(userId, eventId);
+      return;
+    }
+    const { error } = await requireSupabase().rpc("dismiss_notification_event", {
+      p_event_id: eventId,
+    });
+    if (!error) return;
+    if (isMissingDismissRpc(error)) {
+      await rememberDismissedNotificationEvent(userId, eventId);
+      return;
+    }
+    throw error;
   },
 
   async createNotificationEvent(input: SendNotificationInput): Promise<void> {

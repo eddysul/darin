@@ -18,11 +18,15 @@ const BODY_KEYS: Record<string, MessageKey> = {
 };
 
 export function notificationTitleLabel(t: Translate, title: string): string {
+  if (typeof title !== "string" || !title) return "";
   const key = TITLE_KEYS[title];
-  return key ? t(key) : title;
+  const labeled = key ? t(key) : title;
+  return typeof labeled === "string" && labeled ? labeled : title;
 }
 
 export function notificationBodyLabel(t: Translate, body: string): string {
+  if (typeof body !== "string" || !body) return "";
   const key = BODY_KEYS[body];
-  return key ? t(key) : body;
+  const labeled = key ? t(key) : body;
+  return typeof labeled === "string" && labeled ? labeled : body;
 }
