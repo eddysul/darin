@@ -4,8 +4,11 @@ import { assertQaProjectEnvironment } from "./lib/qa-project-guard.mjs";
 import { resolvePsqlBinary } from "./lib/qa-project-config.mjs";
 
 const { ref } = assertQaProjectEnvironment();
-const applied = ["202609170004", "202609180002", "202609200001", "202609200002", "202609200003"];
-const intentionallyPending = ["202608220002", "202608260003", "202609170001", "202609170002"];
+const applied = [
+  "202609170001", "202609170002", "202609170004", "202609180002",
+  "202609200001", "202609200002", "202609200003", "202609210001",
+];
+const intentionallyPending = ["202608220002", "202608260003"];
 
 const sql = `
 select json_build_object(

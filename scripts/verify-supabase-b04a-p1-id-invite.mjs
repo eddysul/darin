@@ -45,6 +45,14 @@ async function addMember(actor, babyId, userId, permissionRole) {
   if (result.error) throw result.error;
 }
 
+async function promoteFullAdmin(actor, babyId, userId) {
+  const result = await actor.sb.rpc("promote_baby_full_admin", {
+    p_baby_id: babyId,
+    p_user_id: userId,
+  });
+  if (result.error) throw result.error;
+}
+
 async function setIssuer(actor, babyId, values) {
   const result = await actor.sb.from("baby_members").update(values)
     .eq("baby_id", babyId).eq("user_id", issuer.user.id).select("id");
@@ -56,13 +64,14 @@ async function restoreIssuer(actor, babyId) {
     .eq("baby_id", babyId).eq("user_id", issuer.user.id).maybeSingle();
   if (existing.error) throw existing.error;
   if (existing.data) {
-    await setIssuer(actor, babyId, { permission_role: "admin", status: "active" });
+    await setIssuer(actor, babyId, { permission_role: "editor", status: "active" });
   } else {
-    await addMember(actor, babyId, issuer.user.id, "admin");
+    await addMember(actor, babyId, issuer.user.id, "editor");
   }
+  await promoteFullAdmin(actor, babyId, issuer.user.id);
 }
 
-async function send(receiverAccount, babyId, requestType = "family", role = "admin") {
+async function send(receiverAccount, babyId, requestType = "family", role = "editor") {
   const darinId = receiverAccount.darinId;
   const result = await issuer.sb.rpc("send_darin_id_invite_request", {
     p_baby_id: babyId,
@@ -124,7 +133,8 @@ try {
 
   const baby = await createBaby(issuer, `B04a P1 ${crypto.randomUUID()}`);
   const otherBaby = await createBaby(coAdmin, `B04a P1 scope ${crypto.randomUUID()}`);
-  await addMember(issuer, baby, coAdmin.user.id, "admin");
+  await addMember(issuer, baby, coAdmin.user.id, "editor");
+  await promoteFullAdmin(issuer, baby, coAdmin.user.id);
 
   const demotedRequest = await send(demoted, baby);
   await setIssuer(coAdmin, baby, { permission_role: "editor" });
@@ -196,7 +206,7 @@ try {
   const racedMembership = await membership(race.user.id, baby);
   if (raceResponse.error) {
     if (racedMembership) throw new Error("rejected race response granted membership");
-  } else if (racedMembership?.permission_role !== "admin" || racedMembership?.status !== "active") {
+  } else if (racedMembership?.permission_role !== "editor" || racedMembership?.status !== "active") {
     throw new Error("successful lock-ordered race response has an invalid grant");
   }
   console.log(`PASS QA concurrent race: ${raceResponse.error ? "safe rejection" : "valid response-first grant"}`);

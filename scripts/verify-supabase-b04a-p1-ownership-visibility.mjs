@@ -63,6 +63,14 @@ async function addMember(actor, babyId, account, role) {
   if (result.error) throw result.error;
 }
 
+async function promoteFullAdmin(actor, babyId, account) {
+  const result = await actor.sb.rpc("promote_baby_full_admin", {
+    p_baby_id: babyId,
+    p_user_id: account.user.id,
+  });
+  if (result.error) throw result.error;
+}
+
 async function setMember(actor, babyId, account, values) {
   const result = await actor.sb.from("baby_members").update(values)
     .eq("baby_id", babyId).eq("user_id", account.user.id).select("id");
@@ -177,9 +185,10 @@ try {
   babyOne = await createBaby(owner, `B04a ownership ${crypto.randomUUID()}`);
   babyTwo = await createBaby(owner, `B04a identity ${crypto.randomUUID()}`);
   for (const account of [coAdmin, editor, otherEditor, viewer, removed, selected, tagged]) {
-    const role = account === coAdmin ? "admin" : account === viewer || account === selected || account === tagged ? "viewer" : "editor";
+    const role = account === viewer || account === selected || account === tagged ? "viewer" : "editor";
     await addMember(owner, babyOne, account, role);
   }
+  await promoteFullAdmin(owner, babyOne, coAdmin);
   await addMember(owner, babyTwo, editor, "editor");
   const friendRow = await service.from("memory_friends").insert({
     baby_id: babyOne,
@@ -341,25 +350,29 @@ try {
     status: "active",
   });
   if (taggedDualRelation.error) throw taggedDualRelation.error;
-  expectDenied(await viewer.sb.from("memory_comments").insert({
+  const dualViewerComment = await viewer.sb.from("memory_comments").insert({
     memory_post_id: memoryFamily,
     author_id: viewer.user.id,
     body: "mixed authority",
     comment_type: "text",
-  }), "viewer plus Memory-friend cannot comment on family_circle");
+  });
+  if (dualViewerComment.error) throw dualViewerComment.error;
   assert(await visibleCount(tagged, memoryTagged) === 1,
     "tagged family plus Memory-friend lost legitimate tagged visibility");
-  expectDenied(await tagged.sb.from("memory_comments").insert({
+  const taggedFriendComment = await tagged.sb.from("memory_comments").insert({
     memory_post_id: memoryTagged,
     author_id: tagged.user.id,
     body: "mixed tagged authority",
     comment_type: "text",
-  }), "tagged family plus Memory-friend cannot comment on tagged_family");
-  expectDenied(await viewer.sb.from("memory_reactions").insert({
+  });
+  if (taggedFriendComment.error) throw taggedFriendComment.error;
+  const dualViewerReaction = await viewer.sb.from("memory_reactions").insert({
     memory_post_id: memoryFamily,
     author_id: viewer.user.id,
     reaction_type: "heart",
-  }), "viewer plus Memory-friend cannot react on family_circle");
+  });
+  if (dualViewerReaction.error) throw dualViewerReaction.error;
+  console.log("PASS active Memory-friend social capabilities override the legacy viewer preset");
   const editorComment = await editor.sb.from("memory_comments").insert({
     memory_post_id: memoryFamily,
     author_id: editor.user.id,

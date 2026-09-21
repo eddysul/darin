@@ -90,8 +90,9 @@ const expectedPending = new Set([
       "202608260003_notification_event_type_constraint_cleanup.sql",
     ]
     : []),
-  "202609170001_memory_video_media.sql",
-  "202609170002_dismiss_notification_event.sql",
+  ...["202609170001_memory_video_media.sql", "202609170002_dismiss_notification_event.sql",
+    "202609210001_memory_video_baby_scope_compat.sql"]
+    .filter((item) => !applied.has(item.split("_")[0])),
   ...(applied.has(version) ? [] : [filename]),
 ]);
 if (

@@ -43,6 +43,14 @@ async function addMember(actor, babyId, userId, permissionRole) {
   if (result.error) throw result.error;
 }
 
+async function promoteFullAdmin(actor, babyId, userId) {
+  const result = await actor.sb.rpc("promote_baby_full_admin", {
+    p_baby_id: babyId,
+    p_user_id: userId,
+  });
+  if (result.error) throw result.error;
+}
+
 async function membership(userId, babyId) {
   const { data, error } = await fixtureAdmin.from("baby_members")
     .select("permission_role,status").eq("baby_id", babyId).eq("user_id", userId).maybeSingle();
@@ -109,7 +117,8 @@ try {
   const [babyA, babyB] = createdBabyIds;
   await addMember(a, babyA, b.user.id, "editor");
   await addMember(a, babyA, c.user.id, "viewer");
-  await addMember(a, babyA, f.user.id, "admin");
+  await addMember(a, babyA, f.user.id, "editor");
+  await promoteFullAdmin(a, babyA, f.user.id);
 
   const initialInviteCount = await fixtureAdmin.from("invite_codes")
     .select("id", { count: "exact", head: true }).eq("baby_id", babyA);
@@ -131,7 +140,7 @@ try {
   }
   console.log("PASS NULL/non-member, viewer, and editor admin-only RPC attacks rejected");
 
-  const removedCode = await makeInvite(f, babyA, "admin");
+  const removedCode = await makeInvite(f, babyA, "editor");
   const removeF = await a.sb.from("baby_members").delete().eq("baby_id", babyA).eq("user_id", f.user.id);
   if (removeF.error) throw removeF.error;
   expectDenied(await f.sb.rpc("create_invite_code", {
@@ -141,8 +150,9 @@ try {
   if (await membership(removedReceiver.user.id, babyA)) throw new Error("removed issuer granted membership");
   console.log("PASS removed former admin and outstanding invite rejected");
 
-  await addMember(a, babyA, f.user.id, "admin");
-  const demotedCode = await makeInvite(f, babyA, "admin");
+  await addMember(a, babyA, f.user.id, "editor");
+  await promoteFullAdmin(a, babyA, f.user.id);
+  const demotedCode = await makeInvite(f, babyA, "editor");
   const demoteF = await a.sb.from("baby_members").update({ permission_role: "editor" })
     .eq("baby_id", babyA).eq("user_id", f.user.id).select("id");
   if (demoteF.error || demoteF.data?.length !== 1) throw demoteF.error ?? new Error("demotion fixture failed");
@@ -150,10 +160,8 @@ try {
   if (await membership(demotedReceiver.user.id, babyA)) throw new Error("demoted issuer granted membership");
   console.log("PASS demoted issuer invite rejected");
 
-  const restoreF = await a.sb.from("baby_members").update({ permission_role: "admin" })
-    .eq("baby_id", babyA).eq("user_id", f.user.id).select("id");
-  if (restoreF.error || restoreF.data?.length !== 1) throw restoreF.error ?? new Error("race fixture restore failed");
-  const raceCode = await makeInvite(f, babyA, "admin");
+  await promoteFullAdmin(a, babyA, f.user.id);
+  const raceCode = await makeInvite(f, babyA, "editor");
   const [raceAccept, raceDemote] = await Promise.all([
     acceptInvite(raceReceiver, raceCode),
     a.sb.from("baby_members").update({ permission_role: "editor" })
@@ -164,7 +172,7 @@ try {
   if (raceAccept.error) {
     assertSafeError(raceAccept.error, "concurrent acceptance safe rejection");
     if (racedMembership) throw new Error("rejected concurrent acceptance granted membership");
-  } else if (!racedMembership || racedMembership.permission_role !== "admin" || racedMembership.status !== "active") {
+  } else if (!racedMembership || racedMembership.permission_role !== "editor" || racedMembership.status !== "active") {
     throw new Error("successful pre-demotion acceptance has an invalid final grant");
   }
   console.log(`PASS concurrent demotion race: ${raceAccept.error ? "safe rejection" : "valid lock-ordered acceptance"}`);
