@@ -139,6 +139,11 @@ try {
   `]);
   run("psql", [...connection, "-f", "supabase/migrations/202609200002_baby_scoped_extended_enforcement.sql"]);
   run("psql", [...connection, "-f", "supabase/migrations/202609200002_baby_scoped_extended_enforcement.sql"]);
+  run("psql", [...connection, "-c", "alter table public.memory_media add column if not exists thumbnail_storage_path text;"]);
+  run("psql", [...connection, "-f", "supabase/migrations/202609210001_memory_video_baby_scope_compat.sql"]);
+  expect("forward migration upgrades signed-url descriptor without return-type conflict", query(`
+    select pg_get_function_result('public.resolve_private_media_for_signing(text,uuid)'::regprocedure)
+  `), "TABLE(bucket_id text, storage_path text, expires_in integer, thumbnail_storage_path text)");
 
   run("psql", [...connection, "-c", `
     insert into public.baby_members(baby_id,user_id,permission_role,status)

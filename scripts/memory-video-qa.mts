@@ -68,8 +68,13 @@ for (const id of ["190", "191", "192", "193", "194", "195", "196", "197", "198",
 assert.match(memoryCriticalKo["memory.critical.190"], /90초/);
 
 const migration = readFileSync("supabase/migrations/202609170001_memory_video_media.sql", "utf8");
+const compatibilityMigration = readFileSync("supabase/migrations/202609210001_memory_video_baby_scope_compat.sql", "utf8");
 assert.match(migration, /duration_ms/);
 assert.match(migration, /thumbnail_storage_path/);
+assert.doesNotMatch(migration, /returns table\(bucket_id text,storage_path text,expires_in integer,thumbnail_storage_path text\)/);
+assert.match(compatibilityMigration, /returns table\(bucket_id text,storage_path text,expires_in integer,thumbnail_storage_path text\)/);
+assert.match(compatibilityMigration, /has_baby_access\(b\.id,'care\.read'\)/);
+assert.match(compatibilityMigration, /has_baby_access\(b\.id,'moments\.read'\)/);
 assert.match(migration, /mp4\|mov\|m4v/);
 assert.match(migration, /file_size_limit=104857600/);
 assert.match(migration, /video\/mp4/);
@@ -77,7 +82,7 @@ assert.match(migration, /video\/quicktime/);
 assert.doesNotMatch(migration, /create table public\.notification_events/);
 assert.doesNotMatch(migration, /alter table public\.notification/);
 assert.match(migration, /duration_ms <= 90000/);
-assert.match(migration, /can_view_memory_post/);
+assert.match(compatibilityMigration, /can_view_memory_post/);
 assert.match(migration, /enqueue_deleted_media/);
 
 const signer = readFileSync("supabase/functions/media-signed-url/index.ts", "utf8");
