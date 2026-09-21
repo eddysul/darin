@@ -23,7 +23,7 @@ export async function drainStorageCleanup(adapter: CleanupAdapter): Promise<{ co
   let completed = 0;
   for (const intent of intents) {
     if (!['memories','diary-media','growth-book-media','baby-stickers','profile-media'].includes(intent.bucket_id)
-      || !/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|heic|heif|webp)$/.test(intent.storage_path)
+      || !/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|heic|heif|webp|mp4|mov|m4v)$/.test(intent.storage_path)
       || !/^[0-9a-f-]{36}$/i.test(intent.lease_id)) continue;
     try {
       await adapter.remove(intent.bucket_id, intent.storage_path);

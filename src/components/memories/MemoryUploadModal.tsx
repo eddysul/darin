@@ -28,6 +28,8 @@ import {
   type EagerPhoto,
 } from "../../utils/eagerMediaUpload";
 import { createId } from "../../utils/id";
+import { compatibleLibraryRepresentation } from "../../utils/mediaLibraryPicker";
+import { MEMORY_MEDIA_MAX_ITEMS, captureMemoryVideoThumbnail, inspectPickedMemoryAsset, memoryUploadErrorMessageKey } from "../../utils/memoryVideo";
 import { colors, radius } from "../../theme";
 import { BabyLogIcon } from "../babylog/BabyLogIcon";
 import { MemoryPeoplePicker } from "./MemoryPeoplePicker";
@@ -36,7 +38,7 @@ import type { BabyRow } from "../../types/database";
 import { useLanguage } from "../../LanguageContext";
 import { useBabyLog } from "../../context/BabyLogContext";
 
-const MAX_MEMORY_PHOTOS = 5;
+const MAX_MEMORY_PHOTOS = MEMORY_MEDIA_MAX_ITEMS;
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 
 function toggle(list: string[], id: string): string[] {
@@ -48,8 +50,12 @@ function toPreparedPhoto(photo: EagerPhoto): PreparedMemoryPhoto {
     id: photo.id,
     localUri: photo.localUri,
     storagePath: photo.storagePath,
+    mediaType: photo.mediaType,
     width: photo.width,
     height: photo.height,
+    durationMs: photo.durationMs,
+    thumbnailStoragePath: photo.thumbnailStoragePath,
+    thumbnailLocalUri: photo.thumbnailLocalUri,
     uploadStatus: photo.status === "uploaded" ? "ready" : photo.status === "failed" ? "failed" : "uploading",
   };
 }
@@ -106,9 +112,12 @@ export function MemoryUploadModal({
     setFamilyMoment(false);
     setError("");
     return subscribeEagerSession(sessionIdRef.current, () => {
-      setPhotos(listEagerPhotos(sessionIdRef.current));
+      const next = listEagerPhotos(sessionIdRef.current);
+      setPhotos(next);
+      const failed = next.find((photo) => photo.status === "failed");
+      if (failed) setError(t(memoryUploadErrorMessageKey(new Error(failed.error))));
     });
-  }, [babyId, visible]);
+  }, [babyId, t, visible]);
 
   useEffect(() => {
     if (visible) return;
@@ -145,20 +154,42 @@ export function MemoryUploadModal({
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
+        mediaTypes: ["images", "videos"],
         allowsMultipleSelection: true,
         selectionLimit: remaining,
         orderedSelection: true,
-        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+        preferredAssetRepresentationMode: compatibleLibraryRepresentation,
         quality: 1,
       });
       if (result.canceled) return;
+      const accepted: Array<{
+        uri: string;
+        width?: number;
+        height?: number;
+        mediaType: EagerPhoto["mediaType"];
+        durationMs?: number;
+        mimeType?: string;
+        thumbnailLocalUri?: string;
+      }> = [];
+      for (const asset of result.assets.slice(0, remaining)) {
+        try {
+          const inspected = await inspectPickedMemoryAsset(asset);
+          let thumbnailLocalUri: string | undefined;
+          if (inspected.mediaType === "video") {
+            thumbnailLocalUri = (await captureMemoryVideoThumbnail(inspected.uri, { time: 0, quality: 0.6 }))?.uri;
+          }
+          accepted.push({ ...inspected, thumbnailLocalUri });
+        } catch (cause) {
+          setError(t(memoryUploadErrorMessageKey(cause)));
+        }
+      }
+      if (!accepted.length) return;
       enqueuePickedPhotos({
         accountId: logAuthor.userId,
         babyId,
         bucket: "memories",
         sessionId: sessionIdRef.current,
-        assets: result.assets.map((asset) => ({ uri: asset.uri, width: asset.width, height: asset.height })),
+        assets: accepted,
       });
       setPhotos(listEagerPhotos(sessionIdRef.current));
     } catch (cause) {
@@ -227,26 +258,30 @@ export function MemoryUploadModal({
           keyboardDismissMode="interactive"
         >
           {photos.length === 0 ? (
-            <Pressable style={styles.photo} onPress={() => void pickImage()} accessibilityRole="button" accessibilityLabel={t("memory.critical.158")}>
+            <Pressable style={styles.photo} onPress={() => void pickImage()} accessibilityRole="button" accessibilityLabel={t("memory.critical.192")}>
               <View style={styles.photoEmpty}>
                 <BabyLogIcon kind="new" size={32} color={colors.amberText} strokeWidth={2.2} />
-                <Text style={styles.photoLabel}>{t("memory.critical.084")}</Text>
+                <Text style={styles.photoLabel}>{t("memory.critical.192")}</Text>
               </View>
             </Pressable>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
               {photos.map((image, index) => (
                 <View key={image.id} style={styles.photoThumbWrap}>
-                  <Image source={{ uri: image.localUri }} style={styles.photoThumb} contentFit="cover" />
+                  <Image source={{ uri: image.thumbnailLocalUri ?? image.localUri }} style={styles.photoThumb} contentFit="cover" />
                   {index === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>{t("memory.critical.085")}</Text></View> : null}
                   {image.status === "failed" ? (
-                    <Pressable style={styles.photoFail} onPress={() => retryEagerPhoto(image.id)} accessibilityRole="button" accessibilityLabel={t("memory.critical.178")}>
+                    <Pressable style={styles.photoFail} onPress={() => retryEagerPhoto(image.id)} accessibilityRole="button" accessibilityLabel={image.mediaType === "video" ? t("memory.critical.194") : t("memory.critical.178")}>
                       <Text style={styles.photoFailText}>{t("memory.critical.017")}</Text>
                     </Pressable>
                   ) : image.status !== "uploaded" ? (
                     <View style={styles.photoUploading} pointerEvents="none">
                       <ActivityIndicator size="small" color="#fff" />
-                      <Text style={styles.photoUploadingText}>{t("memory.critical.104")}</Text>
+                      <Text style={styles.photoUploadingText}>
+                        {image.mediaType === "video"
+                          ? image.status === "compressing" ? t("memory.critical.202") : t("memory.critical.193")
+                          : t("memory.critical.104")}
+                      </Text>
                     </View>
                   ) : null}
                   <Pressable
@@ -260,9 +295,9 @@ export function MemoryUploadModal({
                 </View>
               ))}
               {photos.length < MAX_MEMORY_PHOTOS ? (
-                <Pressable style={styles.photoAddTile} onPress={() => void pickImage()} accessibilityRole="button" accessibilityLabel={t("memory.critical.086")}>
+                <Pressable style={styles.photoAddTile} onPress={() => void pickImage()} accessibilityRole="button" accessibilityLabel={t("memory.critical.191")}>
                   <BabyLogIcon kind="new" size={22} color={colors.amberText} strokeWidth={2.2} />
-                  <Text style={styles.photoAddText}>{t("memory.critical.086")}</Text>
+                  <Text style={styles.photoAddText}>{t("memory.critical.191")}</Text>
                 </Pressable>
               ) : null}
             </ScrollView>
@@ -345,17 +380,17 @@ const styles = StyleSheet.create({
   photoUploading: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, gap: 6, backgroundColor: "rgba(46,42,38,0.44)", alignItems: "center", justifyContent: "center" },
   photoUploadingText: { color: "#fff", fontSize: 11, fontWeight: "800" },
   photoRemove: { position: "absolute", right: 4, top: 4, width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(46,42,38,0.72)" },
-  photoAddTile: { width: 104, height: 132, borderRadius: 18, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center", gap: 4 },
-  photoAddText: { color: colors.amberText, fontSize: 11.5, fontWeight: "800" },
+  photoAddTile: { width: 104, height: 132, borderRadius: 18, borderWidth: 1, borderStyle: "dashed", borderColor: colors.border, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", gap: 4 },
+  photoAddText: { color: colors.muted, fontSize: 11.5, fontWeight: "800" },
   field: { gap: 8, padding: 14, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   fieldLabel: { color: colors.text, fontSize: 14, fontWeight: "800" },
   caption: { minHeight: 100, color: colors.text, fontSize: 14, lineHeight: 21, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
   counter: { color: colors.faint, fontSize: 10.5, textAlign: "right" },
-  babyTag: { color: colors.amberText, fontSize: 13, fontWeight: "800", marginBottom: 2 },
+  babyTag: { color: colors.text, fontSize: 13, fontWeight: "800", marginBottom: 2 },
   babyTargetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  babyTargetChip: { minHeight: TOUCH_MIN, maxWidth: "100%", paddingHorizontal: 12, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  babyTargetChipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  babyTargetChip: { minHeight: TOUCH_MIN, maxWidth: "100%", paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  babyTargetChipActive: { borderColor: colors.border, backgroundColor: colors.accentSoft },
   babyTargetText: { color: colors.muted, fontSize: 12.5, fontWeight: "700" },
-  babyTargetTextActive: { color: colors.amberText },
+  babyTargetTextActive: { color: colors.accentStrong },
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: 12, fontSize: 12.5, lineHeight: 18 },
 });

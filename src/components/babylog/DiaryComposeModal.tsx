@@ -58,6 +58,7 @@ import { BabyStickerVaultModal } from "./BabyStickerVaultModal";
 import { useLanguage } from "../../LanguageContext";
 import type { Locale } from "../../i18n";
 import { formatLocalizedDate } from "../../utils/localeFormat";
+import { compatibleLibraryRepresentation } from "../../utils/mediaLibraryPicker";
 
 type Props = {
   visible: boolean;
@@ -388,7 +389,7 @@ export function DiaryComposeModal({
         allowsMultipleSelection: true,
         selectionLimit: remaining,
         orderedSelection: true,
-        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+        preferredAssetRepresentationMode: compatibleLibraryRepresentation,
       });
       if (!result.canceled && result.assets.length > 0) {
         setPhotoError("");

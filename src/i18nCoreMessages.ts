@@ -13,6 +13,7 @@ import { insightCriticalEn, insightCriticalEs, insightCriticalJa, insightCritica
 import { chromeCriticalEn, chromeCriticalEs, chromeCriticalJa, chromeCriticalKo, chromeCriticalZhCN } from "./i18nChromeCriticalMessages";
 import { contractionCriticalEn, contractionCriticalEs, contractionCriticalJa, contractionCriticalKo, contractionCriticalZhCN } from "./i18nContractionCriticalMessages";
 import { qaCriticalEn, qaCriticalEs, qaCriticalJa, qaCriticalKo, qaCriticalZhCN } from "./i18nQaCriticalMessages";
+import { babyDeletionEn, babyDeletionEs, babyDeletionJa, babyDeletionKo, babyDeletionZhCN } from "./i18nBabyDeletionMessages";
 import { pregnancyOverviewEn, pregnancyOverviewEs, pregnancyOverviewJa, pregnancyOverviewKo, pregnancyOverviewZhCN } from "./i18nPregnancyOverviewMessages";
 
 const onboardingEn = {
@@ -1663,6 +1664,7 @@ const recordZhCN: { [K in keyof typeof recordEn]: string } = {
 
 const en = {
   ...pregnancyOverviewEn,
+  ...babyDeletionEn,
   ...growthCriticalEn,
   ...reportCriticalEn,
   ...consultCriticalEn,
@@ -1852,6 +1854,7 @@ type CoreResource = Record<CoreKey, string>;
 
 const ko: CoreResource = {
   ...pregnancyOverviewKo,
+  ...babyDeletionKo,
   ...onboardingKo,
   ...homeKo,
   ...recordKo,
@@ -1893,6 +1896,7 @@ const ko: CoreResource = {
 
 const ja: CoreResource = {
   ...pregnancyOverviewJa,
+  ...babyDeletionJa,
   ...onboardingJa,
   ...homeJa,
   ...recordJa,
@@ -1934,6 +1938,7 @@ const ja: CoreResource = {
 
 const es: CoreResource = {
   ...pregnancyOverviewEs,
+  ...babyDeletionEs,
   ...onboardingEs,
   ...homeEs,
   ...recordEs,
@@ -1975,6 +1980,7 @@ const es: CoreResource = {
 
 const zhCN: CoreResource = {
   ...pregnancyOverviewZhCN,
+  ...babyDeletionZhCN,
   ...onboardingZhCN,
   ...homeZhCN,
   ...recordZhCN,

@@ -16,6 +16,7 @@ import type {
   CreateMemoryWithImageInput,
   CreateMemoryWithImagesInput,
   MemoryCard,
+  MemoryMomentPreview,
   FriendMemoryContext,
   MemoryComment,
   MemoryMedia,
@@ -29,19 +30,29 @@ import type {
   UpdateMemoryPostInput,
 } from "../types/memory";
 import { compressImageForUpload } from "../utils/compressImage";
-import { bindJobsToMemoryPost, retryEagerPhoto, requireCompletedEagerPhoto } from "../utils/eagerMediaUpload";
+import { bindJobsToMemoryPost, getLocalPosterUriForMedia, getLocalUriForMedia, retryEagerPhoto, requireCompletedEagerPhoto } from "../utils/eagerMediaUpload";
 import { createId } from "../utils/id";
 import { isAllowedMediaStoragePath } from "../utils/tempMediaPath";
 import { createPrivateMediaSignedUrl, retireUnattachedStorageUpload } from "../utils/privateMediaUrl";
+import {
+  MEMORY_IMAGE_MAX_BYTES,
+  MEMORY_VIDEO_MAX_BYTES,
+  MEMORY_MEDIA_MAX_ITEMS,
+  MemoryMediaUploadError,
+  captureMemoryVideoThumbnail,
+  extensionForMemoryAsset,
+  mimeTypeForMemoryAsset,
+  videoDurationExceedsLimit,
+} from "../utils/memoryVideo";
 import { AuthRepository } from "./AuthRepository";
 import { BabyStickerRepository } from "./BabyStickerRepository";
 import { NotificationRepository } from "./NotificationRepository";
+import { MISSING_MEMORY_AUTHOR_ID } from "../utils/memoryAuthorDisplay";
 
 const MEMORIES_BUCKET = "memories";
-const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+const MAX_IMAGE_BYTES = MEMORY_IMAGE_MAX_BYTES;
 const CAPTION_MAX_LENGTH = 1200;
 const COMMENT_MAX_LENGTH = 500;
-const UPLOAD_CONCURRENCY = 3;
 export const MEMORY_FEED_PAGE_SIZE = 20;
 export const MEMORY_FEED_IMAGE_WIDTH = 800;
 export const MEMORY_DETAIL_IMAGE_WIDTH = 1400;
@@ -53,7 +64,7 @@ export function memoryPostRowToModel(row: MemoryPostRow): MemoryPost {
   return {
     id: row.id,
     babyId: row.baby_id,
-    authorId: row.author_id ?? "deleted-user",
+    authorId: row.author_id ?? MISSING_MEMORY_AUTHOR_ID,
     caption: row.caption ?? undefined,
     privacyType: row.privacy_type,
     isFamilyMoment: row.is_family_moment ?? false,
@@ -74,6 +85,8 @@ export function memoryMediaRowToModel(row: MemoryMediaRow): MemoryMedia {
     uploadStatus: row.upload_status ?? "ready",
     width: row.width ?? undefined,
     height: row.height ?? undefined,
+    durationMs: row.duration_ms ?? undefined,
+    thumbnailStoragePath: row.thumbnail_storage_path ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -82,7 +95,7 @@ export function memoryCommentRowToModel(row: MemoryCommentRow): MemoryComment {
   return {
     id: row.id,
     memoryPostId: row.memory_post_id,
-    authorId: row.author_id ?? "deleted-user",
+    authorId: row.author_id ?? MISSING_MEMORY_AUTHOR_ID,
     body: row.body,
     commentType: row.comment_type ?? "text",
     stickerId: row.sticker_id ?? undefined,
@@ -113,7 +126,7 @@ export function memoryTagRowToModel(row: MemoryTagRow): MemoryTag {
     taggedBabyId: row.tagged_baby_id ?? undefined,
     manualLabel: row.manual_label ?? undefined,
     status: row.status,
-    createdBy: row.created_by ?? "deleted-user",
+    createdBy: row.created_by ?? MISSING_MEMORY_AUTHOR_ID,
     createdAt: row.created_at,
   };
 }
@@ -177,19 +190,6 @@ async function requireUserId(): Promise<string> {
   return user.id;
 }
 
-async function mapPool<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let cursor = 0;
-  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(items.length, 1)) }, async () => {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      results[index] = await mapper(items[index]);
-    }
-  }));
-  return results;
-}
-
 async function uploadMemoryImage(input: {
   memoryPostId: string;
   babyId: string;
@@ -197,6 +197,9 @@ async function uploadMemoryImage(input: {
   scope: CapturedSessionScope;
 }): Promise<MemoryMedia> {
   const { scope } = input;
+  if (input.image.mediaType === "video") {
+    return uploadMemoryVideo(input);
+  }
   if (input.image.fileSize !== undefined && input.image.fileSize > MAX_IMAGE_BYTES) {
     throw new Error("사진은 25MB 이하만 올릴 수 있어요.");
   }
@@ -227,6 +230,73 @@ async function uploadMemoryImage(input: {
   }).select("*").single();
   if (error) {
     await retireUnattachedStorageUpload(sb, MEMORIES_BUCKET, storagePath);
+    throw error;
+  }
+  return memoryMediaRowToModel(data);
+}
+
+async function uploadMemoryVideo(input: {
+  memoryPostId: string;
+  babyId: string;
+  image: CreateMemoryWithImagesInput["images"][number];
+  scope: CapturedSessionScope;
+}): Promise<MemoryMedia> {
+  const { scope } = input;
+  const durationMs = input.image.durationMs;
+  if (durationMs == null) throw new MemoryMediaUploadError("VIDEO_DURATION_UNKNOWN");
+  if (videoDurationExceedsLimit(durationMs)) throw new MemoryMediaUploadError("VIDEO_TOO_LONG");
+  if (input.image.fileSize !== undefined && input.image.fileSize > MEMORY_VIDEO_MAX_BYTES) {
+    throw new MemoryMediaUploadError("VIDEO_TOO_LARGE");
+  }
+  const mediaId = createId();
+  const extension = extensionForMemoryAsset("video", input.image.mimeType, input.image.uri);
+  const storagePath = `${input.babyId}/${input.memoryPostId}/${mediaId}.${extension}`;
+  const response = await fetch(input.image.uri);
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength === 0) throw new MemoryMediaUploadError("READ_FAILED");
+  if (bytes.byteLength > MEMORY_VIDEO_MAX_BYTES) throw new MemoryMediaUploadError("VIDEO_TOO_LARGE");
+  await scope.assertCurrent();
+  const sb = scope.client;
+  const { error: uploadError } = await sb.storage.from(MEMORIES_BUCKET).upload(storagePath, bytes, {
+    contentType: mimeTypeForMemoryAsset("video", input.image.mimeType, input.image.uri),
+    upsert: false,
+  });
+  if (uploadError) throw uploadError;
+
+  let thumbnailStoragePath: string | undefined;
+  const poster = await captureMemoryVideoThumbnail(input.image.uri, { time: 0, quality: 0.7 });
+  if (poster) {
+    try {
+      const posterBytes = await fetch(poster.uri).then((item) => item.arrayBuffer());
+      if (posterBytes.byteLength > 0 && posterBytes.byteLength <= MAX_IMAGE_BYTES) {
+        thumbnailStoragePath = `${input.babyId}/${input.memoryPostId}/${mediaId}-poster.jpg`;
+        const posterUpload = await sb.storage.from(MEMORIES_BUCKET).upload(thumbnailStoragePath, posterBytes, {
+          contentType: "image/jpeg",
+          upsert: false,
+        });
+        if (posterUpload.error) thumbnailStoragePath = undefined;
+      }
+    } catch {
+      thumbnailStoragePath = undefined;
+    }
+  }
+
+  await scope.assertCurrent();
+  const { data, error } = await sb.from("memory_media").insert({
+    id: mediaId,
+    memory_post_id: input.memoryPostId,
+    baby_id: input.babyId,
+    storage_path: storagePath,
+    media_type: "video",
+    upload_status: "ready",
+    width: input.image.width ?? null,
+    height: input.image.height ?? null,
+    duration_ms: durationMs,
+    thumbnail_storage_path: thumbnailStoragePath ?? null,
+  }).select("*").single();
+  if (error) {
+    await retireUnattachedStorageUpload(sb, MEMORIES_BUCKET, storagePath);
+    if (thumbnailStoragePath) await retireUnattachedStorageUpload(sb, MEMORIES_BUCKET, thumbnailStoragePath);
     throw error;
   }
   return memoryMediaRowToModel(data);
@@ -276,6 +346,8 @@ async function addMemoryMediaScoped(
     baby_id: input.babyId, storage_path: input.storagePath,
     media_type: input.mediaType ?? "image", upload_status: "ready",
     width: input.width ?? null, height: input.height ?? null,
+    duration_ms: input.durationMs ?? null,
+    thumbnail_storage_path: input.thumbnailStoragePath ?? null,
   }).select("*").single();
   if (error) throw error;
   return memoryMediaRowToModel(data);
@@ -331,6 +403,16 @@ export const MemoriesRepository = {
     const { data, error } = await query;
     if (error) throw error;
     return (data ?? []).map(memoryPostRowToModel);
+  },
+
+  async countByBabyId(babyId: string): Promise<number> {
+    const { count, error } = await requireSupabase()
+      .from("memory_posts")
+      .select("id", { count: "exact", head: true })
+      .eq("baby_id", babyId)
+      .is("deleted_at", null);
+    if (error) throw error;
+    return count ?? 0;
   },
 
   async getById(memoryPostId: string): Promise<MemoryPost | null> {
@@ -563,14 +645,14 @@ export const MemoriesRepository = {
 
   async createSignedUrl(
     storagePath: string,
-    expiresInSeconds = MEMORY_SIGNED_URL_TTL_SECONDS,
-    options?: { width?: number },
+    _expiresInSeconds = MEMORY_SIGNED_URL_TTL_SECONDS,
+    options?: { width?: number; variant?: "source" | "thumbnail" },
   ): Promise<string> {
     const sb = requireSupabase();
     // Gate on memory_media SELECT RLS (can_view_memory_post) before minting a URL.
     const { data: media, error: mediaError } = await sb
       .from("memory_media")
-      .select("id, upload_status")
+      .select("id, upload_status, media_type")
       .eq("storage_path", storagePath)
       .single();
     if (mediaError || !media) {
@@ -580,13 +662,20 @@ export const MemoriesRepository = {
       throw new Error("Memory media is not ready.");
     }
 
-    const mint = async (width?: number) => createPrivateMediaSignedUrl("memory_media", media.id, width ? { width } : undefined);
+    const variant = options?.variant;
+    const width = variant === "thumbnail" || media.media_type !== "video"
+      ? options?.width
+      : undefined;
+    const mint = async (nextWidth?: number) => createPrivateMediaSignedUrl("memory_media", media.id, {
+      ...(nextWidth ? { width: nextWidth } : {}),
+      ...(variant && variant !== "source" ? { variant } : {}),
+    });
 
     let url: string;
     try {
-      url = await mint(options?.width);
+      url = await mint(width);
     } catch (error) {
-      if (!options?.width) throw error;
+      if (!width) throw error;
       url = await mint();
     }
     return url;
@@ -613,7 +702,7 @@ export const MemoriesRepository = {
     const existing = await this.listMedia(input.memoryPostId);
     const retained = new Set(input.retainedMediaIds);
     if (retained.size + input.newImages.length === 0) throw new Error("사진을 한 장 이상 추가해 주세요.");
-    if (retained.size + input.newImages.length > 5) throw new Error("사진은 최대 5장까지 추가할 수 있어요.");
+    if (retained.size + input.newImages.length > MEMORY_MEDIA_MAX_ITEMS) throw new Error("사진은 최대 5장까지 추가할 수 있어요.");
     const uploaded: MemoryMedia[] = [];
     try {
       for (const image of input.newImages) {
@@ -716,16 +805,41 @@ export const MemoriesRepository = {
       const comments = commentsByPost.get(post.id) ?? [];
       const reactions = reactionsByPost.get(post.id) ?? [];
       const coverMedia = media[0];
-      const coverUrl = coverMedia?.uploadStatus === "ready"
-        ? await this.createSignedUrl(coverMedia.storagePath, MEMORY_SIGNED_URL_TTL_SECONDS, { width: MEMORY_FEED_IMAGE_WIDTH }).catch(() => undefined)
-        : undefined;
+      const mediaUrls = await Promise.all(media.map(async (item) => {
+        const local = getLocalUriForMedia(item.id);
+        if (item.mediaType === "video") return local ?? "";
+        if (item.uploadStatus !== "ready") return local ?? "";
+        try {
+          return await this.createSignedUrl(item.storagePath, MEMORY_SIGNED_URL_TTL_SECONDS, { width: MEMORY_FEED_IMAGE_WIDTH });
+        } catch {
+          return local ?? "";
+        }
+      }));
+      const mediaPosterUrls = await Promise.all(media.map(async (item) => {
+        const localPoster = getLocalPosterUriForMedia(item.id);
+        if (item.mediaType !== "video") return "";
+        if (item.uploadStatus !== "ready") return localPoster ?? "";
+        try {
+          return await this.createSignedUrl(item.storagePath, MEMORY_SIGNED_URL_TTL_SECONDS, {
+            width: MEMORY_FEED_IMAGE_WIDTH,
+            variant: "thumbnail",
+          });
+        } catch {
+          return localPoster ?? "";
+        }
+      }));
+      const coverUrl = (coverMedia?.mediaType === "video" ? mediaPosterUrls[0] : mediaUrls[0]) || undefined;
       return {
         post,
         coverMedia,
         coverUrl,
+        media,
+        mediaUrls,
+        mediaPosterUrls,
         mediaCount: media.length,
         tags,
         commentCount: comments.length,
+        latestComment: comments[comments.length - 1],
         reactionCount: reactions.length,
         isLiked: reactions.some((reaction) => reaction.authorId === userId),
         isSaved: saved.has(post.id),
@@ -734,9 +848,87 @@ export const MemoriesRepository = {
     }));
   },
 
+  async listRecentAuthoredPreviews(limit = 3, babyIds: string[] = []): Promise<MemoryMomentPreview[]> {
+    const userId = await requireUserId();
+    const sb = requireSupabase();
+    const take = Math.max(1, Math.min(limit, 12));
+    const { data, error } = await sb
+      .from("memory_posts")
+      .select("id, baby_id, author_id, caption, privacy_type, is_family_moment, status, created_at, updated_at, deleted_at")
+      .eq("author_id", userId)
+      .is("deleted_at", null)
+      .neq("status", "failed")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(take);
+    let posts = error
+      ? []
+      : (data ?? []).map(memoryPostRowToModel).filter((post) => post.status === "published");
+    if (error && babyIds.length) {
+      const perBaby = await Promise.all(babyIds.map((babyId) => this.listByBabyId(babyId, { limit: 12 }).catch(() => [])));
+      posts = perBaby
+        .flat()
+        .filter((post) => post.authorId === userId && post.status === "published")
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id))
+        .slice(0, take);
+    } else if (error) {
+      throw error;
+    }
+    if (!posts.length) return [];
+
+    const postIds = posts.map((post) => post.id);
+    const [mediaResult, reactionsResult] = await Promise.all([
+      sb.from("memory_media").select("*").in("memory_post_id", postIds).order("created_at", { ascending: true }),
+      sb.from("memory_reactions").select("memory_post_id").in("memory_post_id", postIds),
+    ]);
+    if (mediaResult.error) throw mediaResult.error;
+    if (reactionsResult.error) throw reactionsResult.error;
+
+    const mediaByPost = groupByPostId((mediaResult.data ?? []).map(memoryMediaRowToModel));
+    const likeCountByPost = new Map<string, number>();
+    for (const row of reactionsResult.data ?? []) {
+      likeCountByPost.set(row.memory_post_id, (likeCountByPost.get(row.memory_post_id) ?? 0) + 1);
+    }
+
+    return Promise.all(posts.map(async (post) => {
+      const media = mediaByPost.get(post.id) ?? [];
+      const coverMedia = media[0];
+      let coverUrl: string | undefined;
+      if (coverMedia) {
+        const local = coverMedia.mediaType === "video"
+          ? getLocalPosterUriForMedia(coverMedia.id)
+          : getLocalUriForMedia(coverMedia.id);
+        if (coverMedia.mediaType === "video") {
+          try {
+            coverUrl = await this.createSignedUrl(coverMedia.storagePath, MEMORY_SIGNED_URL_TTL_SECONDS, {
+              width: 400,
+              variant: "thumbnail",
+            });
+          } catch {
+            coverUrl = local ?? undefined;
+          }
+        } else if (coverMedia.uploadStatus === "ready") {
+          try {
+            coverUrl = await this.createSignedUrl(coverMedia.storagePath, MEMORY_SIGNED_URL_TTL_SECONDS, { width: 400 });
+          } catch {
+            coverUrl = local ?? undefined;
+          }
+        } else {
+          coverUrl = local ?? undefined;
+        }
+      }
+      return {
+        id: post.id,
+        babyId: post.babyId,
+        coverUrl,
+        likeCount: likeCountByPost.get(post.id) ?? 0,
+      };
+    }));
+  },
+
   async createMemoryWithImages(input: CreateMemoryWithImagesInput): Promise<MemoryPostBundle> {
     if (input.images.length === 0) throw new Error("사진을 한 장 이상 추가해 주세요.");
-    if (input.images.length > 5) throw new Error("사진은 최대 5장까지 추가할 수 있어요.");
+    if (input.images.length > MEMORY_MEDIA_MAX_ITEMS) throw new Error("사진은 최대 5장까지 추가할 수 있어요.");
     const postId = createId();
     const scope = await captureSessionScope();
     const sb = scope.client;
@@ -752,17 +944,20 @@ export const MemoriesRepository = {
         selectedUserIds: input.selectedUserIds,
       }, scope);
       postCreated = true;
-      await mapPool(input.images, UPLOAD_CONCURRENCY, async (image) => {
-        const media = await uploadMemoryImage({ memoryPostId: postId, babyId: input.babyId, image, scope });
-        uploaded.push(media);
-        return media;
-      });
+      for (const image of input.images) {
+        uploaded.push(await uploadMemoryImage({ memoryPostId: postId, babyId: input.babyId, image, scope }));
+      }
       await replaceTags(postId, input.tags ?? [{ tagType: "baby", babyId: input.babyId }]);
       const bundle = await this.getBundleById(postId);
       if (!bundle) throw new Error("업로드한 추억을 다시 불러오지 못했어요.");
       return bundle;
     } catch (error) {
-      for (const media of uploaded) await retireUnattachedStorageUpload(sb, MEMORIES_BUCKET, media.storagePath);
+      for (const media of uploaded) {
+        await retireUnattachedStorageUpload(sb, MEMORIES_BUCKET, media.storagePath);
+        if (media.thumbnailStoragePath) {
+          await retireUnattachedStorageUpload(sb, MEMORIES_BUCKET, media.thumbnailStoragePath);
+        }
+      }
       if (postCreated) await sb.from("memory_posts").delete().eq("id", postId);
       throw error;
     }
@@ -770,7 +965,7 @@ export const MemoriesRepository = {
 
   async publishEagerMemory(input: PublishEagerMemoryInput): Promise<MemoryPostBundle> {
     if (input.photos.length === 0) throw new Error("사진을 한 장 이상 추가해 주세요.");
-    if (input.photos.length > 5) throw new Error("사진은 최대 5장까지 추가할 수 있어요.");
+    if (input.photos.length > MEMORY_MEDIA_MAX_ITEMS) throw new Error("사진은 최대 5장까지 추가할 수 있어요.");
     const scope = await captureSessionScope();
     await Promise.all(input.photos.map((photo) => requireCompletedEagerPhoto(photo.id, scope.accountId)));
     await scope.assertCurrent();
@@ -791,9 +986,12 @@ export const MemoriesRepository = {
           memoryPostId: post.id,
           babyId: input.babyId,
           storagePath: photo.storagePath,
+          mediaType: photo.mediaType,
           uploadStatus: photo.uploadStatus,
           width: photo.width,
           height: photo.height,
+          durationMs: photo.durationMs,
+          thumbnailStoragePath: photo.thumbnailStoragePath,
         }, scope);
       }
       await replaceTags(post.id, input.tags ?? [{ tagType: "baby", babyId: input.babyId }]);

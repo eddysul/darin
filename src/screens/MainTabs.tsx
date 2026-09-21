@@ -4,7 +4,6 @@ import type { BottomTabBarProps, BottomTabNavigationProp } from "@react-navigati
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "../LanguageContext";
 import {
@@ -22,12 +21,15 @@ import { DiaryScreen } from "./tabs/DiaryScreen";
 import { RecordScreen } from "./tabs/RecordScreen";
 import { MemoriesScreen } from "./tabs/MemoriesScreen";
 import { FriendMemoriesScreen } from "./tabs/FriendMemoriesScreen";
+import { MemoriesSideMenu } from "../components/memories/MemoriesSideMenu";
+import { AppSideMenuProvider, useAppSideMenu } from "../context/AppSideMenuContext";
 import type { LogCategoryKey } from "../types/logCategory";
 import type { BabyLogCategoryId } from "../constants/babyLogCategories";
 import type { MessageKey } from "../i18n";
-import { colors, fontScaleCap, gradients, type } from "../theme";
+import { CHIP, TEXT_SECONDARY, VOICE_AMBER, VOICE_AMBER_STRONG } from "../themePalette";
+import { colors, fontScaleCap, type } from "../theme";
 import { isCustomCategoryKey } from "../types/logCategory";
-import { canAddLog, canDeleteLog, canEditLog } from "../types/family";
+import { canAddLog, canDeleteLog, canEditLog, canInvite } from "../types/family";
 import { ErrorBanner } from "../components/states/FeedbackStates";
 import { isPregnancyStage } from "../utils/childDisplay";
 import { formatLogMeta } from "../utils/formatLog";
@@ -50,6 +52,13 @@ const TAB_LABEL_KEYS: Record<keyof MainTabParamList, MessageKey | null> = {
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
+const MIC_BG = VOICE_AMBER;
+const MIC_BG_ACTIVE = VOICE_AMBER_STRONG;
+const MIC_BG_INACTIVE = CHIP;
+const MIC_ICON = "#FFFFFF";
+const MIC_ICON_ACTIVE = "#FFFFFF";
+const MIC_ICON_INACTIVE = TEXT_SECONDARY;
+const MIC_LABEL = VOICE_AMBER_STRONG;
 
 const TAB_ICONS: Record<keyof MainTabParamList, TabIconKey> = {
   Record: "record",
@@ -220,6 +229,7 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
         ) : null}
         {items.map((item) => {
           if (item.kind === "micAction") {
+            const micActive = voiceOpen && allowVoice;
             return (
               <Pressable
                 key="mic-action"
@@ -227,7 +237,7 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
                 accessibilityRole="button"
                 accessibilityLabel={t("home.a11y.voiceRecord")}
                 accessibilityHint={voiceBlockedReason ?? undefined}
-                accessibilityState={{ disabled: !allowVoice }}
+                accessibilityState={{ disabled: !allowVoice, selected: micActive }}
                 onPressIn={() => setVoicePressed(true)}
                 onPressOut={() => setVoicePressed(false)}
                 onPress={() => {
@@ -245,23 +255,38 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
                     pointerEvents="none"
                     style={[
                       styles.centerBtnPulse,
+                      micActive && styles.centerBtnPulseActive,
                       { opacity: voicePulseOpacity, transform: [{ scale: voicePulseScale }] },
                     ]}
                   />
                   <Animated.View
                     pointerEvents="none"
-                    style={[styles.centerBtnGlow, { opacity: voiceGlowOpacity }]}
+                    style={[
+                      styles.centerBtnGlow,
+                      micActive && styles.centerBtnGlowActive,
+                      { opacity: voiceGlowOpacity },
+                    ]}
                   />
-                  <View style={[styles.centerBtnWrap, !allowVoice && styles.centerBtnWrapLocked]}>
+                  <View style={[
+                    styles.centerBtnWrap,
+                    micActive && styles.centerBtnWrapActive,
+                    !allowVoice && styles.centerBtnWrapLocked,
+                  ]}>
                     {allowVoice ? (
-                      <LinearGradient colors={[...gradients.mic]} style={styles.centerBtn}>
+                      <View style={styles.centerBtn}>
                         <Animated.View style={{ opacity: voiceIconOpacity }}>
-                          <BabyLogIcon kind="tab" tab="mic" size={24} color={colors.amberDark} strokeWidth={2.2} />
+                          <BabyLogIcon
+                            kind="tab"
+                            tab="mic"
+                            size={24}
+                            color={micActive ? MIC_ICON_ACTIVE : MIC_ICON}
+                            strokeWidth={2.2}
+                          />
                         </Animated.View>
-                      </LinearGradient>
+                      </View>
                     ) : (
                       <View style={[styles.centerBtn, styles.centerBtnLocked]}>
-                        <BabyLogIcon kind="lock" size={22} color={colors.muted} strokeWidth={2.2} />
+                        <BabyLogIcon kind="lock" size={22} color={MIC_ICON_INACTIVE} strokeWidth={2.2} />
                       </View>
                     )}
                   </View>
@@ -298,7 +323,7 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
                 kind="tab"
                 tab={tabIcon}
                 size={22}
-                color={active ? colors.amberText : colors.muted}
+                color={active ? colors.text : colors.muted}
                 strokeWidth={active ? 2.2 : 1.8}
               />
               <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} maxFontSizeMultiplier={fontScaleCap.tab}>{label}</Text>
@@ -426,6 +451,7 @@ function CustomTabBar({ state, navigation, friendOnly = false }: BottomTabBarPro
 function RecordTab() {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  const { open } = useAppSideMenu();
   return (
     <RecordScreen
       onOpenProfile={(opts) =>
@@ -435,7 +461,7 @@ function RecordTab() {
           merge: false,
         })
       }
-      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+      onOpenSettings={open}
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenConsult={(initialQuestion) => openConsult(rootNavigation, initialQuestion)}
     />
@@ -445,10 +471,11 @@ function RecordTab() {
 function DiaryTab() {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  const { open } = useAppSideMenu();
   return (
     <DiaryScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile", { mode: undefined })}
-      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+      onOpenSettings={open}
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenShared={() => rootNavigation?.navigate("FamilyShare")}
       onOpenConsult={(initialQuestion) => openConsult(rootNavigation, initialQuestion)}
@@ -459,13 +486,15 @@ function DiaryTab() {
 function ReportTab() {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  const { open } = useAppSideMenu();
   return (
     <BabyReportScreen
       onOpenProfile={() => rootNavigation?.navigate("BabyProfile", { mode: undefined })}
-      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+      onOpenSettings={open}
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
       onOpenShared={() => rootNavigation?.navigate("FamilyShare")}
-      onOpenRecord={() => navigation.navigate("Record")}
+      onOpenRecord={(params) => navigation.navigate("Record", params)}
+      onOpenDiary={(params) => navigation.navigate("Diary", params)}
       onOpenConsult={(initialQuestion) => openConsult(rootNavigation, initialQuestion)}
     />
   );
@@ -474,12 +503,11 @@ function ReportTab() {
 function MemoriesTab() {
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const rootNavigation = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+  const { open } = useAppSideMenu();
   return (
     <MemoriesScreen
-      onOpenSettings={() => rootNavigation?.navigate("SettingsHome")}
+      onOpenMenu={open}
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
-      onOpenFamily={() => rootNavigation?.navigate("FamilyShare")}
-      onOpenDetail={(memoryPostId) => rootNavigation?.navigate("MemoryDetail", { memoryPostId })}
     />
   );
 }
@@ -490,7 +518,31 @@ function FriendMemoriesTab() {
   return (
     <FriendMemoriesScreen
       onOpenNotifications={() => rootNavigation?.navigate("NotificationCenter")}
-      onOpenDetail={(memoryPostId) => rootNavigation?.navigate("MemoryDetail", { memoryPostId, source: "friend" })}
+    />
+  );
+}
+
+function AppSideMenuHost() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { isOpen, close } = useAppSideMenu();
+  const { babyName, careSetup, babies, activeBabyId, myFamilyRole } = useBabyLog();
+  const hasBaby = Boolean(activeBabyId);
+  const activeBaby = babies.find((baby) => baby.id === activeBabyId);
+  const babyAvatarUri = careSetup.child.photoUri || activeBaby?.photo_url || undefined;
+
+  return (
+    <MemoriesSideMenu
+      visible={isOpen}
+      babyName={babyName}
+      babyAvatarUri={babyAvatarUri}
+      hasBaby={hasBaby}
+      showInvite={canInvite(myFamilyRole) && hasBaby}
+      onClose={close}
+      onOpenBabyProfile={() => navigation.navigate("BabyProfile", { mode: undefined })}
+      onOpenMyProfile={() => navigation.navigate("MyProfile")}
+      onOpenFamily={() => navigation.navigate("FamilyShare", { tab: "people" })}
+      onOpenInvite={() => navigation.navigate("FamilyShare", { tab: "create" })}
+      onOpenSettings={() => navigation.navigate("SettingsHome")}
     />
   );
 }
@@ -505,78 +557,86 @@ export function MainTabs({ friendOnly = false }: { friendOnly?: boolean }) {
   const insets = useSafeAreaInsets();
 
   return (
-    <>
-      <Tab.Navigator
-        tabBar={(props) => friendOnly ? null : <CustomTabBar {...props} />}
-        initialRouteName={friendOnly ? "Memories" : "Record"}
-        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}
-      >
-        {friendOnly ? (
-          <Tab.Screen name="Memories" component={FriendMemoriesTab} />
-        ) : (
-          <>
-            <Tab.Screen name="Record" component={RecordTab} />
-            <Tab.Screen name="Diary" component={DiaryTab} />
-            <Tab.Screen name="Report" component={ReportTab} />
-            <Tab.Screen name="Memories" component={MemoriesTab} />
-          </>
-        )}
-      </Tab.Navigator>
-      {storageIssue ? (
-        <View style={[styles.storageBanner, { top: insets.top + 8 }]}>
-          <ErrorBanner
-            message={
-              storageIssue.operation === "load"
-                ? t("home.storage.loadError")
-                : storageIssue.severity === "critical"
-                  ? t("home.storage.criticalError")
-                  : t("home.storage.offlineError")
-            }
-            actionLabel={t("home.storage.retry")}
-            onAction={() => void retryPersistence()}
-            onDismiss={dismissStorageIssue}
-          />
-        </View>
-      ) : null}
-    </>
+    <AppSideMenuProvider>
+      <View style={styles.shell}>
+        <Tab.Navigator
+          tabBar={(props) => friendOnly ? null : <CustomTabBar {...props} />}
+          initialRouteName={friendOnly ? "Memories" : "Record"}
+          screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}
+        >
+          {friendOnly ? (
+            <Tab.Screen name="Memories" component={FriendMemoriesTab} />
+          ) : (
+            <>
+              <Tab.Screen name="Record" component={RecordTab} />
+              <Tab.Screen name="Diary" component={DiaryTab} />
+              <Tab.Screen name="Report" component={ReportTab} />
+              <Tab.Screen name="Memories" component={MemoriesTab} />
+            </>
+          )}
+        </Tab.Navigator>
+        {storageIssue ? (
+          <View style={[styles.storageBanner, { top: insets.top + 8 }]}>
+            <ErrorBanner
+              message={
+                storageIssue.operation === "load"
+                  ? t("home.storage.loadError")
+                  : storageIssue.severity === "critical"
+                    ? t("home.storage.criticalError")
+                    : t("home.storage.offlineError")
+              }
+              actionLabel={t("home.storage.retry")}
+              onAction={() => void retryPersistence()}
+              onDismiss={dismissStorageIssue}
+            />
+          </View>
+        ) : null}
+        {friendOnly ? null : <AppSideMenuHost />}
+      </View>
+    </AppSideMenuProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  shell: { flex: 1 },
   tabBar: {
     flexDirection: "row",
     backgroundColor: colors.card,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     paddingTop: 9,
     paddingHorizontal: 4,
-    shadowColor: "#4A3428",
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: -3 },
-    elevation: 10,
+    shadowColor: "#1F1F1F",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: -2 },
+    elevation: 6,
   },
-  tabItem: { flex: 1, minHeight: TOUCH_MIN, alignItems: "center", justifyContent: "flex-start", gap: 4, paddingHorizontal: 2 },
+  tabItem: { flex: 1, minHeight: TOUCH_MIN, alignItems: "center", justifyContent: "flex-start", gap: 5, paddingHorizontal: 2 },
   tabItemPressed: { opacity: 0.78, transform: [{ scale: 0.98 }] },
   voiceTabItemPressed: { opacity: 0.9 },
   centerBtnAnimated: {
     width: 56,
     height: 56,
-    marginTop: -24,
+    marginTop: -28,
   },
   centerBtnGlow: {
     position: "absolute",
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.brandCoral,
-    shadowColor: colors.brandCoral,
+    backgroundColor: MIC_BG,
+    shadowColor: MIC_BG,
     shadowOpacity: 0.72,
     shadowRadius: 9,
     shadowOffset: { width: 0, height: 3 },
     elevation: 8,
+  },
+  centerBtnGlowActive: {
+    backgroundColor: MIC_BG_ACTIVE,
+    shadowColor: MIC_BG_ACTIVE,
   },
   centerBtnPulse: {
     position: "absolute",
@@ -584,18 +644,25 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     borderWidth: 2,
-    borderColor: colors.brandCoral,
+    borderColor: MIC_BG,
+  },
+  centerBtnPulseActive: {
+    borderColor: MIC_BG_ACTIVE,
   },
   centerBtnWrap: {
     borderRadius: 28,
-    backgroundColor: colors.amber,
-    shadowColor: colors.amber,
+    backgroundColor: MIC_BG,
+    shadowColor: MIC_BG,
     shadowOpacity: 0.12,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  centerBtnWrapLocked: { backgroundColor: colors.border, shadowOpacity: 0, elevation: 0 },
+  centerBtnWrapActive: {
+    backgroundColor: MIC_BG_ACTIVE,
+    shadowColor: MIC_BG_ACTIVE,
+  },
+  centerBtnWrapLocked: { backgroundColor: MIC_BG_INACTIVE, shadowOpacity: 0, elevation: 0 },
   centerBtn: {
     width: 56,
     height: 56,
@@ -608,10 +675,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  tabLabel: { fontSize: type.xs, fontWeight: "700", color: colors.muted },
-  tabLabelActive: { color: colors.amberText },
-  centerLabel: { marginTop: 2 },
-  centerLabelActive: { color: colors.amberText },
+  tabLabel: { fontSize: 11, fontWeight: "700", color: colors.muted },
+  tabLabelActive: { color: colors.text },
+  centerLabel: { marginTop: 1 },
+  centerLabelActive: { color: MIC_LABEL },
   voiceNotice: {
     position: "absolute",
     left: 16,

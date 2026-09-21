@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, ScrollView, StyleSheet, Vibration, View } from "react-native";
+import { Animated, ScrollView, StyleSheet, Text, Vibration, View } from "react-native";
 import { Image } from "expo-image";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, {
@@ -18,10 +18,16 @@ import {
   clampMemoryMediaZoom,
   memoryMediaPinchTranslation,
 } from "../../utils/memoryMediaZoom";
+import { MemoryVideoPlayer } from "./MemoryVideoPlayer";
+import { ResizeMode } from "expo-av";
 
 type Props = {
   media: MemoryMedia[];
   imageUrls?: string[];
+  posterUrls?: string[];
+  initialIndex?: number;
+  variant?: "square" | "fullscreen";
+  showIndexBadge?: boolean;
   onDoubleTap?: () => void;
   onZoomChange?: (zoomed: boolean) => void;
 };
@@ -183,12 +189,22 @@ function ZoomableMemoryImage({
   );
 }
 
-export function MemoryMediaViewer({ media, imageUrls = [], onDoubleTap, onZoomChange }: Props) {
+export function MemoryMediaViewer({
+  media,
+  imageUrls = [],
+  posterUrls = [],
+  initialIndex = 0,
+  variant = "square",
+  showIndexBadge = false,
+  onDoubleTap,
+  onZoomChange,
+}: Props) {
   const { t } = useLanguage();
+  const scrollerRef = useRef<ScrollView>(null);
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
   const [pageWidth, setPageWidth] = useState(0);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [zoomed, setZoomed] = useState(false);
   const reduceMotion = useReduceMotion();
 
@@ -226,10 +242,21 @@ export function MemoryMediaViewer({ media, imageUrls = [], onDoubleTap, onZoomCh
 
   useEffect(() => () => onZoomChange?.(false), [onZoomChange]);
 
+  useEffect(() => {
+    if (!pageWidth) return;
+    const count = Math.max(media.length, imageUrls.length);
+    const next = Math.min(Math.max(initialIndex, 0), Math.max(count - 1, 0));
+    setActiveIndex(next);
+    scrollerRef.current?.scrollTo({ x: next * pageWidth, animated: false });
+  }, [imageUrls.length, initialIndex, media.length, pageWidth]);
+
+  const slideCount = Math.max(media.length, imageUrls.length);
+
   return (
-    <View style={styles.wrap} onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}>
-      {imageUrls.length > 0 && media[0]?.mediaType === "image" ? (
+    <View style={variant === "fullscreen" ? styles.wrapFullscreen : styles.wrap} onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}>
+      {slideCount > 0 ? (
         <ScrollView
+          ref={scrollerRef}
           style={styles.scroller}
           horizontal
           pagingEnabled
@@ -237,27 +264,42 @@ export function MemoryMediaViewer({ media, imageUrls = [], onDoubleTap, onZoomCh
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={(event) => setActiveIndex(Math.round(event.nativeEvent.contentOffset.x / Math.max(pageWidth, 1)))}
         >
-          {imageUrls.map((url, index) => (
-            <View
-              key={media[index]?.id ?? `${url}-${index}`}
-              style={[styles.page, { width: pageWidth || undefined }]}
-            >
-              <ZoomableMemoryImage
-                uri={url}
-                pageSize={pageWidth}
-                active={index === activeIndex}
-                reduceMotion={reduceMotion}
-                onDoubleTap={onDoubleTap ? handleDoubleTap : undefined}
-                onZoomChange={handleZoomChange}
-                accessibilityLabel={
-                imageUrls.length > 1
-                  ? t("memory.critical.149", { current: index + 1, total: imageUrls.length })
-                  : t("memory.critical.150")
-              }
-                accessibilityHint={onDoubleTap ? t("memory.critical.151") : undefined}
-              />
-            </View>
-          ))}
+          {Array.from({ length: slideCount }, (_, index) => {
+            const item = media[index];
+            const url = imageUrls[index] ?? "";
+            const isVideo = item?.mediaType === "video";
+            return (
+              <View
+                key={item?.id ?? `${url}-${index}`}
+                style={[styles.page, { width: pageWidth || undefined }]}
+              >
+                {isVideo ? (
+                  <MemoryVideoPlayer
+                    media={item}
+                    sourceUri={url}
+                    posterUri={posterUrls[index] || undefined}
+                    active={index === activeIndex}
+                    resizeMode={variant === "fullscreen" ? ResizeMode.CONTAIN : ResizeMode.COVER}
+                  />
+                ) : (
+                  <ZoomableMemoryImage
+                    uri={url}
+                    pageSize={pageWidth}
+                    active={index === activeIndex}
+                    reduceMotion={reduceMotion}
+                    onDoubleTap={onDoubleTap ? handleDoubleTap : undefined}
+                    onZoomChange={handleZoomChange}
+                    accessibilityLabel={
+                      slideCount > 1
+                        ? t("memory.critical.149", { current: index + 1, total: slideCount })
+                        : t("memory.critical.150")
+                    }
+                    accessibilityHint={onDoubleTap ? t("memory.critical.151") : undefined}
+                  />
+                )}
+              </View>
+            );
+          })}
         </ScrollView>
       ) : (
         <View style={styles.empty}>
@@ -276,9 +318,14 @@ export function MemoryMediaViewer({ media, imageUrls = [], onDoubleTap, onZoomCh
       >
         <BabyLogIcon kind="heart" size={56} color={colors.amberText} fill={colors.amberText} />
       </Animated.View>
-      {imageUrls.length > 1 ? (
-        <View style={styles.dots} pointerEvents="none">
-          {imageUrls.map((_, index) => <View key={index} style={[styles.dot, index === activeIndex && styles.dotActive]} />)}
+      {showIndexBadge && slideCount > 1 ? (
+        <View style={styles.indexBadge} pointerEvents="none" accessibilityElementsHidden>
+          <Text style={styles.indexBadgeText}>{`${activeIndex + 1}/${slideCount}`}</Text>
+        </View>
+      ) : null}
+      {slideCount > 1 ? (
+        <View style={[styles.dots, variant === "fullscreen" && styles.dotsFullscreen]} pointerEvents="none">
+          {Array.from({ length: slideCount }, (_, index) => <View key={index} style={[styles.dot, index === activeIndex && styles.dotActive]} />)}
         </View>
       ) : null}
     </View>
@@ -294,11 +341,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  wrapFullscreen: {
+    flex: 1,
+    width: "100%",
+    overflow: "hidden",
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   empty: { flex: 1, alignItems: "center", justifyContent: "center" },
   scroller: { width: "100%", height: "100%" },
   page: { height: "100%", alignItems: "center", justifyContent: "center" },
   zoomGestureSurface: { width: "100%", height: "100%" },
+  indexBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    minHeight: 24,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  indexBadgeText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   dots: { position: "absolute", bottom: 12, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 6 },
+  dotsFullscreen: { bottom: 28 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.55)" },
   dotActive: { width: 16, backgroundColor: "#fff" },
   heart: {

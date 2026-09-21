@@ -23,6 +23,7 @@ import {
   defaultStickerDraft,
 } from "../../types/babySticker";
 import { persistStickerAsset, deleteStickerAssets } from "../../utils/babyStickerAssets";
+import { compatibleLibraryRepresentation } from "../../utils/mediaLibraryPicker";
 import {
   DEFAULT_CIRCLE_CROP,
   STICKER_CUTOUT_MODE_OPTIONS,
@@ -323,7 +324,7 @@ export function BabyStickerVaultModal({
         mediaTypes: ["images"],
         quality: 0.85,
         allowsMultipleSelection: false,
-        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+        preferredAssetRepresentationMode: compatibleLibraryRepresentation,
         ...pickerExtras,
       });
       if (result.canceled || !result.assets?.[0]?.uri) return;

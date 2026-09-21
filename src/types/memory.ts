@@ -34,6 +34,8 @@ export type MemoryMedia = {
   uploadStatus: MemoryUploadStatus;
   width?: number;
   height?: number;
+  durationMs?: number;
+  thumbnailStoragePath?: string;
   createdAt: string;
 };
 
@@ -81,13 +83,24 @@ export type MemoryPostBundle = {
   selectedUserIds: string[];
 };
 
+export type MemoryMomentPreview = {
+  id: string;
+  babyId: string;
+  coverUrl?: string;
+  likeCount: number;
+};
+
 export type MemoryCard = {
   post: MemoryPost;
   coverMedia?: MemoryMedia;
   coverUrl?: string;
+  media?: MemoryMedia[];
+  mediaUrls?: string[];
+  mediaPosterUrls?: string[];
   mediaCount: number;
   tags: MemoryTag[];
   commentCount: number;
+  latestComment?: MemoryComment;
   reactionCount: number;
   isLiked: boolean;
   isSaved: boolean;
@@ -108,8 +121,12 @@ export type PreparedMemoryPhoto = {
   id: string;
   localUri: string;
   storagePath: string;
+  mediaType?: MemoryMediaType;
   width?: number;
   height?: number;
+  durationMs?: number;
+  thumbnailStoragePath?: string;
+  thumbnailLocalUri?: string;
   uploadStatus: MemoryUploadStatus;
 };
 
@@ -119,6 +136,8 @@ export type MemoryImageDraft = {
   mimeType?: string;
   width?: number;
   height?: number;
+  mediaType?: MemoryMediaType;
+  durationMs?: number;
 };
 
 export type MemoryTagDraft =
@@ -171,6 +190,8 @@ export type AddMemoryMediaInput = {
   uploadStatus?: MemoryUploadStatus;
   width?: number;
   height?: number;
+  durationMs?: number;
+  thumbnailStoragePath?: string;
 };
 
 export type PublishEagerMemoryInput = {

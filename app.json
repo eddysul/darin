@@ -24,7 +24,7 @@
         "dark": {
           "image": "./assets/darin-logo.png",
           "resizeMode": "contain",
-          "backgroundColor": "#181513"
+          "backgroundColor": "#121212"
         }
       },
       "infoPlist": {
@@ -42,7 +42,7 @@
         "dark": {
           "image": "./assets/darin-logo.png",
           "resizeMode": "contain",
-          "backgroundColor": "#181513"
+          "backgroundColor": "#121212"
         }
       },
       "adaptiveIcon": {
@@ -61,7 +61,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Photo access is needed to add baby, diary, and growth book images."
+          "photosPermission": "Photo and video access is needed to add baby photos, diary images, and Our Moments media."
         }
       ],
       [
@@ -74,7 +74,7 @@
         "expo-notifications",
         {
           "icon": "./assets/darin-logo.png",
-          "color": "#E8918A"
+          "color": "#E6B24A"
         }
       ],
       "expo-asset"

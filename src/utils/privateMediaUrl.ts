@@ -16,7 +16,7 @@ type SignedMediaResponse = { signedUrl?: string; expiresIn?: number; error?: str
 export async function createPrivateMediaSignedUrl(
   kind: PrivateMediaKind,
   resourceId: string,
-  options?: { width?: number },
+  options?: { width?: number; variant?: "source" | "thumbnail" },
 ): Promise<string> {
   const scope = await captureSessionScope();
   await scope.assertCurrent();
@@ -24,7 +24,12 @@ export async function createPrivateMediaSignedUrl(
     ? undefined
     : Math.max(1, Math.min(2000, Math.round(options.width)));
   const { data, error } = await scope.client.functions.invoke<SignedMediaResponse>("media-signed-url", {
-    body: { kind, resourceId, ...(width ? { width } : {}) },
+    body: {
+      kind,
+      resourceId,
+      ...(width ? { width } : {}),
+      ...(options?.variant && options.variant !== "source" ? { variant: options.variant } : {}),
+    },
   });
   await scope.assertCurrent();
   if (error || !data?.signedUrl) throw error ?? new Error(data?.error ?? "Private media URL unavailable.");

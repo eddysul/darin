@@ -6,7 +6,7 @@ import type { MemoryCriticalKey } from "../../i18nMemoriesCriticalMessages";
 import { colors, radius } from "../../theme";
 
 export type MemoryViewFilter = "all" | "family_circle" | "friend_circle" | "only_me" | "tagged" | "saved";
-export type MemoryWhoFilter = "all" | "family" | string;
+export type MemoryWhoFilter = "all" | "family" | "friend" | string;
 
 export const MEMORY_VIEW_FILTERS: Array<{
   key: MemoryViewFilter;
@@ -48,7 +48,7 @@ function OptionRow({
         <Text style={[styles.label, active && styles.labelActive]}>{label}</Text>
         {description ? <Text style={styles.description}>{description}</Text> : null}
       </View>
-      {active ? <BabyLogIcon kind="check" size={18} color={colors.amberText} strokeWidth={2.4} /> : null}
+      {active ? <BabyLogIcon kind="check" size={18} color={colors.accentStrong} strokeWidth={2.4} /> : null}
     </Pressable>
   );
 }
@@ -105,6 +105,15 @@ export function MemoryViewFilterSheet({
                   active={whoValue === "family"}
                   onPress={() => {
                     onChangeWho("family");
+                    onClose();
+                  }}
+                />
+                <OptionRow
+                  label={t("memory.critical.216")}
+                  description={t("memory.critical.059")}
+                  active={whoValue === "friend"}
+                  onPress={() => {
+                    onChangeWho("friend");
                     onClose();
                   }}
                 />
@@ -173,9 +182,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.card,
   },
-  optionActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  optionActive: { borderColor: colors.border, backgroundColor: colors.accentSoft },
   copy: { flex: 1 },
   label: { color: colors.text, fontSize: 14, fontWeight: "700" },
-  labelActive: { color: colors.amberText },
+  labelActive: { color: colors.accentStrong },
   description: { color: colors.muted, fontSize: 11.5, marginTop: 2 },
 });

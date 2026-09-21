@@ -1,18 +1,34 @@
 import { DynamicColorIOS, Platform, PlatformColor, type ColorValue } from "react-native";
-import { BRAND_CORAL, categoryColors } from "./themePalette";
+import {
+  ACCENT_SOFT,
+  ACCENT_STRONG,
+  APP_BACKGROUND,
+  APP_BACKGROUND_SOFT,
+  BORDER,
+  BRAND_CORAL,
+  CARD,
+  CHARCOAL_PRESSED,
+  CHIP,
+  ICON_NEUTRAL,
+  INPUT_SURFACE,
+  SURFACE,
+  TEXT_PRIMARY,
+  TEXT_SECONDARY,
+  TEXT_TERTIARY,
+  VOICE_AMBER,
+  VOICE_AMBER_SOFT,
+  VOICE_AMBER_STRONG,
+} from "./themePalette";
 
-export { categoryColors, roleColors } from "./themePalette";
+export { categoryColors, overviewIconWash, roleColors } from "./themePalette";
 
-const BRAND_CORAL_SOFT = "rgba(232,145,138,0.16)";
-const PRIMARY_CORAL = "#B65B55";
-const PRIMARY_CORAL_PRESSED = "#A94E49";
-const PRIMARY_CORAL_DISABLED = "#D6AAA6";
+const PRIMARY_CORAL = TEXT_PRIMARY;
+const PRIMARY_CORAL_PRESSED = CHARCOAL_PRESSED;
+const PRIMARY_CORAL_DISABLED = "#D8D4CF";
 
 /**
- * Native adaptive colors let the existing static StyleSheets react to the
- * system appearance without rebuilding every screen at runtime. iOS keeps
- * Darin's warm cream/brown character; Android follows the platform surface
- * and text roles while the coral brand colors remain stable.
+ * Native adaptive colors let existing StyleSheets follow system appearance.
+ * Light is white-first; dark uses neutral near-black rather than warm brown.
  */
 function adaptiveColor(
   light: string,
@@ -21,89 +37,77 @@ function adaptiveColor(
 ): string {
   let value: ColorValue = light;
   if (Platform.OS === "ios") value = DynamicColorIOS({ light, dark });
-  // Semantic Android roles adapt natively. Stable brand colors deliberately
-  // keep their light value so they do not unexpectedly invert.
   if (Platform.OS === "android" && androidRole) value = PlatformColor(androidRole);
   return value as unknown as string;
 }
 
 export const lightThemeColors = {
-  background: "#FEF7F2",
-  card: "#FFFFFF",
-  text: "#2E2A26",
-  muted: "#6B655E",
-  border: "#EDE5DC",
+  background: APP_BACKGROUND,
+  card: SURFACE,
+  text: TEXT_PRIMARY,
+  muted: TEXT_SECONDARY,
+  border: BORDER,
 } as const;
 
 export const darkThemeColors = {
-  /** Warm near-black instead of pure black preserves Darin's cream tone. */
-  background: "#181513",
-  card: "#24201D",
-  text: "#F7EEE7",
-  muted: "#C7BCB3",
-  border: "#443B35",
+  background: "#121212",
+  card: "#1C1C1C",
+  text: "#F5F5F5",
+  muted: "#A8A39E",
+  border: "#2E2E2E",
 } as const;
 
 export const colors = {
   background: adaptiveColor(lightThemeColors.background, darkThemeColors.background, "?attr/colorBackground"),
-  backgroundSecondary: adaptiveColor("#FFFFFF", "#201C19", "?attr/colorBackgroundFloating"),
+  backgroundSecondary: adaptiveColor(APP_BACKGROUND_SOFT, "#161616", "?attr/colorBackgroundFloating"),
   card: adaptiveColor(lightThemeColors.card, darkThemeColors.card, "?attr/colorBackgroundFloating"),
-  cardHi: adaptiveColor("#FAF4EE", "#2B2521", "?attr/colorBackgroundFloating"),
-  chip: adaptiveColor("#F4F2EF", "#2B2521", "?attr/colorBackgroundFloating"),
+  /** Quiet grouped surface. Prefer white cards with a border over tinted fills. */
+  surface: adaptiveColor(APP_BACKGROUND_SOFT, "#1A1A1A", "?attr/colorBackgroundFloating"),
+  cardHi: adaptiveColor(APP_BACKGROUND_SOFT, "#1A1A1A", "?attr/colorBackgroundFloating"),
+  chip: adaptiveColor(CHIP, "#262626", "?attr/colorBackgroundFloating"),
   text: adaptiveColor(lightThemeColors.text, darkThemeColors.text, "?attr/textColorPrimary"),
-  /** Secondary text. >=4.5:1 on every light surface incl. cardHi. */
   muted: adaptiveColor(lightThemeColors.muted, darkThemeColors.muted, "?attr/textColorSecondary"),
-  /** Tertiary text and placeholders. >=4.5:1 on every light surface incl. cardHi. */
-  faint: adaptiveColor("#736D65", "#B3A69D", "?attr/textColorSecondary"),
+  faint: adaptiveColor(TEXT_TERTIARY, "#9C9792", "?attr/textColorSecondary"),
+  iconNeutral: adaptiveColor(ICON_NEUTRAL, "#C2BDB8", "?attr/textColorSecondary"),
   border: adaptiveColor(lightThemeColors.border, darkThemeColors.border, "?attr/colorControlNormal"),
-  /** Darin's soft brand accent. Keep this for decorative and selected-state accents. */
   brandCoral: BRAND_CORAL,
-  brandCoralSoft: BRAND_CORAL_SOFT,
-  accentSoft: adaptiveColor("#F7EED6", "rgba(232,145,138,0.22)"),
-  accentStrong: adaptiveColor("#2E2A26", "#F7EEE7", "?attr/textColorPrimary"),
-  /** Readable content on solid brandCoral fills used by selected controls. */
-  brandCoralForeground: "#2E2A26",
-  /** Fill / border accent. Do not use as text on cream or white. */
-  amber: BRAND_CORAL,
-  amberSoft: adaptiveColor(BRAND_CORAL_SOFT, "rgba(232,145,138,0.22)"),
-  /** Text/icon on light surfaces. ~5.4:1 on #FFFFFF. */
-  amberText: adaptiveColor("#B03A34", "#F2A8A1", "?attr/textColorPrimary"),
-  /** Content on coral fills (primary buttons, selected chips, FAB). */
+  brandCoralSoft: ACCENT_SOFT,
+  /** Text on light amber washes (selected chips). */
+  brandCoralForeground: VOICE_AMBER_STRONG,
+  accentSoft: adaptiveColor(ACCENT_SOFT, "rgba(230,178,74,0.22)"),
+  accentStrong: adaptiveColor(ACCENT_STRONG, VOICE_AMBER_SOFT),
+  amber: VOICE_AMBER,
+  amberSoft: adaptiveColor(VOICE_AMBER_SOFT, "rgba(230,178,74,0.22)"),
+  amberText: adaptiveColor(VOICE_AMBER_STRONG, VOICE_AMBER_SOFT, "?attr/textColorPrimary"),
+  /** Content on solid amber fills (voice mic). */
   amberDark: "#FFFFFF",
-  /** Content on dark fills and scrims (photo overlays, Apple button). */
   onDark: "#FFFFFF",
-  /** Accent text on dark surfaces (toasts). ~9:1 on the toast scrim. */
-  accentOnDark: "#F7B3AB",
+  accentOnDark: VOICE_AMBER,
+  voiceAmber: VOICE_AMBER,
+  voiceAmberStrong: VOICE_AMBER_STRONG,
   danger: adaptiveColor("#C0463F", "#F28B82"),
   dangerSoft: adaptiveColor("rgba(192,70,63,0.12)", "rgba(242,139,130,0.18)"),
   dangerText: adaptiveColor("#B03A34", "#FFAAA2", "?attr/textColorPrimary"),
-  black: adaptiveColor("#2E2A26", "#F7EEE7", "?attr/textColorPrimary"),
-  /** Alias of brandCoral. Prefer brandCoral in new code. */
-  yellow: BRAND_CORAL,
-  /** Alias of amberSoft. Prefer amberSoft in new code. */
-  yellowSoft: BRAND_CORAL_SOFT,
-  /** High-emphasis filled actions only. 4.55:1 with primaryForeground. */
+  black: adaptiveColor(TEXT_PRIMARY, "#F5F5F5", "?attr/textColorPrimary"),
+  yellow: VOICE_AMBER,
+  yellowSoft: VOICE_AMBER_SOFT,
   primaryCoral: PRIMARY_CORAL,
   primaryCoralPressed: PRIMARY_CORAL_PRESSED,
   primaryCoralDisabled: PRIMARY_CORAL_DISABLED,
-  /** Semantic aliases used by filled-action components. */
   primary: PRIMARY_CORAL,
   primaryPressed: PRIMARY_CORAL_PRESSED,
   primaryDisabled: PRIMARY_CORAL_DISABLED,
-  /** Content on primary/primaryPressed fills. */
   primaryForeground: "#FFFFFF",
-  /** Alias of amber. Prefer amber in new code. */
-  accent: BRAND_CORAL,
-  /** Alias of amber. Prefer amber in new code. */
-  accentGold: BRAND_CORAL,
-  inputBg: adaptiveColor("#FFFFFF", "#2A2521", "?attr/colorBackgroundFloating"),
-  sageSurface: adaptiveColor("#FAF4EE", "#2B2521", "?attr/colorBackgroundFloating"),
-  champagne: BRAND_CORAL_SOFT,
-  /** Alias of amber. Prefer amber in new code. */
-  gold: BRAND_CORAL,
-  deepSage: adaptiveColor("#FEF7F2", "#181513", "?attr/colorBackground"),
-  sage: adaptiveColor("#FEF7F2", "#181513", "?attr/colorBackground"),
-  navy: adaptiveColor("#2E2A26", "#F7EEE7", "?attr/textColorPrimary"),
+  accent: VOICE_AMBER,
+  accentGold: VOICE_AMBER,
+  inputBg: adaptiveColor(INPUT_SURFACE, "#222222", "?attr/colorBackgroundFloating"),
+  sageSurface: adaptiveColor(APP_BACKGROUND_SOFT, "#1A1A1A", "?attr/colorBackgroundFloating"),
+  champagne: ACCENT_SOFT,
+  gold: VOICE_AMBER,
+  deepSage: adaptiveColor(lightThemeColors.background, darkThemeColors.background, "?attr/colorBackground"),
+  sage: adaptiveColor(lightThemeColors.background, darkThemeColors.background, "?attr/colorBackground"),
+  navy: adaptiveColor(TEXT_PRIMARY, "#F5F5F5", "?attr/textColorPrimary"),
+  trialSage: ACCENT_SOFT,
 };
 
 export const type = {
@@ -118,22 +122,21 @@ export const type = {
 export const fontScaleCap = {
   tab: 1.2,
   chrome: 1.3,
-  /** Dense control labels and single-line inputs still grow without consuming the full viewport. */
   control: 1.6,
 } as const;
 
 export const gradients = {
   screen: [
-    adaptiveColor("#FEF7F2", "#181513", "?attr/colorBackground"),
-    adaptiveColor("#FFF9F5", "#211C19", "?attr/colorBackground"),
-    adaptiveColor("#FEF7F2", "#181513", "?attr/colorBackground"),
+    adaptiveColor(lightThemeColors.background, darkThemeColors.background, "?attr/colorBackground"),
+    adaptiveColor(SURFACE, "#161616", "?attr/colorBackground"),
+    adaptiveColor(lightThemeColors.background, darkThemeColors.background, "?attr/colorBackground"),
   ] as const,
   hero: [
-    adaptiveColor("#FFFFFF", "#29231F", "?attr/colorBackgroundFloating"),
-    adaptiveColor("#FAF4EE", "#211C19", "?attr/colorBackground"),
-    adaptiveColor("#FEF7F2", "#181513", "?attr/colorBackground"),
+    adaptiveColor(SURFACE, "#1C1C1C", "?attr/colorBackgroundFloating"),
+    adaptiveColor(CARD, "#161616", "?attr/colorBackground"),
+    adaptiveColor(lightThemeColors.background, darkThemeColors.background, "?attr/colorBackground"),
   ] as const,
-  mic: [BRAND_CORAL, "#D47870"] as const,
+  mic: [VOICE_AMBER, VOICE_AMBER_STRONG] as const,
 };
 
 export const spacing = {

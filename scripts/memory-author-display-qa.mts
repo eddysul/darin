@@ -97,6 +97,8 @@ const familyFeed = readFileSync("src/screens/tabs/MemoriesScreen.tsx", "utf8");
 assert.match(familyFeed, /listMemoryAuthorDisplayProfiles/);
 assert.match(familyFeed, /resolveMemoryAuthorName/);
 assert.doesNotMatch(familyFeed, /familyMembers\.find\(\(member\) => member\.id === authorId\)\?\.name/);
+assert.match(familyFeed, /canManagePost = \(card: MemoryCard\) => \(/);
+assert.match(familyFeed, /myFamilyRole === "owner" \|\| myFamilyRole === "admin"/);
 
 const friendFeed = readFileSync("src/screens/tabs/FriendMemoriesScreen.tsx", "utf8");
 assert.match(friendFeed, /listMemoryAuthorDisplayProfiles/);
@@ -109,7 +111,10 @@ assert.match(detail, /listMemoryAuthorDisplayProfiles/);
 assert.match(detail, /resolveMemoryAuthorName/);
 assert.doesNotMatch(detail, /familyMembers\.find\(\(member\) => member\.id === id\)\?\.name/);
 assert.match(detail, /canEdit = Boolean\(isAuthor \|\| myFamilyRole === "owner" \|\| myFamilyRole === "admin"\)/);
-assert.match(detail, /commentAuthorLabel\(item\.authorId\)/, "comment author uses the loaded safe author projection");
+
+const comments = readFileSync("src/components/memories/MemoryCommentsSheet.tsx", "utf8");
+assert.match(comments, /listMemoryAuthorDisplayProfiles/);
+assert.doesNotMatch(comments, /familyMembers\.find\(\(member\) => member\.id === id\)/);
 
 const profiles = readFileSync("src/repositories/ProfileRepository.ts", "utf8");
 assert.match(profiles, /rpc\("list_memory_author_display"/);

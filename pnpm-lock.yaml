@@ -77,6 +77,9 @@ importers:
       expo-system-ui:
         specifier: ~4.0.9
         version: 4.0.9(expo@52.0.49(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1)))(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1))(react@18.3.1))(react-native-web@0.19.13(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1))
+      expo-video-thumbnails:
+        specifier: ~9.0.3
+        version: 9.0.3(expo@52.0.49(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1)))(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1))(react@18.3.1))
       expo-web-browser:
         specifier: ~14.0.2
         version: 14.0.2(expo@52.0.49(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1)))(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1))
@@ -2059,6 +2062,11 @@ packages:
     peerDependenciesMeta:
       react-native-web:
         optional: true
+
+  expo-video-thumbnails@9.0.3:
+    resolution: {integrity: sha512-WDbYMNlcTN/jBnjXZkHWqbgWloHUpG8ZQfie/Ic+BcJagG00TenHcbdzEYiIjshcF4Hhvl3D8okbPFjDFip9/Q==}
+    peerDependencies:
+      expo: '*'
 
   expo-web-browser@14.0.2:
     resolution: {integrity: sha512-Hncv2yojhTpHbP6SGWARBFdl7P6wBHc1O8IKaNsH0a/IEakq887o1eRhLxZ5IwztPQyRDhpqHdgJ+BjWolOnwA==}
@@ -6413,6 +6421,10 @@ snapshots:
       react-native-web: 0.19.13(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     transitivePeerDependencies:
       - supports-color
+
+  expo-video-thumbnails@9.0.3(expo@52.0.49(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1)))(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1))(react@18.3.1)):
+    dependencies:
+      expo: 52.0.49(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1)))(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1))(react@18.3.1)
 
   expo-web-browser@14.0.2(expo@52.0.49(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@expo/metro-runtime@4.0.1(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1)))(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.29.7)(@babel/preset-env@7.29.7(@babel/core@7.29.7))(@types/react@18.3.31)(react@18.3.1)):
     dependencies:

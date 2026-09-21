@@ -33,11 +33,12 @@ Deno.serve(async (request) => {
   const verified = await user.auth.getUser(token);
   if (verified.error || !verified.data.user) return json(401, { error: "UNAUTHORIZED" });
 
-  let body: { kind?: unknown; resourceId?: unknown; width?: unknown };
+  let body: { kind?: unknown; resourceId?: unknown; width?: unknown; variant?: unknown };
   try { body = await request.json(); } catch { return json(400, { error: "INVALID_REQUEST" }); }
   if (typeof body.kind !== "string" || !kinds.has(body.kind)
     || typeof body.resourceId !== "string" || !uuid.test(body.resourceId)
-    || (body.width !== undefined && (!Number.isInteger(body.width) || body.width < 1 || body.width > 2000))) {
+    || (body.width !== undefined && (!Number.isInteger(body.width) || body.width < 1 || body.width > 2000))
+    || (body.variant !== undefined && body.variant !== "source" && body.variant !== "thumbnail")) {
     return json(400, { error: "INVALID_REQUEST" });
   }
 
@@ -50,11 +51,15 @@ Deno.serve(async (request) => {
     return json(404, { error: "MEDIA_NOT_FOUND" });
   }
 
+  const wantsPoster = body.variant === "thumbnail";
+  const path = wantsPoster ? row.thumbnail_storage_path : row.storage_path;
+  if (!path || (wantsPoster && typeof path !== "string")) return json(404, { error: "MEDIA_NOT_FOUND" });
+  const video = /\.(mp4|mov|m4v)$/i.test(path);
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const signed = await admin.storage.from(row.bucket_id).createSignedUrl(
-    row.storage_path,
+    path,
     row.expires_in,
-    body.width ? { transform: { width: body.width, quality: 75, resize: "contain" } } : undefined,
+    body.width && !video ? { transform: { width: body.width, quality: 75, resize: "contain" } } : undefined,
   );
   if (signed.error || !signed.data?.signedUrl) return json(503, { error: "SIGNING_UNAVAILABLE" });
   return json(200, { signedUrl: signed.data.signedUrl, expiresIn: row.expires_in });

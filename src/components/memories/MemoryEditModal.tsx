@@ -24,11 +24,22 @@ import { MemoryPeoplePicker } from "./MemoryPeoplePicker";
 import { MemoryPrivacyPicker } from "./MemoryPrivacyPicker";
 import { useLanguage } from "../../LanguageContext";
 import { caughtErrorMessage } from "../../utils/familyDisplay";
+import { compatibleLibraryRepresentation } from "../../utils/mediaLibraryPicker";
+import { MEMORY_MEDIA_MAX_ITEMS, captureMemoryVideoThumbnail, inspectPickedMemoryAsset, memoryUploadErrorMessageKey } from "../../utils/memoryVideo";
 
 const toggle = (list: string[], id: string) => list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
-const MAX_MEMORY_PHOTOS = 5;
+const MAX_MEMORY_PHOTOS = MEMORY_MEDIA_MAX_ITEMS;
 
-type PickedImage = { uri: string; width?: number; height?: number; fileSize?: number; mimeType?: string };
+type PickedImage = {
+  uri: string;
+  width?: number;
+  height?: number;
+  fileSize?: number;
+  mimeType?: string;
+  mediaType?: "image" | "video";
+  durationMs?: number;
+  posterUri?: string;
+};
 
 export function MemoryEditModal({
   visible,
@@ -67,7 +78,12 @@ export function MemoryEditModal({
     setNewImages([]);
     setMediaReady(false);
     setError("");
-    void Promise.all(bundle.media.map(async (media) => ({ mediaId: media.id, uri: await MemoriesRepository.createSignedUrl(media.storagePath) })))
+    void Promise.all(bundle.media.map(async (media) => {
+      const uri = media.mediaType === "video"
+        ? await MemoriesRepository.createSignedUrl(media.storagePath, undefined, { variant: "thumbnail" }).catch(() => "")
+        : await MemoriesRepository.createSignedUrl(media.storagePath);
+      return { mediaId: media.id, uri };
+    }))
       .then((photos) => { setExistingPhotos(photos); setMediaReady(true); })
       .catch(() => setError(t("memory.critical.114")));
   }, [bundle, t, visible]);
@@ -81,18 +97,30 @@ export function MemoryEditModal({
       const resolvedPermission = permission.granted ? permission : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!resolvedPermission.granted) return setError(t("memory.critical.098"));
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
+        mediaTypes: ["images", "videos"],
         allowsMultipleSelection: true,
         selectionLimit: remaining,
         orderedSelection: true,
-        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+        preferredAssetRepresentationMode: compatibleLibraryRepresentation,
         quality: 0.9,
       });
       if (result.canceled) return;
-      if (result.assets.some((asset) => asset.fileSize !== undefined && asset.fileSize > 25 * 1024 * 1024)) return setError(t("memory.critical.115"));
+      const accepted: PickedImage[] = [];
+      for (const asset of result.assets.slice(0, remaining)) {
+        try {
+          const inspected = await inspectPickedMemoryAsset(asset);
+          let posterUri: string | undefined;
+          if (inspected.mediaType === "video") {
+            posterUri = (await captureMemoryVideoThumbnail(inspected.uri, { time: 0, quality: 0.6 }))?.uri;
+          }
+          accepted.push({ ...inspected, posterUri });
+        } catch (cause) {
+          setError(t(memoryUploadErrorMessageKey(cause)));
+        }
+      }
       setNewImages((current) => [
         ...current,
-        ...result.assets.slice(0, remaining).filter((asset) => !current.some((item) => item.uri === asset.uri)).map((asset) => ({ uri: asset.uri, width: asset.width, height: asset.height, fileSize: asset.fileSize, mimeType: asset.mimeType })),
+        ...accepted.filter((asset) => !current.some((item) => item.uri === asset.uri)),
       ].slice(0, remaining + current.length));
     } catch (cause) {
       if (__DEV__) console.warn("[memory-edit-photo-picker] open failed", cause instanceof Error ? cause.name : "unknown");
@@ -181,7 +209,7 @@ export function MemoryEditModal({
               {newImages.map((image, index) => {
                 const position = existingPhotos.length + index;
                 return <View key={`${image.uri}-${index}`} style={styles.photoThumbWrap}>
-                  <Image source={{ uri: image.uri }} style={styles.photoThumb} contentFit="cover" />
+                  <Image source={{ uri: image.posterUri ?? image.uri }} style={styles.photoThumb} contentFit="cover" />
                   {position === 0 ? <View style={styles.coverBadge}><Text style={styles.coverBadgeText}>{t("memory.critical.085")}</Text></View> : null}
                   <Pressable style={styles.photoRemove} onPress={() => setNewImages((current) => current.filter((_, photoIndex) => photoIndex !== index))} accessibilityRole="button" accessibilityLabel={t("memory.critical.117", { count: index + 1 })}>
                     <BabyLogIcon kind="trash" size={16} color={colors.onDark} strokeWidth={2.2} />
@@ -189,9 +217,9 @@ export function MemoryEditModal({
                 </View>;
               })}
               {existingPhotos.length + newImages.length < MAX_MEMORY_PHOTOS ? (
-                <Pressable style={styles.photoAddTile} onPress={() => void pickImages()} accessibilityRole="button" accessibilityLabel={t("memory.critical.086")}>
+                <Pressable style={styles.photoAddTile} onPress={() => void pickImages()} accessibilityRole="button" accessibilityLabel={t("memory.critical.191")}>
                   <BabyLogIcon kind="new" size={22} color={colors.amberText} strokeWidth={2.2} />
-                  <Text style={styles.photoAddText}>{t("memory.critical.086")}</Text>
+                  <Text style={styles.photoAddText}>{t("memory.critical.191")}</Text>
                 </Pressable>
               ) : null}
             </ScrollView>}
@@ -236,8 +264,8 @@ const styles = StyleSheet.create({
   coverBadge: { position: "absolute", left: 7, bottom: 7, borderRadius: 999, backgroundColor: "rgba(46,42,38,0.72)", paddingHorizontal: 7, paddingVertical: 3 },
   coverBadgeText: { color: "#fff", fontSize: 9.5, fontWeight: "800" },
   photoRemove: { position: "absolute", right: 2, top: 2, width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(46,42,38,0.72)" },
-  photoAddTile: { width: 96, height: 112, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: colors.amber, backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center", gap: 4 },
-  photoAddText: { color: colors.amberText, fontSize: 11.5, fontWeight: "800" },
+  photoAddTile: { width: 96, height: 112, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: colors.border, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", gap: 4 },
+  photoAddText: { color: colors.muted, fontSize: 11.5, fontWeight: "800" },
   caption: { minHeight: 110, borderRadius: radius.md, backgroundColor: colors.cardHi, padding: 12, color: colors.text, fontSize: 14, lineHeight: 21 },
   counter: { color: colors.faint, fontSize: 10.5, textAlign: "right" },
   error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: 12, fontSize: 12.5 },

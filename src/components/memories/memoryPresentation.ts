@@ -1,6 +1,6 @@
 import type { MiscIconKey } from "../babylog/BabyLogIcon";
 import type { MemoryCriticalKey } from "../../i18nMemoriesCriticalMessages";
-import type { MemoryPrivacyType } from "../../types/memory";
+import type { MemoryCard, MemoryComment, MemoryMedia, MemoryPrivacyType } from "../../types/memory";
 
 export type MemoryPrivacyPresentation = {
   labelKey: MemoryCriticalKey;
@@ -48,4 +48,47 @@ export function memoryPrivacyPresentation(privacyType: MemoryPrivacyType): Memor
 
 export function memoryPrivacyMessageKey(value: MemoryPrivacyType): MemoryCriticalKey {
   return PRESENTATION[value]?.labelKey ?? "memory.critical.056";
+}
+
+export function memoryFeedAspectRatio(media?: Pick<MemoryMedia, "width" | "height">): number {
+  const width = media?.width;
+  const height = media?.height;
+  if (!width || !height) return 1;
+  return Math.min(1.91, Math.max(4 / 5, width / height));
+}
+
+export function memoryCommentPreviewText(comment: MemoryComment): string {
+  if (comment.commentType === "sticker") return (comment.stickerLabel || comment.body).trim();
+  return comment.body.trim();
+}
+
+export function memoryFeedImageUrls(card: MemoryCard): string[] {
+  const urls = (card.mediaUrls ?? []).filter(Boolean);
+  if (urls.length) return urls;
+  return card.coverUrl ? [card.coverUrl] : [];
+}
+
+export function memoryFeedSlides(card: MemoryCard): Array<{
+  key: string;
+  uri: string;
+  posterUri?: string;
+  media?: MemoryMedia;
+}> {
+  if (card.media?.length) {
+    return card.media.map((media, index) => {
+      const uri = card.mediaUrls?.[index] ?? "";
+      const poster = card.mediaPosterUrls?.[index] || (media.mediaType === "image" ? uri || card.coverUrl : undefined);
+      return {
+        key: media.id,
+        uri: media.mediaType === "video" ? uri : (uri || card.coverUrl || ""),
+        posterUri: poster || undefined,
+        media,
+      };
+    });
+  }
+  return memoryFeedImageUrls(card).map((uri, index) => ({
+    key: `${card.post.id}-${index}`,
+    uri,
+    posterUri: uri,
+  }));
 }
