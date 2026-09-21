@@ -41,7 +41,7 @@ type AppContextValue = {
   /** Remove a stale device setup before onboarding a different account. */
   resetCareSetup: () => Promise<void>;
   /** Clear only the auth session. CareSetup remains a local cache for server restoration. */
-  clearSession: () => Promise<void>;
+  clearSession: (options?: { localOnly?: boolean }) => Promise<void>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -69,16 +69,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void saveCareSetup(setup);
   }, []);
 
-  const clearSession = useCallback(async () => {
-    await clearSupabaseSync();
+  const clearSession = useCallback(async (_options?: { localOnly?: boolean }) => {
+    let syncError: unknown;
+    let sessionError: unknown;
+    try { await clearSupabaseSync(); } catch (error) { syncError = error; }
     if (isSupabaseConfigured()) {
-      try {
-        await AuthRepository.signOut();
-      } catch {
-        /* local logout still proceeds */
-      }
+      try { await AuthRepository.signOutLocal(); } catch (error) { sessionError = error; }
     }
     setProfile(DEFAULT_PARENT_PROFILE);
+    if (sessionError || syncError) throw sessionError ?? syncError;
   }, []);
 
   const resetCareSetup = useCallback(async () => {

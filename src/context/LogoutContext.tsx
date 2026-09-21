@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 
-type LogoutFn = () => void | Promise<void>;
+type LogoutFn = (options?: { accountDeleted?: boolean }) => void | Promise<void>;
 
 const LogoutContext = createContext<LogoutFn | null>(null);
 

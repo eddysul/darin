@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Session, User } from "@supabase/supabase-js";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
-import { getSupabase, isSupabaseConfigured, requireSupabase } from "../lib/supabase";
+import { clearLocalSupabaseSession, getSupabase, isSupabaseConfigured, requireSupabase } from "../lib/supabase";
 import {
   completeAuthCallback,
   parseAuthCallback,
@@ -10,6 +10,7 @@ import {
 } from "../utils/authCallback";
 import { validateGoogleLink, validateGoogleLogin } from "../utils/googleAuthFlow";
 import { STORAGE_KEYS } from "../utils/storageKeys";
+import { settleWithin } from "../utils/settleWithin";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -514,5 +515,20 @@ export const AuthRepository = {
     if (!sb) return;
     const { error } = await sb.auth.signOut();
     if (error) throw error;
+  },
+
+  /** Clear this device's session even after the server Auth user was deleted. */
+  async signOutLocal(): Promise<void> {
+    const sb = getSupabase();
+    try {
+      if (sb) {
+        // Auth may not answer after account deletion or on a poor mobile connection.
+        // Local session removal is required even when its revoke request times out.
+        await settleWithin(sb.auth.signOut({ scope: "local" }), 4000).catch(() => undefined);
+      }
+    } finally {
+      await clearLocalSupabaseSession();
+      await clearLegacyDeviceAuth();
+    }
   },
 };

@@ -135,7 +135,8 @@ assert.match(repository, /await scope\.assertCurrent\(\)/);
 assert.match(repository, /scope\.client\.rpc\("unregister_current_push_token"/);
 assert.match(pushLifecycle, /queuePushTokenOperation/);
 assert.match(pushLifecycle, /if \(deviceId\) await NotificationRepository\.unregisterToken\(deviceId\)/);
-assert.match(app, /await unregisterCurrentPushToken\(\);[\s\S]*await prepareForLogout\(\)/);
+assert.match(app, /settleWithin\(unregisterCurrentPushToken\(\), 3000\)/);
+assert.match(app, /settleWithin\(prepareForLogout\(preparationAbort\.signal\), 3000\)/);
 assert.match(memories, /targetId: reaction\.id/);
 
 console.log("B0.4c notification security smoke passed");

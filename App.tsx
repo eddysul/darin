@@ -62,6 +62,7 @@ import {
   saveTermsAccepted,
 } from "./src/utils/termsStore";
 import { unregisterCurrentPushToken } from "./src/utils/pushNotifications";
+import { settleWithin } from "./src/utils/settleWithin";
 import { captureSessionScope } from "./src/lib/supabase";
 
 type AppPhase =
@@ -248,10 +249,18 @@ function RootApp() {
 
   const handleSplashComplete = useCallback(() => setSplashFinished(true), []);
 
-  const handleLogout = useCallback(async () => {
-    await unregisterCurrentPushToken();
-    await prepareForLogout();
-    await clearSession();
+  const handleLogout = useCallback(async (options?: { accountDeleted?: boolean }) => {
+    if (!options?.accountDeleted) {
+      const preparationAbort = new AbortController();
+      await Promise.allSettled([
+        settleWithin(unregisterCurrentPushToken(), 3000),
+        settleWithin(prepareForLogout(preparationAbort.signal), 3000)
+          .finally(() => preparationAbort.abort()),
+      ]);
+    }
+    let sessionError: unknown;
+    try { await clearSession({ localOnly: options?.accountDeleted }); }
+    catch (error) { sessionError = error; }
     setHasAuthSession(false);
     setOnboardingProfile(null);
     setAuthName("");
@@ -259,6 +268,7 @@ function RootApp() {
     setOnboardingStartsWithBaby(false);
     startupRouting.current = false;
     setPhase(getTermsAccepted() ? "auth" : "terms");
+    if (sessionError) throw sessionError;
   }, [clearSession, prepareForLogout]);
 
   const restoreWorkspace = useCallback(async (serverBaby: BabyRow, fallbackName = "") => {

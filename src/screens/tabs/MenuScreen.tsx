@@ -32,6 +32,7 @@ import type { DiaryReminderSettings } from "../../types/diaryReminder";
 import type { SettingsDetailPage } from "../../navigation/types";
 import { DEFAULT_DIARY_REMINDER } from "../../types/diaryReminder";
 import {
+  AccountDeletionError,
   clearLocalAppData,
   deleteServerAccount,
   hasAccountDeletionApi,
@@ -142,13 +143,18 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         );
         return;
       }
+      let localCleanupFailed = false;
       if (deleteLocal) {
-        await clearAllUserData();
-        await clearLocalAppData();
-        await resetSettings();
+        for (const clear of [clearAllUserData, clearLocalAppData, resetSettings]) {
+          try { await clear(); } catch { localCleanupFailed = true; }
+        }
       }
       setDeleteOpen(false);
-      await logout();
+      try { await logout({ accountDeleted: result.serverDeleted }); }
+      catch { localCleanupFailed = true; }
+      if (result.serverDeleted && localCleanupFailed) {
+        Alert.alert(t("settings.critical.354"), t("settings.critical.355"));
+      }
       if (result.localOnly) {
         Alert.alert(
           t("settings.critical.040"),
@@ -156,8 +162,17 @@ export function MenuScreen({ onOpenProfile, onOpenMyProfile, onOpenFamilyShare, 
         );
       }
     } catch (error) {
+      if (error instanceof AccountDeletionError && error.code === "UNAUTHORIZED") {
+        setDeleteOpen(false);
+        try { await logout({ accountDeleted: true }); } catch { /* The auth route still opens. */ }
+        Alert.alert(t("settings.critical.097"));
+        return;
+      }
       setDeleteError(
-        error instanceof Error ? localizedErrorMessage(t, error.message) : t("settings.critical.042"),
+        error instanceof AccountDeletionError
+          ? error.code === "INVALID_CONFIRMATION" ? t("settings.critical.037")
+            : t("settings.critical.042")
+          : error instanceof Error ? localizedErrorMessage(t, error.message) : t("settings.critical.042"),
       );
     } finally {
       setDeleting(false);

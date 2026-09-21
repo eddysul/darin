@@ -24,6 +24,16 @@ export function isSupabaseConfigured(): boolean {
 
 let client: SupabaseClient<Database> | null = null;
 
+/** Emergency device-only logout when an Auth network request never settles. */
+export async function clearLocalSupabaseSession(): Promise<void> {
+  const previous = client;
+  client = null;
+  await previous?.auth.stopAutoRefresh().catch(() => undefined);
+  if (!url) return;
+  const storageKey = `sb-${new URL(url).hostname.split(".")[0]}-auth-token`;
+  await AsyncStorage.multiRemove([storageKey, `${storageKey}-code-verifier`]);
+}
+
 /** Returns null when env is missing — callers should fall back to local cache. */
 export function getSupabase(): SupabaseClient<Database> | null {
   if (!isSupabaseConfigured()) return null;
