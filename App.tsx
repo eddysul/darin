@@ -62,6 +62,7 @@ import {
   saveTermsAccepted,
 } from "./src/utils/termsStore";
 import { unregisterCurrentPushToken } from "./src/utils/pushNotifications";
+import { captureSessionScope } from "./src/lib/supabase";
 
 type AppPhase =
   | "splash"
@@ -345,7 +346,7 @@ function RootApp() {
     let validPendingCode = pendingCode ?? "";
     if (pendingCode) {
       try {
-        const preview = await FamilyRepository.previewInviteCode(pendingCode);
+        const preview = await FamilyRepository.previewInviteCode(pendingCode, session.user.id);
         if (!preview?.is_valid) {
           await clearPendingInvite();
           validPendingCode = "";
@@ -549,12 +550,15 @@ function RootApp() {
       if (result.mode === "join") {
         let accepted: Awaited<ReturnType<typeof FamilyRepository.acceptInviteCode>>;
         try {
+          const scope = await captureSessionScope();
           accepted = await FamilyRepository.acceptInviteCode({
             code: result.code,
             displayName: result.myName,
             nickname: result.myRealName,
             relation: result.relationshipLabel,
+            expectedAccountId: scope.accountId,
           });
+          await scope.assertCurrent();
           await clearPendingInvite();
           await rehydrateFromServer();
         } catch (cause) {

@@ -51,9 +51,12 @@ const outsider = "00000000-0000-4000-8000-000000000002";
 const friend = "00000000-0000-4000-8000-000000000003";
 const editor = "00000000-0000-4000-8000-000000000004";
 const viewer = "00000000-0000-4000-8000-000000000005";
+const concurrentAdminOne = "00000000-0000-4000-8000-000000000006";
+const concurrentAdminTwo = "00000000-0000-4000-8000-000000000007";
 const babyOne = "10000000-0000-4000-8000-000000000001";
 const babyTwo = "10000000-0000-4000-8000-000000000002";
 const babyThree = "10000000-0000-4000-8000-000000000003";
+const babyFour = "10000000-0000-4000-8000-000000000004";
 const careId = "41000000-0000-4000-8000-000000000001";
 const friendPost = "71000000-0000-4000-8000-000000000001";
 
@@ -96,6 +99,14 @@ try {
   expect("friend can read friend-circle moment", query(actor(friend, `select count(*) from memory_posts where id='${friendPost}'`)), 1);
   expect("friend can comment when granted", query(actor(friend, `with x as (insert into memory_comments(memory_post_id,author_id,body) values ('${friendPost}','${friend}','ok') returning id) select count(*) from x`)), 1);
   expect("same user has no cross-baby care access", query(actor(viewer, `select public.has_baby_access('${babyTwo}','care.read')`)), "f");
+  denied("authenticated user cannot query another user's raw baby link", outsider,
+    `select public.is_current_baby_link('${babyOne}','${admin}')`);
+  denied("authenticated user cannot query another user's raw admin role", outsider,
+    `select public.is_baby_full_admin('${babyOne}','${admin}')`);
+  denied("authenticated user cannot query another user's raw capabilities", outsider,
+    `select public.user_has_baby_access('${babyOne}','${admin}','care.write')`);
+  expect("current-user admin wrapper remains available to policy callers", query(actor(admin,
+    `select public.is_current_baby_admin('${babyOne}')`)), "t");
 
   expect("admin can grant independent care write", query(actor(admin, `select (public.set_baby_access_permissions('${babyOne}','${viewer}',true,true,false,false,false,false)).care_write`)), "t");
   expect("granted viewer can create own care", query(actor(viewer, `with x as (insert into care_logs(id,baby_id,category,recorded_at,date_key,time_local,payload,created_by) values (gen_random_uuid(),'${babyOne}','sleep',now(),'2026-09-20','11:00','{}','${viewer}') returning id) select count(*) from x`)), 1);
@@ -127,6 +138,26 @@ try {
 
   run("psql", [...connection, "-c", actor(admin, `insert into babies(id,name,created_by) values ('${babyThree}','Last admin baby','${admin}'); insert into baby_members(baby_id,user_id,permission_role,status) values ('${babyThree}','${admin}','admin','active');`)]);
   denied("last Full Admin cannot directly remove own authority", admin, `delete from baby_members where baby_id='${babyThree}' and user_id='${admin}'`);
+
+  run("psql", [...connection, "-c", `
+    insert into profiles(id,display_name) values
+      ('${concurrentAdminOne}','Concurrent admin one'),
+      ('${concurrentAdminTwo}','Concurrent admin two');
+    insert into babies(id,name,created_by) values ('${babyFour}','Concurrent admin baby','${concurrentAdminOne}');
+    select set_config('darin.admin_grant_approved','true',true);
+    insert into baby_members(baby_id,user_id,permission_role,status) values
+      ('${babyFour}','${concurrentAdminOne}','admin','active'),
+      ('${babyFour}','${concurrentAdminTwo}','admin','active');
+  `]);
+  const firstAdminDeparture = runAsync(`begin; delete from baby_members where baby_id='${babyFour}' and user_id='${concurrentAdminOne}'; select pg_sleep(1); commit;`);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const secondAdminDeparture = runAsync(`delete from baby_members where baby_id='${babyFour}' and user_id='${concurrentAdminTwo}';`);
+  const [firstDepartureResult, secondDepartureResult] = await Promise.all([firstAdminDeparture, secondAdminDeparture]);
+  const successfulDepartures = [firstDepartureResult, secondDepartureResult].filter((result) => result.status === 0).length;
+  if (successfulDepartures !== 1) {
+    throw new Error(`concurrent last-admin guard allowed ${successfulDepartures} departures: ${firstDepartureResult.output} ${secondDepartureResult.output}`);
+  }
+  expect("concurrent departures retain one active Full Admin", query(`select count(*) from baby_members where baby_id='${babyFour}' and status::text='active' and permission_role='admin'`), 1);
 
   console.log("baby-scoped permissions local PostgreSQL regression PASS");
 } finally {

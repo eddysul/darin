@@ -95,6 +95,11 @@ returns boolean language sql stable security definer set search_path = public as
   select auth.uid() is not null and public.user_has_baby_access(p_baby_id,auth.uid(),p_permission);
 $$;
 
+create or replace function public.is_current_baby_admin(p_baby_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null and public.is_baby_full_admin(p_baby_id,auth.uid());
+$$;
+
 create or replace function public.current_baby_access_for_write(p_baby_id uuid, p_permission text)
 returns boolean language plpgsql volatile security definer set search_path = public as $$
 declare
@@ -152,23 +157,22 @@ begin
 end;
 $$;
 
-revoke all on function public.is_current_baby_link(uuid,uuid) from public, anon;
-revoke all on function public.is_baby_full_admin(uuid,uuid) from public, anon;
-revoke all on function public.user_has_baby_access(uuid,uuid,text) from public, anon;
+revoke all on function public.is_current_baby_link(uuid,uuid) from public, anon, authenticated;
+revoke all on function public.is_baby_full_admin(uuid,uuid) from public, anon, authenticated;
+revoke all on function public.user_has_baby_access(uuid,uuid,text) from public, anon, authenticated;
 revoke all on function public.has_baby_access(uuid,text) from public, anon;
+revoke all on function public.is_current_baby_admin(uuid) from public, anon;
 revoke all on function public.current_baby_access_for_write(uuid,text) from public, anon;
 revoke all on function public.current_baby_admin_for_write(uuid) from public, anon;
-grant execute on function public.is_current_baby_link(uuid,uuid) to authenticated;
-grant execute on function public.is_baby_full_admin(uuid,uuid) to authenticated;
-grant execute on function public.user_has_baby_access(uuid,uuid,text) to authenticated;
 grant execute on function public.has_baby_access(uuid,text) to authenticated;
+grant execute on function public.is_current_baby_admin(uuid) to authenticated;
 grant execute on function public.current_baby_access_for_write(uuid,text) to authenticated;
 grant execute on function public.current_baby_admin_for_write(uuid) to authenticated;
 
 drop policy if exists baby_access_permissions_select_self_or_admin on public.baby_access_permissions;
 create policy baby_access_permissions_select_self_or_admin on public.baby_access_permissions
   for select to authenticated using (
-    user_id = auth.uid() or public.is_baby_full_admin(baby_id, auth.uid())
+    user_id = auth.uid() or public.is_current_baby_admin(baby_id)
   );
 
 -- Preserve the effective access of existing active rows. A relationship label
@@ -291,6 +295,10 @@ create or replace function public.baby_admin_transition_guard()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare v_baby uuid:=coalesce(new.baby_id,old.baby_id); v_user uuid:=coalesce(new.user_id,old.user_id);
 begin
+  -- Serialize all authority transitions for one baby. Without a shared parent
+  -- lock, two concurrent Full Admin departures can each observe the other as
+  -- active and commit a zero-admin state.
+  perform 1 from public.babies b where b.id=v_baby for update;
   if tg_op <> 'DELETE' and new.permission_role is not distinct from 'admin'::public.permission_role
      and (tg_op='INSERT' or old.permission_role is distinct from 'admin'::public.permission_role) then
     if current_setting('darin.admin_grant_approved',true) is distinct from 'true'

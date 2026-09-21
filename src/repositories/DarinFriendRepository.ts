@@ -1,4 +1,4 @@
-import { requireSupabase } from "../lib/supabase";
+import { captureSessionScope, requireSupabase } from "../lib/supabase";
 import type { InviteCodeRow, MemoryFriendStatus } from "../types/database";
 
 export type BabyMemoryFriendDisplay = {
@@ -31,13 +31,17 @@ export const FriendRepository = {
     return [...unique.values()];
   },
 
-  async removeFriend(babyId: string, userId: string): Promise<void> {
-    const { error } = await requireSupabase()
+  async removeFriend(babyId: string, userId: string, expectedAccountId: string): Promise<void> {
+    const scope = await captureSessionScope();
+    if (scope.accountId !== expectedAccountId) throw new Error("Account changed during family operation.");
+    await scope.assertCurrent();
+    const { error } = await scope.client
       .from("memory_friends")
       .delete()
       .eq("baby_id", babyId)
       .eq("user_id", userId);
     if (error) throw error;
+    await scope.assertCurrent();
   },
 
   async createFriendInvite(babyId: string): Promise<InviteCodeRow> {

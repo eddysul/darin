@@ -32,6 +32,7 @@ import { colors, fontScaleCap } from "../theme";
 import { useLanguage } from "../LanguageContext";
 import { familyErrorMessage } from "../utils/familyDisplay";
 import { inviteSearchQueryReady, resolveInviteRowStatus } from "../utils/inviteSearchStatus";
+import { localDataScopeId } from "../utils/scopedLocalStorage";
 
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -43,8 +44,9 @@ type PeopleFilter = "family" | "friend";
 export function FamilyShareScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
-  const { babyName, myFamilyRole, familyMembers, rehydrateFromServer, activeBabyId, switchActiveBaby } = useBabyLog();
+  const { babyName, myFamilyRole, familyMembers, rehydrateFromServer, activeBabyId, switchActiveBaby, localDataScope } = useBabyLog();
   const babyId = activeBabyId;
+  const scopeKey = localDataScope ? localDataScopeId(localDataScope) : "";
   const canSendInvite = canInvite(myFamilyRole);
   const [mode, setMode] = useState<ShareMode>(() => route.params?.tab === "people" ? "people" : "create");
   const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>(() => route.params?.peopleFilter ?? "family");
@@ -65,12 +67,15 @@ export function FamilyShareScreen({ navigation, route }: Props) {
   const [toast, setToast] = useState("");
   const searchGen = useRef(0);
   const refreshGen = useRef(0);
+  const scopeKeyRef = useRef(scopeKey);
+  scopeKeyRef.current = scopeKey;
   const [accessByUser, setAccessByUser] = useState<Map<string, BabyAccessPermissions>>(new Map());
   const [permissionsLoading, setPermissionsLoading] = useState(false);
   const [permissionsError, setPermissionsError] = useState("");
 
   const refresh = useCallback(async () => {
     const gen = ++refreshGen.current;
+    const requestScopeKey = scopeKey;
     setPermissionsLoading(Boolean(babyId));
     setPermissionsError("");
     if (!babyId) setAccessByUser(new Map());
@@ -79,7 +84,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
       ProfileRepository.getMyProfile().catch(() => null),
       rehydrateFromServer().catch(() => undefined),
     ]);
-    if (gen !== refreshGen.current) return;
+    if (gen !== refreshGen.current || requestScopeKey !== scopeKeyRef.current) return;
     setMeId(user?.id ?? null);
     setMyDarinId(profile?.darin_id ?? null);
     if (babyId) {
@@ -87,7 +92,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
         FriendRepository.listFriendsByBabyId(babyId),
         FamilyRepository.listBabyAccessPermissions(babyId),
       ]);
-      if (gen !== refreshGen.current) return;
+      if (gen !== refreshGen.current || requestScopeKey !== scopeKeyRef.current) return;
       setFriends(friendResult.status === "fulfilled" ? friendResult.value : []);
       if (accessResult.status === "fulfilled") {
         setAccessByUser(new Map(accessResult.value.map((item) => [item.userId, item.permissions])));
@@ -100,18 +105,37 @@ export function FamilyShareScreen({ navigation, route }: Props) {
     }
     try {
       const requests = await FamilyRepository.listDarinInviteRequests();
-      if (gen !== refreshGen.current) return;
+      if (gen !== refreshGen.current || requestScopeKey !== scopeKeyRef.current) return;
       const scoped = requests.filter((item) => !babyId || item.babyId === babyId);
       setIncoming(scoped.filter((item) => item.direction === "incoming"));
       setOutgoing(scoped.filter((item) => item.direction === "outgoing"));
     } catch {
-      if (gen !== refreshGen.current) return;
+      if (gen !== refreshGen.current || requestScopeKey !== scopeKeyRef.current) return;
       setIncoming([]);
       setOutgoing([]);
     } finally {
-      if (gen === refreshGen.current) setPermissionsLoading(false);
+      if (gen === refreshGen.current && requestScopeKey === scopeKeyRef.current) setPermissionsLoading(false);
     }
-  }, [babyId, rehydrateFromServer, t]);
+  }, [babyId, rehydrateFromServer, scopeKey, t]);
+
+  useEffect(() => {
+    refreshGen.current += 1;
+    searchGen.current += 1;
+    setHits([]);
+    setSearching(false);
+    setSearchError("");
+    setSelected(null);
+    setSubmitting(false);
+    setSendError("");
+    setCodeOpen(false);
+    setOptimisticOutgoing(new Set());
+    setFriends([]);
+    setIncoming([]);
+    setOutgoing([]);
+    setAccessByUser(new Map());
+    setPermissionsError("");
+    setPermissionsLoading(Boolean(babyId));
+  }, [babyId, scopeKey]);
 
   useEffect(() => () => {
     refreshGen.current += 1;
@@ -133,14 +157,15 @@ export function FamilyShareScreen({ navigation, route }: Props) {
       return;
     }
     const gen = ++searchGen.current;
+    const requestScopeKey = scopeKey;
     setSearching(true);
     setSearchError("");
     try {
       const next = await ProfileRepository.searchInviteProfiles(babyId, value);
-      if (gen !== searchGen.current) return;
+      if (gen !== searchGen.current || requestScopeKey !== scopeKeyRef.current) return;
       setHits(next);
     } catch (cause) {
-      if (gen !== searchGen.current) return;
+      if (gen !== searchGen.current || requestScopeKey !== scopeKeyRef.current) return;
       const message = cause instanceof Error ? cause.message : "";
       if (/42501|only baby admin/i.test(message)) {
         setHits([]);
@@ -150,9 +175,9 @@ export function FamilyShareScreen({ navigation, route }: Props) {
         setSearchError(t("family.critical.128"));
       }
     } finally {
-      if (gen === searchGen.current) setSearching(false);
+      if (gen === searchGen.current && requestScopeKey === scopeKeyRef.current) setSearching(false);
     }
-  }, [babyId, canSendInvite, t]);
+  }, [babyId, canSendInvite, scopeKey, t]);
 
   useEffect(() => {
     if (mode !== "create") return;
@@ -192,8 +217,10 @@ export function FamilyShareScreen({ navigation, route }: Props) {
   );
 
   const sendInvite = async (input: { requestType: InviteRequestKind; role: InviteFamilyRole }) => {
-    if (submitting || !selected || !babyId || !canSendInvite) return;
+    if (submitting || !selected || !babyId || !localDataScope || !canSendInvite) return;
     const target = selected;
+    const requestScopeKey = scopeKey;
+    const requestAccountId = localDataScope.userId;
     const optimisticKey = (target.darinId || target.userId).trim().toLowerCase();
     setSubmitting(true);
     setSendError("");
@@ -201,11 +228,13 @@ export function FamilyShareScreen({ navigation, route }: Props) {
     try {
       const request = await FamilyRepository.sendDarinIdInviteRequest({
         babyId,
+        expectedAccountId: requestAccountId,
         darinId: target.darinId,
         requestType: input.requestType,
         role: input.requestType === "family" ? input.role : "editor",
         relationshipLabel: input.requestType === "family" ? "가족" : "친구",
       });
+      if (requestScopeKey !== scopeKeyRef.current) return;
       if (!request) throw new Error(t("family.critical.017"));
       setSelected(null);
       setSendError("");
@@ -213,6 +242,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
       AccessibilityInfo.announceForAccessibility(t("family.critical.124"));
       await refresh();
     } catch (cause) {
+      if (requestScopeKey !== scopeKeyRef.current) return;
       setOptimisticOutgoing((current) => {
         const next = new Set(current);
         next.delete(optimisticKey);
@@ -221,7 +251,7 @@ export function FamilyShareScreen({ navigation, route }: Props) {
       setSendError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.021"));
       await refresh();
     } finally {
-      setSubmitting(false);
+      if (requestScopeKey === scopeKeyRef.current) setSubmitting(false);
     }
   };
 
@@ -266,7 +296,10 @@ export function FamilyShareScreen({ navigation, route }: Props) {
 
       {mode === "people" ? (
         <FamilyPeopleManage
+          key={scopeKey || "no-scope"}
           babyId={babyId}
+          scopeKey={scopeKey}
+          accountId={localDataScope?.userId ?? null}
           myRole={myFamilyRole}
           familyMembers={familyMembers}
           friends={friends}
@@ -393,6 +426,8 @@ export function FamilyShareScreen({ navigation, route }: Props) {
       <InviteCodeSheet
         visible={codeOpen}
         babyId={babyId}
+        scopeKey={scopeKey}
+        accountId={localDataScope?.userId ?? null}
         babyName={babyName}
         myFamilyRole={myFamilyRole}
         onClose={() => setCodeOpen(false)}

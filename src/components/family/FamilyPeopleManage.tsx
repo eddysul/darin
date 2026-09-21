@@ -1,5 +1,5 @@
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ProfileAvatar } from "../profile/ProfileAvatar";
 import { RoleBadge } from "../profile/RoleBadge";
 import { useLanguage } from "../../LanguageContext";
@@ -20,6 +20,8 @@ type PeopleFilter = "family" | "friend";
 
 type Props = {
   babyId?: string | null;
+  scopeKey: string;
+  accountId: string | null;
   myRole: FamilyRole;
   familyMembers: FamilyMember[];
   friends: FriendDisplay[];
@@ -33,6 +35,8 @@ type Props = {
 
 export function FamilyPeopleManage({
   babyId,
+  scopeKey,
+  accountId,
   myRole,
   familyMembers,
   friends,
@@ -47,8 +51,15 @@ export function FamilyPeopleManage({
   const canManage = canManageMembers(myRole);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const scopeKeyRef = useRef(scopeKey);
+  scopeKeyRef.current = scopeKey;
   const activeFamily = familyMembers.filter((member) => member.status === "active");
   const activeFriends = friends.filter((friend) => friend.status === "active");
+
+  useEffect(() => {
+    setExpandedUserId(null);
+    setSavingUserId(null);
+  }, [scopeKey]);
 
   const normalizedAccess = (permissions: BabyAccessPermissions, key: keyof BabyAccessPermissions, value: boolean) => {
     const next = { ...permissions, [key]: value };
@@ -65,20 +76,23 @@ export function FamilyPeopleManage({
   };
 
   const saveAccess = async (userId: string, permissions: BabyAccessPermissions) => {
-    if (!babyId || savingUserId) return;
+    if (!babyId || !accountId || savingUserId) return;
+    const requestScopeKey = scopeKey;
     setSavingUserId(userId);
     try {
-      await FamilyRepository.setBabyAccessPermissions({ babyId, userId, permissions });
+      await FamilyRepository.setBabyAccessPermissions({ babyId, userId, permissions, expectedAccountId: accountId });
+      if (requestScopeKey !== scopeKeyRef.current) return;
       await onReload();
     } catch (cause) {
+      if (requestScopeKey !== scopeKeyRef.current) return;
       Alert.alert(t("family.critical.172"), cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.172"));
     } finally {
-      setSavingUserId(null);
+      if (requestScopeKey === scopeKeyRef.current) setSavingUserId(null);
     }
   };
 
   const promoteFullAdmin = (member: FamilyMember) => {
-    if (!babyId || member.isMe || member.role === "owner" || member.role === "admin") return;
+    if (!babyId || !accountId || member.isMe || member.role === "owner" || member.role === "admin") return;
     Alert.alert(
       t("family.critical.168", { name: member.name }),
       t("family.critical.169"),
@@ -87,13 +101,17 @@ export function FamilyPeopleManage({
         {
           text: t("family.critical.170"),
           onPress: () => {
+            const requestScopeKey = scopeKey;
             setSavingUserId(member.id);
-            void FamilyRepository.promoteBabyFullAdmin(babyId, member.id)
-              .then(() => onReload())
+            void FamilyRepository.promoteBabyFullAdmin(babyId, member.id, accountId)
+              .then(() => requestScopeKey === scopeKeyRef.current ? onReload() : undefined)
               .catch((cause) => {
+                if (requestScopeKey !== scopeKeyRef.current) return;
                 Alert.alert(t("family.critical.172"), cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.172"));
               })
-              .finally(() => setSavingUserId(null));
+              .finally(() => {
+                if (requestScopeKey === scopeKeyRef.current) setSavingUserId(null);
+              });
           },
         },
       ],
@@ -158,19 +176,22 @@ export function FamilyPeopleManage({
   };
 
   const removeFamily = (member: FamilyMember) => {
-    if (!babyId || member.isMe) return;
+    if (!babyId || !accountId || member.isMe) return;
     Alert.alert(t("family.critical.149"), undefined, [
       { text: t("common.cancel"), style: "cancel" },
       {
         text: t("family.critical.150"),
         style: "destructive",
         onPress: () => {
-          void FamilyRepository.removeMember({ babyId, userId: member.id })
+          const requestScopeKey = scopeKey;
+          void FamilyRepository.removeMember({ babyId, userId: member.id, expectedAccountId: accountId })
             .then(() => {
+              if (requestScopeKey !== scopeKeyRef.current) return undefined;
               Alert.alert(t("family.critical.150"));
               return onReload();
             })
             .catch((cause) => {
+              if (requestScopeKey !== scopeKeyRef.current) return;
               Alert.alert(t("family.critical.042"), cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.043"));
             });
         },
@@ -179,19 +200,22 @@ export function FamilyPeopleManage({
   };
 
   const removeFriend = (friend: FriendDisplay) => {
-    if (!babyId) return;
+    if (!babyId || !accountId) return;
     Alert.alert(t("family.critical.147"), undefined, [
       { text: t("common.cancel"), style: "cancel" },
       {
         text: t("family.critical.148"),
         style: "destructive",
         onPress: () => {
-          void FriendRepository.removeFriend(babyId, friend.userId)
+          const requestScopeKey = scopeKey;
+          void FriendRepository.removeFriend(babyId, friend.userId, accountId)
             .then(() => {
+              if (requestScopeKey !== scopeKeyRef.current) return undefined;
               Alert.alert(t("family.critical.148"));
               return onReload();
             })
             .catch((cause) => {
+              if (requestScopeKey !== scopeKeyRef.current) return;
               Alert.alert(t("family.critical.152"), cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.152"));
             });
         },

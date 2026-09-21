@@ -23,6 +23,7 @@ import { storedFamilyRoleLabel, storedRelationshipLabel, localizedErrorMessage, 
 import type { InviteType } from "../../types/database";
 import { FamilyRepository, type DarinInviteRequestView } from "../../repositories/FamilyRepository";
 import { ProfileRepository } from "../../repositories/ProfileRepository";
+import { captureSessionScope } from "../../lib/supabase";
 import { colors } from "../../theme";
 import { BabyLogIcon } from "../../components/babylog/BabyLogIcon";
 import { RecordDatePickerModal } from "../../components/babylog/RecordDatePickerModal";
@@ -117,6 +118,7 @@ export function OnboardingFlow({
   const [datePickerTarget, setDatePickerTarget] = useState<"birthDate" | "dueDate" | null>(null);
   const [submittingSetup, setSubmittingSetup] = useState(false);
   const submittingSetupRef = useRef(false);
+  const invitePreviewRunRef = useRef(0);
 
   const setParent = <K extends keyof CareSetup["parent"]>(key: K, value: CareSetup["parent"][K]) =>
     setSetup((s) => ({ ...s, parent: { ...s.parent, [key]: value } }));
@@ -175,8 +177,12 @@ export function OnboardingFlow({
   });
 
   const previewInvite = useCallback(async () => {
+    const run = ++invitePreviewRunRef.current;
     try {
-      const row = await FamilyRepository.previewInviteCode(inviteCode);
+      const scope = await captureSessionScope();
+      const row = await FamilyRepository.previewInviteCode(inviteCode, scope.accountId);
+      await scope.assertCurrent();
+      if (run !== invitePreviewRunRef.current) return;
       if (!row || !row.is_valid) {
         throw new Error(t(row?.invalid_reason === "expired" ? "onboardingFlow.error.inviteExpired" : "onboardingFlow.error.inviteInvalid"));
       }
@@ -192,9 +198,14 @@ export function OnboardingFlow({
       setInviteError("");
       setStep("invite-confirm");
     } catch (cause) {
+      if (run !== invitePreviewRunRef.current) return;
       setInviteError(caughtErrorMessage(t, cause, "onboardingFlow.error.invitePreview"));
     }
   }, [inviteCode, t]);
+
+  useEffect(() => () => {
+    invitePreviewRunRef.current += 1;
+  }, []);
 
   useEffect(() => {
     if (!initialInviteCode) return;

@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const bin = process.env.POSTGRES_BIN?.trim() || "/opt/homebrew/opt/postgresql@16/bin";
 const work = mkdtempSync(join(tmpdir(), "darin-baby-extended-"));
@@ -30,6 +30,16 @@ const expect = (label, actual, wanted) => {
   if (actual !== String(wanted)) throw new Error(`${label}: expected ${wanted}, got ${actual}`);
   console.log(`PASS ${label}`);
 };
+const runAsync = (sql) => new Promise((resolve, reject) => {
+  const child = spawn(join(bin, "psql"), [...connection, "-At", "-c", sql], {
+    cwd: process.cwd(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  child.stderr.on("data", (chunk) => { output += chunk; });
+  child.on("error", reject);
+  child.on("close", (status) => resolve({ status, output }));
+});
 
 const uid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const baby = "10000000-0000-4000-8000-000000000001";
@@ -187,6 +197,21 @@ try {
       values ('${baby}','egg','egg','${careMember}') returning id) select count(*) from x`)), 1);
   expect("moments-only friend cannot see care caution record", query(actor(friend,
     `select count(*) from baby_caution_foods where baby_id='${baby}'`)), 0);
+
+  const profileWriter = runAsync(actor(careMember, `begin; update babies set name='Serialized profile write' where id='${baby}'; select pg_sleep(1); commit;`));
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const revokeStarted = performance.now();
+  const profileRevocation = runAsync(actor(admin,
+    `select public.set_baby_access_permissions('${baby}','${careMember}',true,false,false,false,false,false);`));
+  const profileRevocationResult = await profileRevocation;
+  const revokeElapsed = performance.now()-revokeStarted;
+  const profileWriterResult = await profileWriter;
+  if (profileWriterResult.status !== 0 || profileRevocationResult.status !== 0 || revokeElapsed < 600) {
+    throw new Error(`baby profile write/revocation serialization failed: ${profileWriterResult.output} ${profileRevocationResult.output}`);
+  }
+  console.log("PASS baby profile write serializes before care-write revocation");
+  expect("revoked care writer cannot update baby profile", query(actor(careMember,
+    `with changed as (update babies set name='Stale write denied' where id='${baby}' returning id) select count(*) from changed`)), 0);
 
   expect("admin revokes friend capabilities", query(actor(admin,
     `select not (public.set_baby_access_permissions('${baby}','${friend}',false,false,false,false,false,false)).moments_read`)), "t");

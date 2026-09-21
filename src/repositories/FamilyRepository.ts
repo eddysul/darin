@@ -10,7 +10,7 @@ import type { BabyAccessPermissions, FamilyMember, FamilyRole } from "../types/f
 import { FAMILY_ROLE_LABELS } from "../types/family";
 import type { FamilyMemberDisplay } from "../types/profileSettings";
 import type { RelationshipLabel } from "../types/growthBook";
-import { requireSupabase } from "../lib/supabase";
+import { captureSessionScope, requireSupabase } from "../lib/supabase";
 import {
   familyRoleToPermission,
   permissionToFamilyRole,
@@ -250,11 +250,12 @@ export const FamilyRepository = {
     return data;
   },
 
-  async removeMember(input: { babyId: string; userId: string }): Promise<void> {
-    const me = await AuthRepository.getUser();
-    if (me?.id === input.userId) throw new Error("내 계정은 여기서 제거할 수 없어요.");
-    const sb = requireSupabase();
-    const { error } = await sb
+  async removeMember(input: { babyId: string; userId: string; expectedAccountId: string }): Promise<void> {
+    const scope = await captureSessionScope();
+    if (scope.accountId !== input.expectedAccountId) throw new Error("Account changed during family operation.");
+    if (scope.accountId === input.userId) throw new Error("내 계정은 여기서 제거할 수 없어요.");
+    await scope.assertCurrent();
+    const { error } = await scope.client
       .from("baby_members")
       .delete()
       .eq("baby_id", input.babyId)
@@ -265,17 +266,21 @@ export const FamilyRepository = {
       }
       throw error;
     }
+    await scope.assertCurrent();
   },
 
   async createInviteCode(input: {
     babyId?: string | null;
+    expectedAccountId: string;
     inviteType?: InviteType;
     role?: FamilyRole;
     relationshipLabel?: string;
     expiresAt?: string | null;
   }): Promise<InviteCodeRow> {
-    const sb = requireSupabase();
-    const { data, error } = await sb
+    const scope = await captureSessionScope();
+    if (scope.accountId !== input.expectedAccountId) throw new Error("Account changed during family operation.");
+    await scope.assertCurrent();
+    const { data, error } = await scope.client
       .rpc("create_invite_code", {
         p_baby_id: input.babyId ?? null,
         p_invite_type: input.inviteType ?? "family",
@@ -285,34 +290,47 @@ export const FamilyRepository = {
         p_max_uses: 1,
       });
     if (error) throw error;
+    await scope.assertCurrent();
     return data;
   },
 
-  async previewInviteCode(code: string) {
-    const { data, error } = await requireSupabase().rpc("preview_invite_code", { p_code: code });
+  async previewInviteCode(code: string, expectedAccountId: string) {
+    const scope = await captureSessionScope();
+    if (scope.accountId !== expectedAccountId) throw new Error("Account changed during family operation.");
+    await scope.assertCurrent();
+    const { data, error } = await scope.client.rpc("preview_invite_code", { p_code: code });
     if (error) throw error;
+    await scope.assertCurrent();
     return data?.[0] ?? null;
   },
 
-  async acceptInviteCode(input: { code: string; displayName: string; nickname?: string; relation: string }) {
-    const { data, error } = await requireSupabase().rpc("accept_invite_code", {
+  async acceptInviteCode(input: { code: string; displayName: string; nickname?: string; relation: string; expectedAccountId: string }) {
+    const scope = await captureSessionScope();
+    if (scope.accountId !== input.expectedAccountId) throw new Error("Account changed during family operation.");
+    await scope.assertCurrent();
+    const { data, error } = await scope.client.rpc("accept_invite_code", {
       p_code: input.code,
       p_display_name: input.displayName,
       p_nickname: input.nickname ?? null,
       p_relation: input.relation,
     });
     if (error) throw error;
+    await scope.assertCurrent();
     return data?.[0] ?? null;
   },
 
   async sendDarinIdInviteRequest(input: {
     babyId: string;
+    expectedAccountId: string;
     darinId: string;
     requestType: "family" | "friend";
     role?: FamilyRole;
     relationshipLabel?: string;
   }) {
-    const { data, error } = await requireSupabase().rpc("send_darin_id_invite_request", {
+    const scope = await captureSessionScope();
+    if (scope.accountId !== input.expectedAccountId) throw new Error("Account changed during family operation.");
+    await scope.assertCurrent();
+    const { data, error } = await scope.client.rpc("send_darin_id_invite_request", {
       p_baby_id: input.babyId,
       p_darin_id: input.darinId,
       p_request_type: input.requestType,
@@ -320,6 +338,7 @@ export const FamilyRepository = {
       p_relation: input.relationshipLabel ?? (input.requestType === "family" ? "가족" : "친구"),
     });
     if (error) throw mapDarinInviteError(error);
+    await scope.assertCurrent();
     return data?.[0] ?? null;
   },
 
@@ -388,9 +407,13 @@ export const FamilyRepository = {
   async setBabyAccessPermissions(input: {
     babyId: string;
     userId: string;
+    expectedAccountId: string;
     permissions: BabyAccessPermissions;
   }): Promise<BabyAccessPermissions> {
-    const { data, error } = await requireSupabase().rpc("set_baby_access_permissions", {
+    const scope = await captureSessionScope();
+    if (scope.accountId !== input.expectedAccountId) throw new Error("Account changed during family operation.");
+    await scope.assertCurrent();
+    const { data, error } = await scope.client.rpc("set_baby_access_permissions", {
       p_baby_id: input.babyId,
       p_user_id: input.userId,
       p_care_read: input.permissions.careRead,
@@ -401,15 +424,20 @@ export const FamilyRepository = {
       p_social_react: input.permissions.socialReact,
     });
     if (error) throw error;
+    await scope.assertCurrent();
     return accessFromRow(data);
   },
 
-  async promoteBabyFullAdmin(babyId: string, userId: string): Promise<void> {
-    const { error } = await requireSupabase().rpc("promote_baby_full_admin", {
+  async promoteBabyFullAdmin(babyId: string, userId: string, expectedAccountId: string): Promise<void> {
+    const scope = await captureSessionScope();
+    if (scope.accountId !== expectedAccountId) throw new Error("Account changed during family operation.");
+    await scope.assertCurrent();
+    const { error } = await scope.client.rpc("promote_baby_full_admin", {
       p_baby_id: babyId,
       p_user_id: userId,
     });
     if (error) throw error;
+    await scope.assertCurrent();
   },
 
   subscribeToMyBabyAccess(input: {

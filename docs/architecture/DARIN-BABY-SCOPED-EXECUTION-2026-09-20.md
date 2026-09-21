@@ -2,7 +2,7 @@
 
 계획: [DARIN-BABY-SCOPED-SHARING-UI-STABILIZATION-PLAN-2026-09-20.md](./DARIN-BABY-SCOPED-SHARING-UI-STABILIZATION-PLAN-2026-09-20.md)
 
-상태: 사용자 요청에 따라 G3 로컬 구현·검증까지 완료하고 중단. G4–G6, focused final security review, QA/Production 적용은 미실행이다. 이 문서는 적용·배포 증빙이 아니다.
+상태: G4 focused security review와 전체 로컬 회귀까지 완료하고 G5 직전에 중단. QA/Production 적용은 미실행이다. 이 문서는 적용·배포 증빙이 아니다.
 
 ## G0 변경 inventory와 기준선
 
@@ -129,22 +129,46 @@ G2의 다른 보호자 Full Admin 지정은 **현재 해당 아기의 admin이 �
 - iPhone 16 Pro / iOS 18.2 Expo Go에서 현재 소스 bundle startup까지 확인했다. Expo Go가 별도 fresh storage로 약관 화면에서 시작해 authenticated sharing/timeline 화면의 수동 UI 확인은 수행하지 않았으며 PASS로 주장하지 않는다.
 - 신규 commit, QA/Production migration, Supabase mutation, 배포는 수행하지 않았다.
 
+## G4 focused security review 및 전체 로컬 회귀
+
+G0–G3 source 기준점은 `96891a4833ae009b8d95ab0dfda76c5562c86731`이다. G4에서는 migration/RPC trigger ordering, `SECURITY DEFINER` 실행권한, account deletion과 Storage cleanup, 모바일 account+baby scope의 늦은 응답을 함께 검토했다.
+
+### 검토 중 발견해 수정한 P1
+
+1. 두 Full Admin이 동시에 탈퇴·강등되면 각 transaction이 상대 관리자를 보고 모두 성공할 수 있었다. `baby_admin_transition_guard`가 baby parent row를 잠근 뒤 현재 관리자 수를 다시 검사하도록 직렬화하고, 동시 탈퇴 공격 회귀에서 정확히 한 요청만 성공하며 관리자 1명이 남는 것을 확인했다.
+2. `babies` UPDATE 정책만 stable access 조회를 사용해 care.write 철회와 profile write가 직렬화되지 않았다. `current_baby_access_for_write`로 바꾸고, in-flight profile write와 철회가 순서대로 완료되며 철회 뒤 stale write가 거부되는 것을 확인했다.
+3. 임의 `user_id`를 받는 내부 helper 3개가 authenticated에 직접 공개되어 다른 사용자의 연결·admin·capability 여부를 boolean으로 조회할 수 있었다. helper 실행권한을 내부 전용으로 회수하고 current-user admin wrapper만 공개했다.
+4. 공유 관리 mutation과 초대 요청이 account/baby 전환 중 완료되면 이전 응답이 새 화면의 loading·toast·permission state에 반영될 수 있었다. mutation client를 캡처한 세션에 고정하고, 화면 반영은 전체 `account+baby` scope identity가 일치할 때만 허용했다.
+
+### G4 검증 결과
+
+- `typecheck`, `git diff --check`, secret scan: PASS
+- mobile UI, Overview growth/category/compare, pregnancy Overview, baby switch responsiveness: PASS
+- weekly AI cache, report, Diary save, Voice scope, architecture, repository query: PASS
+- invite search/response, five-locale i18n audit/coverage/release: PASS
+- B0.4a P0/ID invite/ownership-visibility/final authorization 정적 및 로컬 PostgreSQL 회귀: PASS
+- baby-scoped permissions/extended/lifecycle 정적 및 로컬 PostgreSQL 회귀: PASS
+- B0.4b Storage 정적 회귀와 실제 Docker Storage API + disposable PostgreSQL 공격 회귀: `184 PASS / 0 skipped`
+- B0.4c Notification 정적 및 로컬 PostgreSQL 회귀: PASS
+- 실제 기기 검증은 승인된 계획 범위에서 제외했다. QA/Production migration, API mutation, 배포는 0건이다.
+
+focused review 기준 변경 경로에 남은 P0/P1은 확인되지 않았다. 이미 발급된 signed URL은 승인된 계약대로 최대 180–300초 만료까지 유효하며, 새 발급은 철회 즉시 차단한다.
+
 ## 아직 통과로 판정하지 않은 항목
 
 - G1의 로컬 코드/정적/기존 iOS simulator 회귀는 PASS다. 다만 실제 account X→Y 수동 UI, 작은 Android 화면, media 부분 실패의 실제 UI, 장시간 메모리/중복 subscription 계측은 이번 정지점에서 실행하지 않았다. 실기기는 계획 범위에서 제외되어 있다.
-- G2는 로컬 구현 및 PostgreSQL 공격 회귀까지 PASS다. 별도의 focused final security review와 실제 QA schema/data preflight는 G4/G5 전 단계이므로 아직 수행하지 않았다.
-- G4–G6: focused final security review, QA/Production migration/API 공격 회귀, release gate는 미실행이다.
+- G2/G3 변경은 G4 focused security review와 전체 로컬 공격 회귀까지 PASS다. 실제 QA schema/data preflight는 G5 전 단계이므로 아직 수행하지 않았다.
+- G5–G6: QA/Production migration/API 공격 회귀와 release gate는 미실행이다.
 - 기존 signed URL의 만료 전 강제 철회는 승인된 계약상 제공하지 않는다. 신규 발급은 권한 철회 즉시 차단한다.
 
 ## 일시 중단 인계 — 재개 시 여기서 시작
 
-1. G4에서 G2 migration과 G3 client 연결을 함께 독립 focused security review한다. production schema compatibility, legacy 중복/NULL/removed data, trigger ordering, SECURITY DEFINER, account deletion/cleanup queue와 UI의 fail-closed/stale response 경계를 검토한다.
-2. 리뷰 P0/P1이 있으면 로컬에서만 수정하고 동일 gate를 재실행한다. PASS 전에는 QA에 적용하지 않는다.
-3. G5에서 QA project identity·pending migration dependency·synthetic fixture를 read-only 확인한 뒤 migration/API 공격 회귀로 이동한다. Production은 별도 승인 전 변경하지 않는다.
-4. 별도 UI release gate 전에 아직 미실행인 authenticated sharing/timeline 수동 확인, account X→Y 전환, 작은 Android, media partial failure UI, 장시간 subscription 계측을 보완한다.
+1. G5에서 QA project identity·pending migration dependency·synthetic fixture를 read-only 확인한 뒤 migration/API 공격 회귀로 이동한다. Production은 별도 승인 전 변경하지 않는다.
+2. G5에서 migration source SHA와 적용 대상을 다시 고정하고, admin/family/friend/cross-baby/removed/concurrency/Storage matrix의 실제 QA API 결과를 기록한다.
+3. 별도 UI release gate 전에 아직 미실행인 authenticated sharing/timeline 수동 확인, account X→Y 전환, 작은 Android, media partial failure UI, 장시간 subscription 계측을 보완한다.
 
 현재 소스에서 `typecheck`, mobile UI, Overview growth/category, weekly AI cache, report, build12, Diary, Voice scope, architecture, repository query, invite, i18n coverage/release/audit, secrets, B0.4a/B0.4b/B0.4c 정적 회귀와 `git diff --check`가 PASS했다.
 
-이 중단 시점에는 새로운 commit, QA/Production migration, Supabase 변경, 배포를 하지 않았다. 기존 무관한 dirty worktree 변경은 그대로 보존한다.
+G4에서는 QA/Production migration, Supabase 변경, 배포를 하지 않았다. 기존 무관한 dirty worktree 변경은 그대로 보존한다.
 
-현재 verdict: `G3 LOCAL PASS — STOPPED BEFORE G4; DO NOT DEPLOY`
+현재 verdict: `G4 SECURITY/LOCAL REGRESSION PASS — READY FOR G5 QA PREFLIGHT`

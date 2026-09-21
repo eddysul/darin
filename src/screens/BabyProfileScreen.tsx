@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -40,6 +40,7 @@ import { BabyRepository } from "../repositories/BabyRepository";
 import { formatBabyAge, formatDueCountdown, formatGestationalAge, isPregnancyStage } from "../utils/childDisplay";
 import { isValidBirthDate, isValidCalendarDate } from "../utils/dateInput";
 import { formatDateKey, offsetDateKey } from "../utils/dateKey";
+import { localDataScopeId } from "../utils/scopedLocalStorage";
 import { presentAvatarPicker } from "../utils/profileAvatarPicker";
 import { colors, radius } from "../theme";
 import { CAUTION_FOOD_PRESETS } from "../types/cautionFood";
@@ -79,10 +80,14 @@ export function BabyProfileScreen() {
     addCautionFood,
     removeCautionFood,
     activeBabyId,
+    localDataScope,
     addBaby,
   } = useBabyLog();
 
   const babyId = activeBabyId;
+  const profileScopeKey = localDataScope ? localDataScopeId(localDataScope) : "";
+  const profileScopeKeyRef = useRef(profileScopeKey);
+  profileScopeKeyRef.current = profileScopeKey;
   const allowInvite = canInvite(myFamilyRole);
   const allowManage = canManageMembers(myFamilyRole);
   const canEditBaby = isCreating || myFamilyRole === "owner" || myFamilyRole === "admin" || myFamilyRole === "editor" || myFamilyRole === "caregiver";
@@ -851,12 +856,22 @@ export function BabyProfileScreen() {
                             text: t("babyProfile.remove"),
                             style: "destructive",
                             onPress: () => {
-                              void FamilyRepository.removeMember({ babyId: babyId!, userId: m.userId })
+                              if (!localDataScope?.userId) return;
+                              const requestScopeKey = profileScopeKey;
+                              void FamilyRepository.removeMember({
+                                babyId: babyId!,
+                                userId: m.userId,
+                                expectedAccountId: localDataScope.userId,
+                              })
                                 .then(() => {
+                                  if (requestScopeKey !== profileScopeKeyRef.current) return undefined;
                                   removeFamilyMember(m.userId);
                                   return load();
                                 })
-                                .catch(() => setError(t("babyProfile.error.removeMember")));
+                                .catch(() => {
+                                  if (requestScopeKey !== profileScopeKeyRef.current) return;
+                                  setError(t("babyProfile.error.removeMember"));
+                                });
                             },
                           },
                         ]);

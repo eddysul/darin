@@ -85,7 +85,8 @@ assert.match(screen, /const pregnancy = isPregnancyStage\(careSetup\.child\)/);
 assert.match(screen, /pregnancy \? \([\s\S]*?<PregnancyOverview[\s\S]*?: \([\s\S]*?<OverviewTodaySummary/,
   "pregnancy mode branches before unchanged born overview components");
 assert.match(screen, /pregnancy \? null : createWeeklyAiCacheIdentity/, "pregnancy mode does not generate post-birth AI copy");
-assert.match(screen, /if \(pregnancy\) return;/, "pregnancy mode does not run post-birth narrative state updates");
+assert.match(screen, /if \(pregnancy \|\|[^\n]*!narrativeCacheIdentity\) return;/,
+  "pregnancy mode does not run post-birth narrative state updates");
 assert.match(screen, /reportLogsForDisplay\(logs, reportRangeCovered, reportHistoryComplete\)/,
   "report loading uses a stable empty input instead of allocating during render");
 const component = readFileSync("src/components/babylog/PregnancyOverview.tsx", "utf8");

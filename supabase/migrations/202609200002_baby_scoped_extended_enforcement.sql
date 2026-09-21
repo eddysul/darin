@@ -9,8 +9,8 @@ create policy babies_select_member on public.babies for select to authenticated
   using (public.has_baby_access(id,'care.read'));
 drop policy if exists babies_update_admin_or_editor on public.babies;
 create policy babies_update_admin_or_editor on public.babies for update to authenticated
-  using (public.has_baby_access(id,'care.write'))
-  with check (public.has_baby_access(id,'care.write'));
+  using (public.current_baby_access_for_write(id,'care.write'))
+  with check (public.current_baby_access_for_write(id,'care.write'));
 
 create or replace function public.can_view_growth_book(p_growth_book_id uuid)
 returns boolean language sql stable security definer set search_path=public as $$

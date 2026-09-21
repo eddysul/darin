@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -30,13 +30,15 @@ type VisibleInviteType = "family" | "baby_friend";
 type Props = {
   visible: boolean;
   babyId?: string | null;
+  scopeKey: string;
+  accountId: string | null;
   babyName: string;
   myFamilyRole: FamilyRole;
   onClose: () => void;
   onAccepted?: (babyId?: string | null) => void;
 };
 
-export function InviteCodeSheet({ visible, babyId, babyName, myFamilyRole, onClose, onAccepted }: Props) {
+export function InviteCodeSheet({ visible, babyId, scopeKey, accountId, babyName, myFamilyRole, onClose, onAccepted }: Props) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const isAdmin = canInvite(myFamilyRole);
@@ -53,35 +55,52 @@ export function InviteCodeSheet({ visible, babyId, babyName, myFamilyRole, onClo
   } | null>(null);
   const [codeWorking, setCodeWorking] = useState(false);
   const [error, setError] = useState("");
+  const scopeKeyRef = useRef(scopeKey);
+  scopeKeyRef.current = scopeKey;
+
+  useEffect(() => {
+    setInviteCode("");
+    setCreatingCode(false);
+    setEnteredCode("");
+    setCodePreview(null);
+    setCodeWorking(false);
+    setError("");
+  }, [scopeKey]);
 
   const createInviteCode = async () => {
-    if (!babyId || !isAdmin || creatingCode) return;
+    if (!babyId || !accountId || !isAdmin || creatingCode) return;
+    const requestScopeKey = scopeKey;
     setCreatingCode(true);
     setError("");
     try {
       const row = await FamilyRepository.createInviteCode({
         babyId,
+        expectedAccountId: accountId,
         inviteType,
         role: "editor",
         relationshipLabel: inviteType === "family" ? "가족" : "친구",
       });
+      if (requestScopeKey !== scopeKeyRef.current) return;
       if (!row?.code) throw new Error(t("family.critical.022"));
       setInviteCode(row.code);
     } catch (cause) {
+      if (requestScopeKey !== scopeKeyRef.current) return;
       setError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.022"));
     } finally {
-      setCreatingCode(false);
+      if (requestScopeKey === scopeKeyRef.current) setCreatingCode(false);
     }
   };
 
   const previewEnteredCode = async () => {
     const code = enteredCode.trim().toUpperCase();
-    if (!code || codeWorking) return;
+    if (!code || !accountId || codeWorking) return;
+    const requestScopeKey = scopeKey;
     setCodeWorking(true);
     setError("");
     setCodePreview(null);
     try {
-      const row = await FamilyRepository.previewInviteCode(code);
+      const row = await FamilyRepository.previewInviteCode(code, accountId);
+      if (requestScopeKey !== scopeKeyRef.current) return;
       if (!row?.is_valid) {
         throw new Error(row?.invalid_reason === "expired" ? t("family.critical.030") : t("family.critical.031"));
       }
@@ -94,25 +113,30 @@ export function InviteCodeSheet({ visible, babyId, babyName, myFamilyRole, onClo
         inviteType: row.invite_type,
       });
     } catch (cause) {
+      if (requestScopeKey !== scopeKeyRef.current) return;
       setError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.033"));
     } finally {
-      setCodeWorking(false);
+      if (requestScopeKey === scopeKeyRef.current) setCodeWorking(false);
     }
   };
 
   const acceptEnteredCode = async () => {
-    if (!codePreview || codeWorking) return;
+    if (!codePreview || !accountId || codeWorking) return;
+    const requestScopeKey = scopeKey;
     setCodeWorking(true);
     setError("");
     try {
       const profile = await ProfileRepository.getMyDisplayProfile();
+      if (requestScopeKey !== scopeKeyRef.current) return;
       if (!profile) throw new Error(t("family.critical.034"));
       const accepted = await FamilyRepository.acceptInviteCode({
         code: codePreview.code,
         displayName: profile.displayName,
         nickname: profile.nickname,
         relation: profile.defaultRelation ?? "가족",
+        expectedAccountId: accountId,
       });
+      if (requestScopeKey !== scopeKeyRef.current) return;
       if (!accepted) throw new Error(t("family.critical.035"));
       setEnteredCode("");
       setCodePreview(null);
@@ -123,9 +147,10 @@ export function InviteCodeSheet({ visible, babyId, babyName, myFamilyRole, onClo
       onAccepted?.(accepted.baby_id);
       onClose();
     } catch (cause) {
+      if (requestScopeKey !== scopeKeyRef.current) return;
       setError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.035"));
     } finally {
-      setCodeWorking(false);
+      if (requestScopeKey === scopeKeyRef.current) setCodeWorking(false);
     }
   };
 
