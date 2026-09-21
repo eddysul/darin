@@ -13,6 +13,7 @@ import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { BabySwitcher } from "./BabySwitcher";
 import { NotificationBellButton } from "../NotificationBellButton";
 import { useLanguage } from "../../LanguageContext";
+import { hasGrantedFamilyShare } from "../../types/family";
 
 type Props = {
   onOpenProfile: (opts?: { convertBirth?: boolean }) => void;
@@ -31,7 +32,7 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
   const compact = useCompactLayout();
   const ageLabel = formatRecordHeaderAge(careSetup.child, new Date(), locale) ?? babyBirthMeta;
   const showBirthCta = shouldShowBirthCta(careSetup.child);
-  const isShared = familyMembers.filter((member) => member.status === "active").length > 1;
+  const isShared = hasGrantedFamilyShare(familyMembers);
   const [babyPhoto, setBabyPhoto] = useState(careSetup.child.photoUri);
 
   useFocusEffect(
@@ -92,13 +93,15 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
           </Pressable>
 
           <View style={styles.info}>
-            <View style={[styles.nameLine, compact && styles.nameLineCompact]}>
+            <View style={styles.nameLine}>
               <Pressable style={styles.nameRow} onPress={() => onOpenProfile()} accessibilityRole="button" accessibilityLabel={t("home.a11y.openNamedBabyProfile", { babyName })}>
                 <Text style={styles.name} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>{babyName}</Text>
               </Pressable>
-              <View style={styles.switchWrap}><BabySwitcher variant="switchButton" /></View>
             </View>
             <Text style={styles.age} maxFontSizeMultiplier={fontScaleCap.chrome}>{ageLabel}</Text>
+            <View style={styles.together}>
+              <BabySwitcher variant="togetherChip" />
+            </View>
             {showBirthCta ? (
               <Pressable
                 onPress={() => onOpenProfile({ convertBirth: true })}
@@ -118,7 +121,7 @@ export function RecordHomeHeader({ onOpenProfile, onOpenSettings, onOpenNotifica
         </View>
         <View style={styles.actions}>
           {onOpenNotifications ? <NotificationBellButton onPress={onOpenNotifications} /> : null}
-          {onOpenSettings ? <Pressable style={styles.settingsBtn} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel={t("home.a11y.openSettings")}><BabyLogIcon kind="settings" size={18} color={colors.muted} /></Pressable> : null}
+          {onOpenSettings ? <Pressable style={styles.menuBtn} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel={t("home.a11y.openSettings")}><BabyLogIcon kind="menu" size={22} color={colors.text} /></Pressable> : null}
         </View>
       </View>
     </View>
@@ -152,29 +155,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
-    shadowColor: "#4A3428",
-    shadowOpacity: 0.06,
+    shadowColor: "#1F1F1F",
+    shadowOpacity: 0.04,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
   },
   avatarCompact: { width: 40, height: 40, borderRadius: 20 },
   info: { flex: 1, minWidth: 0, justifyContent: "center" },
-  nameLine: { minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 },
-  nameLineCompact: { flexDirection: "column", alignItems: "flex-start", gap: 4 },
-  nameRow: { minWidth: 0, flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 6 },
-  name: { flexShrink: 1, fontSize: type.lg, fontWeight: "900", color: colors.text, letterSpacing: -0.4 },
+  nameLine: {
+    minWidth: 0,
+    maxWidth: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 2,
+  },
+  nameRow: { minWidth: 0, flexGrow: 0, flexShrink: 1 },
+  name: { fontSize: type.lg, fontWeight: "900", color: colors.text, letterSpacing: -0.4 },
   age: { marginTop: 2, fontSize: type.sm, color: colors.text, fontWeight: "800", flexShrink: 0 },
+  together: { marginTop: 6, alignSelf: "flex-start" },
   birthCta: { marginTop: 4, fontSize: type.xs, color: colors.amberText, fontWeight: "800" },
   sharedMeta: { minWidth: 0, marginTop: 2, flexDirection: "row", alignItems: "center", gap: 4 },
   sharedText: { flexShrink: 1, color: colors.muted, fontSize: type.xs, fontWeight: "700" },
-  switchWrap: { flexShrink: 0, alignItems: "flex-end" },
-  settingsBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
+  menuBtn: {
+    width: 48,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
   },

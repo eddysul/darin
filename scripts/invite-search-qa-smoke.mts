@@ -108,6 +108,8 @@ assert.doesNotMatch(people, /ROLE_OPTIONS/);
 const notice = readFileSync("src/screens/NotificationCenterScreen.tsx", "utf8");
 assert.doesNotMatch(notice, /tab: "enter"/);
 assert.match(notice, /respondToDarinIdInviteRequest/);
+assert.match(notice, /notice\.critical\.042/);
+assert.match(notice, /notice\.critical\.043/);
 
 const rpc = readFileSync("src/repositories/FamilyRepository.ts", "utf8");
 assert.match(rpc, /rpc\("send_darin_id_invite_request"/);
@@ -130,5 +132,10 @@ assert.match(sendRpc, /only baby admin can send requests/);
 
 const familyAuth = readFileSync("src/types/family.ts", "utf8");
 assert.match(familyAuth, /role === "owner" \|\| role === "admin"/);
+
+const identity = readFileSync("src/components/memories/MemoryIdentityHeader.tsx", "utf8");
+assert.match(identity, /peopleFilter: "family"/);
+assert.match(identity, /peopleFilter: "friend"/);
+assert.match(identity, /tab: "create"/);
 
 console.log("Invite search QA smoke passed");

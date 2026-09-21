@@ -470,11 +470,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: "#4A3428",
-    shadowOpacity: 0.07,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 3,
   },
   cardCompact: {
     marginBottom: 6,
@@ -525,7 +520,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#F0E9E1",
+    borderColor: colors.border,
     backgroundColor: colors.card,
   },
   iconWrap: {

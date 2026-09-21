@@ -6,6 +6,9 @@ import { colors, fontScaleCap } from "../../theme";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { useLanguage } from "../../LanguageContext";
 
+/** Flip to false to show the AI helper FAB again. Feature code stays in place. */
+export const CONSULT_FAB_TEMPORARILY_HIDDEN = true;
+
 type Props = {
   onPress: () => void;
   /** Icon-only smaller FAB (Record tab). */
@@ -19,16 +22,17 @@ type Props = {
 export function ConsultFab({ onPress, compact = false, hidden = false, bottomOffset = 0 }: Props) {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
-  const opacity = useRef(new Animated.Value(hidden ? 0 : 1)).current;
+  const isHidden = hidden || CONSULT_FAB_TEMPORARILY_HIDDEN;
+  const opacity = useRef(new Animated.Value(isHidden ? 0 : 1)).current;
   const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     Animated.timing(opacity, {
-      toValue: hidden ? 0 : 1,
+      toValue: isHidden ? 0 : 1,
       duration: reduceMotion ? 0 : 220,
       useNativeDriver: true,
     }).start();
-  }, [hidden, opacity, reduceMotion]);
+  }, [isHidden, opacity, reduceMotion]);
 
   const size = compact ? 48 : 72;
   const bottom = compact
@@ -37,7 +41,7 @@ export function ConsultFab({ onPress, compact = false, hidden = false, bottomOff
 
   return (
     <Animated.View
-      pointerEvents={hidden ? "none" : "box-none"}
+      pointerEvents={isHidden ? "none" : "box-none"}
       style={[
         styles.wrap,
         {

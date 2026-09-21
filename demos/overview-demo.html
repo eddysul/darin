@@ -209,7 +209,7 @@
       box-shadow: var(--shadow);
     }
 
-    .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 13px; }
+    .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 13px; }
     .card-title { margin: 0; font-size: 15.5px; line-height: 1.25; font-weight: 850; }
     .caption { color: var(--faint); font-size: 10.5px; font-weight: 650; text-align: right; }
 
@@ -255,6 +255,12 @@
     .rhythm-card { padding: 16px 14px 12px; }
     .rhythm-card .card-title { font-size: 18px; letter-spacing: -.03em; }
     .rhythm-heading { display: inline-flex; align-items: center; }
+    .rhythm-hint { margin: 4px 0 0; color: var(--muted); font-size: 11px; font-weight: 650; line-height: 1.4; }
+    .rhythm-head-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .rhythm-reset {
+      width: 44px; height: 44px; padding: 0; border: 0; background: transparent;
+      color: var(--text); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    }
     .rhythm-today {
       border-radius: 999px; padding: 4px 9px 4px 10px; color: var(--muted);
       background: var(--surface-hi); font-size: 11px; font-weight: 750;
@@ -277,7 +283,8 @@
     .rhythm-mode.compare-on.is-active .mode-ico { display: block; }
     .rhythm-sky {
       position: relative;
-      --now-position: 63.89%;
+      --today-cursor: 63.89%;
+      --yesterday-cursor: 63.89%;
       --track-gutter: 0px;
       padding: 2px 2px 0;
     }
@@ -320,7 +327,7 @@
       display: flex; align-items: flex-end; justify-content: flex-end;
       min-height: 72px; margin: 8px 2px 0; pointer-events: none;
     }
-    .track-row { position: relative; min-height: 30px; }
+    .track-row { position: relative; min-height: 44px; padding-top: 16px; }
     .track-row.is-today { min-height: 34px; }
     .track-row.is-yesterday { display: none; }
     .rhythm-card.is-compare .track-row.is-yesterday { display: block; }
@@ -338,24 +345,21 @@
       position: relative; height: 30px; overflow: hidden; border-radius: 999px; background: #f1f2f8;
     }
     .compare-float {
-      display: none; position: relative; z-index: 7; flex: 0 1 186px;
-      max-width: calc(100% - 54px); margin: 0 auto; padding: 7px 9px; border: 1px solid var(--border); border-radius: 14px;
-      background: var(--surface); box-shadow: 0 10px 24px rgba(93, 67, 49, .12);
-      pointer-events: none;
+      display: none; position: relative; z-index: 7; flex: 1; min-width: 0;
+      max-width: calc(100% - 54px); margin: 0; padding: 0; border: 0;
+      background: transparent; box-shadow: none; pointer-events: none;
     }
-    .rhythm-card.is-compare.is-inspecting .compare-float { display: block; }
-    .tip-kicker { margin: 0 0 5px; color: var(--text); font-size: 9.5px; font-weight: 800; letter-spacing: -.02em; }
+    .rhythm-card.is-compare .compare-float { display: block; }
+    .compare-head { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; pointer-events: auto; }
+    .tip-kicker { flex: 1; min-width: 0; margin: 0; color: var(--text); font-size: 12px; font-weight: 800; letter-spacing: -.02em; }
     .tip-metric {
-      display: flex; align-items: center; gap: 5px; margin: 0 0 3px;
-      color: var(--muted); font-size: 10px; font-weight: 700;
+      display: grid; gap: 3px; margin: 0 0 8px;
+      color: var(--muted); font-size: 11px; font-weight: 700;
     }
     .tip-metric:last-child { margin-bottom: 0; }
-    .tip-metric strong { margin-left: auto; font-weight: 850; text-align: right; }
-    .tip-metric.feed strong { color: #d37a72; }
-    .tip-metric.sleep strong { color: #6d74e6; }
-    .tip-metric.diaper strong { color: var(--diaper); }
-    .tip-metric.activity strong { color: var(--activity); }
-    .tip-metric.same strong { color: var(--faint); }
+    .tip-metric .tip-name { display: flex; align-items: center; gap: 6px; }
+    .tip-metric .tip-values { display: flex; justify-content: space-between; gap: 12px; color: var(--text); font-size: 13px; font-weight: 800; }
+    .tip-metric .tip-delta { color: #8f5f18; font-size: 11px; font-weight: 700; }
     .tip-ico { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: currentColor; }
     .tip-metric.feed .tip-ico { color: #e8918a; }
     .tip-metric.sleep .tip-ico { color: var(--sleep); }
@@ -411,23 +415,28 @@
     .sleep-block::before { content: none; }
     .sleep-block:focus-visible { outline: 2px solid var(--primary-coral); outline-offset: 2px; }
     .sleep-block::after { content: ""; }
-    .now-scrubber {
-      position: absolute; left: var(--now-position); top: 2px; z-index: 6;
-      width: 120px; height: calc(100% + 18px); padding: 0; border: 0; background: transparent;
+    .day-scrubber {
+      position: absolute; left: var(--today-cursor); top: -16px; z-index: 6;
+      width: 88px; bottom: 0; padding: 0; border: 0; background: transparent;
       transform: translateX(-50%); touch-action: none; cursor: grab; user-select: none;
-      outline: none; -webkit-tap-highlight-color: transparent;
+      outline: none; -webkit-tap-highlight-color: transparent; pointer-events: none;
     }
-    .now-scrubber.is-dragging { cursor: grabbing; }
+    .day-scrubber.is-yesterday { left: var(--yesterday-cursor); }
+    .track-row.is-yesterday { overflow: visible; }
+    .track-row.is-today { overflow: visible; }
+    .day-scrubber::after {
+      content: ""; position: absolute; left: 50%; top: 22px; bottom: 0; width: 2px;
+      background: #4e67d8; transform: translateX(-50%); border-radius: 99px;
+    }
+    .day-scrubber.is-yesterday::after { background: #8b92c9; }
+    .now-scrubber.is-dragging, .day-scrubber.is-dragging { cursor: grabbing; }
     .now-scrubber:focus,
     .now-scrubber:focus-visible { outline: none; }
-    .now-badge { position: absolute; left: 50%; top: 0; transform: translateX(-50%); z-index: 5; border-radius: 999px; padding: 5px 10px; color: white; background: var(--sleep); box-shadow: 0 4px 10px rgba(124, 131, 253, .16); font-size: 11px; font-weight: 850; white-space: nowrap; }
-    .now-badge.is-time { padding: 5px 10px; font-size: 11px; white-space: nowrap; }
-    .now-badge::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 7px; height: 7px; background: var(--sleep); transform: translateX(-50%) rotate(45deg); border-radius: 1px; }
-    .now-line { position: absolute; left: var(--now-position); top: 28px; bottom: 2px; z-index: 4; width: 1.5px; transform: translateX(-50%); background: color-mix(in srgb, var(--sleep) 82%, transparent); border-radius: 99px; pointer-events: none; }
-    .now-line::before { content: ""; position: absolute; left: 50%; top: -4px; width: 7px; height: 7px; border-radius: 50%; background: #6c83e8; transform: translateX(-50%); box-shadow: 0 2px 5px rgba(108,131,232,.2); }
-    .now-scrubber, .now-line { transition: left .46s cubic-bezier(.2,.82,.28,1); }
-    .rhythm-sky.is-dragging .now-scrubber,
-    .rhythm-sky.is-dragging .now-line { transition: none; }
+    .now-badge { position: absolute; left: 50%; top: 0; transform: translateX(-50%); z-index: 5; border-radius: 999px; padding: 3px 8px; color: white; background: var(--sleep); box-shadow: 0 4px 10px rgba(124, 131, 253, .16); font-size: 10px; font-weight: 850; white-space: nowrap; }
+    .now-badge.is-time { padding: 3px 8px; font-size: 10px; white-space: nowrap; }
+    .day-scrubber.is-yesterday .now-badge { background: #8b92c9; }
+    .day-scrubber { transition: left .18s cubic-bezier(.2,.82,.28,1); }
+    .rhythm-sky.is-dragging .day-scrubber { transition: none; }
     .rhythm-duck {
       position: relative; z-index: 4; display: block;
       flex: 0 0 46px; width: 46px; height: 54px; margin: 0; overflow: hidden;
@@ -1207,7 +1216,7 @@
       <ul class="demo-hints">
         <li>기본은 오늘 그래프와 아래 숫자 비교 카드예요</li>
         <li>어제 비교를 켜면 위는 어제, 아래는 오늘 타임라인이 나란히 보여요</li>
-        <li>그래프를 누르면 같은 시각 어제보다 수유·수면 차이가 떠요</li>
+        <li>각 날짜의 기준선을 따로 움직여 원하는 시점까지 비교해요</li>
       </ul>
       <button class="theme-switch" id="themeSwitch" type="button" aria-label="데모 테마 전환">다크 모드</button>
     </aside>
@@ -1264,14 +1273,17 @@
           </div>
         </div>
         <div class="rhythm-sky" id="rhythmSky" aria-label="오늘 24시간 수면, 수유, 기저귀 리듬">
-          <span class="sr-only" id="scrubHelp">좌우로 밀거나 화살표 키로 그 시간에 한 일을 볼 수 있어요. 어제 비교에서 그래프를 누르면 같은 시각의 누적 차이가 보여요. 손을 놓으면 지금으로 돌아와요.</span>
+          <span class="sr-only" id="scrubHelp">오늘과 어제 기준선을 각각 움직여 원하는 시점까지 비교할 수 있어요. 비교 초기화는 지금 시각으로 맞춰요.</span>
           <div class="rhythm-stage">
           <div class="rhythm-plot">
           <div class="time-axis" aria-hidden="true"><span style="left:0%">00:00</span><span style="left:25%">06:00</span><span style="left:50%">12:00</span><span style="left:75%">18:00</span><span style="left:100%">24:00</span></div>
           <div class="rhythm-tracks" id="rhythmTracks">
             <div class="track-row is-yesterday" id="yesterdaySplit">
               <span class="track-label">어제</span>
-              <div class="yesterday-rail" id="yesterdayTrack" aria-label="어제 24시간 미니 타임라인"></div>
+              <div class="yesterday-rail" id="yesterdayTrack" role="slider" tabindex="0" aria-label="어제 기준 시각"></div>
+              <div class="day-scrubber is-yesterday" id="yesterdayScrubber" aria-hidden="true">
+                <span class="now-badge is-time" id="yesterdayBadge">어제</span>
+              </div>
             </div>
             <div class="track-row is-today">
               <span class="track-label is-today">오늘</span>
@@ -1282,15 +1294,19 @@
                   <div class="bar-events" id="barEvents" aria-label="오늘 수유, 기저귀, 활동 기록"></div>
                 </div>
               </div>
+              <div class="day-scrubber is-today" id="nowScrubber" role="slider" tabindex="0" aria-label="오늘 기준 시각" aria-describedby="scrubHelp" aria-valuemin="0" aria-valuemax="920" aria-valuenow="920" aria-valuetext="지금, 깨어 있음">
+                <span class="now-badge is-time" id="nowBadge">지금</span>
+              </div>
             </div>
-            <div class="now-scrubber" id="nowScrubber" role="slider" tabindex="0" aria-label="오늘 리듬 탐색" aria-describedby="scrubHelp" aria-valuemin="0" aria-valuemax="920" aria-valuenow="920" aria-valuetext="지금, 깨어 있음">
-              <span class="now-badge" id="nowBadge">지금</span>
-            </div>
-            <i class="now-line" id="nowLine" aria-hidden="true"></i>
           </div>
           <div class="rhythm-dock">
             <div class="compare-float" id="compareTooltip" aria-live="polite">
-              <p class="tip-kicker">같은 시각 어제보다</p>
+              <div class="compare-head">
+                <p class="tip-kicker">오늘 · 어제</p>
+                <button class="rhythm-reset" id="resetCompare" type="button" aria-label="비교를 지금 시각 기준으로 다시 맞춰요">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+                </button>
+              </div>
               <div id="compareRows"></div>
             </div>
             <span class="rhythm-duck awake" id="rhythmDuck" aria-hidden="true"></span>
@@ -1370,12 +1386,7 @@
         </div>
         <div class="rhythm-foot">
           <button class="timeline-toggle" id="timelineToggle" type="button" aria-expanded="false" aria-controls="timelineRows">펼쳐서 보기 ⌄</button>
-          <div class="legend" aria-label="범례">
-            <span class="legend-item"><i class="legend-dot sleep"></i>수면</span>
-            <span class="legend-item"><i class="legend-dot feed"></i>수유</span>
-            <span class="legend-item"><i class="legend-tick"></i>기저귀</span>
-            <span class="legend-item"><i class="legend-dot activity"></i>터미타임</span>
-          </div>
+          <div class="legend" id="rhythmLegend" aria-label="범례"></div>
         </div>
       </article>
 
@@ -1730,7 +1741,6 @@
     const rhythmCard = timelineToggle.closest(".rhythm-card");
     const rhythmLine = document.getElementById("rhythmLine");
     const nowBadge = document.getElementById("nowBadge");
-    const nowLine = document.getElementById("nowLine");
     const rhythmDuck = document.getElementById("rhythmDuck");
     const rhythmInsight = document.getElementById("rhythmInsight");
     const rhythmStatus = document.getElementById("rhythmStatus");
@@ -1744,8 +1754,13 @@
     const rhythmSky = document.getElementById("rhythmSky");
     const rhythmTracks = document.getElementById("rhythmTracks");
     const nowScrubber = document.getElementById("nowScrubber");
+    const yesterdayScrubber = document.getElementById("yesterdayScrubber");
+    const yesterdayBadge = document.getElementById("yesterdayBadge");
+    const resetCompare = document.getElementById("resetCompare");
     const nowMinutes = 15 * 60 + 20;
     const daySpan = 24 * 60;
+    let todayCursorMinutes = nowMinutes;
+    let yesterdayCursorMinutes = nowMinutes;
 
     const sleepData = [
       { type: "밤잠", start: 21 * 60 + 10, duration: 280, detail: "4시간 40분" },
@@ -1833,10 +1848,14 @@
       .filter((event) => event.start <= minutes)
       .reduce((sum, event) => sum + (event.ml || 0), 0);
     const describeFeed = (feed) => (feed ? (feed.amount || (feed.duration ? `${feed.duration}분` : "기록 없음")) : "아직 없음");
+    const formatAmount = (value, unit) => {
+      if (unit === "ml") return `${Math.round(value)}ml`;
+      if (unit === "count") return `${Math.round(value)}회`;
+      return formatDuration(value);
+    };
     const signedAmount = (value, unit) => {
       if (value === 0) return "같아요";
-      const abs = unit === "ml" ? `${Math.abs(value)}ml` : unit === "count" ? `${Math.abs(value)}회` : formatDuration(Math.abs(value));
-      return `${value > 0 ? "+" : "-"}${abs}`;
+      return `${value > 0 ? "+" : "-"}${formatAmount(Math.abs(value), unit)}`;
     };
     const setCompare = (on) => {
       compareOn = on;
@@ -1847,40 +1866,83 @@
       modeYesterday.setAttribute("aria-pressed", String(on));
       modeYesterdayLabel.textContent = on ? "어제 비교 ON" : "어제 비교";
     };
-    const fillCompareTooltip = (minutes) => {
-      const before = (events) => events.filter((event) => event.start <= minutes);
-      const durationUntil = (events) => before(events).reduce((sum, event) => sum + Math.min(event.duration || 0, minutes - event.start), 0);
+    const lastBefore = (events, minutes) => [...events].filter((event) => event.start <= minutes).at(-1);
+    const fillCompareTooltip = (todayMin, yesterdayMin) => {
+      const before = (events, minutes) => events.filter((event) => event.start <= minutes);
+      const durationUntil = (events, minutes) => before(events, minutes).reduce((sum, event) => sum + Math.min(event.duration || 0, minutes - event.start), 0);
       const groups = [
         { label: "수유", kind: "feed", today: feedData, yesterday: yesterdayFeedData,
-          value: (events) => feedUntil(events, minutes), unit: "ml" },
+          value: feedUntil, event: (events, minutes) => describeFeed(lastBefore(events, minutes)), unit: "ml" },
         { label: "수면", kind: "sleep", today: sleepData, yesterday: yesterdaySleepData,
-          value: (events) => sleepUntil(events, minutes), unit: "min" },
+          value: sleepUntil, event: (events, minutes) => {
+            const current = events.find((item) => minutes >= item.start && minutes <= item.start + item.duration);
+            return current ? `${Math.max(1, Math.min(minutes, 1440) - current.start)}분` : "";
+          }, unit: "min" },
         { label: "기저귀", kind: "diaper", today: diaperData, yesterday: yesterdayDiaperData,
-          value: (events) => before(events).length, unit: "count" },
+          value: (events, minutes) => before(events, minutes).length, event: (events, minutes) => lastBefore(events, minutes)?.detail || "", unit: "count" },
         { label: "터미타임", kind: "activity", today: activityData, yesterday: yesterdayActivityData,
-          value: durationUntil, unit: "min" },
+          value: durationUntil, event: (events, minutes) => {
+            const current = lastBefore(events, minutes);
+            return current ? `${current.duration}분` : "";
+          }, unit: "min" },
       ];
       compareRows.replaceChildren();
       groups.forEach((group) => {
-        const todayValue = group.value(group.today);
-        const yesterdayValue = group.value(group.yesterday);
-        const todayHasRecord = group.kind === "sleep" ? todayValue > 0 : before(group.today).length > 0;
-        const yesterdayHasRecord = group.kind === "sleep" ? yesterdayValue > 0 : before(group.yesterday).length > 0;
+        const todayValue = group.value(group.today, todayMin);
+        const yesterdayValue = group.value(group.yesterday, yesterdayMin);
+        const todayHasRecord = group.kind === "sleep" ? todayValue > 0 : before(group.today, todayMin).length > 0;
+        const yesterdayHasRecord = group.kind === "sleep" ? yesterdayValue > 0 : before(group.yesterday, yesterdayMin).length > 0;
         if (!todayHasRecord && !yesterdayHasRecord) return;
         const delta = todayHasRecord && yesterdayHasRecord ? todayValue - yesterdayValue : null;
-        const row = document.createElement("p");
-        row.className = `tip-metric ${group.kind}${delta == null || delta === 0 ? " same" : ""}`;
+        const row = document.createElement("div");
+        row.className = `tip-metric ${group.kind}`;
+        const name = document.createElement("div");
+        name.className = "tip-name";
         const dot = document.createElement("span");
         dot.className = "tip-ico";
         dot.setAttribute("aria-hidden", "true");
         const label = document.createElement("span");
         label.textContent = group.label;
-        const value = document.createElement("strong");
-        value.textContent = delta == null ? "비교할 기록 없음" : signedAmount(delta, group.unit);
-        row.append(dot, label, value);
+        name.append(dot, label);
+        const values = document.createElement("div");
+        values.className = "tip-values";
+        const todayEl = document.createElement("span");
+        todayEl.textContent = `오늘 ${todayHasRecord ? formatAmount(todayValue, group.unit) : "기록 없음"}`;
+        const yesterdayEl = document.createElement("span");
+        yesterdayEl.textContent = `어제 ${yesterdayHasRecord ? formatAmount(yesterdayValue, group.unit) : "기록 없음"}`;
+        values.append(todayEl, yesterdayEl);
+        row.append(name, values);
+        if (delta != null) {
+          const deltaEl = document.createElement("div");
+          deltaEl.className = "tip-delta";
+          deltaEl.textContent = signedAmount(delta, group.unit);
+          row.append(deltaEl);
+        }
         compareRows.append(row);
       });
-      if (!compareRows.childElementCount) compareRows.textContent = "비교할 기록 없음";
+      if (!compareRows.childElementCount) compareRows.textContent = "아직 이 시간대에 비교할 기록이 없어요.";
+    };
+    const renderRhythmLegend = () => {
+      const legend = document.getElementById("rhythmLegend");
+      const items = [
+        { label: "수면", icon: "legend-dot sleep", events: sleepData, row: sleepEvents?.closest(".timeline-row") },
+        { label: "수유", icon: "legend-dot feed", events: feedData, row: feedEvents?.closest(".timeline-row") },
+        { label: "기저귀", icon: "legend-tick", events: diaperData, row: diaperEvents?.closest(".timeline-row") },
+        { label: "터미타임", icon: "legend-dot activity", events: activityData, row: document.getElementById("activityRow") },
+      ];
+      legend.replaceChildren();
+      items.forEach((item) => {
+        const hasRecord = item.events.length > 0;
+        if (item.row) item.row.hidden = !hasRecord;
+        if (!hasRecord) return;
+        const chip = document.createElement("span");
+        chip.className = "legend-item";
+        const mark = document.createElement("i");
+        mark.className = item.icon;
+        mark.setAttribute("aria-hidden", "true");
+        chip.append(mark, document.createTextNode(item.label));
+        legend.append(chip);
+      });
     };
 
     const percentAt = (minutes) => `${(minutes / daySpan) * 100}%`;
@@ -1929,24 +1991,7 @@
     const applyDuckPose = (pose) => {
       duckPoses.forEach((name) => rhythmDuck.classList.toggle(name, name === pose));
     };
-    const setPlayhead = (minutes, live = false) => {
-      rhythmSky.style.setProperty("--now-position", percentAt(minutes));
-      if (!live) {
-        const sleepingNow = isSleepingAt(nowMinutes);
-        applyDuckPose(sleepingNow ? "sleeping" : "awake");
-        highlightEvent();
-        nowBadge.textContent = "지금";
-        nowBadge.classList.remove("is-time");
-        nowScrubber.setAttribute("aria-valuenow", String(nowMinutes));
-        nowScrubber.setAttribute("aria-valuetext", sleepingNow ? "지금, 낮잠 중" : "지금, 깨어 있음");
-        rhythmStatus.innerHTML = sleepingNow
-          ? `<strong>낮잠 중 · ${nowMinutes - sleepingNow.start}분째</strong> · ${formatTime(sleepingNow.start)} 시작`
-          : `<strong>지금은 깨어 있어요</strong> · 마지막 수유 ${formatTime(feedData.at(-1).start)}`;
-        rhythmInsight.innerHTML = restInsight;
-        rhythmCard.classList.remove("is-inspecting");
-        if (compareOn) fillCompareTooltip(nowMinutes);
-        return;
-      }
+    const updateDuck = (minutes) => {
       const diaperOn = coveringEvent(diaperData, minutes, 6);
       const feedOn = coveringEvent(feedData, minutes, 12);
       const activityOn = coveringEvent(activityData, minutes, 8);
@@ -1954,97 +1999,124 @@
       let pose = "awake";
       let kind = "";
       let match = null;
-      let valueText = `${formatTime(minutes)}, 깨어 있음`;
+      let valueText = `오늘 기준 시각 ${formatTime(minutes)}`;
       let status = `<strong>${formatTime(minutes)} · 깨어 있어요</strong>`;
       if (diaperOn) {
         pose = "diapered";
         kind = "diaper";
         match = diaperOn;
-        valueText = `${formatTime(minutes)}, 기저귀 ${diaperOn.detail}`;
+        valueText = `오늘 기준 시각 ${formatTime(minutes)}, 기저귀 ${diaperOn.detail}`;
         status = `<strong>${formatTime(diaperOn.start)} · ${diaperOn.type}</strong> · ${diaperOn.detail}`;
       } else if (feedOn) {
         pose = "feeding";
         kind = "feed";
         match = feedOn;
-        valueText = `${formatTime(minutes)}, ${feedOn.type} ${describeFeed(feedOn)}`;
+        valueText = `오늘 기준 시각 ${formatTime(minutes)}, ${feedOn.type} ${describeFeed(feedOn)}`;
         status = `<strong>${formatTime(feedOn.start)} · ${feedOn.type}</strong> · ${describeFeed(feedOn)}`;
       } else if (activityOn) {
         pose = "resting";
         kind = "activity";
         match = activityOn;
-        valueText = `${formatTime(minutes)}, ${activityOn.type} ${activityOn.duration}분`;
+        valueText = `오늘 기준 시각 ${formatTime(minutes)}, ${activityOn.type} ${activityOn.duration}분`;
         status = `<strong>${formatTime(activityOn.start)} · ${activityOn.type}</strong> · ${activityOn.duration}분`;
       } else if (sleeping) {
         pose = "sleeping";
-        valueText = `${formatTime(minutes)}, ${sleeping.type}`;
+        valueText = `오늘 기준 시각 ${formatTime(minutes)}, ${sleeping.type}`;
         status = `<strong>${sleeping.type} 중 · ${Math.max(1, sleepElapsed(sleeping, minutes))}분째</strong> · ${formatTime(sleeping.start)} 시작`;
       }
       applyDuckPose(pose);
       highlightEvent(kind, match?.start);
-      nowBadge.textContent = formatTime(minutes).replace("오전 ", "").replace("오후 ", "");
-      nowBadge.classList.add("is-time");
+      nowBadge.textContent = formatTime(minutes);
       nowScrubber.setAttribute("aria-valuenow", String(minutes));
       nowScrubber.setAttribute("aria-valuetext", valueText);
+      yesterdayBadge.textContent = formatTime(yesterdayCursorMinutes);
+      yesterdayTrack.setAttribute("aria-valuenow", String(yesterdayCursorMinutes));
+      yesterdayTrack.setAttribute("aria-valuetext", `어제 기준 시각 ${formatTime(yesterdayCursorMinutes)}`);
+      yesterdayTrack.setAttribute("aria-label", `어제 기준 시각 ${formatTime(yesterdayCursorMinutes)}`);
       rhythmStatus.innerHTML = status;
-      rhythmInsight.innerHTML = `${status}<small>손을 놓으면 지금으로 돌아와요.</small>`;
-      if (compareOn) {
-        fillCompareTooltip(minutes);
-        rhythmCard.classList.add("is-inspecting");
-      }
+      rhythmInsight.innerHTML = `${status}<small>오늘 ${formatTime(todayCursorMinutes)} · 어제 ${formatTime(yesterdayCursorMinutes)}</small>`;
+      const tipKicker = document.querySelector("#compareTooltip .tip-kicker");
+      if (tipKicker) tipKicker.textContent = `오늘 ${formatTime(todayCursorMinutes)} · 어제 ${formatTime(yesterdayCursorMinutes)}`;
+      if (compareOn) fillCompareTooltip(todayCursorMinutes, yesterdayCursorMinutes);
     };
-    const setCurrentState = () => setPlayhead(nowMinutes, false);
-    const clampMinutes = (minutes) => Math.max(0, Math.min(nowMinutes, Math.round(minutes)));
-    const minutesFromClientX = (clientX) => {
-      const rect = rhythmLine.getBoundingClientRect();
-      if (!rect.width) return nowMinutes;
-      return clampMinutes(((clientX - rect.left) / rect.width) * daySpan);
+    const renderCursors = () => {
+      rhythmSky.style.setProperty("--today-cursor", percentAt(todayCursorMinutes));
+      rhythmSky.style.setProperty("--yesterday-cursor", percentAt(yesterdayCursorMinutes));
+      updateDuck(todayCursorMinutes);
     };
-    const returnToNow = () => {
-      rhythmSky.classList.remove("is-dragging");
-      nowScrubber.classList.remove("is-dragging");
-      setCurrentState();
+    const setCurrentState = () => {
+      todayCursorMinutes = nowMinutes;
+      yesterdayCursorMinutes = nowMinutes;
+      renderCursors();
+    };
+    const clampToday = (minutes) => Math.max(0, Math.min(nowMinutes, Math.round(minutes)));
+    const clampYesterday = (minutes) => Math.max(0, Math.min(1439, Math.round(minutes)));
+    const minutesFromClientX = (clientX, track, max) => {
+      const rect = track.getBoundingClientRect();
+      if (!rect.width) return max;
+      return Math.max(0, Math.min(max, Math.round(((clientX - rect.left) / rect.width) * daySpan)));
     };
     let scrubPointer = null;
-    let scrubKeyTimer = 0;
-    nowScrubber.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      scrubPointer = event.pointerId;
-      try { nowScrubber.setPointerCapture(event.pointerId); } catch (_) {}
-      rhythmSky.classList.add("is-dragging");
-      nowScrubber.classList.add("is-dragging");
-      nowScrubber.focus({ preventScroll: true });
-      setPlayhead(minutesFromClientX(event.clientX), true);
-    });
-    nowScrubber.addEventListener("pointermove", (event) => {
-      if (scrubPointer !== event.pointerId) return;
-      setPlayhead(minutesFromClientX(event.clientX), true);
-    });
-    const endScrub = (event) => {
-      if (scrubPointer !== event.pointerId) return;
-      scrubPointer = null;
-      returnToNow();
+    let scrubDay = "today";
+    const bindTrack = (track, day) => {
+      const max = day === "today" ? nowMinutes : 1439;
+      const apply = (clientX) => {
+        const next = minutesFromClientX(clientX, track, max);
+        if (day === "today") todayCursorMinutes = clampToday(next);
+        else yesterdayCursorMinutes = clampYesterday(next);
+        renderCursors();
+      };
+      track.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 || event.target.closest("button")) return;
+        event.preventDefault();
+        scrubPointer = event.pointerId;
+        scrubDay = day;
+        try { track.setPointerCapture(event.pointerId); } catch (_) {}
+        rhythmSky.classList.add("is-dragging");
+        apply(event.clientX);
+      });
+      track.addEventListener("pointermove", (event) => {
+        if (scrubPointer !== event.pointerId || scrubDay !== day) return;
+        apply(event.clientX);
+      });
+      const endScrub = (event) => {
+        if (scrubPointer !== event.pointerId) return;
+        scrubPointer = null;
+        rhythmSky.classList.remove("is-dragging");
+      };
+      track.addEventListener("pointerup", endScrub);
+      track.addEventListener("pointercancel", endScrub);
     };
-    nowScrubber.addEventListener("pointerup", endScrub);
-    nowScrubber.addEventListener("pointercancel", endScrub);
+    bindTrack(rhythmLine, "today");
+    bindTrack(yesterdayTrack, "yesterday");
     nowScrubber.addEventListener("keydown", (event) => {
       const step = event.shiftKey ? 60 : 15;
-      const rawNow = nowScrubber.getAttribute("aria-valuenow");
-      let next = rawNow == null || rawNow === "" ? nowMinutes : Number(rawNow);
+      let next = todayCursorMinutes;
       if (event.key === "ArrowLeft") next -= step;
       else if (event.key === "ArrowRight") next += step;
       else if (event.key === "Home") next = 0;
       else if (event.key === "End" || event.key === "Escape") next = nowMinutes;
       else return;
       event.preventDefault();
-      rhythmSky.classList.add("is-dragging");
-      setPlayhead(clampMinutes(next), next !== nowMinutes);
-      window.clearTimeout(scrubKeyTimer);
-      if (next === nowMinutes) {
-        returnToNow();
-        return;
-      }
-      scrubKeyTimer = window.setTimeout(returnToNow, 1200);
+      todayCursorMinutes = clampToday(next);
+      renderCursors();
+    });
+    yesterdayTrack.addEventListener("keydown", (event) => {
+      const step = event.shiftKey ? 60 : 15;
+      let next = yesterdayCursorMinutes;
+      if (event.key === "ArrowLeft") next -= step;
+      else if (event.key === "ArrowRight") next += step;
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End" || event.key === "Escape") next = nowMinutes;
+      else return;
+      event.preventDefault();
+      yesterdayCursorMinutes = clampYesterday(next);
+      renderCursors();
+    });
+    resetCompare.addEventListener("click", () => {
+      todayCursorMinutes = nowMinutes;
+      yesterdayCursorMinutes = nowMinutes;
+      renderCursors();
     });
     const showEvent = (event) => {
       const value = event.duration ? `${event.duration}분` : event.amount || event.detail;
@@ -2195,6 +2267,7 @@
     renderEvents(diaperData, diaperEvents, "diaper");
     renderBarEvents();
     renderActivities();
+    renderRhythmLegend();
     renderVisualTracks();
     if (typeof ResizeObserver !== "undefined") {
       const trackResizeObserver = new ResizeObserver(renderVisualTracks);
@@ -2211,26 +2284,12 @@
     });
     modeToday.addEventListener("click", () => {
       setCompare(false);
-      returnToNow();
+      renderCursors();
     });
     modeYesterday.addEventListener("click", () => {
       setCompare(true);
-      returnToNow();
+      renderCursors();
     });
-    rhythmTracks.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || event.target.closest("#nowScrubber") || event.target.closest("button")) return;
-      event.preventDefault();
-      scrubPointer = event.pointerId;
-      try { rhythmTracks.setPointerCapture(event.pointerId); } catch (_) {}
-      rhythmSky.classList.add("is-dragging");
-      setPlayhead(minutesFromClientX(event.clientX), true);
-    });
-    rhythmTracks.addEventListener("pointermove", (event) => {
-      if (scrubPointer !== event.pointerId) return;
-      setPlayhead(minutesFromClientX(event.clientX), true);
-    });
-    rhythmTracks.addEventListener("pointerup", endScrub);
-    rhythmTracks.addEventListener("pointercancel", endScrub);
 
     const summaryTitle = document.getElementById("todaySummaryTitle");
     const summaryBody = document.getElementById("todaySummaryBody");

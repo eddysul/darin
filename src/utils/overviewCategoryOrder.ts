@@ -48,6 +48,14 @@ export function overviewOptionalOrderIndex(id: string): number {
   return OVERVIEW_OPTIONAL_CATEGORY_ORDER.length + (id.startsWith("custom:") ? 1 : 2);
 }
 
+/** Compare-summary order: 수유·수면·기저귀, then the existing optional registry. No invented ids. */
+export function overviewCompareOrderIndex(id: string): number {
+  if (id === "feed") return 0;
+  if (id === "sleep") return 1;
+  if (id === "diaper") return 2;
+  return 3 + overviewOptionalOrderIndex(id);
+}
+
 export function stampOfLog(entry: { dateKey?: string; time?: string }): string {
   return `${entry.dateKey ?? ""}T${entry.time ?? ""}`;
 }

@@ -72,8 +72,25 @@ function clipBlocks(blocks: RhythmBlock[], untilMinutes: number): RhythmBlock[] 
     .filter((block) => block.duration > 0);
 }
 
+export const RHYTHM_DAY_MINUTES = 1440;
+export const RHYTHM_LAST_MINUTE = 1439;
+
 export function minutesNow(now = new Date()): number {
-  return Math.min(1439, now.getHours() * 60 + now.getMinutes());
+  return Math.min(RHYTHM_LAST_MINUTE, now.getHours() * 60 + now.getMinutes());
+}
+
+export function localDateKey(now = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+export function clampRhythmMinutes(minutes: number, max = RHYTHM_LAST_MINUTE): number {
+  if (!Number.isFinite(minutes)) return 0;
+  return Math.max(0, Math.min(max, Math.round(minutes)));
+}
+
+export function clockFromMinutes(minutes: number): string {
+  const clamped = clampRhythmMinutes(minutes);
+  return `${String(Math.floor(clamped / 60)).padStart(2, "0")}:${String(clamped % 60).padStart(2, "0")}`;
 }
 
 export function percentAt(minutes: number): number {
@@ -116,12 +133,13 @@ export function buildDayRhythm(logs: BabyLogEntry[], untilMinutes: number): DayR
 }
 
 export function sleepMinutesUntil(logs: BabyLogEntry[], minutes: number): number {
+  const cutoff = Math.max(0, Math.min(1440, minutes));
   return logs.reduce((sum, entry) => {
     if (entry.cat !== "sleep") return sum;
     const start = toMinutes(entry.time);
-    if (!Number.isFinite(start) || start > minutes) return sum;
-    return sum + clipBlocks(splitOvernight(start, durationMinutes(entry)), minutes)
-      .reduce((inner, block) => inner + block.duration, 0);
+    if (!Number.isFinite(start) || start > cutoff) return sum;
+    const visibleEnd = Math.min(start + durationMinutes(entry), cutoff, 1440);
+    return sum + Math.max(0, visibleEnd - start);
   }, 0);
 }
 

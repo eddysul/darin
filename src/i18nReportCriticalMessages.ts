@@ -263,6 +263,14 @@ const rows = [
   ["262","{day} · {time}","{day} · {time}","{day}・{time}","{day}, {time}","{day} {time}"],
   ["263","이번 {value} · 누적 {total}","Event {value} · Total {total}","今回 {value}・累計 {total}","Evento {value} · Total {total}","本次 {value} · 累计 {total}"],
   ["264","누적 {total}","Total {total}","累計 {total}","Acumulado: {total}","合计 {total}"],
+  ["265","비교 초기화","Reset comparison","比較をリセット","Restablecer comparación","重置比较"],
+  ["266","오늘과 어제의 선택 시점까지 기록을 비교해요.","Compare records up to the time you pick on each day.","今日と昨日で選んだ時点までの記録を比べます。","Comparamos los registros hasta la hora elegida en cada día.","比较你在今天和昨天各自选中的时间点之前的记录。"],
+  ["267","오늘 기준 시각 {time}","Today reference time {time}","今日の基準時刻 {time}","Hora de referencia de hoy: {time}","今天的参考时间 {time}"],
+  ["268","어제 기준 시각 {time}","Yesterday reference time {time}","昨日の基準時刻 {time}","Hora de referencia de ayer: {time}","昨天的参考时间 {time}"],
+  ["269","비교를 지금 시각 기준으로 다시 맞춰요","Reset both days to the current time","比較を今の時刻に戻します","Restablece ambos días a la hora actual","将比较重置为当前时间"],
+  ["270","{day} {time}까지 {value}","{day} {value} by {time}","{day} {time}まで {value}","{day}: {value} hasta las {time}","{day} 截至 {time} {value}"],
+  ["271","차이 {delta}","Difference {delta}","差 {delta}","Diferencia {delta}","差值 {delta}"],
+  ["272","아직 이 시간대에 비교할 기록이 없어요.","No records to compare at these times yet.","この時間帯に比べる記録はまだありません。","Aún no hay registros para comparar a estas horas.","这个时间点还没有可比较的记录。"],
 ] as const;
 
 type ReportId = typeof rows[number][0];

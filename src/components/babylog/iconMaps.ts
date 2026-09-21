@@ -37,6 +37,7 @@ import {
   Pencil,
   Pill,
   Plus,
+  RotateCcw,
   Search,
   Send,
   Settings,
@@ -129,7 +130,8 @@ export type MiscIconKey =
   | "userPlus"
   | "search"
   | "camera"
-  | "filter";
+  | "filter"
+  | "refresh";
 
 export const TAB_ICONS: Record<TabIconKey, IconComponent> = {
   record: ClipboardList,
@@ -177,4 +179,5 @@ export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
   search: Search,
   camera: Camera,
   filter: ListFilter,
+  refresh: RotateCcw,
 };

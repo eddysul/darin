@@ -211,7 +211,7 @@ export function formatWeeklyAmount(key: string, unit: string, value: number, t: 
   }
   if (FEATURE_ORDER.includes(key as FeatureKey)) return formatFeatureValue(key as FeatureKey, value, t, locale);
   if (unit === "분" || unit === "minutes") return formatFeatureValue("sleepMinutes", value, t, locale);
-  if (unit === "회") return t("report.critical.125", { count: rounded });
+  if (unit === "회" || unit === "count") return t("report.critical.125", { count: rounded });
   if (unit === "ml") return t("insight.critical.147", { count: rounded });
   if (unit === "g") return t("insight.critical.148", { count: rounded });
   return `${rounded}${unit}`;

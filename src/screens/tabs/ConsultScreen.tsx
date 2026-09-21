@@ -567,12 +567,12 @@ const styles = StyleSheet.create({
   userBubble: {
     alignSelf: "flex-end",
     maxWidth: "85%",
-    backgroundColor: colors.amber,
+    backgroundColor: colors.primary,
     marginBottom: 8,
   },
   aiBlock: { alignSelf: "flex-start", maxWidth: "85%", marginBottom: 8 },
   bubbleText: { fontSize: 13.5, lineHeight: 21, color: colors.text },
-  userText: { color: colors.brandCoralForeground },
+  userText: { color: colors.primaryForeground },
   memoLink: {
     minHeight: Platform.OS === "android" ? 48 : 44,
     justifyContent: "center",

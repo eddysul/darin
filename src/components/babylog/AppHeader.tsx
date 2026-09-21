@@ -19,7 +19,7 @@ type Props = {
 export function AppHeader({ onOpenProfile, onOpenSettings, onOpenShared, onOpenNotifications }: Props) {
   const insets = useSafeAreaInsets();
   const compact = useCompactLayout();
-  const { babyBadge } = useBabyLog();
+  const { babyBadge, babyName } = useBabyLog();
   const { t } = useLanguage();
 
   return (
@@ -27,24 +27,25 @@ export function AppHeader({ onOpenProfile, onOpenSettings, onOpenShared, onOpenN
       <View style={styles.row}>
         <View style={styles.left}>
           <View style={[styles.chip, compact && styles.chipCompact]}>
-            <BabySwitcher compact />
+            <Text style={styles.babyName} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>{babyName}</Text>
             <View style={styles.badge}>
               <Text style={styles.badgeText} maxFontSizeMultiplier={fontScaleCap.chrome}>{babyBadge}</Text>
             </View>
           </View>
-          <View style={styles.sharedWrap}>
-            <SharedCaregiversRow onPress={onOpenShared ?? onOpenProfile} />
+          <View style={styles.together}>
+            <BabySwitcher variant="togetherChip" />
           </View>
+          <SharedCaregiversRow onPress={onOpenShared ?? onOpenProfile} size="lg" label={t("chrome.critical.122")} />
         </View>
         <View style={styles.actions}>
           {onOpenNotifications ? <NotificationBellButton onPress={onOpenNotifications} /> : null}
           <Pressable
-          style={styles.profileBtn}
-          onPress={onOpenSettings ?? onOpenProfile}
-          accessibilityRole="button"
-          accessibilityLabel={onOpenSettings ? t("home.a11y.openSettings") : t("chrome.critical.025")}
-        >
-          <BabyLogIcon kind={onOpenSettings ? "settings" : "profile"} size={18} color={colors.muted} />
+            style={styles.menuBtn}
+            onPress={onOpenSettings ?? onOpenProfile}
+            accessibilityRole="button"
+            accessibilityLabel={onOpenSettings ? t("home.a11y.openSettings") : t("chrome.critical.025")}
+          >
+            <BabyLogIcon kind={onOpenSettings ? "menu" : "profile"} size={22} color={colors.text} />
           </Pressable>
         </View>
       </View>
@@ -54,11 +55,12 @@ export function AppHeader({ onOpenProfile, onOpenSettings, onOpenShared, onOpenN
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 20, paddingBottom: 14 },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 },
-  left: { flex: 1 },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
+  left: { flex: 1, minWidth: 0 },
   chip: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   chipCompact: { flexDirection: "column", alignItems: "flex-start", gap: 6 },
-  chipText: { color: colors.amberText, fontWeight: "700", fontSize: 15 },
+  babyName: { maxWidth: 180, color: colors.text, fontSize: 18, fontWeight: "800" },
+  together: { marginTop: 6, alignSelf: "flex-start" },
   badge: {
     backgroundColor: colors.amberSoft,
     borderRadius: radius.full,
@@ -66,14 +68,9 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   badgeText: { color: colors.amberText, fontSize: 12, fontWeight: "600" },
-  sharedWrap: { marginTop: 8 },
-  profileBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
+  menuBtn: {
+    width: 48,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
   },

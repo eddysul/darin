@@ -12,6 +12,7 @@ import { buildOverviewRhythmSegments } from "../src/utils/overviewRhythmSegments
 import {
   buildOverviewCategoryCardsAtCutoff,
   buildOverviewInspectionRows,
+  buildOverviewTimelineRows,
 } from "../src/utils/overviewCategoryCards.ts";
 import type { BabyLogEntry } from "../src/types/babyLog.ts";
 
@@ -71,6 +72,9 @@ assert.match(presenter, /sleepMinutesFor\(/);
 assert.match(presenter, /collectOverviewExtraCategoryIds/);
 assert.match(presenter, /buildOverviewTimelineRows/);
 assert.match(presenter, /collectOverviewExtraCategoryIds\(todayLogs\)/);
+assert.match(presenter, /compareMetricFor/);
+assert.match(presenter, /overviewCompareOrderIndex/);
+assert.match(presenter, /semanticDelta/);
 
 const rhythm = await readFile(new URL("../src/components/babylog/OverviewRhythmCard.tsx", import.meta.url), "utf8");
 assert.match(rhythm, /OverviewCategoryCarousel/);
@@ -82,10 +86,17 @@ assert.doesNotMatch(rhythm, /item\.kind !== "activity"/);
 assert.match(rhythm, /function TrackSegments/);
 assert.match(rhythm, /<TrackSegments segments=\{yesterdaySegments\}/);
 assert.match(rhythm, /<TrackSegments segments=\{todaySegments\}/);
-assert.match(rhythm, /day: "today" \| "yesterday"/);
+assert.match(rhythm, /todayCursorTime/);
+assert.match(rhythm, /yesterdayCursorTime/);
 assert.match(rhythm, /todayPan\.panHandlers/);
 assert.match(rhythm, /yesterdayPan\.panHandlers/);
 assert.match(rhythm, /buildOverviewInspectionRows/);
+assert.match(rhythm, /buildOverviewIndependentCompareRows/);
+assert.match(rhythm, /recorded\.find\(\(row\) => row\.id === "sleep"\)/);
+assert.match(rhythm, /row\.events\.length > 0/);
+assert.match(rhythm, /kind="refresh"/);
+assert.match(rhythm, /report\.critical\.272/);
+assert.doesNotMatch(rhythm, /setInspection/);
 assert.doesNotMatch(rhythm, /setPlayhead/);
 
 const todayCutoffLogs = [
@@ -113,6 +124,20 @@ assert.equal(inspectedFeed?.cumulative, 120);
 const inspectedAfternoon = buildOverviewInspectionRows(todayCutoffLogs, 15 * 60);
 assert.equal(inspectedAfternoon.find((row) => row.id === "feed")?.cumulative, 210);
 
+assert.deepEqual(
+  buildOverviewTimelineRows(todayCutoffLogs).map((row) => row.id),
+  ["feed", "sleep"],
+  "timeline/legend omit fixed categories with no today record",
+);
+assert.deepEqual(buildOverviewTimelineRows([]), [], "no today records means no legend rows");
+assert.deepEqual(
+  buildOverviewTimelineRows([
+    { id: "only-tummy", cat: "tummy", dateKey: "2026-09-18", time: "10:15", duration: "12" },
+  ] as BabyLogEntry[]).map((row) => row.id),
+  ["tummy"],
+  "a recorded extra can appear without forcing feed/sleep/diaper",
+);
+
 const sourceRhythm = {
   sleep: [{ start: 60, duration: 180 }, { start: 260, duration: 120 }],
   ticks: [
@@ -137,6 +162,8 @@ const demo = await readFile(new URL("../demos/overview-demo.html", import.meta.u
 assert.match(demo, /id="trackVisuals"/);
 assert.match(demo, /const composeVisualTrack =/);
 assert.match(demo, /renderVisualTracks\(\)/);
+assert.match(demo, /id="rhythmLegend"/);
+assert.match(demo, /renderRhythmLegend/);
 
 const record = await readFile(new URL("../src/screens/tabs/RecordScreen.tsx", import.meta.url), "utf8");
 assert.match(record, /route\.params\?\.category/);
@@ -149,6 +176,11 @@ assert.match(i18n, /\["257","비교할 기록이 아직 부족해요"/);
 assert.match(i18n, /\["258","아직 기록이 없어요"/);
 assert.match(i18n, /\["259","\{label\}\. \{value\}\. \{change\}"/);
 assert.match(i18n, /\["137","변화가 없어요"/);
+assert.match(i18n, /\["265","비교 초기화"/);
+assert.match(i18n, /\["266","오늘과 어제의 선택 시점까지 기록을 비교해요\."/);
+assert.match(i18n, /\["267","오늘 기준 시각 \{time\}"/);
+assert.match(i18n, /\["268","어제 기준 시각 \{time\}"/);
+assert.match(i18n, /\["272","아직 이 시간대에 비교할 기록이 없어요\."/);
 assert.match(carousel, /report\.critical\.256/);
 assert.match(carousel, /mixHexWithWhite/);
 assert.match(carousel, /resolveLogCategory/);

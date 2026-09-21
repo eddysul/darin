@@ -120,6 +120,7 @@ const rows = [
   ["119","스티커 이미지는 10MB 이하만 저장할 수 있어요.","Sticker images must be 10MB or smaller.","ステッカー画像は10MB以下のみ保存できます。","Las pegatinas deben pesar 10 MB o menos.","贴纸图片须不超过10MB。"],
   ["120","Darin ID의 코드는 숫자 4자리예요.","The Darin ID code must be 4 digits.","Darin IDのコードは数字4桁です。","El código del Darin ID debe tener 4 dígitos.","Darin ID的代码必须是4位数字。"],
   ["121","선택한 일기 사진을 읽지 못했어요.","Couldn't read the selected diary photo.","選んだ日記の写真を読み取れませんでした。","No se pudo leer la foto del diario.","无法读取所选日记照片。"],
+  ["122","함께 돌보는 중","Caring together","いっしょに見守っています","Cuidando juntos","一起照顾中"],
 ] as const;
 
 type ChromeId = typeof rows[number][0];

@@ -8,6 +8,7 @@ import {
   isOverviewFixedLogCat,
   OVERVIEW_FIXED_CATEGORY_IDS,
   OVERVIEW_OPTIONAL_CATEGORY_ORDER,
+  overviewCompareOrderIndex,
   overviewOptionalOrderIndex,
   stampOfLog,
   type OverviewFixedCategoryId,
@@ -22,6 +23,7 @@ import {
   type CompareTone,
 } from "./overviewRhythm";
 import { toMinutes } from "./formatLog";
+import { diaperTypeLabel } from "./diaperLog";
 import { resolveLogCategory } from "./resolveLogCategory";
 
 export {
@@ -65,8 +67,27 @@ export type OverviewInspectionRow = {
   id: OverviewCategoryCardId;
   recordCategory: LogCategoryKey;
   eventValue: number | null;
+  eventLabel: string | null;
   cumulative: number;
   unit: "ml" | "min" | "count";
+};
+
+export type OverviewCompareUnit = "ml" | "min" | "count" | "temp";
+
+export type OverviewIndependentCompareRow = {
+  id: OverviewCategoryCardId;
+  recordCategory: LogCategoryKey;
+  unit: OverviewCompareUnit;
+  todayEventValue: number | null;
+  todayEventLabel: string | null;
+  todayCumulative: number | null;
+  yesterdayEventValue: number | null;
+  yesterdayEventLabel: string | null;
+  yesterdayCumulative: number | null;
+  delta: number | null;
+  hasToday: boolean;
+  hasYesterday: boolean;
+  semanticDelta: boolean;
 };
 
 function durationMinutes(entry: BabyLogEntry): number {
@@ -115,6 +136,65 @@ function matchesCard(entry: BabyLogEntry, id: OverviewCategoryCardId): boolean {
   if (id === "sleep") return entry.cat === "sleep";
   if (id === "diaper") return entry.cat === "diaper";
   return entry.cat === id;
+}
+
+const COMPARE_COUNT_IDS = new Set<string>([
+  "diaper", "bath", "med", "food", "snack", "doctor", "vaccination", "memo", "other",
+  "pregMood", "pregSymptom", "pregMed", "pregKick", "pregHospital",
+]);
+const COMPARE_LATEST_IDS = new Set<string>(["temp"]);
+
+function recordsThrough(logs: BabyLogEntry[], id: OverviewCategoryCardId, minutes: number): BabyLogEntry[] {
+  const cutoff = Math.max(0, Math.min(1440, minutes));
+  return logs.filter((entry) => {
+    if (!matchesCard(entry, id)) return false;
+    const start = toMinutes(entry.time);
+    return Number.isFinite(start) && start <= cutoff;
+  });
+}
+
+function latestNumeric(entries: BabyLogEntry[]): number | null {
+  const last = [...entries].sort((a, b) => stampOfLog(a).localeCompare(stampOfLog(b))).at(-1);
+  if (!last) return null;
+  const fromValue = typeof last.amountValue === "number"
+    ? last.amountValue
+    : Number.parseFloat(String(last.amountValue ?? last.amount ?? ""));
+  return Number.isFinite(fromValue) ? fromValue : null;
+}
+
+/** Cursor-scoped summary for one day. Missing records stay missing — never a fake 0. */
+export function compareMetricFor(
+  id: OverviewCategoryCardId,
+  logs: BabyLogEntry[],
+  minutes: number,
+  customCategories: CustomCategory[],
+): { has: boolean; numeric: number | null; unit: OverviewCompareUnit } {
+  const entries = recordsThrough(logs, id, minutes);
+  if (id === "sleep") {
+    const minutesUntil = sleepMinutesUntil(logs, minutes);
+    return { has: entries.length > 0, numeric: entries.length ? minutesUntil : null, unit: "min" };
+  }
+  if (id === "feed") {
+    if (!entries.length) return { has: false, numeric: null, unit: "ml" };
+    const feed = feedDisplay(entries);
+    return { has: true, numeric: feed.numeric, unit: feed.unit };
+  }
+  if (!entries.length) {
+    if (COMPARE_LATEST_IDS.has(String(id))) return { has: false, numeric: null, unit: "temp" };
+    if (typeof id === "string" && ML_CATS.has(id)) return { has: false, numeric: null, unit: "ml" };
+    if (typeof id === "string" && DURATION_CATS.has(id) && !COMPARE_COUNT_IDS.has(id) && id !== "pump") {
+      return { has: false, numeric: null, unit: "min" };
+    }
+    return { has: false, numeric: null, unit: "count" };
+  }
+  if (COMPARE_LATEST_IDS.has(String(id))) {
+    return { has: true, numeric: latestNumeric(entries), unit: "temp" };
+  }
+  if (COMPARE_COUNT_IDS.has(String(id))) {
+    return { has: true, numeric: entries.length, unit: "count" };
+  }
+  const metric = metricFor(id, entries, customCategories);
+  return { has: true, numeric: metric.numeric, unit: metric.unit };
 }
 
 function metricFor(
@@ -189,17 +269,44 @@ function logsThrough(logs: BabyLogEntry[], minutes: number): BabyLogEntry[] {
   });
 }
 
+function coversCursor(entry: BabyLogEntry, minutes: number): boolean {
+  const start = toMinutes(entry.time);
+  if (!Number.isFinite(start)) return false;
+  const duration = durationMinutes(entry);
+  if (duration <= 0) return false;
+  return minutes >= start && minutes <= Math.min(1440, start + duration);
+}
+
+/** Last record at or before the cursor; covering intervals win when the cursor is inside one. */
 function eventAt(logs: BabyLogEntry[], id: OverviewCategoryCardId, minutes: number): BabyLogEntry | undefined {
-  return logs
-    .filter((entry) => matchesCard(entry, id))
-    .sort((a, b) => Math.abs(toMinutes(a.time) - minutes) - Math.abs(toMinutes(b.time) - minutes))
-    .find((entry) => {
+  const matches = logs.filter((entry) => matchesCard(entry, id));
+  const covering = matches.find((entry) => coversCursor(entry, minutes));
+  if (covering) return covering;
+  return matches
+    .filter((entry) => {
       const start = toMinutes(entry.time);
-      if (!Number.isFinite(start)) return false;
-      const duration = durationMinutes(entry);
-      if (duration > 0) return minutes >= start && minutes <= Math.min(1440, start + duration);
-      return Math.abs(start - minutes) <= 10;
-    });
+      return Number.isFinite(start) && start <= minutes;
+    })
+    .sort((a, b) => toMinutes(a.time) - toMinutes(b.time))
+    .at(-1);
+}
+
+function eventDetail(
+  entry: BabyLogEntry | undefined,
+  id: OverviewCategoryCardId,
+  minutes: number,
+  customCategories: CustomCategory[],
+  unit: "ml" | "min" | "count",
+): { value: number | null; label: string | null } {
+  if (!entry) return { value: null, label: null };
+  if (id === "diaper") {
+    return { value: 1, label: diaperTypeLabel(entry) ?? null };
+  }
+  if (id === "sleep") {
+    return { value: sleepMinutesUntil([entry], minutes), label: null };
+  }
+  const metric = metricFor(id, [entry], customCategories);
+  return { value: metric.unit === unit ? metric.numeric : null, label: null };
 }
 
 /** Values for one independently inspected day/cursor. */
@@ -223,11 +330,12 @@ export function buildOverviewInspectionRows(
     const cumulative = card.id === "sleep"
       ? sleepMinutesUntil(logs, cutoff)
       : metricFor(card.id, through, customCategories).numeric;
-    const eventMetric = current ? metricFor(card.id, [current], customCategories) : null;
+    const detail = eventDetail(current, card.id, cutoff, customCategories, card.unit);
     return [{
       id: card.id,
       recordCategory: card.recordCategory,
-      eventValue: eventMetric?.unit === card.unit ? eventMetric.numeric : null,
+      eventValue: detail.value,
+      eventLabel: detail.label,
       cumulative,
       unit: card.unit,
     }];
@@ -268,7 +376,7 @@ function timelineEventsFor(logs: BabyLogEntry[], id: OverviewCategoryCardId): Ov
     .filter((event) => Number.isFinite(event.start));
 }
 
-/** Expanded 한눈에 rows: 수유·수면·기저귀, then extras that have a today record. */
+/** Expanded 한눈에 rows + legend: only categories that have a today record. */
 export function buildOverviewTimelineRows(
   todayLogs: BabyLogEntry[],
   options: {
@@ -324,7 +432,7 @@ export function buildOverviewTimelineRows(
       } satisfies OverviewTimelineRow;
     })
     .filter((row) => row.events.length > 0);
-  return [...fixed, ...extras];
+  return [...fixed, ...extras].filter((row) => row.events.length > 0);
 }
 
 export function buildOverviewCategoryCards(
@@ -350,6 +458,47 @@ export function buildOverviewCategoryCards(
   return [...fixed, ...extras];
 }
 
+function clipSleepCard(
+  card: OverviewCategoryCard,
+  todaySleep: number,
+  yesterdaySleep: number,
+): OverviewCategoryCard {
+  if (card.id !== "sleep") return card;
+  return {
+    ...card,
+    numeric: todaySleep,
+    delta: todaySleep - yesterdaySleep,
+    hasToday: todaySleep > 0,
+    hasYesterday: yesterdaySleep > 0,
+    tone: compareTone(todaySleep - yesterdaySleep),
+  };
+}
+
+/** Compare each day through its own cursor. Do not force the same x / wall-clock minute. */
+export function buildOverviewCategoryCardsAtCursors(
+  todayLogs: BabyLogEntry[],
+  yesterdayLogs: BabyLogEntry[],
+  todayMinutes: number,
+  yesterdayMinutes: number,
+  options: {
+    customCategories?: CustomCategory[];
+    defaultFeedingMethod?: DefaultFeedingMethod;
+  } = {},
+): OverviewCategoryCard[] {
+  const todayCutoff = Math.max(0, Math.min(1440, todayMinutes));
+  const yesterdayCutoff = Math.max(0, Math.min(1440, yesterdayMinutes));
+  const cards = buildOverviewCategoryCards(
+    logsThrough(todayLogs, todayCutoff),
+    logsThrough(yesterdayLogs, yesterdayCutoff),
+    options,
+  );
+  return cards.map((card) => clipSleepCard(
+    card,
+    sleepMinutesUntil(todayLogs, todayCutoff),
+    sleepMinutesUntil(yesterdayLogs, yesterdayCutoff),
+  ));
+}
+
 /** Default comparison contract: today-to-now versus yesterday-to-the-same wall-clock minute. */
 export function buildOverviewCategoryCardsAtCutoff(
   todayLogs: BabyLogEntry[],
@@ -360,17 +509,78 @@ export function buildOverviewCategoryCardsAtCutoff(
     defaultFeedingMethod?: DefaultFeedingMethod;
   } = {},
 ): OverviewCategoryCard[] {
-  const cutoff = Math.max(0, Math.min(1440, minutes));
-  const cards = buildOverviewCategoryCards(logsThrough(todayLogs, cutoff), logsThrough(yesterdayLogs, cutoff), options);
-  const todaySleep = sleepMinutesUntil(todayLogs, cutoff);
-  const yesterdaySleep = sleepMinutesUntil(yesterdayLogs, cutoff);
-  return cards.map((card) => card.id !== "sleep" ? card : {
-    ...card,
-    numeric: todaySleep,
-    delta: todaySleep - yesterdaySleep,
-    hasToday: todaySleep > 0,
-    hasYesterday: yesterdaySleep > 0,
-    tone: compareTone(todaySleep - yesterdaySleep),
+  return buildOverviewCategoryCardsAtCursors(todayLogs, yesterdayLogs, minutes, minutes, options);
+}
+
+function inspectionById(rows: OverviewInspectionRow[]) {
+  return new Map(rows.map((row) => [String(row.id), row]));
+}
+
+function compareCategoryIds(
+  todayLogs: BabyLogEntry[],
+  yesterdayLogs: BabyLogEntry[],
+  options: {
+    customCategories?: CustomCategory[];
+    defaultFeedingMethod?: DefaultFeedingMethod;
+  },
+): { id: OverviewCategoryCardId; recordCategory: LogCategoryKey }[] {
+  const feedCat = feedRecordCategory(todayLogs, yesterdayLogs, options.defaultFeedingMethod);
+  const extras = collectOverviewExtraCategoryIds([...todayLogs, ...yesterdayLogs]);
+  const ids: { id: OverviewCategoryCardId; recordCategory: LogCategoryKey }[] = [
+    { id: "feed", recordCategory: feedCat },
+    { id: "sleep", recordCategory: "sleep" },
+    { id: "diaper", recordCategory: "diaper" },
+    ...extras.map((id) => ({ id: id as LogCategoryKey, recordCategory: id as LogCategoryKey })),
+  ];
+  return ids.sort((a, b) => {
+    const order = overviewCompareOrderIndex(String(a.id)) - overviewCompareOrderIndex(String(b.id));
+    if (order !== 0) return order;
+    return String(a.id).localeCompare(String(b.id));
+  });
+}
+
+/** Independent today/yesterday cursors → only categories with a real record on either side. */
+export function buildOverviewIndependentCompareRows(
+  todayLogs: BabyLogEntry[],
+  yesterdayLogs: BabyLogEntry[],
+  todayMinutes: number,
+  yesterdayMinutes: number,
+  options: {
+    customCategories?: CustomCategory[];
+    defaultFeedingMethod?: DefaultFeedingMethod;
+  } = {},
+): OverviewIndependentCompareRow[] {
+  const todayCutoff = Math.max(0, Math.min(1440, todayMinutes));
+  const yesterdayCutoff = Math.max(0, Math.min(1440, yesterdayMinutes));
+  const customCategories = options.customCategories ?? [];
+  const todayInspect = inspectionById(buildOverviewInspectionRows(todayLogs, todayCutoff, options));
+  const yesterdayInspect = inspectionById(buildOverviewInspectionRows(yesterdayLogs, yesterdayCutoff, options));
+  return compareCategoryIds(todayLogs, yesterdayLogs, options).flatMap((item) => {
+    const today = compareMetricFor(item.id, todayLogs, todayCutoff, customCategories);
+    const yesterday = compareMetricFor(item.id, yesterdayLogs, yesterdayCutoff, customCategories);
+    if (!today.has && !yesterday.has) return [];
+    const unit = today.has ? today.unit : yesterday.unit;
+    const comparable = today.has && yesterday.has
+      && today.numeric != null
+      && yesterday.numeric != null
+      && today.unit === yesterday.unit;
+    const inspectToday = todayInspect.get(String(item.id));
+    const inspectYesterday = yesterdayInspect.get(String(item.id));
+    return [{
+      id: item.id,
+      recordCategory: item.recordCategory,
+      unit,
+      todayEventValue: inspectToday?.eventValue ?? null,
+      todayEventLabel: inspectToday?.eventLabel ?? null,
+      todayCumulative: today.has ? today.numeric : null,
+      yesterdayEventValue: inspectYesterday?.eventValue ?? null,
+      yesterdayEventLabel: inspectYesterday?.eventLabel ?? null,
+      yesterdayCumulative: yesterday.has ? yesterday.numeric : null,
+      delta: comparable ? (today.numeric as number) - (yesterday.numeric as number) : null,
+      hasToday: today.has,
+      hasYesterday: yesterday.has,
+      semanticDelta: unit !== "temp",
+    }];
   });
 }
 

@@ -563,7 +563,7 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
           <Text style={styles.viewerBanner}>{t("diary.screen.viewerBanner")}</Text>
         )}
         <Pressable
-          style={[styles.writeBtn, styles.btnPrimary, writeDisabled && styles.disabled]}
+          style={[styles.writeBtn, writeDisabled && styles.disabled]}
           disabled={writeDisabled}
           accessibilityRole="button"
           accessibilityLabel={writeLabel}
@@ -571,8 +571,8 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
           onPress={openComposeFresh}
         >
           <View style={styles.btnInner}>
-            <BabyLogIcon kind="edit" size={14} color={colors.amberDark} strokeWidth={2.2} />
-            <Text style={styles.btnPrimaryText}>{writeLabel}</Text>
+            <BabyLogIcon kind="edit" size={14} color={colors.text} strokeWidth={2.2} />
+            <Text style={styles.writeBtnText}>{writeLabel}</Text>
           </View>
         </Pressable>
 
@@ -997,11 +997,10 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 10,
   },
-  writeBtn: { minHeight: 44, borderRadius: 14, paddingVertical: 12, alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  writeBtn: { minHeight: 48, borderRadius: 14, paddingVertical: 12, alignItems: "center", justifyContent: "center", marginBottom: 12, backgroundColor: colors.amber },
   disabled: { opacity: 0.45 },
-  btnPrimary: { backgroundColor: colors.primary },
   btnInner: { flexDirection: "row", alignItems: "center", gap: 6 },
-  btnPrimaryText: { color: colors.primaryForeground, fontWeight: "700", fontSize: 14 },
+  writeBtnText: { color: colors.text, fontWeight: "700", fontSize: 14 },
   bookRow: { flexDirection: "row", gap: 8, marginBottom: 4 },
   bookCard: {
     flex: 1,

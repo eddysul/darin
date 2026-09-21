@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AppState,
   DynamicColorIOS,
   Image,
   PanResponder,
@@ -13,6 +14,7 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import { useLanguage } from "../../LanguageContext";
+import { useAppSettings } from "../../context/AppSettingsContext";
 import { colors } from "../../theme";
 import type { BabyLogEntry } from "../../types/babyLog";
 import type { CustomCategory } from "../../types/logCategory";
@@ -20,19 +22,32 @@ import { isCustomCategoryKey } from "../../types/logCategory";
 import type { BabyLogCategoryId } from "../../constants/babyLogCategories";
 import type { DefaultFeedingMethod } from "../../types/careSetup";
 import { formatDisplayTime } from "../../utils/logSummary";
+import { formatTemperature, formatVolume } from "../../utils/measurementFormat";
+import type { OverviewCompareUnit } from "../../utils/overviewCategoryCards";
 import { customCategoryDisplayLabel, recordCategoryLabel } from "../../utils/recordDisplay";
-import { buildOverviewCategoryCardsAtCutoff, buildOverviewInspectionRows, buildOverviewTimelineRows } from "../../utils/overviewCategoryCards";
+import {
+  buildOverviewCategoryCardsAtCursors,
+  buildOverviewCategoryCardsAtCutoff,
+  buildOverviewIndependentCompareRows,
+  buildOverviewInspectionRows,
+  buildOverviewTimelineRows,
+} from "../../utils/overviewCategoryCards";
 import {
   OVERVIEW_RHYTHM_COLORS,
   buildDayRhythm,
+  clampRhythmMinutes,
+  clockFromMinutes,
   coveringKind,
   formatOverviewAmount,
   lastFeedTime,
+  localDateKey,
   minutesNow,
   percentAt,
   sleepElapsedAt,
 } from "../../utils/overviewRhythm";
+import { resolveLogCategory } from "../../utils/resolveLogCategory";
 import { buildOverviewRhythmSegments, type RhythmTrackSegment } from "../../utils/overviewRhythmSegments";
+import { BabyLogIcon } from "./BabyLogIcon";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import { OverviewCategoryCarousel } from "./OverviewCategoryCarousel";
 import { overviewAssets } from "./overviewAssets";
@@ -138,6 +153,43 @@ function TrackSegments({ segments, muted, locale }: { segments: RhythmTrackSegme
   );
 }
 
+function formatCursorClock(minutes: number, clock: "12h" | "24h") {
+  return formatDisplayTime(clockFromMinutes(minutes), clock);
+}
+
+function formatRhythmAmount(
+  numeric: number,
+  unit: OverviewCompareUnit,
+  t: Parameters<typeof formatOverviewAmount>[2],
+  volumeUnit: "ml" | "oz",
+) {
+  if (unit === "temp") return formatTemperature(numeric);
+  if (unit === "ml") return formatVolume(numeric, volumeUnit);
+  return formatOverviewAmount(numeric, unit, t);
+}
+
+function formatRhythmDelta(
+  delta: number,
+  unit: OverviewCompareUnit,
+  t: Parameters<typeof formatOverviewAmount>[2],
+  volumeUnit: "ml" | "oz",
+) {
+  if (delta === 0) return t("report.critical.167");
+  const signed = `${delta > 0 ? "+" : "-"}${formatRhythmAmount(Math.abs(delta), unit, t, volumeUnit)}`;
+  return signed;
+}
+
+function CursorMark({ minutes, label, tone }: { minutes: number; label: string; tone: "today" | "yesterday" }) {
+  return (
+    <View pointerEvents="none" style={[styles.cursorMark, { left: `${percentAt(minutes)}%` }]}>
+      <View style={[styles.cursorPill, tone === "yesterday" && styles.cursorPillYesterday]}>
+        <Text style={styles.cursorPillText} numberOfLines={1}>{label}</Text>
+      </View>
+      <View style={[styles.cursorLine, tone === "yesterday" && styles.cursorLineYesterday]} />
+    </View>
+  );
+}
+
 export function OverviewRhythmCard({
   todayLogs,
   yesterdayLogs,
@@ -145,63 +197,101 @@ export function OverviewRhythmCard({
   defaultFeedingMethod,
 }: Props) {
   const { locale, t } = useLanguage();
+  const { settings } = useAppSettings();
+  const clock = settings.time.clock;
+  const volumeUnit = settings.units.volume;
   const { fontScale } = useWindowDimensions();
   const largeText = fontScale >= 1.4;
   const [compareOn, setCompareOn] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [now, setNow] = useState(minutesNow);
-  const [inspection, setInspection] = useState<{ day: "today" | "yesterday"; minutes: number } | null>(null);
+  const [todayCursor, setTodayCursor] = useState<number | null>(null);
+  const [yesterdayCursor, setYesterdayCursor] = useState<number | null>(null);
   const [trackWidth, setTrackWidth] = useState(320);
   const liveNowRef = useRef(minutesNow());
-  const trackWidthRef = useRef(0);
+  const dateKeyRef = useRef(localDateKey());
+  const todayWidthRef = useRef(0);
+  const yesterdayWidthRef = useRef(0);
   liveNowRef.current = now;
+  const todayCursorTime = todayCursor ?? now;
+  const yesterdayCursorTime = yesterdayCursor ?? now;
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      const next = minutesNow();
-      setNow(next);
-    }, 30_000);
-    return () => clearInterval(timer);
+    const tick = () => {
+      const nextNow = minutesNow();
+      const nextDate = localDateKey();
+      setNow(nextNow);
+      if (dateKeyRef.current !== nextDate) {
+        dateKeyRef.current = nextDate;
+        setTodayCursor(null);
+        setYesterdayCursor(null);
+      }
+    };
+    const timer = setInterval(tick, 30_000);
+    const appState = AppState.addEventListener("change", (state) => {
+      if (state === "active") tick();
+    });
+    return () => {
+      clearInterval(timer);
+      appState.remove();
+    };
   }, []);
+
+  useEffect(() => {
+    if (todayCursor != null && todayCursor > now) setTodayCursor(now);
+  }, [now, todayCursor]);
 
   const todayPan = useMemo(() => PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > Math.abs(gesture.dy),
       onPanResponderGrant: (event) => {
-        const width = trackWidthRef.current;
+        const width = todayWidthRef.current;
         const x = Math.max(0, Math.min(width, event.nativeEvent.locationX));
-        const next = width ? Math.max(0, Math.min(liveNowRef.current, Math.round((x / width) * 1440))) : liveNowRef.current;
-        setInspection({ day: "today", minutes: next });
+        const next = width
+          ? clampRhythmMinutes((x / width) * 1440, liveNowRef.current)
+          : liveNowRef.current;
+        setTodayCursor(next);
       },
       onPanResponderMove: (event) => {
-        const width = trackWidthRef.current;
+        const width = todayWidthRef.current;
         const x = Math.max(0, Math.min(width, event.nativeEvent.locationX));
-        const next = width ? Math.max(0, Math.min(liveNowRef.current, Math.round((x / width) * 1440))) : liveNowRef.current;
-        setInspection({ day: "today", minutes: next });
+        const next = width
+          ? clampRhythmMinutes((x / width) * 1440, liveNowRef.current)
+          : liveNowRef.current;
+        setTodayCursor(next);
       },
     }), []);
   const yesterdayPan = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > Math.abs(gesture.dy),
     onPanResponderGrant: (event) => {
-      const width = trackWidthRef.current;
+      const width = yesterdayWidthRef.current;
       const x = Math.max(0, Math.min(width, event.nativeEvent.locationX));
-      setInspection({ day: "yesterday", minutes: width ? Math.round((x / width) * 1440) : 0 });
+      setYesterdayCursor(width ? clampRhythmMinutes((x / width) * 1440) : 0);
     },
     onPanResponderMove: (event) => {
-      const width = trackWidthRef.current;
+      const width = yesterdayWidthRef.current;
       const x = Math.max(0, Math.min(width, event.nativeEvent.locationX));
-      setInspection({ day: "yesterday", minutes: width ? Math.round((x / width) * 1440) : 0 });
+      setYesterdayCursor(width ? clampRhythmMinutes((x / width) * 1440) : 0);
     },
   }), []);
 
-  const onTrackLayout = (event: LayoutChangeEvent) => {
+  const onTodayLayout = (event: LayoutChangeEvent) => {
     const width = event.nativeEvent.layout.width;
-    trackWidthRef.current = width;
+    todayWidthRef.current = width;
+    if (width > 0 && Math.abs(trackWidth - width) > 1) setTrackWidth(width);
+  };
+  const onYesterdayLayout = (event: LayoutChangeEvent) => {
+    const width = event.nativeEvent.layout.width;
+    yesterdayWidthRef.current = width;
     if (width > 0 && Math.abs(trackWidth - width) > 1) setTrackWidth(width);
   };
 
-  const inspectedMinutes = inspection?.minutes ?? now;
+  const resetComparison = () => {
+    setTodayCursor(null);
+    setYesterdayCursor(null);
+  };
+
   const todayRhythm = useMemo(() => buildDayRhythm(todayLogs, now), [now, todayLogs]);
   const yesterdayRhythm = useMemo(() => buildDayRhythm(yesterdayLogs, 1440), [yesterdayLogs]);
   const todaySegments = useMemo(
@@ -213,30 +303,36 @@ export function OverviewRhythmCard({
     [trackWidth, yesterdayRhythm],
   );
   const cards = useMemo(
-    () => buildOverviewCategoryCardsAtCutoff(todayLogs, yesterdayLogs, now, { customCategories, defaultFeedingMethod }),
-    [customCategories, defaultFeedingMethod, now, todayLogs, yesterdayLogs],
+    () => compareOn
+      ? buildOverviewCategoryCardsAtCursors(todayLogs, yesterdayLogs, todayCursorTime, yesterdayCursorTime, { customCategories, defaultFeedingMethod })
+      : buildOverviewCategoryCardsAtCutoff(todayLogs, yesterdayLogs, todayCursorTime, { customCategories, defaultFeedingMethod }),
+    [compareOn, customCategories, defaultFeedingMethod, todayCursorTime, todayLogs, yesterdayCursorTime, yesterdayLogs],
   );
   const timelineRows = useMemo(
     () => buildOverviewTimelineRows(todayLogs, { customCategories, defaultFeedingMethod }),
     [customCategories, defaultFeedingMethod, todayLogs],
   );
   const legendRows = useMemo(() => {
-    const extras = timelineRows.filter((row) => row.id !== "feed" && row.id !== "sleep" && row.id !== "diaper");
+    const recorded = timelineRows.filter((row) => row.events.length > 0);
+    const extras = recorded.filter((row) => row.id !== "feed" && row.id !== "sleep" && row.id !== "diaper");
     return [
-      timelineRows.find((row) => row.id === "sleep"),
-      timelineRows.find((row) => row.id === "feed"),
-      timelineRows.find((row) => row.id === "diaper"),
+      recorded.find((row) => row.id === "sleep"),
+      recorded.find((row) => row.id === "feed"),
+      recorded.find((row) => row.id === "diaper"),
       ...extras,
     ].filter((row): row is NonNullable<typeof row> => Boolean(row));
   }, [timelineRows]);
-  const inspectionRows = useMemo(
-    () => inspection
-      ? buildOverviewInspectionRows(inspection.day === "today" ? todayLogs : yesterdayLogs, inspection.minutes, { customCategories, defaultFeedingMethod })
-      : [],
-    [customCategories, defaultFeedingMethod, inspection, todayLogs, yesterdayLogs],
+  const todayInspectRows = useMemo(
+    () => buildOverviewInspectionRows(todayLogs, todayCursorTime, { customCategories, defaultFeedingMethod }),
+    [customCategories, defaultFeedingMethod, todayCursorTime, todayLogs],
   );
-  const poseMinutes = inspection?.day === "today" ? inspection.minutes : now;
-  const pose = coveringKind(todayLogs, poseMinutes);
+  const compareRows = useMemo(
+    () => compareOn
+      ? buildOverviewIndependentCompareRows(todayLogs, yesterdayLogs, todayCursorTime, yesterdayCursorTime, { customCategories, defaultFeedingMethod })
+      : [],
+    [compareOn, customCategories, defaultFeedingMethod, todayCursorTime, todayLogs, yesterdayCursorTime, yesterdayLogs],
+  );
+  const pose = coveringKind(todayLogs, todayCursorTime);
   const nap = sleepElapsedAt(todayLogs, now);
   const feedAt = lastFeedTime(todayLogs);
   const duckSource = pose === "feeding"
@@ -248,15 +344,12 @@ export function OverviewRhythmCard({
         : pose === "sleeping"
           ? overviewAssets.rhythmRest
           : overviewAssets.rhythmIdle;
-  const nowPercent = percentAt(now);
-  const inspectionPercent = inspection ? percentAt(inspection.minutes) : 0;
-  const inspectionTime = inspection
-    ? formatDisplayTime(`${String(Math.floor(inspection.minutes / 60)).padStart(2, "0")}:${String(inspection.minutes % 60).padStart(2, "0")}`)
-    : "";
+  const todayTimeLabel = formatCursorClock(todayCursorTime, clock);
+  const yesterdayTimeLabel = formatCursorClock(yesterdayCursorTime, clock);
   const status = nap
     ? t("report.critical.134", { minutes: nap.elapsed })
     : feedAt
-      ? `${t("report.critical.132")} · ${t("report.critical.133", { time: formatDisplayTime(feedAt) })}`
+      ? `${t("report.critical.132")} · ${t("report.critical.133", { time: formatDisplayTime(feedAt, clock) })}`
       : t("report.critical.132");
 
   const labelForRow = (id: (typeof timelineRows)[number]["id"]) => {
@@ -270,32 +363,55 @@ export function OverviewRhythmCard({
     return recordCategoryLabel(t, id as BabyLogCategoryId);
   };
 
+  const accentForRow = (id: (typeof timelineRows)[number]["id"], recordCategory: (typeof timelineRows)[number]["recordCategory"]) => {
+    if (id === "feed") return OVERVIEW_RHYTHM_COLORS.feed;
+    if (id === "sleep") return OVERVIEW_RHYTHM_COLORS.sleep;
+    if (id === "diaper") return OVERVIEW_RHYTHM_COLORS.diaper;
+    return resolveLogCategory(recordCategory, customCategories).color;
+  };
+
+  const resetButton = (
+    <Pressable
+      onPress={resetComparison}
+      hitSlop={8}
+      style={styles.resetBtn}
+      accessibilityRole="button"
+      accessibilityLabel={t("report.critical.269")}
+    >
+      <BabyLogIcon kind="refresh" size={18} color={colors.text} strokeWidth={2.2} />
+    </Pressable>
+  );
+
   return (
     <View style={styles.card}>
       <View style={[styles.head, largeText && styles.headLargeText]}>
-        <Text style={styles.title}>{t("report.critical.030")}</Text>
-        <View style={styles.modes}>
-          <Pressable
-            style={[styles.mode, !compareOn && styles.modeSelected]}
-            onPress={() => setCompareOn(false)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityState={{ selected: !compareOn }}
-          >
-            <Text style={[styles.modeText, !compareOn && styles.modeSelectedText]}>{t("report.critical.069")}</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.mode, compareOn && styles.modeSelected]}
-            onPress={() => setCompareOn(true)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityState={{ selected: compareOn }}
-          >
-            {compareOn ? <View style={styles.modeIco}><View style={styles.modeBarA} /><View style={styles.modeBarB} /><View style={styles.modeBarC} /></View> : null}
-            <Text style={[styles.modeText, compareOn && styles.modeSelectedText]}>
-              {compareOn ? t("report.critical.127") : t("report.critical.126")}
-            </Text>
-          </Pressable>
+        <View style={styles.headCopy}>
+          <Text style={styles.title}>{t("report.critical.030")}</Text>
+        </View>
+        <View style={styles.headActions}>
+          <View style={styles.modes}>
+            <Pressable
+              style={[styles.mode, !compareOn && styles.modeSelected]}
+              onPress={() => setCompareOn(false)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !compareOn }}
+            >
+              <Text style={[styles.modeText, !compareOn && styles.modeSelectedText]}>{t("report.critical.069")}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.mode, compareOn && styles.modeSelected]}
+              onPress={() => setCompareOn(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityState={{ selected: compareOn }}
+            >
+              {compareOn ? <View style={styles.modeIco}><View style={styles.modeBarA} /><View style={styles.modeBarB} /><View style={styles.modeBarC} /></View> : null}
+              <Text style={[styles.modeText, compareOn && styles.modeSelectedText]}>
+                {compareOn ? t("report.critical.127") : t("report.critical.126")}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
 
@@ -324,23 +440,24 @@ export function OverviewRhythmCard({
                   <Text style={styles.trackLabel}>{t("report.critical.139")}</Text>
                 </View>
                 <View
-                  style={styles.yesterdayRail}
-                  onLayout={onTrackLayout}
+                  style={styles.railHit}
+                  onLayout={onYesterdayLayout}
                   {...yesterdayPan.panHandlers}
                   accessible
                   accessibilityRole="adjustable"
-                  accessibilityLabel={t("report.critical.262", { day: t("report.critical.139"), time: inspection?.day === "yesterday" ? inspectionTime : "" })}
-                  accessibilityValue={{ text: inspection?.day === "yesterday" ? inspectionTime : t("report.critical.159") }}
+                  accessibilityLabel={t("report.critical.268", { time: yesterdayTimeLabel })}
+                  accessibilityValue={{ text: yesterdayTimeLabel }}
                   accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
                   onAccessibilityAction={(event) => {
-                    const base = inspection?.day === "yesterday" ? inspection.minutes : now;
                     const delta = event.nativeEvent.actionName === "increment" ? 15 : -15;
-                    setInspection({ day: "yesterday", minutes: Math.max(0, Math.min(1440, base + delta)) });
+                    setYesterdayCursor(clampRhythmMinutes(yesterdayCursorTime + delta));
                   }}
                 >
-                  <TimeGuides muted />
-                  <TrackSegments segments={yesterdaySegments} muted locale={locale} />
-                  {inspection?.day === "yesterday" ? <View pointerEvents="none" style={[styles.inspectLine, { left: `${inspectionPercent}%` }]} /> : null}
+                  <View style={styles.yesterdayRail}>
+                    <TimeGuides muted />
+                    <TrackSegments segments={yesterdaySegments} muted locale={locale} />
+                  </View>
+                  <CursorMark minutes={yesterdayCursorTime} label={yesterdayTimeLabel} tone="yesterday" />
                 </View>
               </View>
             ) : null}
@@ -354,64 +471,92 @@ export function OverviewRhythmCard({
                 </View>
               ) : null}
               <View
-                style={styles.todayRail}
-                onLayout={onTrackLayout}
+                style={styles.railHit}
+                onLayout={onTodayLayout}
                 {...todayPan.panHandlers}
                 accessible
                 accessibilityRole="adjustable"
-                accessibilityLabel={t("report.critical.262", { day: t("report.critical.069"), time: inspection?.day === "today" ? inspectionTime : "" })}
-                accessibilityValue={{ text: inspection?.day === "today" ? inspectionTime : t("report.critical.159") }}
+                accessibilityLabel={t("report.critical.267", { time: todayTimeLabel })}
+                accessibilityValue={{ text: todayTimeLabel }}
                 accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
                 onAccessibilityAction={(event) => {
-                  const base = inspection?.day === "today" ? inspection.minutes : now;
                   const delta = event.nativeEvent.actionName === "increment" ? 15 : -15;
-                  setInspection({ day: "today", minutes: Math.max(0, Math.min(now, base + delta)) });
+                  setTodayCursor(clampRhythmMinutes(todayCursorTime + delta, now));
                 }}
               >
-                <TimeGuides muted={false} />
-                <TrackSegments segments={todaySegments} muted={false} locale={locale} />
-                <View pointerEvents="none" style={[styles.todayNowDot, { left: `${nowPercent}%` }]} />
-                {inspection?.day === "today" ? <View pointerEvents="none" style={[styles.inspectLine, { left: `${inspectionPercent}%` }]} /> : null}
-              </View>
-            </View>
-
-            <View pointerEvents="none" style={[styles.nowLine, { left: `${nowPercent}%` }]} />
-            <View pointerEvents="none" style={[styles.nowScrubber, { left: `${nowPercent}%` }]}>
-              <View style={styles.nowBadge}>
-                <Text style={styles.nowBadgeText} numberOfLines={1}>
-                  {t("report.critical.159")}
-                </Text>
+                <View style={styles.todayRail}>
+                  <TimeGuides muted={false} />
+                  <TrackSegments segments={todaySegments} muted={false} locale={locale} />
+                </View>
+                <CursorMark minutes={todayCursorTime} label={todayTimeLabel} tone="today" />
               </View>
             </View>
           </View>
 
           <View style={styles.dock}>
-            {inspection ? (
-              <View style={styles.tooltipSlot} pointerEvents="none">
-                <View style={styles.tooltip}>
-                  <Text style={styles.tipKicker}>
-                    {t("report.critical.262", {
-                      day: inspection.day === "today" ? t("report.critical.069") : t("report.critical.139"),
-                      time: inspectionTime,
-                    })}
-                  </Text>
-                  {inspectionRows.length ? inspectionRows.map((row) => {
-                    const cumulative = formatOverviewAmount(row.cumulative, row.unit, t);
-                    const value = row.eventValue == null ? null : formatOverviewAmount(row.eventValue, row.unit, t);
-                    return (
-                      <View key={String(row.id)} style={styles.tipRow}>
-                        <Text style={styles.tipLabel} numberOfLines={1}>{labelForRow(row.id)}</Text>
-                        <Text style={[styles.tipValue, row.id === "sleep" ? styles.tipSleep : styles.tipFeed]}>
-                          {value
-                            ? t("report.critical.263", { value, total: cumulative })
-                            : t("report.critical.264", { total: cumulative })}
+            <View style={styles.comparePanel}>
+              <View style={styles.compareHead}>
+                <Text style={styles.compareTimes} numberOfLines={1}>
+                  {compareOn
+                    ? `${t("report.critical.069")} ${todayTimeLabel} · ${t("report.critical.139")} ${yesterdayTimeLabel}`
+                    : `${t("report.critical.069")} ${todayTimeLabel}`}
+                </Text>
+                {resetButton}
+              </View>
+              {compareOn ? (
+                compareRows.length ? compareRows.map((row) => {
+                  const todayValue = row.hasToday && row.todayCumulative != null
+                    ? formatRhythmAmount(row.todayCumulative, row.unit, t, volumeUnit)
+                    : t("report.critical.017");
+                  const yesterdayValue = row.hasYesterday && row.yesterdayCumulative != null
+                    ? formatRhythmAmount(row.yesterdayCumulative, row.unit, t, volumeUnit)
+                    : t("report.critical.017");
+                  const delta = row.delta == null || !row.hasToday || !row.hasYesterday
+                    ? null
+                    : formatRhythmDelta(row.delta, row.unit, t, volumeUnit);
+                  const accent = accentForRow(row.id, row.recordCategory);
+                  return (
+                    <View key={String(row.id)} style={styles.compareRow}>
+                      <View style={styles.compareName}>
+                        <LogCategoryIcon
+                          categoryKey={row.recordCategory}
+                          customCategories={customCategories}
+                          size={16}
+                          color={accent}
+                        />
+                        <Text style={styles.compareLabel} numberOfLines={1}>{labelForRow(row.id)}</Text>
+                      </View>
+                      <View style={styles.compareValues}>
+                        <Text style={styles.compareNumber} numberOfLines={1}>
+                          {t("report.critical.069")} {todayValue}
+                        </Text>
+                        <Text style={styles.compareNumber} numberOfLines={1}>
+                          {t("report.critical.139")} {yesterdayValue}
                         </Text>
                       </View>
-                    );
-                  }) : <Text style={styles.tipEmpty}>{t("report.critical.225")}</Text>}
-                </View>
-              </View>
-            ) : null}
+                      {delta ? (
+                        <Text style={[styles.compareDelta, !row.semanticDelta && styles.compareDeltaNeutral]}>{delta}</Text>
+                      ) : null}
+                    </View>
+                  );
+                }) : <Text style={styles.tipEmpty}>{t("report.critical.272")}</Text>
+              ) : (
+                todayInspectRows.length ? todayInspectRows.map((row) => (
+                  <View key={String(row.id)} style={styles.compareRow}>
+                    <View style={styles.compareName}>
+                      <LogCategoryIcon
+                        categoryKey={row.recordCategory}
+                        customCategories={customCategories}
+                        size={16}
+                        color={accentForRow(row.id, row.recordCategory)}
+                      />
+                      <Text style={styles.compareLabel} numberOfLines={1}>{labelForRow(row.id)}</Text>
+                    </View>
+                    <Text style={styles.compareNumber}>{formatRhythmAmount(row.cumulative, row.unit, t, volumeUnit)}</Text>
+                  </View>
+                )) : <Text style={styles.tipEmpty}>{t("report.critical.272")}</Text>
+              )}
+            </View>
             <Image source={duckSource} style={styles.duck} resizeMode="contain" />
           </View>
         </View>
@@ -497,9 +642,12 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     marginBottom: 12,
   },
-  head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 13 },
+  head: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 13 },
   headLargeText: { flexDirection: "column", alignItems: "stretch", gap: 8 },
+  headCopy: { flex: 1, minWidth: 0, gap: 4 },
   title: { fontSize: 18, fontWeight: "800", color: colors.text, letterSpacing: -0.4 },
+  headActions: { alignItems: "flex-end", gap: 8 },
+  resetBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   modes: { flexDirection: "row", alignItems: "center", alignSelf: "flex-end", gap: 6 },
   mode: {
     minHeight: 32,
@@ -533,9 +681,10 @@ const styles = StyleSheet.create({
   axisLabel: { position: "absolute", top: 0, width: 64, marginLeft: -32, textAlign: "center", color: colors.faint, fontSize: 10, fontWeight: "700" },
   axisFirst: { marginLeft: 0, textAlign: "left" },
   axisLast: { marginLeft: 0, textAlign: "right" },
-  tracks: { position: "relative", paddingTop: 34, paddingBottom: 12, gap: 14, overflow: "visible" },
-  yesterdayRow: { position: "relative", minHeight: 30, justifyContent: "center", overflow: "visible" },
-  todayRow: { position: "relative", minHeight: 34, justifyContent: "center", overflow: "visible" },
+  tracks: { position: "relative", paddingTop: 8, paddingBottom: 12, gap: 18, overflow: "visible" },
+  yesterdayRow: { position: "relative", minHeight: 44, justifyContent: "center", overflow: "visible" },
+  todayRow: { position: "relative", minHeight: 48, justifyContent: "center", overflow: "visible" },
+  railHit: { minHeight: 48, justifyContent: "center", overflow: "visible" },
   trackLabelSlot: {
     position: "absolute",
     left: -42,
@@ -571,6 +720,17 @@ const styles = StyleSheet.create({
   },
   yesterdayRail: { height: 30, borderRadius: 999, backgroundColor: rhythmSurface("#F1F2F8", "#312F39"), overflow: "hidden" },
   todayRail: { height: 34, borderRadius: 999, backgroundColor: rhythmSurface("#F4F5FA", "#373541"), overflow: "hidden" },
+  cursorMark: { position: "absolute", top: -16, bottom: 0, width: 72, marginLeft: -36, alignItems: "center", zIndex: 6 },
+  cursorPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: OVERVIEW_RHYTHM_COLORS.sleep,
+  },
+  cursorPillYesterday: { backgroundColor: "#8B92C9" },
+  cursorPillText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  cursorLine: { flex: 1, width: 2, marginTop: 2, borderRadius: 99, backgroundColor: "#4E67D8" },
+  cursorLineYesterday: { backgroundColor: "#8B92C9" },
   guideLayer: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
   timeGuide: { position: "absolute", top: 5, bottom: 5, width: 1, backgroundColor: "rgba(124,131,253,0.10)" },
   timeGuideMuted: { backgroundColor: "rgba(124,131,253,0.07)" },
@@ -583,50 +743,18 @@ const styles = StyleSheet.create({
   trackEventStripePoint: { flex: 1, marginHorizontal: 1 },
   trackEventStripeDuration: { flex: 1 },
   segmentLabel: { color: "#fff", fontSize: 9, fontWeight: "800", letterSpacing: -0.1, textAlign: "center", paddingHorizontal: 4 },
-  todayNowDot: { position: "absolute", top: 1, width: 7, height: 7, marginLeft: -3.5, borderRadius: 999, backgroundColor: "#6C83E8", zIndex: 5 },
-  inspectLine: { position: "absolute", top: 2, bottom: 2, width: 2, marginLeft: -1, borderRadius: 99, backgroundColor: "#4E67D8", zIndex: 6 },
-  nowLine: { position: "absolute", top: 28, bottom: 2, width: 1.5, marginLeft: -0.75, borderRadius: 99, backgroundColor: "rgba(124,131,253,0.82)", zIndex: 2 },
-  nowScrubber: { position: "absolute", top: 2, width: 120, marginLeft: -60, alignItems: "center", zIndex: 6, overflow: "visible" },
-  nowBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: OVERVIEW_RHYTHM_COLORS.sleep,
-    shadowColor: OVERVIEW_RHYTHM_COLORS.sleep,
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  },
-  nowBadgeTime: { paddingHorizontal: 10, paddingVertical: 5 },
-  nowBadgeText: { color: "#fff", fontSize: 11, fontWeight: "800", flexShrink: 0 },
-  dock: { minHeight: 72, marginTop: 8, flexDirection: "row", alignItems: "flex-end", justifyContent: "flex-end" },
-  tooltipSlot: {
-    flex: 1,
-    marginRight: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tooltip: {
-    width: 186,
-    maxWidth: "100%",
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    backgroundColor: colors.card,
-  },
-  tipKicker: { marginBottom: 5, color: colors.text, fontSize: 9.5, fontWeight: "800" },
-  tipRow: { flexDirection: "row", alignItems: "center", marginBottom: 3, gap: 5 },
-  tipLabel: { color: colors.muted, fontSize: 10, fontWeight: "700", flexShrink: 1 },
-  tipValue: { marginLeft: "auto", fontSize: 10, fontWeight: "800", flexShrink: 1, textAlign: "right" },
-  tipEmpty: { color: colors.faint, fontSize: 10, fontWeight: "700" },
-  tipFeed: { color: OVERVIEW_RHYTHM_COLORS.feed },
-  tipSleep: { color: OVERVIEW_RHYTHM_COLORS.sleep },
-  tipSame: { color: colors.faint },
+  dock: { minHeight: 72, marginTop: 10, flexDirection: "row", alignItems: "flex-end", justifyContent: "flex-end" },
+  comparePanel: { flex: 1, minWidth: 0, marginRight: 8, gap: 8 },
+  compareHead: { flexDirection: "row", alignItems: "center", gap: 4 },
+  compareTimes: { flex: 1, minWidth: 0, color: colors.text, fontSize: 12, fontWeight: "800" },
+  compareRow: { gap: 3 },
+  compareName: { flexDirection: "row", alignItems: "center", gap: 6 },
+  compareLabel: { color: colors.muted, fontSize: 11, fontWeight: "700", flexShrink: 1 },
+  compareValues: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 },
+  compareNumber: { flex: 1, minWidth: 0, color: colors.text, fontSize: 13, fontWeight: "800" },
+  compareDelta: { color: colors.amberText, fontSize: 11, fontWeight: "700" },
+  compareDeltaNeutral: { color: colors.muted },
+  tipEmpty: { color: colors.faint, fontSize: 12, fontWeight: "700", lineHeight: 18 },
   duck: { width: 46, height: 54 },
   status: { marginTop: 8, color: colors.text, fontSize: 12, fontWeight: "800", textAlign: "center" },
   timelineRows: { gap: 7, marginTop: 14 },
