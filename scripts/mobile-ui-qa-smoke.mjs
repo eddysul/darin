@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const [tabs, navTypes, menu, navigator, theme, consult, notifications, mediaViewer, growthChart, report, formField, emailAuth, appConfig, expoConfig, appRoot, packageJson, recordGrid, timeline, memoryDetail, stickerVault] = await Promise.all([
+const [tabs, navTypes, menu, navigator, theme, consult, notifications, mediaViewer, growthChart, report, formField, emailAuth, appConfig, expoConfig, appRoot, packageJson, recordGrid, timeline, memoryDetail, stickerVault, rhythmCard] = await Promise.all([
   read("src/screens/MainTabs.tsx"),
   read("src/navigation/types.ts"),
   read("src/screens/tabs/MenuScreen.tsx"),
@@ -23,6 +23,7 @@ const [tabs, navTypes, menu, navigator, theme, consult, notifications, mediaView
   read("src/components/babylog/TodayTimeline.tsx"),
   read("src/screens/MemoryDetailScreen.tsx"),
   read("src/components/babylog/BabyStickerVaultModal.tsx"),
+  read("src/components/babylog/OverviewRhythmCard.tsx"),
 ]);
 
 assert.ok(tabs.includes('{ kind: "micAction" }'), "Mic remains an independent center action");
@@ -61,5 +62,6 @@ assert.ok(timeline.includes("rowEnterY") && timeline.includes("animateDelete"), 
 assert.ok(memoryDetail.includes('commentStatus') && memoryDetail.includes('busy: working'), "comments expose submitting and success states");
 assert.ok(stickerVault.includes("styles.cardPressed") && stickerVault.includes("styles.optionChipPressed"), "sticker selection and options have press feedback");
 assert.ok(notifications.includes("cardMainPressed"), "notification read actions react immediately on press");
+assert.ok(rhythmCard.includes("fontScale >= 1.4") && rhythmCard.includes("styles.headLargeText") && rhythmCard.includes("largeText ? [0, 12, 24]"), "rhythm title/actions and time guides adapt to accessibility text sizes");
 
 console.log("mobile-ui-qa-smoke: approved navigation, accessibility, contrast, motion, and virtualization invariants passed");

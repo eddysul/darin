@@ -34,9 +34,9 @@ export function BabyLogIcon(props: BabyLogIconProps) {
     Icon = CATEGORY_ICONS[props.catId];
     if (!color) resolvedColor = getCategory(props.catId).color;
   } else if (props.kind === "tab") {
-    Icon = TAB_ICONS[props.tab];
+    Icon = TAB_ICONS[props.tab] ?? MISC_ICONS.bell;
   } else {
-    Icon = MISC_ICONS[props.kind];
+    Icon = MISC_ICONS[props.kind] ?? MISC_ICONS.bell;
   }
 
   return (

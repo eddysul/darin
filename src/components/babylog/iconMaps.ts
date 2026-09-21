@@ -11,6 +11,7 @@ import {
   Bot,
   BookOpen,
   Cake,
+  Camera,
   CalendarDays,
   Check,
   ChevronRight,
@@ -24,16 +25,19 @@ import {
   Heart,
   Image as ImageIcon,
   LayoutGrid,
+  ListFilter,
   GlassWater,
   Lock,
   LogOut,
   Menu,
   Mic,
+  MoreHorizontal,
   Milk,
   Moon,
   Pencil,
   Pill,
   Plus,
+  Search,
   Send,
   Settings,
   Sparkles,
@@ -43,6 +47,7 @@ import {
   Syringe,
   Trash2,
   User,
+  UserPlus,
   Users,
   Utensils,
   type LucideProps,
@@ -118,7 +123,13 @@ export type MiscIconKey =
   | "cake"
   | "lock"
   | "handshake"
-  | "globe";
+  | "globe"
+  | "more"
+  | "menu"
+  | "userPlus"
+  | "search"
+  | "camera"
+  | "filter";
 
 export const TAB_ICONS: Record<TabIconKey, IconComponent> = {
   record: ClipboardList,
@@ -160,4 +171,10 @@ export const MISC_ICONS: Record<MiscIconKey, IconComponent> = {
   lock: Lock,
   handshake: Handshake,
   globe: Globe,
+  more: MoreHorizontal,
+  menu: Menu,
+  userPlus: UserPlus,
+  search: Search,
+  camera: Camera,
+  filter: ListFilter,
 };

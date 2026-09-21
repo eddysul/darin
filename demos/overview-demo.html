@@ -7,25 +7,25 @@
   <style>
     :root {
       color-scheme: light;
-      --background: #fef7f2;
+      --background: #ffffff;
       --surface: #ffffff;
-      --surface-hi: #faf4ee;
-      --text: #2e2a26;
-      --muted: #6b655e;
-      --faint: #736d65;
-      --border: #ede5dc;
-      --brand-coral: #e8918a;
-      --coral-soft: rgba(232, 145, 138, .16);
-      --primary-coral: #b65b55;
-      --amber-text: #b03a34;
+      --surface-hi: #fffdf9;
+      --text: #1f1f1f;
+      --muted: #7a756f;
+      --faint: #a6a19b;
+      --border: #eeeae4;
+      --brand-coral: #1f1f1f;
+      --coral-soft: rgba(230, 178, 74, .16);
+      --primary-coral: #1f1f1f;
+      --amber-text: #b77a1f;
       --sleep: #7c83fd;
-      --feed: #e8918a;
-      --diaper: #c98a54;
-      --activity: #4ec9b0;
+      --feed: #e6a23a;
+      --diaper: #3aa48d;
+      --activity: #5b8dee;
       --sage: #4ec9b0;
       --purple: #7c83fd;
       --blue: #7c83fd;
-      --shadow: 0 8px 24px rgba(93, 67, 49, .07);
+      --shadow: 0 4px 16px rgba(31, 31, 31, .04);
     }
 
     * { box-sizing: border-box; }
@@ -33,10 +33,7 @@
     body {
       margin: 0;
       min-height: 100vh;
-      background:
-        radial-gradient(circle at 12% 0%, rgba(232,145,138,.16), transparent 26rem),
-        radial-gradient(circle at 88% 100%, rgba(124,131,253,.08), transparent 22rem),
-        #f3ece6;
+      background: #ffffff;
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
     }
@@ -237,7 +234,7 @@
       75%, 87.49% { background-position: -116px -82px; }
       87.5%, 100% { background-position: -174px -82px; }
     }
-    .duck-inline { display: inline-block; width: 16px; height: 17px; margin-right: 2px; vertical-align: -3px; background: url("./assets/darin-duck-sprites.png") no-repeat -2.5px -1.5px / 126px auto; }
+    .duck-inline { display: inline-block; width: 16px; height: 17px; margin-right: 2px; vertical-align: -3px; background: url("./assets/rhythm-duck-idle.png?t=12") no-repeat center / contain; }
     .milestone-intro .duck-inline { width: 54px; height: 66px; flex: 0 0 54px; margin: 0; vertical-align: middle; background-image: url("./assets/milestone-intro-duck-frames.png?t=2"); background-size: 216px 132px; background-position: 0 0; cursor: pointer; }
     .milestone-intro .duck-inline.is-playing { animation: milestoneIntroSprite 2.6s steps(1, end) 1 both; }
     @keyframes milestoneIntroSprite {
@@ -255,80 +252,214 @@
     .today-stats { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px 10px; padding: 8px 12px; border-radius: 12px; background: var(--surface-hi); color: var(--muted); font-size: 11px; font-weight: 750; }
     .today-stats strong { color: var(--text); font-weight: 850; }
 
-    .rhythm-card { padding-bottom: 14px; }
+    .rhythm-card { padding: 16px 14px 12px; }
+    .rhythm-card .card-title { font-size: 18px; letter-spacing: -.03em; }
     .rhythm-heading { display: inline-flex; align-items: center; }
     .rhythm-today {
       border-radius: 999px; padding: 4px 9px 4px 10px; color: var(--muted);
       background: var(--surface-hi); font-size: 11px; font-weight: 750;
     }
+    .rhythm-modes {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 0; border-radius: 0; background: transparent;
+    }
+    .rhythm-mode {
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+      min-height: 32px; padding: 6px 12px; border: 0; border-radius: 999px;
+      background: #f4eee8; color: var(--muted); font-size: 11px; font-weight: 800;
+      cursor: pointer; white-space: nowrap;
+    }
+    .rhythm-mode.is-active {
+      background: var(--sleep); color: #fff; border-color: transparent;
+      box-shadow: 0 6px 14px rgba(124, 131, 253, .28);
+    }
+    .rhythm-mode .mode-ico { display: none; }
+    .rhythm-mode.compare-on.is-active .mode-ico { display: block; }
     .rhythm-sky {
       position: relative;
       --now-position: 63.89%;
-      padding: 8px 2px 54px;
+      --track-gutter: 0px;
+      padding: 2px 2px 0;
     }
+    .rhythm-card.is-compare .rhythm-sky { --track-gutter: 38px; }
+    .rhythm-stage { display: block; }
+    .rhythm-plot { min-width: 0; margin-left: var(--track-gutter); }
+    .track-visuals { position: absolute; inset: 0; z-index: 1; overflow: hidden; border-radius: 999px; pointer-events: none; }
+    .track-guide { position: absolute; top: 5px; bottom: 5px; z-index: 0; width: 1px; background: rgba(124,131,253,.1); }
+    .yesterday-rail > .track-guide { background: rgba(124,131,253,.07); }
+    .track-segment { position: absolute; top: 1px; bottom: 1px; z-index: 1; border: 1px solid #f4f5fa; box-sizing: border-box; border-radius: 999px; }
+    .track-segment.sleep { top: 5px; bottom: 5px; background: #5e6cc4; display: flex; align-items: center; justify-content: center; }
+    .track-segment.sleep .segment-label { color: #fff; }
+    .track-segment.event {
+      display: flex; align-items: stretch; justify-content: center; gap: 2px;
+      top: 3px; bottom: 3px; overflow: visible; box-sizing: border-box;
+    }
+    .track-segment.event > span:not(.segment-label) { flex: 0 0 4px; min-width: 0; border-radius: 999px; }
+    .track-segment.event.event-duration {
+      top: 4px; bottom: 4px; border-radius: 999px; overflow: hidden; gap: 1px;
+    }
+    .track-segment.event.event-duration > span:not(.segment-label) { flex: 1 1 0; }
+    .segment-label { position: relative; z-index: 3; display: block; padding: 0 5px; color: #fff; font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: -.02em; text-align: center; white-space: nowrap; pointer-events: none; }
+    .track-segment.event .feed { background: var(--feed); }
+    .track-segment.event .diaper { background: var(--diaper); }
+    .track-segment.event .activity { background: var(--activity); }
+    .yesterday-rail .track-segment.sleep { background: color-mix(in srgb, var(--sleep) 42%, white); }
+    .yesterday-rail .track-segment { border-color: #f1f2f8; }
+    .yesterday-rail .track-segment.event .feed { background: #ebc789; }
+    .yesterday-rail .track-segment.event .diaper { background: #8ac9b9; }
+    .yesterday-rail .track-segment.event .activity { background: #a5c3ed; }
+    .rhythm-tracks {
+      position: relative;
+      display: grid;
+      gap: 12px;
+      padding: 34px 0 12px;
+      touch-action: none;
+    }
+    .rhythm-dock {
+      position: relative;
+      display: flex; align-items: flex-end; justify-content: flex-end;
+      min-height: 72px; margin: 8px 2px 0; pointer-events: none;
+    }
+    .track-row { position: relative; min-height: 30px; }
+    .track-row.is-today { min-height: 34px; }
+    .track-row.is-yesterday { display: none; }
+    .rhythm-card.is-compare .track-row.is-yesterday { display: block; }
+    .track-label {
+      position: absolute; left: -38px; top: 50%; width: 34px;
+      transform: translateY(-50%);
+      color: var(--faint); font-size: 9px; font-weight: 800; text-align: center;
+      letter-spacing: -.02em;
+    }
+    .track-label.is-today {
+      color: #fff; background: var(--sleep); border-radius: 999px; padding: 4px 0;
+    }
+    .rhythm-card:not(.is-compare) .track-label.is-today { display: none; }
+    .yesterday-rail {
+      position: relative; height: 30px; overflow: hidden; border-radius: 999px; background: #f1f2f8;
+    }
+    .compare-float {
+      display: none; position: relative; z-index: 7; flex: 0 1 186px;
+      max-width: calc(100% - 54px); margin: 0 auto; padding: 7px 9px; border: 1px solid var(--border); border-radius: 14px;
+      background: var(--surface); box-shadow: 0 10px 24px rgba(93, 67, 49, .12);
+      pointer-events: none;
+    }
+    .rhythm-card.is-compare.is-inspecting .compare-float { display: block; }
+    .tip-kicker { margin: 0 0 5px; color: var(--text); font-size: 9.5px; font-weight: 800; letter-spacing: -.02em; }
+    .tip-metric {
+      display: flex; align-items: center; gap: 5px; margin: 0 0 3px;
+      color: var(--muted); font-size: 10px; font-weight: 700;
+    }
+    .tip-metric:last-child { margin-bottom: 0; }
+    .tip-metric strong { margin-left: auto; font-weight: 850; text-align: right; }
+    .tip-metric.feed strong { color: #d37a72; }
+    .tip-metric.sleep strong { color: #6d74e6; }
+    .tip-metric.diaper strong { color: var(--diaper); }
+    .tip-metric.activity strong { color: var(--activity); }
+    .tip-metric.same strong { color: var(--faint); }
+    .tip-ico { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: currentColor; }
+    .tip-metric.feed .tip-ico { color: #e8918a; }
+    .tip-metric.sleep .tip-ico { color: var(--sleep); }
+    .tip-metric.diaper .tip-ico { color: var(--diaper); }
+    .tip-metric.activity .tip-ico { color: var(--activity); }
+    .compare-stats {
+      display: flex; gap: 10px; margin: 12px 0 0; padding: 0 0 2px;
+      overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .compare-stats::-webkit-scrollbar { display: none; }
+    .compare-stat {
+      flex: 0 0 72%; min-height: 98px; padding: 10px 10px 9px;
+      border: 1px solid var(--border); background: var(--surface);
+      border-radius: 16px; text-align: left; scroll-snap-align: start;
+    }
+    .compare-stat.feed { background: #fff1ee; }
+    .compare-stat.sleep { background: #eef0fe; }
+    .compare-stat.diaper { background: #fbf3e4; }
+    .compare-stat.activity { background: #e8f7f2; }
+    .stat-head { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+    .stat-icon { width: 28px; height: 28px; padding: 6px; box-sizing: border-box; flex: 0 0 auto; border-radius: 10px; }
+    .compare-stat.feed .stat-icon { color: var(--feed); background: #fff6e8; }
+    .compare-stat.sleep .stat-icon { color: var(--sleep); background: #eef0fe; }
+    .compare-stat.diaper .stat-icon { color: var(--diaper); background: #e8f7f2; }
+    .compare-stat.activity .stat-icon { color: var(--activity); background: #eef4ff; }
+    .compare-stat .label { color: var(--muted); font-size: 11px; font-weight: 750; }
+    .compare-stat .value { display: block; margin: 6px 0 8px; color: var(--text); font-size: 16px; font-weight: 880; letter-spacing: -.03em; }
+    .compare-stat .diff {
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+      min-height: 22px; padding: 3px 8px; border-radius: 999px;
+      font-size: 10.5px; font-weight: 800;
+    }
+    .compare-stat .diff.up { color: #d37a72; background: rgba(232, 145, 138, .16); }
+    .compare-stat.sleep .diff.down { color: #6d74e6; background: rgba(124, 131, 253, .16); }
+    .compare-stat.activity .diff.up { color: #3aa48d; background: rgba(78, 201, 176, .16); }
+    .compare-stat .diff.same { color: #b08946; background: rgba(224, 162, 74, .16); }
+    .compare-stat .hint { display: block; margin-top: 6px; color: var(--faint); font-size: 10px; font-weight: 650; }
+    .compare-insight { display: none; }
     .rhythm-line-shell { padding: 0; }
-    .bar-events { position: absolute; inset: 0; z-index: 3; }
+    .bar-events { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+    .bar-events .timeline-event { pointer-events: auto; }
     .rhythm-line {
-      height: 32px; position: relative; overflow: visible;
+      height: 34px; position: relative; overflow: visible;
       background: transparent; border: 0; box-shadow: none;
+      touch-action: none; cursor: ew-resize;
     }
     .rhythm-line::before {
       content: ""; position: absolute; left: 0; right: 0; top: 50%; z-index: 0;
-      height: 12px; border-radius: 99px; background: #ece9f4; transform: translateY(-50%);
+      height: 34px; border-radius: 99px; background: #f4f5fa; transform: translateY(-50%);
     }
-    .sleep-block { position: absolute; top: 0; bottom: 0; z-index: 1; padding: 0; border: 0; background: transparent; cursor: pointer; }
-    .sleep-block::before {
-      content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 12px; border-radius: 999px;
-      transform: translateY(-50%);
-      background: #a8adf8;
-    }
+    .sleep-block { position: absolute; top: 0; bottom: 0; z-index: 2; padding: 0; border: 0; background: transparent; cursor: pointer; }
+    .sleep-block::before { content: none; }
     .sleep-block:focus-visible { outline: 2px solid var(--primary-coral); outline-offset: 2px; }
     .sleep-block::after { content: ""; }
     .now-scrubber {
-      position: absolute; left: var(--now-position); top: 0; z-index: 6;
-      width: 64px; height: 140px; padding: 0; border: 0; background: transparent;
+      position: absolute; left: var(--now-position); top: 2px; z-index: 6;
+      width: 120px; height: calc(100% + 18px); padding: 0; border: 0; background: transparent;
       transform: translateX(-50%); touch-action: none; cursor: grab; user-select: none;
       outline: none; -webkit-tap-highlight-color: transparent;
     }
     .now-scrubber.is-dragging { cursor: grabbing; }
     .now-scrubber:focus,
     .now-scrubber:focus-visible { outline: none; }
-    .now-badge { position: absolute; left: 50%; top: 0; transform: translateX(-50%); z-index: 5; border-radius: 999px; padding: 4px 9px; color: white; background: var(--sleep); box-shadow: 0 3px 8px rgba(124, 131, 253, .22); font-size: 10px; font-weight: 850; white-space: nowrap; }
-    .now-badge.is-time { padding: 4px 7px; font-size: 9.5px; }
+    .now-badge { position: absolute; left: 50%; top: 0; transform: translateX(-50%); z-index: 5; border-radius: 999px; padding: 5px 10px; color: white; background: var(--sleep); box-shadow: 0 4px 10px rgba(124, 131, 253, .16); font-size: 11px; font-weight: 850; white-space: nowrap; }
+    .now-badge.is-time { padding: 5px 10px; font-size: 11px; white-space: nowrap; }
     .now-badge::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 7px; height: 7px; background: var(--sleep); transform: translateX(-50%) rotate(45deg); border-radius: 1px; }
-    .now-line { position: absolute; left: var(--now-position); top: -22px; bottom: -10px; z-index: 2; width: 3px; transform: translateX(-50%); background: color-mix(in srgb, var(--sleep) 78%, transparent); border-radius: 99px; pointer-events: none; }
+    .now-line { position: absolute; left: var(--now-position); top: 28px; bottom: 2px; z-index: 4; width: 1.5px; transform: translateX(-50%); background: color-mix(in srgb, var(--sleep) 82%, transparent); border-radius: 99px; pointer-events: none; }
+    .now-line::before { content: ""; position: absolute; left: 50%; top: -4px; width: 7px; height: 7px; border-radius: 50%; background: #6c83e8; transform: translateX(-50%); box-shadow: 0 2px 5px rgba(108,131,232,.2); }
     .now-scrubber, .now-line { transition: left .46s cubic-bezier(.2,.82,.28,1); }
     .rhythm-sky.is-dragging .now-scrubber,
     .rhythm-sky.is-dragging .now-line { transition: none; }
-    .rhythm-duck { position: absolute; left: 50%; top: 78px; z-index: 4; background-image: url("./assets/darin-duck-sprites.png"); background-repeat: no-repeat; background-size: 615px auto; transform: translateX(-50%); transform-origin: center top; filter: drop-shadow(0 3px 3px rgba(74,52,40,.12)); pointer-events: none; }
-    .rhythm-duck.sleeping { width: 100px; height: 64px; background-position: 0 -228px; transform: translateX(-50%) scale(.7); }
-    .rhythm-duck.awake,
-    .rhythm-duck.feeding,
-    .rhythm-duck.diapered,
-    .rhythm-duck.resting { background-position: center bottom; background-size: contain; }
-    .rhythm-duck.awake { width: 46px; height: 54px; top: 76px; background-image: url("./assets/rhythm-duck-idle.png?t=12"); transform: translateX(-50%); }
-    .rhythm-duck.feeding { width: 48px; height: 48px; top: 80px; background-image: url("./assets/rhythm-duck-feed.png?t=12"); transform: translateX(-50%); }
-    .rhythm-duck.diapered { width: 44px; height: 48px; top: 80px; background-image: url("./assets/rhythm-duck-diaper.png?t=12"); transform: translateX(-50%); }
-    .rhythm-duck.resting { width: 54px; height: 42px; top: 84px; background-image: url("./assets/rhythm-duck-rest.png?t=12"); transform: translateX(-50%); }
+    .rhythm-duck {
+      position: relative; z-index: 4; display: block;
+      flex: 0 0 46px; width: 46px; height: 54px; margin: 0; overflow: hidden;
+      background-repeat: no-repeat; background-position: center; background-size: contain;
+      transform: none;
+      filter: drop-shadow(0 3px 3px rgba(74,52,40,.12)); pointer-events: none;
+    }
+    .rhythm-duck.sleeping { background-image: url("./assets/rhythm-duck-rest.png?t=12"); }
+    .rhythm-duck.awake { background-image: url("./assets/rhythm-duck-idle.png?t=12"); }
+    .rhythm-duck.feeding { background-image: url("./assets/rhythm-duck-feed.png?t=12"); }
+    .rhythm-duck.diapered { background-image: url("./assets/rhythm-duck-diaper.png?t=12"); }
+    .rhythm-duck.resting { background-image: url("./assets/rhythm-duck-rest.png?t=12"); }
     @media (prefers-reduced-motion: reduce) {
       .now-scrubber, .now-line { transition: none; }
     }
-    .status-copy { margin: 14px 0 2px; color: var(--muted); font-size: 11px; font-weight: 750; text-align: center; }
-    .status-copy strong { color: var(--text); font-weight: 850; }
+    .status-copy { margin: 8px 2px 0; color: var(--text); font-size: 12px; font-weight: 800; text-align: center; letter-spacing: -.02em; }
+    .status-copy strong { color: var(--text); font-weight: 800; }
     .timeline-rows { display: grid; gap: 7px; margin: 14px 0 0; }
     .timeline-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 6px; min-height: 36px; align-items: center; }
     .timeline-label { display: inline-flex; align-items: center; justify-content: center; gap: 3px; color: var(--muted); }
-    .timeline-label i { display: inline-block; flex: 0 0 auto; }
-    .timeline-label .feed-mark { width: 9px; height: 12px; border: 2px solid var(--brand-coral); border-radius: 3px 3px 4px 4px; position: relative; }
-    .timeline-label .feed-mark::after { content: ""; position: absolute; left: 1px; right: 1px; top: -5px; height: 4px; border: 2px solid var(--brand-coral); border-bottom: 0; border-radius: 3px 3px 0 0; }
-    .timeline-label .diaper-mark { width: 12px; height: 8px; border: 2px solid var(--diaper); border-radius: 2px 2px 5px 5px; }
-    .timeline-label .activity-mark { width: 12px; height: 8px; border: 2px solid var(--activity); border-radius: 2px 2px 5px 5px; }
-    .bar-events .timeline-event { width: 20px; height: 32px; }
-    .bar-events .timeline-event::before {
-      inset: auto; top: 50%; left: 50%; width: 5px; height: 12px;
-      border: 1px solid var(--surface); box-sizing: border-box;
-      border-radius: 999px; transform: translate(-50%, -50%); box-shadow: none;
+    .timeline-label .stat-icon { width: 16px; height: 16px; }
+    .timeline-label .feed-icon { color: #e8918a; }
+    .timeline-label .sleep-icon { color: var(--sleep); }
+    .timeline-label .diaper-icon { color: #c98a54; }
+    .timeline-label .activity-icon { color: #4ec9b0; }
+    .timeline-sleep {
+      position: absolute; top: 11px; height: 14px; border-radius: 999px;
+      background: #a8adf8; pointer-events: none;
     }
+    .bar-events .timeline-event { width: 20px; height: 32px; }
+    .bar-events .timeline-event::before { content: none; }
+    .bar-events .timeline-event:focus-visible { outline: 2px solid var(--primary-coral); outline-offset: -2px; }
     .bar-events .timeline-event.feed::before { background: var(--feed); }
     .bar-events .timeline-event.feed::after { content: none; }
     .bar-events .timeline-event.diaper::before { background: #e6b84d; }
@@ -352,31 +483,35 @@
     .timeline-rows { display: none; }
     .rhythm-card.is-expanded .timeline-rows { display: grid; }
     .rhythm-card.is-expanded .bar-events { visibility: hidden; pointer-events: none; }
-    .timeline-toggle { min-height: 44px; margin: 3px 0 -3px; padding: 5px 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; font-weight: 800; cursor: pointer; }
+    .rhythm-foot {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      margin-top: 10px; padding-right: 52px;
+    }
+    .timeline-toggle { min-height: 36px; margin: 0; padding: 5px 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; font-weight: 800; cursor: pointer; }
     .timeline-toggle:focus-visible { outline: 2px solid var(--coral-soft); outline-offset: 2px; border-radius: 7px; }
     .activity-block { position: absolute; top: 12px; bottom: 12px; border-radius: 999px; background: linear-gradient(135deg, #8fdcc8, var(--activity)); box-shadow: inset 0 1px 0 rgba(255,255,255,.5); }
     .rhythm-chips { display: none; }
-    .time-axis { position: relative; height: 28px; margin: 0 0 2px; border: 0; }
-    .rhythm-card.is-expanded .timeline-toggle { margin-left: 28px; }
+    .time-axis { position: relative; height: 16px; margin: 0 0 8px; border: 0; }
+    .rhythm-card.is-expanded .timeline-toggle { margin-left: 0; }
     .time-axis span {
       position: absolute; top: 0; color: var(--faint); font-size: 10px; font-weight: 750;
       transform: translateX(-50%); white-space: nowrap;
     }
     .time-axis span::after {
-      content: ""; position: absolute; left: 50%; top: 16px; width: 1px; height: 6px;
+      content: ""; position: absolute; left: 50%; top: 14px; width: 1px; height: 4px;
       background: #d9d2cb; transform: translateX(-50%);
     }
     .time-axis span:first-child { transform: none; }
     .time-axis span:first-child::after { left: 0; transform: none; }
     .time-axis span:last-child { transform: translateX(-100%); }
     .time-axis span:last-child::after { left: auto; right: 0; transform: none; }
-    .legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; gap: 6px; margin-top: 10px; padding: 0; border: 0; background: transparent; }
-    .legend-item { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; color: var(--faint); font-size: 10px; white-space: nowrap; }
-    .legend-dot { width: 18px; height: 8px; flex: 0 0 auto; border-radius: 99px; }
+    .legend { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin: 0; padding: 0; border: 0; background: transparent; }
+    .legend-item { display: inline-flex; align-items: center; gap: 4px; min-width: 0; color: var(--faint); font-size: 10px; white-space: nowrap; }
+    .legend-dot { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 99px; }
     .legend-dot.sleep { background: #a8adf8; }
     .legend-dot.feed { background: var(--feed); }
     .legend-dot.activity { background: var(--activity); }
-    .legend-tick { width: 18px; height: 8px; flex: 0 0 auto; border-radius: 99px; background: #e6b84d; }
+    .legend-tick { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 99px; background: #e6b84d; }
 
     .weekly-card {
       width: 100%; text-align: left; cursor: pointer; color: inherit;
@@ -458,7 +593,7 @@
     button.growth-scene { width: 100%; padding: 0; border: 0; color: inherit; cursor: pointer; }
     button.growth-scene:active { transform: scale(.98); }
     .growth-scene::after { content: ""; position: absolute; left: 13px; right: 13px; bottom: 13px; height: 5px; border-radius: 50%; background: rgba(77,58,45,.1); filter: blur(2px); }
-    .growth-duck { position: absolute; z-index: 1; left: 50%; bottom: -3px; width: 78px; height: 82px; background: url("./assets/darin-duck-sprites.png") no-repeat -12px -7px / 615px auto; transform: translateX(-50%) scale(.67); transform-origin: center bottom; animation: growthDuckPop .75s cubic-bezier(.2,.9,.35,1) both; }
+    .growth-duck { position: absolute; z-index: 1; left: 50%; bottom: -3px; width: 78px; height: 82px; background: url("./assets/rhythm-duck-idle.png?t=12") no-repeat center / contain; transform: translateX(-50%) scale(.67); transform-origin: center bottom; animation: growthDuckPop .75s cubic-bezier(.2,.9,.35,1) both; }
     .measure-scene .growth-duck { left: 50%; bottom: 2px; animation: none; }
     .height-value, .weight-value, .weight-result, .head-value, .head-result,
     .height-dynamic-copy, .measure-sparkle { display: none !important; }
@@ -805,7 +940,7 @@
     .linked-record-scroll h3 { margin: 8px 0 4px; font-size: 22px; letter-spacing: -.025em; }
     .linked-record-meta { margin: 0; color: var(--faint); font-size: 11px; }
     .linked-record-visual { position: relative; height: 190px; margin-top: 18px; overflow: hidden; border-radius: 18px; background: linear-gradient(145deg, var(--coral-soft), rgba(155,130,215,.16)); }
-    .linked-record-duck { position: absolute; left: 50%; bottom: 13px; width: 100px; height: 105px; background: url("./assets/darin-duck-sprites.png") no-repeat -500px -86px / 615px auto; transform: translateX(-48%) scale(1.2); filter: drop-shadow(0 7px 6px rgba(74,52,40,.12)); }
+    .linked-record-duck { position: absolute; left: 50%; bottom: 13px; width: 100px; height: 105px; background: url("./assets/rhythm-duck-idle.png?t=12") no-repeat center / contain; transform: translateX(-48%) scale(1.2); filter: drop-shadow(0 7px 6px rgba(74,52,40,.12)); }
     .linked-record-note { margin-top: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); color: var(--muted); font-size: 13px; line-height: 1.65; }
     .linked-record-note strong { display: block; margin-bottom: 4px; color: var(--text); font-size: 11px; }
     .report-header { display: flex; align-items: center; gap: 8px; padding: 16px 18px 11px; background: color-mix(in srgb, var(--background) 92%, transparent); border-bottom: 1px solid var(--border); }
@@ -821,7 +956,7 @@
     .report-period { margin: 0 0 7px; color: #b03a34; font-size: 11px; font-weight: 850; }
     .report-hero { display: grid; grid-template-columns: 56px minmax(0,1fr); gap: 10px; align-items: start; padding: 14px; border: 1px solid var(--border); border-radius: 17px; background: linear-gradient(145deg, var(--surface), var(--surface-hi)); box-shadow: var(--shadow); }
     .report-hero .report-duck { align-self: end; }
-    .report-duck { width: 54px; height: 58px; background: url("./assets/darin-duck-sprites.png") no-repeat -9px -7px / 430px auto; }
+    .report-duck { width: 54px; height: 58px; background: url("./assets/rhythm-duck-idle.png?t=12") no-repeat center / contain; }
     .report-duck-week { width: 54px; height: 66px; background-image: url("./assets/weekly-report-duck-frames.png?t=4"); background-repeat: no-repeat; background-size: 216px 132px; background-position: 0 0; cursor: pointer; }
     .report-duck-week.is-playing { animation: weeklyReportDuckSprite 2.6s steps(1, end) 1 both; }
     @keyframes weeklyReportDuckSprite {
@@ -905,13 +1040,11 @@
 
     body.dark {
       color-scheme: dark;
-      --background: #181513; --surface: #24201d; --surface-hi: #2b2521;
-      --text: #f7eee7; --muted: #c7bcb3; --faint: #b3a69d; --border: #443b35;
-      --coral-soft: rgba(232,145,138,.22); --shadow: 0 8px 24px rgba(0,0,0,.18);
-      --future-mask: rgba(24, 21, 19, .48);
-      background:
-        radial-gradient(circle at 20% 0%, rgba(232,145,138,.14), transparent 28rem),
-        #100e0d;
+      --background: #121212; --surface: #1c1c1c; --surface-hi: #1a1a1a;
+      --text: #f5f5f5; --muted: #a8a39e; --faint: #9c9792; --border: #2e2e2e;
+      --coral-soft: rgba(230,178,74,.22); --shadow: 0 8px 24px rgba(0,0,0,.18);
+      --future-mask: rgba(18, 18, 18, .48);
+      background: #121212;
     }
     body.dark .age-badge, body.dark .weekly-kicker, body.dark .weekly-link, body.dark .tab.active { color: #f2a8a1; }
     body.dark .weekly-badge { color: #f2a8a1; }
@@ -923,10 +1056,19 @@
     body.dark .height-measure { background: transparent; box-shadow: none; }
     body.dark .new-milestone { background: linear-gradient(145deg, rgba(232,145,138,.16), rgba(155,130,215,.13)); }
     body.dark .theme-switch { background: rgba(36,32,29,.9); color: #f7eee7; border-color: #443b35; }
-    body.dark .rhythm-line::before { background: #4a433c; }
+    body.dark .rhythm-line::before { background: #343340; }
     body.dark .time-axis span::after { background: #6a5f55; }
-    body.dark .sleep-block::before { background: #8b90e8; }
-    body.dark { background: #100e0d; }
+    body.dark .track-segment.sleep { background: #7884d6; }
+    body.dark .yesterday-rail { background: #302f39; }
+    body.dark .yesterday-rail .track-segment.sleep { background: #4b506f; }
+    body.dark .compare-float { background: #2c2622; }
+    body.dark .rhythm-mode { background: #332c27; color: #c7bcb3; }
+    body.dark .rhythm-mode.is-active { background: var(--sleep); color: #fff; }
+    body.dark .compare-stat.feed { background: rgba(232,145,138,0.16); }
+    body.dark .compare-stat.sleep { background: rgba(124,131,253,0.16); }
+    body.dark .compare-stat.diaper { background: rgba(224,162,74,0.16); }
+    body.dark .compare-stat.activity { background: rgba(78,201,176,0.16); }
+    body.dark { background: #121212; }
     body.dark .demo-brand { color: #f2a8a1; }
     body.dark .growth-chart-wrap { background: #322b26; border-color: #6a5c52; }
     body.dark .growth-chart::before,
@@ -1063,9 +1205,9 @@
       <h1>한눈에</h1>
       <p>오늘의 리듬, 주간 리포트, 성장을 한 화면에서 보는 인터랙티브 데모예요.</p>
       <ul class="demo-hints">
-        <li>지금 표시를 좌우로 밀면 그 시간에 한 일이 보여요</li>
-        <li>주간 리포트를 열면 발견과 근거가 나와요</li>
-        <li>성장 카드의 자세히에서 그래프와 측정을 볼 수 있어요</li>
+        <li>기본은 오늘 그래프와 아래 숫자 비교 카드예요</li>
+        <li>어제 비교를 켜면 위는 어제, 아래는 오늘 타임라인이 나란히 보여요</li>
+        <li>그래프를 누르면 같은 시각 어제보다 수유·수면 차이가 떠요</li>
       </ul>
       <button class="theme-switch" id="themeSwitch" type="button" aria-label="데모 테마 전환">다크 모드</button>
     </aside>
@@ -1102,57 +1244,138 @@
       <section class="today-summary" aria-labelledby="todaySummaryTitle">
         <div class="duck-mascot" role="button" tabindex="0" aria-label="오늘의 요약 오리 애니메이션 다시 보기"></div>
         <div>
-          <h1 class="today-summary-title" id="todaySummaryTitle">오늘 다린이는 전반적으로 평소 리듬대로 지내고 있어요.</h1>
-          <p class="today-summary-body" id="todaySummaryBody">밤잠은 어제보다 1시간 길었고, 수유 간격도 안정적이에요.</p>
+          <h1 class="today-summary-title" id="todaySummaryTitle">오늘은 어제보다 조금 더 잘 먹고, 잠은 조금 적어요.</h1>
+          <p class="today-summary-body" id="todaySummaryBody">수유 720ml · 어제보다 +90ml. 수면은 11시간 20분으로 어제보다 40분 짧아요.</p>
         </div>
         <div class="today-stats" aria-label="오늘 기록 요약">
-          <span>수면 <strong>8시간 30분</strong></span><span>·</span><span>수유 <strong>5회</strong></span><span>·</span><span>기저귀 <strong>5회</strong></span><span>·</span><span>터미타임 <strong>2회</strong></span>
+          <span>수면 <strong>11시간 20분</strong></span><span>·</span><span>수유 <strong>720ml</strong></span><span>·</span><span>기저귀 <strong>6회</strong></span><span>·</span><span>터미타임 <strong>28분</strong></span>
         </div>
       </section>
 
-      <article class="card rhythm-card">
+      <article class="card rhythm-card is-compare" id="rhythmCard">
         <div class="card-head">
-          <h2 class="card-title rhythm-heading">
-            오늘의 리듬
-          </h2>
-          <span class="rhythm-today">오늘</span>
+          <h2 class="card-title rhythm-heading">오늘의 리듬</h2>
+          <div class="rhythm-modes" role="group" aria-label="리듬 보기">
+            <button class="rhythm-mode" id="modeToday" type="button" aria-pressed="false">오늘</button>
+            <button class="rhythm-mode compare-on is-active" id="modeYesterday" type="button" aria-pressed="true">
+              <svg class="mode-ico" width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><rect x="1" y="6" width="2.2" height="5" rx="1"/><rect x="4.9" y="3" width="2.2" height="8" rx="1"/><rect x="8.8" y="1" width="2.2" height="10" rx="1"/></svg>
+              <span id="modeYesterdayLabel">어제 비교 ON</span>
+            </button>
+          </div>
         </div>
         <div class="rhythm-sky" id="rhythmSky" aria-label="오늘 24시간 수면, 수유, 기저귀 리듬">
-          <div class="now-scrubber" id="nowScrubber" role="slider" tabindex="0" aria-label="오늘 리듬 탐색" aria-describedby="scrubHelp" aria-valuemin="0" aria-valuemax="920" aria-valuenow="920" aria-valuetext="지금, 깨어 있음">
-            <span class="now-badge" id="nowBadge">지금</span>
+          <span class="sr-only" id="scrubHelp">좌우로 밀거나 화살표 키로 그 시간에 한 일을 볼 수 있어요. 어제 비교에서 그래프를 누르면 같은 시각의 누적 차이가 보여요. 손을 놓으면 지금으로 돌아와요.</span>
+          <div class="rhythm-stage">
+          <div class="rhythm-plot">
+          <div class="time-axis" aria-hidden="true"><span style="left:0%">00:00</span><span style="left:25%">06:00</span><span style="left:50%">12:00</span><span style="left:75%">18:00</span><span style="left:100%">24:00</span></div>
+          <div class="rhythm-tracks" id="rhythmTracks">
+            <div class="track-row is-yesterday" id="yesterdaySplit">
+              <span class="track-label">어제</span>
+              <div class="yesterday-rail" id="yesterdayTrack" aria-label="어제 24시간 미니 타임라인"></div>
+            </div>
+            <div class="track-row is-today">
+              <span class="track-label is-today">오늘</span>
+              <div class="rhythm-line-shell">
+                <div class="rhythm-line" id="rhythmLine">
+                  <div class="track-visuals" id="trackVisuals" aria-hidden="true"></div>
+                  <div id="sleepBlocks"></div>
+                  <div class="bar-events" id="barEvents" aria-label="오늘 수유, 기저귀, 활동 기록"></div>
+                </div>
+              </div>
+            </div>
+            <div class="now-scrubber" id="nowScrubber" role="slider" tabindex="0" aria-label="오늘 리듬 탐색" aria-describedby="scrubHelp" aria-valuemin="0" aria-valuemax="920" aria-valuenow="920" aria-valuetext="지금, 깨어 있음">
+              <span class="now-badge" id="nowBadge">지금</span>
+            </div>
+            <i class="now-line" id="nowLine" aria-hidden="true"></i>
+          </div>
+          <div class="rhythm-dock">
+            <div class="compare-float" id="compareTooltip" aria-live="polite">
+              <p class="tip-kicker">같은 시각 어제보다</p>
+              <div id="compareRows"></div>
+            </div>
             <span class="rhythm-duck awake" id="rhythmDuck" aria-hidden="true"></span>
           </div>
-          <span class="sr-only" id="scrubHelp">좌우로 밀거나 화살표 키로 그 시간에 한 일을 볼 수 있어요. 손을 놓으면 지금으로 돌아와요.</span>
-          <div class="time-axis" aria-hidden="true"><span style="left:0%">0시</span><span style="left:25%">6시</span><span style="left:50%">12시</span><span style="left:75%">18시</span><span style="left:100%">24시</span></div>
-          <div class="rhythm-line-shell">
-            <div class="rhythm-line" id="rhythmLine">
-              <div id="sleepBlocks"></div>
-              <div class="bar-events" id="barEvents" aria-label="오늘 수유, 기저귀, 활동 기록"></div>
-              <i class="now-line" id="nowLine" aria-hidden="true"></i>
-            </div>
+          </div>
           </div>
         </div>
         <p class="status-copy" id="rhythmStatus"><strong>지금은 깨어 있어요</strong> · 마지막 수유 오후 2:30</p>
+        <div class="compare-stats" aria-label="어제 대비 오늘 요약">
+          <article class="compare-stat feed">
+            <div class="stat-head">
+              <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3h6M10 3v3.2c0 1.1-1.1 1.6-1.1 2.8v9a3.1 3.1 0 0 0 6.2 0V9c0-1.2-1.1-1.7-1.1-2.8V3"/><path d="M9.4 12h5.2"/></svg>
+              <span class="label">수유</span>
+            </div>
+            <span class="value">720ml</span>
+            <span class="diff up">▲ +90ml</span>
+            <span class="hint">어제보다 많아요</span>
+          </article>
+          <article class="compare-stat sleep">
+            <div class="stat-head">
+              <svg class="stat-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.4 15.1A7.8 7.8 0 1 1 8.9 4.7 6.4 6.4 0 0 0 17.4 15.1Z"/></svg>
+              <span class="label">수면</span>
+            </div>
+            <span class="value">11시간 20분</span>
+            <span class="diff down">▼ -40분</span>
+            <span class="hint">어제보다 적어요</span>
+          </article>
+          <article class="compare-stat diaper">
+            <div class="stat-head">
+              <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 8h14v3c0 4.2-2.6 7.5-7 7.5S5 15.2 5 11V8Z"/><path d="M5 11h14"/></svg>
+              <span class="label">기저귀</span>
+            </div>
+            <span class="value">6회</span>
+            <span class="diff same">— 어제와 같음</span>
+            <span class="hint">변화가 없어요</span>
+          </article>
+          <article class="compare-stat activity">
+            <div class="stat-head">
+              <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20V11"/><path d="M12 11c-2.4-2.2-4.4-2.2-6.2-.2"/><path d="M12 11c2.4-2.2 4.4-2.2 6.2-.2"/></svg>
+              <span class="label">터미타임</span>
+            </div>
+            <span class="value">28분</span>
+            <span class="diff up">▲ +8분</span>
+            <span class="hint">어제보다 많아요</span>
+          </article>
+        </div>
+        <p class="compare-insight" id="rhythmInsight">지금은 깨어 있어요. 오늘 수유 720ml · 어제보다 +90ml<small>오늘은 어제보다 수유량이 많고, 수면은 조금 적어요. 오후 수유 텀이 어제보다 조금 빨라졌어요.</small></p>
         <div class="timeline-rows" id="timelineRows">
           <div class="timeline-row">
-            <span class="timeline-label"><i class="feed-mark"></i><span class="sr-only">수유</span></span>
+            <span class="timeline-label">
+              <svg class="stat-icon feed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3h6M10 3v3.2c0 1.1-1.1 1.6-1.1 2.8v9a3.1 3.1 0 0 0 6.2 0V9c0-1.2-1.1-1.7-1.1-2.8V3"/><path d="M9.4 12h5.2"/></svg>
+              <span class="sr-only">수유</span>
+            </span>
             <div class="event-track" id="feedEvents"></div>
           </div>
           <div class="timeline-row">
-            <span class="timeline-label"><i class="diaper-mark"></i><span class="sr-only">기저귀</span></span>
+            <span class="timeline-label">
+              <svg class="stat-icon sleep-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.4 15.1A7.8 7.8 0 1 1 8.9 4.7 6.4 6.4 0 0 0 17.4 15.1Z"/></svg>
+              <span class="sr-only">수면</span>
+            </span>
+            <div class="event-track" id="sleepEvents"></div>
+          </div>
+          <div class="timeline-row">
+            <span class="timeline-label">
+              <svg class="stat-icon diaper-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 8h14v3c0 4.2-2.6 7.5-7 7.5S5 15.2 5 11V8Z"/><path d="M5 11h14"/></svg>
+              <span class="sr-only">기저귀</span>
+            </span>
             <div class="event-track" id="diaperEvents"></div>
           </div>
           <div class="timeline-row" id="activityRow">
-            <span class="timeline-label"><i class="activity-mark"></i><span class="sr-only">활동</span></span>
+            <span class="timeline-label">
+              <svg class="stat-icon activity-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20V11"/><path d="M12 11c-2.4-2.2-4.4-2.2-6.2-.2"/><path d="M12 11c2.4-2.2 4.4-2.2 6.2-.2"/></svg>
+              <span class="sr-only">터미타임</span>
+            </span>
             <div class="event-track" id="activityEvents"></div>
           </div>
         </div>
-        <button class="timeline-toggle" id="timelineToggle" type="button" aria-expanded="false" aria-controls="timelineRows">펼쳐서 보기</button>
-        <div class="legend" aria-label="범례">
-          <span class="legend-item"><i class="legend-dot sleep"></i>수면</span>
-          <span class="legend-item"><i class="legend-dot feed"></i>수유</span>
-          <span class="legend-item"><i class="legend-tick"></i>기저귀</span>
-          <span class="legend-item"><i class="legend-dot activity"></i>터미타임</span>
+        <div class="rhythm-foot">
+          <button class="timeline-toggle" id="timelineToggle" type="button" aria-expanded="false" aria-controls="timelineRows">펼쳐서 보기 ⌄</button>
+          <div class="legend" aria-label="범례">
+            <span class="legend-item"><i class="legend-dot sleep"></i>수면</span>
+            <span class="legend-item"><i class="legend-dot feed"></i>수유</span>
+            <span class="legend-item"><i class="legend-tick"></i>기저귀</span>
+            <span class="legend-item"><i class="legend-dot activity"></i>터미타임</span>
+          </div>
         </div>
       </article>
 
@@ -1496,7 +1719,9 @@
 
   <script>
     const sleepBlocks = document.getElementById("sleepBlocks");
+    const trackVisuals = document.getElementById("trackVisuals");
     const feedEvents = document.getElementById("feedEvents");
+    const sleepEvents = document.getElementById("sleepEvents");
     const diaperEvents = document.getElementById("diaperEvents");
     const activityEvents = document.getElementById("activityEvents");
     const barEvents = document.getElementById("barEvents");
@@ -1507,8 +1732,17 @@
     const nowBadge = document.getElementById("nowBadge");
     const nowLine = document.getElementById("nowLine");
     const rhythmDuck = document.getElementById("rhythmDuck");
+    const rhythmInsight = document.getElementById("rhythmInsight");
     const rhythmStatus = document.getElementById("rhythmStatus");
+    const yesterdayTrack = document.getElementById("yesterdayTrack");
+    const modeToday = document.getElementById("modeToday");
+    const modeYesterday = document.getElementById("modeYesterday");
+    const modeYesterdayLabel = document.getElementById("modeYesterdayLabel");
+    const compareRows = document.getElementById("compareRows");
+    const restInsight = "지금은 깨어 있어요. 오늘 수유 720ml · 어제보다 +90ml<small>오늘은 어제보다 수유량이 많고, 수면은 조금 적어요. 오후 수유 텀이 어제보다 조금 빨라졌어요.</small>";
+    let compareOn = true;
     const rhythmSky = document.getElementById("rhythmSky");
+    const rhythmTracks = document.getElementById("rhythmTracks");
     const nowScrubber = document.getElementById("nowScrubber");
     const nowMinutes = 15 * 60 + 20;
     const daySpan = 24 * 60;
@@ -1521,22 +1755,49 @@
       { type: "낮잠", start: 13 * 60 + 25, duration: 50, detail: "50분" },
     ];
     const feedData = [
-      { type: "모유", start: 1 * 60 + 52, duration: 14 },
-      { type: "분유", start: 6 * 60 + 40, amount: "120ml" },
-      { type: "모유", start: 9 * 60 + 15, duration: 15 },
-      { type: "분유", start: 12 * 60 + 0, amount: "130ml" },
-      { type: "모유", start: 14 * 60 + 30, duration: 12 },
+      { type: "모유", start: 1 * 60 + 52, duration: 14, amount: "90ml", ml: 90 },
+      { type: "분유", start: 6 * 60 + 40, amount: "150ml", ml: 150 },
+      { type: "모유", start: 9 * 60 + 15, duration: 15, amount: "140ml", ml: 140 },
+      { type: "분유", start: 12 * 60 + 0, amount: "160ml", ml: 160 },
+      { type: "모유", start: 14 * 60 + 30, duration: 12, amount: "180ml", ml: 180 },
     ];
     const diaperData = [
       { type: "기저귀", start: 2 * 60 + 8, detail: "소변" },
+      { type: "기저귀", start: 4 * 60 + 20, detail: "소변" },
       { type: "기저귀", start: 6 * 60 + 55, detail: "소변" },
       { type: "기저귀", start: 9 * 60 + 35, detail: "대변" },
       { type: "기저귀", start: 12 * 60 + 20, detail: "소변" },
       { type: "기저귀", start: 14 * 60 + 48, detail: "소변" },
     ];
     const activityData = [
-      { type: "터미타임", start: 9 * 60 + 50, duration: 8 },
-      { type: "터미타임", start: 12 * 60 + 45, duration: 10 },
+      { type: "터미타임", start: 9 * 60 + 50, duration: 12 },
+      { type: "터미타임", start: 12 * 60 + 45, duration: 16 },
+    ];
+    const yesterdaySleepData = [
+      { type: "밤잠", start: 20 * 60 + 40, duration: 310, detail: "5시간 10분" },
+      { type: "밤잠", start: 2 * 60 + 5, duration: 250, detail: "4시간 10분" },
+      { type: "낮잠", start: 8 * 60 + 5, duration: 55, detail: "55분" },
+      { type: "낮잠", start: 11 * 60 + 10, duration: 50, detail: "50분" },
+      { type: "낮잠", start: 14 * 60 + 5, duration: 55, detail: "55분" },
+    ];
+    const yesterdayFeedData = [
+      { type: "모유", start: 1 * 60 + 20, duration: 16, amount: "90ml", ml: 90 },
+      { type: "분유", start: 5 * 60 + 40, amount: "140ml", ml: 140 },
+      { type: "모유", start: 8 * 60 + 50, duration: 14, amount: "130ml", ml: 130 },
+      { type: "분유", start: 11 * 60 + 10, amount: "130ml", ml: 130 },
+      { type: "모유", start: 13 * 60 + 50, duration: 13, amount: "140ml", ml: 140 },
+    ];
+    const yesterdayDiaperData = [
+      { type: "기저귀", start: 1 * 60 + 40, detail: "소변" },
+      { type: "기저귀", start: 5 * 60 + 55, detail: "소변" },
+      { type: "기저귀", start: 8 * 60 + 10, detail: "대변" },
+      { type: "기저귀", start: 10 * 60 + 50, detail: "소변" },
+      { type: "기저귀", start: 13 * 60 + 5, detail: "소변" },
+      { type: "기저귀", start: 15 * 60 + 5, detail: "소변" },
+    ];
+    const yesterdayActivityData = [
+      { type: "터미타임", start: 9 * 60 + 20, duration: 8 },
+      { type: "터미타임", start: 13 * 60 + 10, duration: 12 },
     ];
 
     const formatTime = (minutes) => {
@@ -1545,6 +1806,81 @@
       const period = hour < 12 ? "오전" : "오후";
       const displayHour = hour % 12 || 12;
       return `${period} ${displayHour}:${String(minute).padStart(2, "0")}`;
+    };
+    const formatDuration = (minutes) => {
+      if (minutes < 60) return `${Math.round(minutes)}분`;
+      return `${Math.round(minutes / 60 * 10) / 10}시간`;
+    };
+    const segmentLabel = (segment) => {
+      if (segment.kind === "sleep" && segment.duration >= 180) return formatDuration(segment.duration);
+      if (segment.kind === "event" && segment.kinds.length === 1 && segment.kinds[0] === "activity" && segment.duration >= 180) return formatDuration(segment.duration);
+      return "";
+    };
+    const sleepSegments = (event) => {
+      const end = event.start + event.duration;
+      return end <= 1440
+        ? [{ start: event.start, duration: event.duration }]
+        : [{ start: event.start, duration: 1440 - event.start }, { start: 0, duration: end - 1440 }];
+    };
+    const sleepUntil = (events, minutes) => events.reduce((total, event) => (
+      event.start > minutes ? total : total + sleepSegments(event).reduce((sum, segment) => {
+        const from = Math.max(segment.start, 0);
+        const to = Math.min(segment.start + segment.duration, minutes);
+        return sum + Math.max(0, to - from);
+      }, 0)
+    ), 0);
+    const feedUntil = (events, minutes) => events
+      .filter((event) => event.start <= minutes)
+      .reduce((sum, event) => sum + (event.ml || 0), 0);
+    const describeFeed = (feed) => (feed ? (feed.amount || (feed.duration ? `${feed.duration}분` : "기록 없음")) : "아직 없음");
+    const signedAmount = (value, unit) => {
+      if (value === 0) return "같아요";
+      const abs = unit === "ml" ? `${Math.abs(value)}ml` : unit === "count" ? `${Math.abs(value)}회` : formatDuration(Math.abs(value));
+      return `${value > 0 ? "+" : "-"}${abs}`;
+    };
+    const setCompare = (on) => {
+      compareOn = on;
+      rhythmCard.classList.toggle("is-compare", on);
+      modeToday.classList.toggle("is-active", !on);
+      modeYesterday.classList.toggle("is-active", on);
+      modeToday.setAttribute("aria-pressed", String(!on));
+      modeYesterday.setAttribute("aria-pressed", String(on));
+      modeYesterdayLabel.textContent = on ? "어제 비교 ON" : "어제 비교";
+    };
+    const fillCompareTooltip = (minutes) => {
+      const before = (events) => events.filter((event) => event.start <= minutes);
+      const durationUntil = (events) => before(events).reduce((sum, event) => sum + Math.min(event.duration || 0, minutes - event.start), 0);
+      const groups = [
+        { label: "수유", kind: "feed", today: feedData, yesterday: yesterdayFeedData,
+          value: (events) => feedUntil(events, minutes), unit: "ml" },
+        { label: "수면", kind: "sleep", today: sleepData, yesterday: yesterdaySleepData,
+          value: (events) => sleepUntil(events, minutes), unit: "min" },
+        { label: "기저귀", kind: "diaper", today: diaperData, yesterday: yesterdayDiaperData,
+          value: (events) => before(events).length, unit: "count" },
+        { label: "터미타임", kind: "activity", today: activityData, yesterday: yesterdayActivityData,
+          value: durationUntil, unit: "min" },
+      ];
+      compareRows.replaceChildren();
+      groups.forEach((group) => {
+        const todayValue = group.value(group.today);
+        const yesterdayValue = group.value(group.yesterday);
+        const todayHasRecord = group.kind === "sleep" ? todayValue > 0 : before(group.today).length > 0;
+        const yesterdayHasRecord = group.kind === "sleep" ? yesterdayValue > 0 : before(group.yesterday).length > 0;
+        if (!todayHasRecord && !yesterdayHasRecord) return;
+        const delta = todayHasRecord && yesterdayHasRecord ? todayValue - yesterdayValue : null;
+        const row = document.createElement("p");
+        row.className = `tip-metric ${group.kind}${delta == null || delta === 0 ? " same" : ""}`;
+        const dot = document.createElement("span");
+        dot.className = "tip-ico";
+        dot.setAttribute("aria-hidden", "true");
+        const label = document.createElement("span");
+        label.textContent = group.label;
+        const value = document.createElement("strong");
+        value.textContent = delta == null ? "비교할 기록 없음" : signedAmount(delta, group.unit);
+        row.append(dot, label, value);
+        compareRows.append(row);
+      });
+      if (!compareRows.childElementCount) compareRows.textContent = "비교할 기록 없음";
     };
 
     const percentAt = (minutes) => `${(minutes / daySpan) * 100}%`;
@@ -1593,7 +1929,6 @@
     const applyDuckPose = (pose) => {
       duckPoses.forEach((name) => rhythmDuck.classList.toggle(name, name === pose));
     };
-    const describeFeed = (feed) => (feed.duration ? `${feed.duration}분` : feed.amount);
     const setPlayhead = (minutes, live = false) => {
       rhythmSky.style.setProperty("--now-position", percentAt(minutes));
       if (!live) {
@@ -1607,6 +1942,9 @@
         rhythmStatus.innerHTML = sleepingNow
           ? `<strong>낮잠 중 · ${nowMinutes - sleepingNow.start}분째</strong> · ${formatTime(sleepingNow.start)} 시작`
           : `<strong>지금은 깨어 있어요</strong> · 마지막 수유 ${formatTime(feedData.at(-1).start)}`;
+        rhythmInsight.innerHTML = restInsight;
+        rhythmCard.classList.remove("is-inspecting");
+        if (compareOn) fillCompareTooltip(nowMinutes);
         return;
       }
       const diaperOn = coveringEvent(diaperData, minutes, 6);
@@ -1648,6 +1986,11 @@
       nowScrubber.setAttribute("aria-valuenow", String(minutes));
       nowScrubber.setAttribute("aria-valuetext", valueText);
       rhythmStatus.innerHTML = status;
+      rhythmInsight.innerHTML = `${status}<small>손을 놓으면 지금으로 돌아와요.</small>`;
+      if (compareOn) {
+        fillCompareTooltip(minutes);
+        rhythmCard.classList.add("is-inspecting");
+      }
     };
     const setCurrentState = () => setPlayhead(nowMinutes, false);
     const clampMinutes = (minutes) => Math.max(0, Math.min(nowMinutes, Math.round(minutes)));
@@ -1705,7 +2048,9 @@
     });
     const showEvent = (event) => {
       const value = event.duration ? `${event.duration}분` : event.amount || event.detail;
-      rhythmStatus.innerHTML = `<strong>${formatTime(event.start)} · ${event.type}</strong> · ${value}`;
+      const copy = `<strong>${formatTime(event.start)} · ${event.type}</strong> · ${value}`;
+      rhythmStatus.innerHTML = copy;
+      rhythmInsight.innerHTML = `${copy}<small>기록을 탭해서 보고 있어요.</small>`;
     };
     const appendEventButton = (event, parent, className, left) => {
       const button = document.createElement("button");
@@ -1736,21 +2081,156 @@
       block.title = `${formatTime(event.start)} ${event.type} ${event.duration}분`;
       activityEvents.appendChild(block);
       });
+    const composeVisualTrack = (sleepRecords, eventGroups, limit, widthPx) => {
+      const minutesPerPixel = daySpan / Math.max(1, widthPx);
+      const minimum = 7 * minutesPerPixel;
+      const gap = 2 * minutesPerPixel;
+      const slots = eventGroups.flatMap(({ kind, events }) => events
+        .filter((event) => event.start <= limit)
+        .map((event) => {
+          const duration = kind === "activity" ? Math.max(0, event.duration || 0) : 0;
+          const center = event.start + duration / 2;
+          const width = Math.max(minimum, duration);
+          return { start: Math.max(0, center - width / 2), end: Math.min(limit, center + width / 2), kinds: new Set([kind]) };
+        }))
+        .filter((slot) => slot.end > slot.start)
+        .sort((a, b) => a.start - b.start);
+      const mergedEvents = [];
+      slots.forEach((slot) => {
+        const previous = mergedEvents.at(-1);
+        if (previous && slot.start < previous.end + gap) {
+          previous.end = Math.max(previous.end, slot.end);
+          slot.kinds.forEach((kind) => previous.kinds.add(kind));
+        } else mergedEvents.push(slot);
+      });
+      const sleepRanges = sleepRecords.flatMap(sleepSegments)
+        .map((segment) => ({ start: Math.max(0, segment.start), end: Math.min(limit, segment.start + segment.duration) }))
+        .filter((range) => range.end > range.start)
+        .sort((a, b) => a.start - b.start);
+      const mergedSleep = [];
+      sleepRanges.forEach((range) => {
+        const previous = mergedSleep.at(-1);
+        if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
+        else mergedSleep.push({ ...range });
+      });
+      const segments = [];
+      mergedSleep.forEach((range) => {
+        let cursor = range.start;
+        for (const event of mergedEvents) {
+          if (event.end <= cursor) continue;
+          if (event.start >= range.end) break;
+          const end = Math.min(event.start, range.end);
+          if (end > cursor) segments.push({ kind: "sleep", start: cursor, duration: end - cursor });
+          cursor = Math.max(cursor, Math.min(event.end, range.end));
+          if (cursor >= range.end) break;
+        }
+        if (cursor < range.end) segments.push({ kind: "sleep", start: cursor, duration: range.end - cursor });
+      });
+      mergedEvents.forEach((event) => segments.push({
+        kind: "event", start: event.start, duration: event.end - event.start,
+        kinds: ["feed", "diaper", "activity"].filter((kind) => event.kinds.has(kind)),
+      }));
+      return segments.sort((a, b) => a.start - b.start || (a.kind === "sleep" ? -1 : 1));
+    };
+    const appendVisualTrack = (parent, sleepRecords, feedRecords, diaperRecords, activityRecords, limit, width) => {
+      const segments = composeVisualTrack(sleepRecords, [
+        { kind: "feed", events: feedRecords },
+        { kind: "diaper", events: diaperRecords },
+        { kind: "activity", events: activityRecords },
+      ], limit, width);
+      const guides = [0, 6, 12, 18].map((hour) => {
+        const guide = document.createElement("span");
+        guide.className = "track-guide";
+        guide.style.left = percentAt(hour * 60);
+        guide.setAttribute("aria-hidden", "true");
+        return guide;
+      });
+      parent.replaceChildren(...guides, ...segments.map((segment) => {
+        const el = document.createElement("span");
+        el.className = `track-segment ${segment.kind}${segment.kind === "event" && segment.kinds.includes("activity") && segment.duration > 12 ? " event-duration" : ""}`;
+        el.style.left = percentAt(segment.start);
+        el.style.width = percentAt(segment.duration);
+        const label = segmentLabel(segment);
+        if (label) {
+          const labelEl = document.createElement("span");
+          labelEl.className = "segment-label";
+          labelEl.textContent = label;
+          el.appendChild(labelEl);
+        }
+        if (segment.kind === "event") segment.kinds.forEach((kind) => {
+          const stripe = document.createElement("span");
+          stripe.className = kind;
+          el.insertBefore(stripe, el.firstChild);
+        });
+        return el;
+      }));
+    };
+    const renderVisualTracks = () => {
+      appendVisualTrack(trackVisuals, sleepData, feedData, diaperData, activityData, nowMinutes, rhythmLine.clientWidth);
+      appendVisualTrack(yesterdayTrack, yesterdaySleepData, yesterdayFeedData, yesterdayDiaperData, yesterdayActivityData, daySpan, yesterdayTrack.clientWidth);
+    };
 
     renderSleepBlocks();
+    sleepData.forEach((event) => {
+      const end = event.start + event.duration;
+      const segments = end <= 1440
+        ? [{ start: event.start, duration: event.duration }]
+        : [{ start: event.start, duration: 1440 - event.start }, { start: 0, duration: end - 1440 }];
+      segments
+        .map((segment) => ({
+          start: segment.start,
+          duration: Math.min(segment.duration, nowMinutes - segment.start),
+        }))
+        .filter((segment) => segment.duration > 0)
+        .forEach((segment) => {
+          const block = document.createElement("span");
+          block.className = "timeline-sleep";
+          block.style.left = percentAt(segment.start);
+          block.style.width = `${Math.max((segment.duration / daySpan) * 100, 1.2)}%`;
+          sleepEvents.appendChild(block);
+        });
+    });
     setCurrentState();
     renderEvents(feedData, feedEvents);
     renderEvents(diaperData, diaperEvents, "diaper");
     renderBarEvents();
     renderActivities();
+    renderVisualTracks();
+    if (typeof ResizeObserver !== "undefined") {
+      const trackResizeObserver = new ResizeObserver(renderVisualTracks);
+      trackResizeObserver.observe(rhythmLine);
+      trackResizeObserver.observe(yesterdayTrack);
+    }
     document.getElementById("systemTime").textContent = formatTime(nowMinutes).replace("오전 ", "").replace("오후 ", "");
 
     timelineToggle.addEventListener("click", () => {
       const expanded = timelineToggle.getAttribute("aria-expanded") === "true";
       timelineToggle.setAttribute("aria-expanded", String(!expanded));
       rhythmCard.classList.toggle("is-expanded", !expanded);
-      timelineToggle.textContent = expanded ? "펼쳐서 보기" : "접기";
+      timelineToggle.textContent = expanded ? "펼쳐서 보기 ⌄" : "접기 ⌃";
     });
+    modeToday.addEventListener("click", () => {
+      setCompare(false);
+      returnToNow();
+    });
+    modeYesterday.addEventListener("click", () => {
+      setCompare(true);
+      returnToNow();
+    });
+    rhythmTracks.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || event.target.closest("#nowScrubber") || event.target.closest("button")) return;
+      event.preventDefault();
+      scrubPointer = event.pointerId;
+      try { rhythmTracks.setPointerCapture(event.pointerId); } catch (_) {}
+      rhythmSky.classList.add("is-dragging");
+      setPlayhead(minutesFromClientX(event.clientX), true);
+    });
+    rhythmTracks.addEventListener("pointermove", (event) => {
+      if (scrubPointer !== event.pointerId) return;
+      setPlayhead(minutesFromClientX(event.clientX), true);
+    });
+    rhythmTracks.addEventListener("pointerup", endScrub);
+    rhythmTracks.addEventListener("pointercancel", endScrub);
 
     const summaryTitle = document.getElementById("todaySummaryTitle");
     const summaryBody = document.getElementById("todaySummaryBody");
@@ -1801,8 +2281,8 @@
       summaryTitle.textContent = "밤새 6시간 12분 푹 잤어요. 아침 첫 수유도 잘 했어요.";
       summaryBody.textContent = "오늘은 어젯밤보다 조금 더 길게 잠을 이어갔어요.";
     } else if (hour < 18) {
-      summaryTitle.textContent = "오늘 다린이는 평소 리듬대로 편안하게 지내고 있어요.";
-      summaryBody.textContent = "수유 간격이 안정적이고, 터미타임도 2회 총 18분 했어요.";
+      summaryTitle.textContent = "오늘은 어제보다 조금 더 잘 먹고, 잠은 조금 적어요.";
+      summaryBody.textContent = "수유 720ml · 어제보다 +90ml. 수면은 11시간 20분으로 어제보다 40분 짧아요.";
     } else {
       summaryTitle.textContent = "오늘 하루도 다린이의 평소 리듬대로 흘러갔어요.";
       summaryBody.textContent = "수면 13시간 18분, 수유 7회로 평소와 비슷한 하루예요.";

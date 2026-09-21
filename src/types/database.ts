@@ -350,6 +350,8 @@ export type MemoryMediaRow = {
   upload_status: MediaUploadStatus;
   width: number | null;
   height: number | null;
+  duration_ms: number | null;
+  thumbnail_storage_path: string | null;
   created_at: string;
 };
 
@@ -520,6 +522,20 @@ export type DarinInviteRequestRow = {
   updated_at: string;
 };
 
+export type BabyAccessPermissionRow = {
+  baby_id: string;
+  user_id: string;
+  care_read: boolean;
+  care_write: boolean;
+  moments_read: boolean;
+  moments_write: boolean;
+  social_comment: boolean;
+  social_react: boolean;
+  granted_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ContactRequestRow = {
   id: string;
   user_id: string | null;
@@ -553,6 +569,12 @@ export type Database = {
         Insert: Partial<BabyMemberRow> &
           Pick<BabyMemberRow, "baby_id" | "user_id" | "permission_role">;
         Update: Partial<BabyMemberRow>;
+        Relationships: [];
+      };
+      baby_access_permissions: {
+        Row: BabyAccessPermissionRow;
+        Insert: Partial<BabyAccessPermissionRow> & Pick<BabyAccessPermissionRow, "baby_id" | "user_id">;
+        Update: Partial<BabyAccessPermissionRow>;
         Relationships: [];
       };
       baby_caution_foods: {
@@ -741,6 +763,24 @@ export type Database = {
     Functions: {
       is_baby_member: { Args: { p_baby_id: string }; Returns: boolean };
       baby_permission: { Args: { p_baby_id: string }; Returns: PermissionRole };
+      has_baby_access: { Args: { p_baby_id: string; p_permission: string }; Returns: boolean };
+      set_baby_access_permissions: {
+        Args: {
+          p_baby_id: string;
+          p_user_id: string;
+          p_care_read: boolean;
+          p_care_write: boolean;
+          p_moments_read: boolean;
+          p_moments_write: boolean;
+          p_social_comment: boolean;
+          p_social_react: boolean;
+        };
+        Returns: BabyAccessPermissionRow;
+      };
+      promote_baby_full_admin: {
+        Args: { p_baby_id: string; p_user_id: string };
+        Returns: boolean;
+      };
       list_visible_profile_display: {
         Args: { p_user_ids: string[] };
         Returns: Array<{
@@ -749,6 +789,15 @@ export type Database = {
           nickname: string | null;
           avatar_storage_path: string | null;
           default_relation: string | null;
+        }>;
+      };
+      search_invite_profiles: {
+        Args: { p_baby_id: string; p_query: string };
+        Returns: Array<{
+          user_id: string;
+          display_name: string | null;
+          darin_id: string;
+          avatar_storage_path: string | null;
         }>;
       };
       list_memory_author_display: {
@@ -760,6 +809,7 @@ export type Database = {
         }>;
       };
       can_edit_care_logs: { Args: { p_baby_id: string }; Returns: boolean };
+      delete_created_baby: { Args: { p_baby_id: string }; Returns: boolean };
       can_edit_growth_records: { Args: { p_baby_id: string }; Returns: boolean };
       can_create_diary_entry: { Args: { p_baby_id: string }; Returns: boolean };
       can_manage_diary_entry: { Args: { p_diary_entry_id: string }; Returns: boolean };
@@ -838,6 +888,10 @@ export type Database = {
         Returns: Array<{ baby_id: string; request_type: "family" | "friend"; permission_role: string }>;
       };
       mark_notification_event_read: {
+        Args: { p_event_id: string };
+        Returns: undefined;
+      };
+      dismiss_notification_event: {
         Args: { p_event_id: string };
         Returns: undefined;
       };

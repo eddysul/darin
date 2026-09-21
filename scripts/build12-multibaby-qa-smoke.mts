@@ -2,15 +2,29 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { matchCautionFoods, normalizeCautionFoodName } from "../src/utils/cautionFoodsStore";
 import { scopedStorageKey, type LocalDataScope } from "../src/utils/scopedLocalStorage";
+import { careLogRequestMatchesScope } from "../src/utils/careLogHistory.ts";
+import { sameLocalDataScope } from "../src/context/babyLogContextHelpers.ts";
 import type { CautionFood } from "../src/types/cautionFood";
 
 const firstScope: LocalDataScope = { userId: "user-1", babyId: "baby-1" };
 const secondScope: LocalDataScope = { userId: "user-1", babyId: "baby-2" };
+const otherAccountScope: LocalDataScope = { userId: "user-2", babyId: "baby-1" };
 assert.notEqual(
   scopedStorageKey("darin:baby-logs", firstScope),
   scopedStorageKey("darin:baby-logs", secondScope),
   "local data keys must be isolated by baby",
 );
+assert.notEqual(
+  scopedStorageKey("darin:baby-logs", firstScope),
+  scopedStorageKey("darin:baby-logs", otherAccountScope),
+  "local data keys must be isolated by account",
+);
+assert.equal(careLogRequestMatchesScope("user-1:baby-1", firstScope), true);
+assert.equal(careLogRequestMatchesScope("user-1:baby-1", secondScope), false, "late result from baby A must not enter baby B");
+assert.equal(careLogRequestMatchesScope("user-1:baby-1", otherAccountScope), false, "late result from account X must not enter account Y");
+assert.equal(careLogRequestMatchesScope("user-1:baby-1", null), false, "late result must not enter signed-out state");
+assert.equal(sameLocalDataScope(firstScope, secondScope), false);
+assert.equal(sameLocalDataScope(firstScope, otherAccountScope), false);
 
 assert.equal(normalizeCautionFoodName("  달걀  "), "달걀");
 assert.equal(normalizeCautionFoodName("MILK"), "milk");
@@ -55,7 +69,9 @@ for (const file of [
 }
 
 const context = readFileSync("src/context/BabyLogContext.tsx", "utf8");
-assert.match(context, /accessibleBabies\.find\(\(baby\) => baby\.id === sync\.babyId\)/);
+const hydration = readFileSync("src/context/babyLogHydrationService.ts", "utf8");
+assert.match(hydration, /sync\.userId === session\.user\.id[\s\S]*babies\.find\(\(baby\) => baby\.id === sync\.babyId\)/);
+assert.match(hydration, /return \{ scope: \{ userId: session\.user\.id, babyId: selected\.id \}, babies \}/);
 assert.match(context, /if \(isSupabaseConfigured\(\) && !activeBabyId\)/);
 assert.match(context, /syncCareLogCreate\(next, scope\?\.babyId\)/);
 

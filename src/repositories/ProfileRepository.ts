@@ -1,4 +1,6 @@
 import type { ProfileRow } from "../types/database";
+import type { InviteSearchHit } from "../types/inviteSearch";
+import { parseDarinId } from "./DarinIdentityRepository";
 import type {
   DisplayProfile,
   UpdateMyProfileInput,
@@ -13,6 +15,12 @@ import { toDbRelationshipLabel } from "../utils/supabaseMappers";
 import { AuthRepository } from "./AuthRepository";
 import type { Locale } from "../i18n";
 import { collectMemoryAuthorUserIds } from "../utils/memoryAuthorDisplay";
+
+function fallbackInviteSearch(query: string): InviteSearchHit[] {
+  const parsed = parseDarinId(query);
+  if (!parsed) return [];
+  return [{ userId: "", displayName: parsed.nickname, darinId: parsed.darinId }];
+}
 
 function isMissingRpc(error: { code?: string; message?: string }): boolean {
   const message = error.message ?? "";
@@ -87,6 +95,32 @@ export const ProfileRepository = {
         ? await this.createProfileAvatarSignedUrl(row.avatar_storage_path).catch(() => undefined)
         : undefined,
     )));
+  },
+
+  /**
+   * Privacy-safe people discovery for the invite screen.
+   * Projection is user_id + display_name + darin_id + signed avatar only.
+   */
+  async searchInviteProfiles(babyId: string, query: string): Promise<InviteSearchHit[]> {
+    const trimmed = query.trim();
+    if ([...trimmed].length < 2) return [];
+    const sb = requireSupabase();
+    const { data, error } = await sb.rpc("search_invite_profiles", {
+      p_baby_id: babyId,
+      p_query: trimmed,
+    });
+    if (error) {
+      if (isMissingRpc(error)) return fallbackInviteSearch(trimmed);
+      throw error;
+    }
+    return Promise.all((data ?? []).map(async (row) => ({
+      userId: row.user_id,
+      displayName: row.display_name?.trim() || row.darin_id,
+      darinId: row.darin_id,
+      avatarUrl: row.avatar_storage_path
+        ? await this.createProfileAvatarSignedUrl(row.avatar_storage_path).catch(() => undefined)
+        : undefined,
+    })));
   },
 
   /**

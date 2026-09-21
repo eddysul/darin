@@ -1,6 +1,13 @@
 /** Pure color constants shared by app UI and Node-based QA utilities. */
 export const BRAND_CORAL = "#E8918A";
 
+export const roleColors = {
+  admin: { background: "#F4F2EF", text: "#6B655E" },
+  editor: { background: "#F4F2EF", text: "#6B655E" },
+  viewer: { background: "#F4F2EF", text: "#6B655E" },
+  friend: { background: "#F4F2EF", text: "#6B655E" },
+} as const;
+
 export const categoryColors = {
   diaper: "#c98a54",
   sleep: "#7c83fd",

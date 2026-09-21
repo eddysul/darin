@@ -1,7 +1,7 @@
 import { DynamicColorIOS, Platform, PlatformColor, type ColorValue } from "react-native";
 import { BRAND_CORAL, categoryColors } from "./themePalette";
 
-export { categoryColors } from "./themePalette";
+export { categoryColors, roleColors } from "./themePalette";
 
 const BRAND_CORAL_SOFT = "rgba(232,145,138,0.16)";
 const PRIMARY_CORAL = "#B65B55";
@@ -49,6 +49,7 @@ export const colors = {
   backgroundSecondary: adaptiveColor("#FFFFFF", "#201C19", "?attr/colorBackgroundFloating"),
   card: adaptiveColor(lightThemeColors.card, darkThemeColors.card, "?attr/colorBackgroundFloating"),
   cardHi: adaptiveColor("#FAF4EE", "#2B2521", "?attr/colorBackgroundFloating"),
+  chip: adaptiveColor("#F4F2EF", "#2B2521", "?attr/colorBackgroundFloating"),
   text: adaptiveColor(lightThemeColors.text, darkThemeColors.text, "?attr/textColorPrimary"),
   /** Secondary text. >=4.5:1 on every light surface incl. cardHi. */
   muted: adaptiveColor(lightThemeColors.muted, darkThemeColors.muted, "?attr/textColorSecondary"),
@@ -58,6 +59,8 @@ export const colors = {
   /** Darin's soft brand accent. Keep this for decorative and selected-state accents. */
   brandCoral: BRAND_CORAL,
   brandCoralSoft: BRAND_CORAL_SOFT,
+  accentSoft: adaptiveColor("#F7EED6", "rgba(232,145,138,0.22)"),
+  accentStrong: adaptiveColor("#2E2A26", "#F7EEE7", "?attr/textColorPrimary"),
   /** Readable content on solid brandCoral fills used by selected controls. */
   brandCoralForeground: "#2E2A26",
   /** Fill / border accent. Do not use as text on cream or white. */

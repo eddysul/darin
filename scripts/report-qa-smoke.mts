@@ -5,6 +5,8 @@ import {
   recentFeedingSleepPattern,
   summarizeFeedingVolumes,
 } from "../src/utils/reportAggregates";
+import { buildMonthReport } from "../src/utils/periodReport";
+import { readFileSync } from "node:fs";
 
 const now = new Date("2026-08-12T12:00:00");
 
@@ -48,5 +50,34 @@ const pattern = recentFeedingSleepPattern(patternLogs, now);
 assert.equal(pattern.validDayCount, 9);
 assert.deepEqual(pattern.buckets.map((bucket) => bucket.dayCount), [3, 3, 3]);
 assert.deepEqual(pattern.buckets.map((bucket) => bucket.key), ["early", "typical", "late"]);
+
+const monthlyLogs: BabyLogEntry[] = [];
+for (const [month, count, sleepMinutes] of [["08", 3, 60], ["09", 1, 120]] as const) {
+  for (const day of [1, 2, 3]) {
+    const dateKey = `2026-${month}-${String(day).padStart(2, "0")}`;
+    for (let index = 0; index < count; index++) {
+      monthlyLogs.push(log(`${month}-${day}-feed-${index}`, "formula", dateKey));
+    }
+    monthlyLogs.push(log(`${month}-${day}-sleep`, "sleep", dateKey, { duration: String(sleepMinutes) }));
+  }
+}
+const monthWithLongerSleep = buildMonthReport(monthlyLogs, new Date("2026-09-20T12:00:00"));
+assert.equal(monthWithLongerSleep.headlineKey, "report.critical.208");
+assert.equal(monthWithLongerSleep.bodyKey, "report.critical.261", "sleep headline must not make an unsupported feeding-interval claim");
+const monthWithFewerFeeds = buildMonthReport(monthlyLogs.filter((entry) => entry.cat !== "sleep"), new Date("2026-09-20T12:00:00"));
+assert.equal(monthWithFewerFeeds.headlineKey, "report.critical.209");
+assert.equal(monthWithFewerFeeds.bodyKey, "report.critical.261", "feed-count decrease must not imply steadier intervals");
+assert.equal(buildMonthReport([], new Date("2026-09-20T12:00:00")).headlineKey, "report.critical.210");
+
+const reportSource = readFileSync(new URL("../src/components/babylog/OverviewReportScreen.tsx", import.meta.url), "utf8");
+assert.match(reportSource, /const canShowReport = dataState === "ready" && logs\.length > 0/);
+assert.match(reportSource, /canShowReport && tab === "week"/);
+assert.match(reportSource, /canShowReport && tab === "month"/);
+assert.match(reportSource, /canShowReport && tab === "all"/);
+const overviewSource = readFileSync(new URL("../src/screens/tabs/BabyReportScreen.tsx", import.meta.url), "utf8");
+assert.match(overviewSource, /reportDataState === "ready" \? \([\s\S]*?<OverviewTodaySummary[\s\S]*?<OverviewRhythmCard/);
+assert.match(overviewSource, /reportDataState === "ready" && narrative\.headline/);
+assert.match(overviewSource, /storageReady && !growthRecordsHydrated \? \([\s\S]*?<ErrorState/);
+assert.match(overviewSource, /growthRecordsHydrated \? \([\s\S]*?<OverviewGrowthSection/);
 
 console.log("report QA: PASS");

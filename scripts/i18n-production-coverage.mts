@@ -82,6 +82,7 @@ const englishFallbacks: string[] = [];
 // These values contain only punctuation, placeholders, or terms spelled the
 // same in Spanish and English. Equality is intentional, not fallback.
 const languageNeutralValues = new Set([
+  "es:pregnancy.overview.count",
   "es:auth.legal.suffix",
   "ja:onboardingFlow.authorByline",
   "zh-CN:onboardingFlow.authorByline",

@@ -5,6 +5,15 @@ export type FamilyRole = "owner" | "admin" | "editor" | "viewer" | "caregiver";
 
 export type FamilyMemberStatus = "active" | "pending" | "inactive";
 
+export type BabyAccessPermissions = {
+  careRead: boolean;
+  careWrite: boolean;
+  momentsRead: boolean;
+  momentsWrite: boolean;
+  socialComment: boolean;
+  socialReact: boolean;
+};
+
 export type FamilyMember = {
   id: string;
   /** Primary app nickname from profiles.display_name. */
@@ -73,6 +82,11 @@ export function canDeleteLog(role: FamilyRole, entryCreatedBy?: BabyLogActor, me
 
 export function canManageMembers(role: FamilyRole): boolean {
   return role === "owner" || role === "admin";
+}
+
+/** True once another family member is active with a granted role. */
+export function hasGrantedFamilyShare(members: FamilyMember[]): boolean {
+  return members.some((member) => member.status === "active" && !member.isMe);
 }
 
 /** Growth book rolling comments / letters — write access. */

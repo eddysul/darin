@@ -98,6 +98,7 @@ import { BabyRepository, type CreateBabyInput } from "../repositories/BabyReposi
 import type { BabyRow } from "../types/database";
 import type { CautionFood, CautionFoodSource } from "../types/cautionFood";
 import { CautionFoodRepository } from "../repositories/CautionFoodRepository";
+import { FamilyRepository } from "../repositories/FamilyRepository";
 import { normalizeCautionFoodName, saveCautionFoods } from "../utils/cautionFoodsStore";
 import { getDiaryReminder, saveDiaryReminder } from "../utils/diaryReminderStore";
 import { saveCareSetup } from "../utils/careSetupStore";
@@ -186,12 +187,14 @@ type BabyLogContextValue = {
   addCautionFood: (foodName: string, source: CautionFoodSource) => Promise<CautionFood>;
   removeCautionFood: (id: string) => Promise<void>;
   familyMembers: FamilyMember[];
+  familyHydrated: boolean;
   growthBookEdit: GrowthBookEdit;
   setGrowthBookEdit: (edit: GrowthBookEdit | ((prev: GrowthBookEdit) => GrowthBookEdit)) => void;
   babyStickers: BabySticker[];
   addBabySticker: (sticker: BabySticker) => Promise<BabySticker>;
   deleteBabySticker: (id: string) => Promise<void>;
   growthRecords: GrowthRecord[];
+  growthRecordsHydrated: boolean;
   addGrowthRecord: (draft: GrowthRecordDraft) => GrowthRecord;
   updateGrowthRecord: (id: string, draft: GrowthRecordDraft) => void;
   deleteGrowthRecord: (id: string) => void;
@@ -231,7 +234,7 @@ type BabyLogContextValue = {
   storageIssue: StorageIssue | null;
   retryPersistence: () => Promise<void>;
   rehydrateFromServer: (scope?: LocalDataScope) => Promise<void>;
-  prepareForLogout: () => Promise<void>;
+  prepareForLogout: (signal?: AbortSignal) => Promise<void>;
   dismissStorageIssue: () => void;
   clearAllUserData: () => Promise<void>;
   qaDebug: {
@@ -269,6 +272,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const storageHydrationRunRef = useRef(0);
   const growthBookDirtyRef = useRef(false);
   const growthBookSyncRunRef = useRef(0);
+  const accessRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [familyHydrated, setFamilyHydrated] = useState(false);
   const [growthBookEdit, setGrowthBookEditState] = useState<GrowthBookEdit>(() =>
@@ -297,17 +301,18 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
 
   const resolveLocalDataScope = useCallback(async (
     override?: LocalDataScope,
+    suppressBootstrap = false,
   ): Promise<LocalDataScope | null> => {
-    const resolution = await resolveBabyLogDataScope({ override, hasSavedCareSetup });
+    const resolution = await resolveBabyLogDataScope({ override, hasSavedCareSetup: hasSavedCareSetup && !suppressBootstrap });
     setBabies(resolution.babies);
     return resolution.scope;
   }, [hasSavedCareSetup]);
 
-  const hydrateStorageState = useCallback(async (force = false, scopeOverride?: LocalDataScope) => {
+  const hydrateStorageState = useCallback(async (force = false, scopeOverride?: LocalDataScope, suppressBootstrap = false) => {
     const hydrationRun = ++storageHydrationRunRef.current;
     let scope: LocalDataScope | null = null;
     try {
-      scope = await resolveLocalDataScope(scopeOverride);
+      scope = await resolveLocalDataScope(scopeOverride, suppressBootstrap);
     } catch {
       // Without a verified auth+baby scope, account data must remain hidden.
       scope = null;
@@ -365,7 +370,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     if (logsOk) {
       const careLogs = await resolveHydratedCareLogs({
         careSetup,
-        hasSavedCareSetup,
+        hasSavedCareSetup: hasSavedCareSetup && !suppressBootstrap,
         storedLogs: getBabyLogs(),
       });
       if (hydrationRun !== storageHydrationRunRef.current) return false;
@@ -439,7 +444,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       setStickersHydrated(!!scope);
     }
     if (growthRecordsOk) {
-      const growthRecordsSnapshot = await resolveGrowthRecordsSnapshot(hasSavedCareSetup);
+      const growthRecordsSnapshot = await resolveGrowthRecordsSnapshot(hasSavedCareSetup && !suppressBootstrap);
       if (hydrationRun !== storageHydrationRunRef.current) return false;
       if (growthRecordsSnapshot.value !== null) {
         setGrowthRecords(growthRecordsSnapshot.value);
@@ -1211,7 +1216,6 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveCustomCategories([], localDataScope),
       saveQuickRecords([], localDataScope),
       clearSupabaseSync(),
-      isSupabaseConfigured() ? AuthRepository.signOut().catch(() => undefined) : Promise.resolve(),
     ]);
   }, [applyCareLogCoverage, display.babyName, localDataScope]);
 
@@ -1338,6 +1342,75 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     return next;
   }, [babies]);
 
+  const hidePreviousBabyDuringSwitch = useCallback(() => {
+    // Profile copy changes before the next scoped hydration has resolved. Hide
+    // every previous-baby view immediately so a render in that gap cannot pair
+    // the new baby identity with old records or let an old request write back.
+    storageHydrationRunRef.current += 1;
+    growthBookDirtyRef.current = false;
+    growthBookSyncRunRef.current += 1;
+    localDataScopeRef.current = null;
+    setLocalDataScope(null);
+    setStorageReady(false);
+    setLogsHydrated(false);
+    setDiaryHydrated(false);
+    setFamilyHydrated(false);
+    setStickersHydrated(false);
+    setGrowthRecordsHydrated(false);
+    setGrowthBookHydrated(false);
+    setChatHydrated(false);
+    logsRef.current = [];
+    setLogs([]);
+    applyCareLogCoverage(null);
+    careLogCategoryCoverageRef.current = new Set();
+    setDiaryEntries([]);
+    setGrowthRecords([]);
+    setFamilyMembers([]);
+    setBabyStickers([]);
+    setCautionFoods([]);
+    setChatHistory([DEFAULT_CHAT_GREETING]);
+    setCustomCategoriesState([]);
+    setQuickRecordsState([]);
+    setGrowthBookEditState(createEmptyGrowthBookEdit({ babyId: "", babyName: "" }));
+    resetDiaryEntriesMemory();
+    resetBabyLogsMemory();
+    resetCareLogCacheMetadataMemory();
+    resetGrowthBookEditMemory();
+    resetDiaryDraftMemory();
+    resetBabyStickersMemory();
+    resetGrowthRecordsMemory();
+    resetFamilyMembersMemory();
+    resetCustomCategoriesMemory();
+    resetQuickRecordsMemory();
+    resetChatHistoryMemory();
+  }, [applyCareLogCoverage]);
+
+  useEffect(() => {
+    if (!localDataScope || !isSupabaseConfigured()) return;
+    const subscribedScope = localDataScope;
+    const unsubscribe = FamilyRepository.subscribeToMyBabyAccess({
+      babyId: subscribedScope.babyId,
+      userId: subscribedScope.userId,
+      onChange: () => {
+        if (!sameLocalDataScope(localDataScopeRef.current, subscribedScope)) return;
+        if (accessRefreshTimerRef.current) clearTimeout(accessRefreshTimerRef.current);
+        accessRefreshTimerRef.current = setTimeout(() => {
+          accessRefreshTimerRef.current = null;
+          if (!sameLocalDataScope(localDataScopeRef.current, subscribedScope)) return;
+          hidePreviousBabyDuringSwitch();
+          void hydrateStorageState(true, subscribedScope, true);
+        }, 50);
+      },
+    });
+    return () => {
+      unsubscribe();
+      if (accessRefreshTimerRef.current) {
+        clearTimeout(accessRefreshTimerRef.current);
+        accessRefreshTimerRef.current = null;
+      }
+    };
+  }, [hidePreviousBabyDuringSwitch, hydrateStorageState, localDataScope]);
+
   const switchActiveBaby = useCallback(async (babyId: string): Promise<boolean> => {
     if (!isSupabaseConfigured()) return false;
     const session = await AuthRepository.getSession();
@@ -1354,6 +1427,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         migrationCandidateCount: 0,
         lastHydratedAt: new Date().toISOString(),
       });
+      hidePreviousBabyDuringSwitch();
       applyBabyRowToLocalProfile(fallback);
       await hydrateStorageState(true, { userId: session.user.id, babyId: fallback.id });
       return false;
@@ -1364,10 +1438,11 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       migrationCandidateCount: 0,
       lastHydratedAt: new Date().toISOString(),
     });
+    hidePreviousBabyDuringSwitch();
     applyBabyRowToLocalProfile(selected);
     await hydrateStorageState(true, { userId: session.user.id, babyId: selected.id });
     return true;
-  }, [applyBabyRowToLocalProfile, hydrateStorageState]);
+  }, [applyBabyRowToLocalProfile, hidePreviousBabyDuringSwitch, hydrateStorageState]);
 
   const addBaby = useCallback(async (input: CreateBabyInput): Promise<BabyRow> => {
     if (!input.name.trim()) throw new Error("아기 이름을 입력해 주세요.");
@@ -1413,7 +1488,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     await saveCautionFoods(scope, next);
   }, [cautionFoods]);
 
-  const prepareForLogout = useCallback(async () => {
+  const prepareForLogout = useCallback(async (signal?: AbortSignal) => {
     storageHydrationRunRef.current += 1;
     // Preserve account-scoped Diary/Growth Book data. Only clear their in-memory view;
     // the next authenticated account hydrates its own user+baby keys.
@@ -1430,6 +1505,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         })] : []),
       ]);
     }
+    if (signal?.aborted) return;
     growthBookDirtyRef.current = false;
     growthBookSyncRunRef.current += 1;
     setDiaryHydrated(false);
@@ -1438,6 +1514,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     if (scope) {
       await saveChatHistory(chatHistory, scope);
     }
+    if (signal?.aborted) return;
     localDataScopeRef.current = null;
     setLocalDataScope(null);
     resetDiaryEntriesMemory();
@@ -1470,7 +1547,6 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       saveBabyLogs([], scope),
       saveFamilyMembers([], scope),
       saveGrowthRecords([], scope),
-      clearSupabaseSync(),
     ]);
   }, [applyCareLogCoverage, careSetup.child.childName, chatHistory, diaryEntries, growthBookEdit]);
 
@@ -1589,12 +1665,14 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       addCautionFood,
       removeCautionFood,
       familyMembers,
+      familyHydrated,
       growthBookEdit,
       setGrowthBookEdit,
       babyStickers,
       addBabySticker,
       deleteBabySticker,
       growthRecords,
+      growthRecordsHydrated,
       addGrowthRecord,
       updateGrowthRecord,
       deleteGrowthRecord,
@@ -1656,12 +1734,14 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       addCautionFood,
       removeCautionFood,
       familyMembers,
+      familyHydrated,
       growthBookEdit,
       setGrowthBookEdit,
       babyStickers,
       addBabySticker,
       deleteBabySticker,
       growthRecords,
+      growthRecordsHydrated,
       addGrowthRecord,
       updateGrowthRecord,
       deleteGrowthRecord,

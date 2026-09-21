@@ -171,7 +171,7 @@ export function NotificationCenterScreen({ navigation, friendOnly = false }: Pro
         navigation.navigate("MainTabs", { screen: "Memories" });
         return;
       }
-      navigation.navigate("FamilyShare", { tab: "enter" });
+      navigation.navigate("FamilyShare", { tab: "people" });
       return;
     }
     const route = stringData(item, "route");

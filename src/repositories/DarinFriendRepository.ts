@@ -31,6 +31,15 @@ export const FriendRepository = {
     return [...unique.values()];
   },
 
+  async removeFriend(babyId: string, userId: string): Promise<void> {
+    const { error } = await requireSupabase()
+      .from("memory_friends")
+      .delete()
+      .eq("baby_id", babyId)
+      .eq("user_id", userId);
+    if (error) throw error;
+  },
+
   async createFriendInvite(babyId: string): Promise<InviteCodeRow> {
     const { data, error } = await requireSupabase().rpc("create_invite_code", {
       p_baby_id: babyId,

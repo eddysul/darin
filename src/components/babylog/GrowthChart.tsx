@@ -36,6 +36,7 @@ type Props = {
   color: string;
   sex: WhoSex;
   points: GrowthPoint[];
+  compact?: boolean;
 };
 
 const HEIGHT = 210;
@@ -60,14 +61,23 @@ function monthStep(maxDays: number): number {
   return 6;
 }
 
-export function GrowthChart({ measure, label, unit, color, sex, points }: Props) {
+export function GrowthChart({ measure, label, unit, color, sex, points, compact = false }: Props) {
   const { t } = useLanguage();
   const [width, setWidth] = useState(0);
   const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
+  const chartHeight = compact ? 112 : HEIGHT;
+  const pad = compact ? { top: 8, right: 36, bottom: 16, left: 8 } : PAD;
 
   const sorted = [...points].sort((a, b) => a.ageDays - b.ageDays);
   const latest = sorted[sorted.length - 1];
   const percentile = latest ? percentileFor(measure, sex, latest.ageDays, latest.value) : null;
+  const displayValue = (value: number) => {
+    if (measure === "weight" && unit === "lb") return value * 2.20462;
+    if (measure !== "weight" && unit === "in") return value / 2.54;
+    return value;
+  };
+
+  if (!sorted.length) return null;
 
   const maxDays = xDomain(sorted);
   const grid = Array.from({ length: CURVE_STEPS + 1 }, (_, i) => (maxDays * i) / CURVE_STEPS);
@@ -89,10 +99,10 @@ export function GrowthChart({ measure, label, unit, color, sex, points }: Props)
   const yMin = rawMin - margin;
   const yMax = rawMax + margin;
 
-  const plotW = Math.max(0, width - PAD.left - PAD.right);
-  const plotH = HEIGHT - PAD.top - PAD.bottom;
-  const xAt = (day: number) => PAD.left + (day / maxDays) * plotW;
-  const yAt = (value: number) => PAD.top + plotH - ((value - yMin) / (yMax - yMin)) * plotH;
+  const plotW = Math.max(0, width - pad.left - pad.right);
+  const plotH = chartHeight - pad.top - pad.bottom;
+  const xAt = (day: number) => pad.left + (day / maxDays) * plotW;
+  const yAt = (value: number) => pad.top + plotH - ((value - yMin) / (yMax - yMin)) * plotH;
 
   const pathOf = (values: (number | null)[]) =>
     values
@@ -107,27 +117,29 @@ export function GrowthChart({ measure, label, unit, color, sex, points }: Props)
 
   return (
     <View
-      style={styles.wrap}
+      style={[styles.wrap, compact && styles.wrapCompact]}
       onLayout={onLayout}
       accessible
       accessibilityRole="image"
       accessibilityLabel={latest
-        ? `${label}: ${latest.value.toFixed(measure === "weight" ? 2 : 1)} ${unit}`
+        ? `${label}: ${displayValue(latest.value).toFixed(measure === "weight" ? 2 : 1)} ${unit}`
         : `${label}: ${t("growth.critical.160")}`}
     >
-      <View style={styles.head}>
-        <Text style={styles.label}>{label}</Text>
-        {latest ? (
-          <Text style={styles.value}>
-            {latest.value.toFixed(measure === "weight" ? 2 : 1)}
-            <Text style={styles.unit}> {unit}</Text>
-          </Text>
-        ) : (
-          <Text style={styles.empty}>{t("growth.critical.160")}</Text>
-        )}
-      </View>
+      {compact ? null : (
+        <View style={styles.head}>
+          <Text style={styles.label}>{label}</Text>
+          {latest ? (
+            <Text style={styles.value}>
+              {displayValue(latest.value).toFixed(measure === "weight" ? 2 : 1)}
+              <Text style={styles.unit}> {unit}</Text>
+            </Text>
+          ) : (
+            <Text style={styles.empty}>{t("growth.critical.160")}</Text>
+          )}
+        </View>
+      )}
 
-      {percentile !== null ? (
+      {compact || percentile === null || !latest ? null : (
         <View style={styles.badgeRow}>
           <Text style={[styles.badge, { color, backgroundColor: `${color}1F` }]}>
             {t("growth.critical.161", { percent: Math.max(1, Math.min(99, Math.round(100 - percentile))) })}
@@ -136,10 +148,10 @@ export function GrowthChart({ measure, label, unit, color, sex, points }: Props)
             {shortDateLabel(latest.dateKey)} · {describePercentile(percentile)}
           </Text>
         </View>
-      ) : null}
+      )}
 
       {width > 0 ? (
-        <Svg width={width} height={HEIGHT} accessible={false}>
+        <Svg width={width} height={chartHeight} accessible={false}>
           {/* 3~97 구간을 옅게 채워 "대부분이 여기 있다"를 먼저 보이게 한다. */}
           <Path
             d={`${pathOf(curves[0].values)} ${curves[4].values
@@ -154,9 +166,9 @@ export function GrowthChart({ measure, label, unit, color, sex, points }: Props)
           {yTicks.map((value) => (
             <Line
               key={`y${value}`}
-              x1={PAD.left}
+              x1={pad.left}
               y1={yAt(value)}
-              x2={PAD.left + plotW}
+              x2={pad.left + plotW}
               y2={yAt(value)}
               stroke={colors.border}
               strokeWidth={1}
@@ -165,13 +177,13 @@ export function GrowthChart({ measure, label, unit, color, sex, points }: Props)
           {yTicks.map((value) => (
             <SvgText
               key={`yl${value}`}
-              x={PAD.left - 6}
+              x={pad.left - 6}
               y={yAt(value) + 3.5}
               fontSize={9}
               fill={colors.faint}
               textAnchor="end"
             >
-              {value.toFixed(measure === "weight" ? 1 : 0)}
+              {displayValue(value).toFixed(measure === "weight" ? 1 : 0)}
             </SvgText>
           ))}
 
@@ -190,7 +202,7 @@ export function GrowthChart({ measure, label, unit, color, sex, points }: Props)
             return last === null ? null : (
               <SvgText
                 key={`c${curve.percentile}`}
-                x={PAD.left + plotW + 3}
+                x={pad.left + plotW + 3}
                 y={yAt(last) + 3}
                 fontSize={8}
                 fill={colors.faint}
@@ -204,7 +216,7 @@ export function GrowthChart({ measure, label, unit, color, sex, points }: Props)
             <SvgText
               key={`x${month}`}
               x={xAt(month * DAYS_PER_MONTH)}
-              y={HEIGHT - 6}
+              y={chartHeight - 6}
               fontSize={9}
               fill={colors.faint}
               textAnchor="middle"
@@ -237,16 +249,17 @@ export function GrowthChart({ measure, label, unit, color, sex, points }: Props)
           ))}
         </Svg>
       ) : (
-        <View style={{ height: HEIGHT }} />
+        <View style={{ height: chartHeight }} />
       )}
 
-      <Text style={styles.axisNote}>{t("growth.critical.162")}</Text>
+      {compact ? null : <Text style={styles.axisNote}>{t("growth.critical.162")}</Text>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { marginTop: 6 },
+  wrapCompact: { marginTop: 0 },
   head: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
   label: { fontSize: 13, fontWeight: "800", color: colors.text },
   value: { fontSize: 20, fontWeight: "900", color: colors.text },

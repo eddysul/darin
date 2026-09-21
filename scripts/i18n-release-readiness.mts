@@ -89,8 +89,9 @@ assert.match(pushWorker, /profiles["']\)\.select\(["']preferred_language["']\)/,
 assert.match(reminderWorker, /profiles["']\)\.select\(["']preferred_language["']\)/, "care reminder worker does not read recipient locale");
 assert.doesNotMatch(insightPrompt, /`(?:관계|우리 문장|기준|결과|차이|관측)/, "insight prompt labels can bias non-Korean output");
 
-const reportScreen = source("src/screens/tabs/BabyReportScreen.tsx");
-assert.match(reportScreen, /useWindowDimensions/, "report screen does not adapt to small widths");
+const reportScreen = source("src/components/babylog/OverviewReportScreen.tsx");
+assert.match(reportScreen, /heroText:\s*\{\s*flex:\s*1,\s*minWidth:\s*0/, "report hero text does not adapt to small widths");
+assert.match(reportScreen, /compareValues:\s*\{[^}]*flexWrap:\s*"wrap"/, "report comparison values cannot wrap on small widths");
 assert.doesNotMatch(reportScreen, /dialWrap:\s*\{\s*width:\s*316/, "report dial remains fixed-width");
 for (const file of ["src/screens/onboarding/OnboardingShell.tsx", "src/components/settings/AppSettingsModal.tsx"]) {
   assert.match(source(file), /flexShrink:\s*1/, `${file}: translated action copy cannot shrink or wrap safely`);

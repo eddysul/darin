@@ -455,6 +455,18 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     return () => { active = false; };
   }, [ensureCareLogById, navigation, openEdit, route.params?.logId, storageReady]);
 
+  useEffect(() => {
+    const category = route.params?.category;
+    if (!category || !storageReady || route.params?.logId) return;
+    navigation.setParams({ category: undefined });
+    openSheet(category, {
+      cat: category,
+      dateKey: selectedDateKey,
+      time: nowTime(),
+      source: "manual",
+    });
+  }, [navigation, route.params?.category, route.params?.logId, selectedDateKey, storageReady]);
+
   const announceCreated = (entry: BabyLogEntry, title: string) => {
     setHighlightId(entry.id);
     setToast({ id: entry.id, title });

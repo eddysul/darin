@@ -1,665 +1,428 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
-  Alert,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { Image } from "expo-image";
-import * as Clipboard from "expo-clipboard";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BabyLogIcon, type MiscIconKey } from "../components/babylog/BabyLogIcon";
+import { ChevronLeft } from "lucide-react-native";
+import { BabyLogIcon } from "../components/babylog/BabyLogIcon";
+import { FamilyPeopleManage } from "../components/family/FamilyPeopleManage";
+import { InviteCodeSheet } from "../components/family/InviteCodeSheet";
+import { InviteComposerSheet } from "../components/family/InviteComposerSheet";
+import { InviteSearchRow } from "../components/family/InviteSearchRow";
 import { useBabyLog } from "../context/BabyLogContext";
+import { AuthRepository } from "../repositories/AuthRepository";
 import { FriendRepository, type FriendDisplay } from "../repositories/DarinFriendRepository";
-import {
-  FamilyRepository,
-  type DarinInviteRequestView,
-} from "../repositories/FamilyRepository";
+import { FamilyRepository, type DarinInviteRequestView } from "../repositories/FamilyRepository";
 import { ProfileRepository } from "../repositories/ProfileRepository";
-import { parseDarinId } from "../repositories/DarinIdentityRepository";
-import { familyRoleMessageKey } from "../types/family";
 import type { RootStackParamList } from "../navigation/types";
-import { colors, radius } from "../theme";
+import { canInvite, type BabyAccessPermissions } from "../types/family";
+import type { InviteFamilyRole, InviteRequestKind, InviteSearchHit } from "../types/inviteSearch";
+import { colors, fontScaleCap } from "../theme";
 import { useLanguage } from "../LanguageContext";
-import {
-  familyErrorMessage,
-  inviteRequestBody,
-  inviteRequestTitle,
-  storedFamilyRoleLabel,
-  storedRelationshipLabel,
-} from "../utils/familyDisplay";
-import { inviteUrl } from "../utils/inviteCode";
+import { familyErrorMessage } from "../utils/familyDisplay";
+import { inviteSearchQueryReady, resolveInviteRowStatus } from "../utils/inviteSearchStatus";
 
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
+const SEARCH_DEBOUNCE_MS = 300;
 
-const INVITE_ICON: Record<VisibleInviteType, MiscIconKey> = {
-  family: "family",
-  baby_friend: "handshake",
-};
-
-type ShareTab = "create" | "enter" | "people";
-type VisibleInviteType = "family" | "baby_friend";
-type IdPreview = { darinId: string; nickname: string; tag: string };
-type CodePreview = {
-  code: string;
-  babyId: string | null;
-  babyName: string | null;
-  inviterName: string;
-  inviteType: VisibleInviteType;
-};
 type Props = NativeStackScreenProps<RootStackParamList, "FamilyShare">;
+type ShareMode = "create" | "people";
+type PeopleFilter = "family" | "friend";
 
 export function FamilyShareScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const { babyName, myFamilyRole, familyMembers, rehydrateFromServer, activeBabyId, switchActiveBaby } = useBabyLog();
   const babyId = activeBabyId;
-  const isAdmin = myFamilyRole === "owner" || myFamilyRole === "admin";
-  const [activeTab, setActiveTab] = useState<ShareTab>(() => route.params?.tab ?? (isAdmin ? "create" : "enter"));
-  const [inviteType, setInviteType] = useState<VisibleInviteType>(() => (isAdmin ? "family" : "baby_friend"));
-  const [role, setRole] = useState<"admin" | "editor">("editor");
-  const [relation, setRelation] = useState("가족");
-  const [targetDarinId, setTargetDarinId] = useState("");
-  const [idPreview, setIdPreview] = useState<IdPreview | null>(null);
+  const canSendInvite = canInvite(myFamilyRole);
+  const [mode, setMode] = useState<ShareMode>(() => route.params?.tab === "people" ? "people" : "create");
+  const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>(() => route.params?.peopleFilter ?? "family");
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<InviteSearchHit[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [meId, setMeId] = useState<string | null>(null);
+  const [myDarinId, setMyDarinId] = useState<string | null>(null);
   const [friends, setFriends] = useState<FriendDisplay[]>([]);
   const [incoming, setIncoming] = useState<DarinInviteRequestView[]>([]);
   const [outgoing, setOutgoing] = useState<DarinInviteRequestView[]>([]);
-  const [working, setWorking] = useState(false);
-  const [respondingId, setRespondingId] = useState<string | null>(null);
-  const [inviteCode, setInviteCode] = useState("");
-  const [creatingCode, setCreatingCode] = useState(false);
-  const [enteredCode, setEnteredCode] = useState("");
-  const [codePreview, setCodePreview] = useState<CodePreview | null>(null);
-  const [codeWorking, setCodeWorking] = useState(false);
-  const [codeError, setCodeError] = useState("");
-  const [error, setError] = useState("");
+  const [optimisticOutgoing, setOptimisticOutgoing] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<InviteSearchHit | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [toast, setToast] = useState("");
+  const searchGen = useRef(0);
+  const refreshGen = useRef(0);
+  const [accessByUser, setAccessByUser] = useState<Map<string, BabyAccessPermissions>>(new Map());
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [permissionsError, setPermissionsError] = useState("");
 
   const refresh = useCallback(async () => {
-    const [profile] = await Promise.all([
+    const gen = ++refreshGen.current;
+    setPermissionsLoading(Boolean(babyId));
+    setPermissionsError("");
+    if (!babyId) setAccessByUser(new Map());
+    const [user, profile] = await Promise.all([
+      AuthRepository.getUser().catch(() => null),
       ProfileRepository.getMyProfile().catch(() => null),
       rehydrateFromServer().catch(() => undefined),
     ]);
-    if (profile) {
-      setRelation((current) =>
-        current === "가족" && profile.default_relation ? profile.default_relation : current,
-      );
-    }
-    if (babyId && isAdmin) {
-      const babyFriends = await FriendRepository.listFriendsByBabyId(babyId).catch(() => []);
-      setFriends(babyFriends);
+    if (gen !== refreshGen.current) return;
+    setMeId(user?.id ?? null);
+    setMyDarinId(profile?.darin_id ?? null);
+    if (babyId) {
+      const [friendResult, accessResult] = await Promise.allSettled([
+        FriendRepository.listFriendsByBabyId(babyId),
+        FamilyRepository.listBabyAccessPermissions(babyId),
+      ]);
+      if (gen !== refreshGen.current) return;
+      setFriends(friendResult.status === "fulfilled" ? friendResult.value : []);
+      if (accessResult.status === "fulfilled") {
+        setAccessByUser(new Map(accessResult.value.map((item) => [item.userId, item.permissions])));
+      } else {
+        setAccessByUser(new Map());
+        setPermissionsError(t("family.critical.157"));
+      }
     } else {
       setFriends([]);
     }
     try {
       const requests = await FamilyRepository.listDarinInviteRequests();
-      setIncoming(requests.filter((item) => item.direction === "incoming"));
-      setOutgoing(requests.filter((item) => item.direction === "outgoing"));
+      if (gen !== refreshGen.current) return;
+      const scoped = requests.filter((item) => !babyId || item.babyId === babyId);
+      setIncoming(scoped.filter((item) => item.direction === "incoming"));
+      setOutgoing(scoped.filter((item) => item.direction === "outgoing"));
     } catch {
+      if (gen !== refreshGen.current) return;
       setIncoming([]);
       setOutgoing([]);
+    } finally {
+      if (gen === refreshGen.current) setPermissionsLoading(false);
     }
-  }, [babyId, isAdmin, rehydrateFromServer]);
+  }, [babyId, rehydrateFromServer, t]);
+
+  useEffect(() => () => {
+    refreshGen.current += 1;
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      if (route.params?.tab) setActiveTab(route.params.tab);
+      if (route.params?.tab === "people") setMode("people");
+      else if (route.params?.tab === "create") setMode("create");
+      if (route.params?.peopleFilter) setPeopleFilter(route.params.peopleFilter);
       void refresh();
-    }, [refresh, route.params?.tab]),
+    }, [refresh, route.params?.peopleFilter, route.params?.tab]),
   );
 
-  const chooseType = (next: VisibleInviteType) => {
-    setInviteType(next);
-    setError("");
-    setIdPreview(null);
-    setInviteCode("");
-    setRelation(next === "family" ? "가족" : "친구");
-  };
-
-  const confirmDarinId = () => {
-    const preview = parseDarinId(targetDarinId);
-    if (!preview) {
-      setIdPreview(null);
-      setError(t("family.critical.015"));
+  const runSearch = useCallback(async (value: string) => {
+    if (!babyId || !canSendInvite) {
+      setHits([]);
+      setSearching(false);
       return;
     }
-    setError("");
-    setIdPreview(preview);
-  };
+    const gen = ++searchGen.current;
+    setSearching(true);
+    setSearchError("");
+    try {
+      const next = await ProfileRepository.searchInviteProfiles(babyId, value);
+      if (gen !== searchGen.current) return;
+      setHits(next);
+    } catch (cause) {
+      if (gen !== searchGen.current) return;
+      const message = cause instanceof Error ? cause.message : "";
+      if (/42501|only baby admin/i.test(message)) {
+        setHits([]);
+        setSearchError("");
+      } else {
+        setHits([]);
+        setSearchError(t("family.critical.128"));
+      }
+    } finally {
+      if (gen === searchGen.current) setSearching(false);
+    }
+  }, [babyId, canSendInvite, t]);
 
-  const sendDarinIdRequest = async () => {
-    if (working || !idPreview) return;
-    if (!babyId || !isAdmin) {
-      setError(t("family.critical.016"));
+  useEffect(() => {
+    if (mode !== "create") return;
+    if (!inviteSearchQueryReady(query)) {
+      searchGen.current += 1;
+      setHits([]);
+      setSearching(false);
+      setSearchError("");
       return;
     }
-    setWorking(true);
-    setError("");
+    const handle = setTimeout(() => {
+      void runSearch(query);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [mode, query, runSearch]);
+
+  const familyIds = useMemo(
+    () => new Set(familyMembers.filter((member) => member.status === "active").map((member) => member.id)),
+    [familyMembers],
+  );
+  const friendIds = useMemo(
+    () => new Set(friends.filter((friend) => friend.status === "active").map((friend) => friend.userId)),
+    [friends],
+  );
+  const outgoingUserIds = useMemo(
+    () => new Set(outgoing.map((item) => item.receiverId).filter(Boolean)),
+    [outgoing],
+  );
+  const outgoingDarinIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const value of optimisticOutgoing) ids.add(value);
+    return ids;
+  }, [optimisticOutgoing]);
+  const incomingUserIds = useMemo(
+    () => new Set(incoming.map((item) => item.senderId).filter(Boolean)),
+    [incoming],
+  );
+
+  const sendInvite = async (input: { requestType: InviteRequestKind; role: InviteFamilyRole }) => {
+    if (submitting || !selected || !babyId || !canSendInvite) return;
+    const target = selected;
+    const optimisticKey = (target.darinId || target.userId).trim().toLowerCase();
+    setSubmitting(true);
+    setSendError("");
+    setOptimisticOutgoing((current) => new Set(current).add(optimisticKey));
     try {
       const request = await FamilyRepository.sendDarinIdInviteRequest({
         babyId,
-        darinId: idPreview.darinId,
-        requestType: inviteType === "family" ? "family" : "friend",
-        role,
-        relationshipLabel: relation,
+        darinId: target.darinId,
+        requestType: input.requestType,
+        role: input.requestType === "family" ? input.role : "editor",
+        relationshipLabel: input.requestType === "family" ? "가족" : "친구",
       });
       if (!request) throw new Error(t("family.critical.017"));
-      setTargetDarinId("");
-      setIdPreview(null);
-      Alert.alert(
-        inviteType === "family" ? t("family.critical.018") : t("family.critical.019"),
-        t("family.critical.020", { name: request.recipient_nickname }),
-      );
+      setSelected(null);
+      setSendError("");
+      setToast(t("family.critical.124"));
+      AccessibilityInfo.announceForAccessibility(t("family.critical.124"));
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.021"));
-    } finally {
-      setWorking(false);
-    }
-  };
-
-  const createInviteCode = async () => {
-    if (!babyId || !isAdmin || creatingCode) return;
-    setCreatingCode(true);
-    setError("");
-    try {
-      const row = await FamilyRepository.createInviteCode({
-        babyId,
-        inviteType,
-        role,
-        relationshipLabel: relation,
+      setOptimisticOutgoing((current) => {
+        const next = new Set(current);
+        next.delete(optimisticKey);
+        return next;
       });
-      if (!row?.code) throw new Error(t("family.critical.022"));
-      setInviteCode(row.code);
-    } catch (cause) {
-      setError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.022"));
-    } finally {
-      setCreatingCode(false);
-    }
-  };
-
-  const copyInviteCode = async () => {
-    if (!inviteCode) return;
-    await Clipboard.setStringAsync(inviteCode);
-    Alert.alert(t("family.critical.023"), t("family.critical.024"));
-  };
-
-  const copyInviteLink = async () => {
-    if (!inviteCode) return;
-    await Clipboard.setStringAsync(inviteUrl(inviteCode));
-    Alert.alert(t("family.critical.025"), t("family.critical.026"));
-  };
-
-  const shareInviteCode = async () => {
-    if (!inviteCode) return;
-    const inviteLink = inviteUrl(inviteCode);
-    await Share.share({
-      message: t("family.critical.027", {
-        babyName,
-        kind: inviteType === "family" ? t("family.critical.028") : t("family.critical.029"),
-        link: inviteLink,
-        code: inviteCode,
-      }),
-    });
-  };
-
-  const previewEnteredCode = async () => {
-    const code = enteredCode.trim().toUpperCase();
-    if (!code || codeWorking) return;
-    setCodeWorking(true);
-    setCodeError("");
-    setCodePreview(null);
-    try {
-      const row = await FamilyRepository.previewInviteCode(code);
-      if (!row?.is_valid) {
-        throw new Error(row?.invalid_reason === "expired" ? t("family.critical.030") : t("family.critical.031"));
-      }
-      if (row.invite_type === "darin_friend") {
-        throw new Error(t("family.critical.032"));
-      }
-      setCodePreview({
-        code,
-        babyId: row.baby_id,
-        babyName: row.baby_name,
-        inviterName: row.inviter_name,
-        inviteType: row.invite_type,
-      });
-    } catch (cause) {
-      setCodeError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.033"));
-    } finally {
-      setCodeWorking(false);
-    }
-  };
-
-  const acceptEnteredCode = async () => {
-    if (!codePreview || codeWorking) return;
-    setCodeWorking(true);
-    setCodeError("");
-    try {
-      const profile = await ProfileRepository.getMyDisplayProfile();
-      if (!profile) throw new Error(t("family.critical.034"));
-      const accepted = await FamilyRepository.acceptInviteCode({
-        code: codePreview.code,
-        displayName: profile.displayName,
-        nickname: profile.nickname,
-        relation: profile.defaultRelation ?? "가족",
-      });
-      if (!accepted) throw new Error(t("family.critical.035"));
-      setEnteredCode("");
-      setCodePreview(null);
-      if (accepted.invite_type === "family" && accepted.baby_id) {
-        await switchActiveBaby(accepted.baby_id);
-      } else {
-        await refresh();
-      }
-      Alert.alert(
-        t("family.critical.036"),
-        accepted.invite_type === "family" ? t("family.critical.037") : t("family.critical.038"),
-      );
-    } catch (cause) {
-      setCodeError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.035"));
-    } finally {
-      setCodeWorking(false);
-    }
-  };
-
-  const respondToRequest = async (item: DarinInviteRequestView, accept: boolean) => {
-    if (respondingId) return;
-    setRespondingId(item.id);
-    try {
-      await FamilyRepository.respondToDarinIdInviteRequest(item.id, accept);
-      Alert.alert(accept ? t("family.critical.039") : t("family.critical.040"), accept ? t("family.critical.041") : t("family.critical.040"));
+      setSendError(cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.021"));
       await refresh();
-    } catch (cause) {
-      Alert.alert(t("family.critical.042"), cause instanceof Error ? familyErrorMessage(t, cause.message) : t("family.critical.043"));
     } finally {
-      setRespondingId(null);
+      setSubmitting(false);
     }
   };
 
-  const activeFamily = familyMembers.filter((member) => member.status === "active");
-  const pendingOutgoing = useMemo(
-    () => outgoing.filter((item) => !babyId || item.babyId === babyId),
-    [babyId, outgoing],
-  );
+  useEffect(() => {
+    if (!toast) return;
+    const handle = setTimeout(() => setToast(""), 2800);
+    return () => clearTimeout(handle);
+  }, [toast]);
+
+  const title = mode === "people" ? t("family.critical.137") : t("family.critical.105");
+  const subtitle = mode === "people" ? t("family.critical.138") : t("family.critical.106");
+  const readyQuery = inviteSearchQueryReady(query);
 
   return (
-    <View style={styles.root}>
-      <View style={styles.topChrome}>
-        <View style={[styles.card, styles.summaryCard]}>
-          <View style={styles.summaryIcon}>
-            <BabyLogIcon kind="family" size={22} color={colors.amberText} />
-          </View>
-          <View style={styles.summaryCopy}>
-            <Text style={styles.summaryTitle}>{t("family.critical.044", { babyName })}</Text>
-            <Text style={styles.summaryMeta}>{t("family.critical.045", { family: activeFamily.length, friends: friends.length })}</Text>
-            <Text style={styles.summaryHint} numberOfLines={2}>
-              {activeFamily.length <= 1 ? t("family.critical.046") : t("family.critical.047", { count: activeFamily.length - 1 })}
-            </Text>
-          </View>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <Pressable
+          style={styles.side}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel={t("chrome.critical.023")}
+        >
+          <ChevronLeft size={27} color={colors.text} strokeWidth={2.2} />
+        </Pressable>
+        <View style={styles.headerCopy}>
+          <Text style={styles.title} numberOfLines={1} maxFontSizeMultiplier={fontScaleCap.chrome}>{title}</Text>
+          <Text style={styles.subtitle} numberOfLines={2} maxFontSizeMultiplier={fontScaleCap.chrome}>{subtitle}</Text>
         </View>
+        <Pressable
+          style={styles.side}
+          onPress={() => (mode === "people" ? setMode("create") : setCodeOpen(true))}
+          accessibilityRole="button"
+          accessibilityLabel={mode === "people" ? t("family.critical.108") : t("family.critical.133")}
+        >
+          {mode === "people" ? (
+            <Text style={styles.sideLabel}>{t("family.critical.108")}</Text>
+          ) : (
+            <Text style={styles.sideLabel}>{t("family.critical.133")}</Text>
+          )}
+        </Pressable>
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? undefined : "padding"}
-        keyboardVerticalOffset={0}
-      >
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
-          keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets
-        >
-          <View style={styles.hubCard}>
-            <View style={styles.tabs} accessibilityRole="tablist">
-              {([
-                ["create", t("family.critical.048")],
-                ["enter", t("family.critical.049")],
-                ["people", t("family.critical.050")],
-              ] as const).map(([value, label]) => (
+      {mode === "people" ? (
+        <FamilyPeopleManage
+          babyId={babyId}
+          myRole={myFamilyRole}
+          familyMembers={familyMembers}
+          friends={friends}
+          accessByUser={accessByUser}
+          permissionsLoading={permissionsLoading}
+          permissionsError={permissionsError}
+          peopleFilter={peopleFilter}
+          onChangeFilter={setPeopleFilter}
+          onReload={refresh}
+        />
+      ) : (
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? undefined : "padding"}>
+          <View style={styles.searchWrap}>
+            <View style={styles.search}>
+              <BabyLogIcon kind="search" size={18} color={colors.muted} />
+              <TextInput
+                testID="invite-search-input"
+                style={styles.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder={t("family.critical.107")}
+                placeholderTextColor={colors.faint}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                accessibilityLabel={t("family.critical.153")}
+                accessibilityHint={t("family.critical.107")}
+              />
+              {query ? (
                 <Pressable
-                  key={value}
-                  style={[styles.tab, activeTab === value && styles.tabActive]}
-                  onPress={() => {
-                    setActiveTab(value);
-                    setError("");
-                  }}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: activeTab === value }}
+                  style={styles.clear}
+                  onPress={() => setQuery("")}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("family.critical.134")}
                 >
-                  <Text style={[styles.tabText, activeTab === value && styles.tabTextActive]} numberOfLines={1}>{label}</Text>
+                  <Text style={styles.clearText}>✕</Text>
                 </Pressable>
-              ))}
+              ) : null}
             </View>
-
-            {activeTab === "create" ? (
-              <View style={styles.tabBody}>
-                {isAdmin ? (
-                  <>
-                <Text style={styles.sectionTitle}>{t("family.critical.051")}</Text>
-                {(["family", "baby_friend"] as VisibleInviteType[]).map((type) => (
-                    <Pressable
-                      key={type}
-                      testID={`invite-choice-${type}`}
-                      style={[styles.inviteOption, inviteType === type && styles.inviteOptionActive]}
-                      onPress={() => chooseType(type)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: inviteType === type }}
-                    >
-                      <View style={[styles.optionIcon, inviteType === type && styles.optionIconActive]}>
-                        <BabyLogIcon kind={INVITE_ICON[type]} size={18} color={inviteType === type ? colors.amberText : colors.muted} />
-                      </View>
-                      <View style={styles.optionCopy}>
-                        <Text style={styles.optionTitle}>{type === "family" ? t("family.critical.009") : t("family.critical.010")}</Text>
-                        <Text style={styles.optionDescription}>{type === "family" ? t("family.critical.011") : t("family.critical.012")}</Text>
-                      </View>
-                    </Pressable>
-                ))}
-
-                <Text style={styles.permissionHint}>{inviteType === "family" ? t("family.critical.013") : t("family.critical.014")}</Text>
-                {inviteType === "family" ? (
-                  <View style={styles.roleArea}>
-                    <Text style={styles.fieldLabel}>{t("family.critical.052")}</Text>
-                    <View style={styles.chips}>
-                      {(["admin", "editor"] as const).map((value) => (
-                        <Pressable
-                          key={value}
-                          style={[styles.chip, role === value && styles.chipActive]}
-                          onPress={() => setRole(value)}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: role === value }}
-                        >
-                          <Text style={[styles.chipText, role === value && styles.chipTextActive]}>{t(familyRoleMessageKey(value))}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                    <Text style={styles.permissionHint}>{t("family.critical.053")}</Text>
-                  </View>
-                ) : null}
-
-                <View style={styles.sendSection}>
-                  <Text style={styles.sectionTitle}>{inviteType === "family" ? t("family.critical.054") : t("family.critical.055")}</Text>
-                  <Text style={styles.description}>{t("family.critical.056")}</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={targetDarinId}
-                    onChangeText={(value) => {
-                      setTargetDarinId(value);
-                      setError("");
-                      setIdPreview(null);
-                    }}
-                    placeholder={t("family.critical.057")}
-                    placeholderTextColor={colors.faint}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="done"
-                    onSubmitEditing={confirmDarinId}
-                    accessibilityLabel="Darin ID"
-                    accessibilityHint={error || undefined}
-                  />
-                  {error ? <Text nativeID="invite-id-error" style={styles.error} accessibilityRole="alert">{error}</Text> : null}
-                  {!idPreview ? (
-                    <Pressable
-                      style={[styles.secondary, (!targetDarinId.trim() || working) && styles.disabled]}
-                      onPress={confirmDarinId}
-                      disabled={!targetDarinId.trim() || working}
-                      accessibilityRole="button"
-                      accessibilityLabel={t("family.critical.058")}
-                    >
-                      <Text style={styles.secondaryText}>{t("family.critical.058")}</Text>
-                    </Pressable>
-                  ) : (
-                    <>
-                      <View style={styles.previewCard}>
-                        <Avatar name={idPreview.nickname} />
-                        <View style={styles.friendCopy}>
-                          <Text style={styles.person}>{idPreview.nickname}</Text>
-                          <Text style={styles.nickname}>{idPreview.darinId}</Text>
-                          <Text style={styles.permissionHint}>{t("family.critical.059")}</Text>
-                        </View>
-                      </View>
-                      <Pressable
-                        style={[styles.primary, working && styles.disabled]}
-                        onPress={() => void sendDarinIdRequest()}
-                        disabled={working}
-                        accessibilityRole="button"
-                        accessibilityLabel={t("family.critical.048")}
-                      >
-                        {working ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.primaryText}>{t("family.critical.048")}</Text>}
-                      </Pressable>
-                    </>
-                  )}
-                </View>
-
-                <View style={styles.sendSection}>
-                  <Text style={styles.sectionTitle}>{t("family.critical.060")}</Text>
-                  <Text style={styles.description}>{t("family.critical.061")}</Text>
-                  {inviteCode ? (
-                    <>
-                      <View style={styles.codePill}>
-                        <Text style={styles.codeText}>{inviteCode}</Text>
-                      </View>
-                      <View style={styles.inviteActions}>
-                        <Pressable style={styles.secondaryAction} onPress={() => void copyInviteCode()} accessibilityRole="button" accessibilityLabel={t("family.critical.062")}>
-                          <Text style={styles.secondaryText}>{t("family.critical.062")}</Text>
-                        </Pressable>
-                        <Pressable style={styles.secondaryAction} onPress={() => void copyInviteLink()} accessibilityRole="button" accessibilityLabel={t("family.critical.063")}>
-                          <Text style={styles.secondaryText}>{t("family.critical.063")}</Text>
-                        </Pressable>
-                        <Pressable style={styles.primaryAction} onPress={() => void shareInviteCode()} accessibilityRole="button" accessibilityLabel={t("family.critical.064")} accessibilityHint={t("family.critical.065")}>
-                          <Text style={styles.primaryText}>{t("family.critical.064")}</Text>
-                        </Pressable>
-                      </View>
-                    </>
-                  ) : (
-                    <Pressable
-                      style={[styles.secondary, creatingCode && styles.disabled]}
-                      onPress={() => void createInviteCode()}
-                      disabled={creatingCode}
-                      accessibilityRole="button"
-                      accessibilityLabel={t("family.critical.066")}
-                    >
-                      {creatingCode ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.secondaryText}>{t("family.critical.066")}</Text>}
-                    </Pressable>
-                  )}
-                </View>
-
-                {pendingOutgoing.length ? (
-                  <View style={styles.sendSection}>
-                    <Text style={styles.sectionTitle}>{t("family.critical.067")}</Text>
-                    {pendingOutgoing.map((item) => (
-                      <View key={item.id} style={styles.personRow}>
-                        <View style={styles.personAvatar}>
-                          <BabyLogIcon kind={item.requestType === "family" ? "family" : "handshake"} size={18} color={colors.amberText} />
-                        </View>
-                        <View style={styles.friendCopy}>
-                          <Text style={styles.person}>{inviteRequestTitle(t, item.title)}</Text>
-                          <Text style={styles.nickname}>{inviteRequestBody(t, item.body)}</Text>
-                          <Text style={styles.permissionHint}>{t("family.critical.068", { relation: storedRelationshipLabel(t, item.relation), role: storedFamilyRoleLabel(t, item.roleLabel) })}</Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.sectionTitle}>{t("family.critical.048")}</Text>
-                    <Text style={styles.description}>{t("family.critical.069")}</Text>
-                    <Pressable
-                      style={styles.secondary}
-                      onPress={() => setActiveTab("enter")}
-                      accessibilityRole="button"
-                      accessibilityLabel={t("family.critical.070")}
-                    >
-                      <Text style={styles.secondaryText}>{t("family.critical.070")}</Text>
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            ) : null}
-
-            {activeTab === "enter" ? (
-              <View style={styles.tabBody}>
-                <Text style={styles.sectionTitle}>{t("family.critical.071")}</Text>
-                <Text style={styles.description}>{t("family.critical.072")}</Text>
-                {incoming.length ? incoming.map((item) => (
-                  <View key={item.id} style={styles.requestCard}>
-                    <View style={styles.previewCard}>
-                      <View style={styles.personAvatar}>
-                        <BabyLogIcon kind={item.requestType === "family" ? "family" : "handshake"} size={18} color={colors.amberText} />
-                      </View>
-                      <View style={styles.friendCopy}>
-                        <Text style={styles.person}>{inviteRequestTitle(t, item.title)}</Text>
-                        <Text style={styles.nickname}>{inviteRequestBody(t, item.body)}</Text>
-                        <Text style={styles.permissionHint}>{storedRelationshipLabel(t, item.relation)} · {storedFamilyRoleLabel(t, item.roleLabel)}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.inviteActions}>
-                      <Pressable
-                        style={[styles.declineButton, respondingId === item.id && styles.disabled]}
-                        disabled={respondingId === item.id}
-                        onPress={() => void respondToRequest(item, false)}
-                        accessibilityRole="button"
-                        accessibilityLabel={t("family.critical.073")}
-                      >
-                        <Text style={styles.declineText}>{t("family.critical.073")}</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[styles.acceptButton, respondingId === item.id && styles.disabled]}
-                        disabled={respondingId === item.id}
-                        onPress={() => void respondToRequest(item, true)}
-                        accessibilityRole="button"
-                        accessibilityLabel={t("family.critical.074")}
-                      >
-                        {respondingId === item.id ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.acceptText}>{t("family.critical.074")}</Text>}
-                      </Pressable>
-                    </View>
-                  </View>
-                )) : (
-                  <View style={styles.emptyGroup}>
-                    <Text style={styles.empty}>{t("family.critical.075")}</Text>
-                    <Text style={styles.empty}>{t("family.critical.076")}</Text>
-                    <Pressable
-                      style={styles.secondary}
-                      onPress={() => navigation.navigate("NotificationCenter")}
-                      accessibilityRole="button"
-                      accessibilityLabel={t("family.critical.077")}
-                    >
-                      <Text style={styles.secondaryText}>{t("family.critical.077")}</Text>
-                    </Pressable>
-                  </View>
-                )}
-
-                <View style={styles.sendSection}>
-                  <Text style={styles.sectionTitle}>{t("family.critical.078")}</Text>
-                  <Text style={styles.description}>{t("family.critical.079")}</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={enteredCode}
-                    onChangeText={(value) => {
-                      setEnteredCode(value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 24));
-                      setCodePreview(null);
-                      setCodeError("");
-                    }}
-                    placeholder={t("family.critical.080")}
-                    placeholderTextColor={colors.faint}
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                    returnKeyType="done"
-                    onSubmitEditing={() => void previewEnteredCode()}
-                    accessibilityLabel={t("family.critical.078")}
-                  />
-                  {codeError ? <Text style={styles.error} accessibilityRole="alert">{codeError}</Text> : null}
-                  {codePreview ? (
-                    <View style={styles.requestCard}>
-                      <Text style={styles.person}>{codePreview.inviteType === "family" ? t("family.critical.009") : t("family.critical.010")}</Text>
-                      {codePreview.babyName ? <Text style={styles.nickname}>{t("family.critical.081", { name: codePreview.babyName })}</Text> : null}
-                      <Text style={styles.nickname}>{t("family.critical.082", { name: codePreview.inviterName })}</Text>
-                      <Text style={styles.permissionHint}>{codePreview.inviteType === "family" ? t("family.critical.083") : t("family.critical.012")}</Text>
-                      <Pressable
-                        style={[styles.primary, codeWorking && styles.disabled]}
-                        disabled={codeWorking}
-                        onPress={() => void acceptEnteredCode()}
-                        accessibilityRole="button"
-                        accessibilityLabel={t("family.critical.084")}
-                      >
-                        {codeWorking ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.primaryText}>{t("family.critical.084")}</Text>}
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <Pressable
-                      style={[styles.secondary, (!enteredCode.trim() || codeWorking) && styles.disabled]}
-                      disabled={!enteredCode.trim() || codeWorking}
-                      onPress={() => void previewEnteredCode()}
-                      accessibilityRole="button"
-                      accessibilityLabel={t("family.critical.085")}
-                    >
-                      {codeWorking ? <ActivityIndicator color={colors.amberText} /> : <Text style={styles.secondaryText}>{t("family.critical.085")}</Text>}
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-            ) : null}
-
-            {activeTab === "people" ? (
-              <View style={styles.tabBody}>
-                <Text style={styles.sectionTitle}>{t("family.critical.050")}</Text>
-                <Text style={styles.permissionHint}>{t("family.critical.086")}</Text>
-
-                <View style={styles.peopleSection}>
-                  <Text style={styles.peopleTitle}>{t("family.critical.087")}</Text>
-                  {activeFamily.length ? activeFamily.map((member) => (
-                    <View key={member.id} style={styles.personRow}>
-                      <Avatar name={member.name} uri={member.avatarUrl} />
-                      <View style={styles.friendCopy}>
-                        <Text style={styles.person}>{member.name}</Text>
-                        <Text style={styles.nickname}>{member.realName ? `${member.realName} · ` : ""}{storedRelationshipLabel(t, member.relationshipLabel ?? "가족")} · {t(familyRoleMessageKey(member.role))}</Text>
-                      </View>
-                    </View>
-                  )) : <Text style={styles.empty}>{t("family.critical.046")}</Text>}
-                </View>
-
-                <View style={styles.peopleSection}>
-                  <Text style={styles.peopleTitle}>{t("family.critical.088")}</Text>
-                  {friends.length ? friends.map((friend) => (
-                    <View key={friend.membershipId} style={styles.personRow}>
-                      <Avatar name={friend.displayName} />
-                      <View style={styles.friendCopy}>
-                        <Text style={styles.person}>{friend.displayName}</Text>
-                        {friend.realName ? <Text style={styles.nickname}>{friend.realName}</Text> : null}
-                      </View>
-                    </View>
-                  )) : (
-                    <View style={styles.emptyGroup}>
-                      <Text style={styles.empty}>{t("family.critical.089")}</Text>
-                      <Text style={styles.empty}>{t("family.critical.090")}</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            ) : null}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+
+          {!canSendInvite ? (
+            <Text style={styles.permission}>{t("family.critical.135")}</Text>
+          ) : null}
+
+          <FlatList
+            data={hits}
+            keyExtractor={(item) => item.userId || item.darinId}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.list}
+            ItemSeparatorComponent={() => <View style={styles.resultDivider} />}
+            ListHeaderComponent={searching && readyQuery ? <SearchSkeleton /> : null}
+            ListEmptyComponent={
+              searching ? null : searchError ? (
+                <View style={styles.empty}>
+                  <Text style={styles.emptyTitle}>{searchError}</Text>
+                  <Pressable style={styles.retry} onPress={() => void runSearch(query)} accessibilityRole="button">
+                    <Text style={styles.retryText}>{t("chrome.critical.002")}</Text>
+                  </Pressable>
+                </View>
+              ) : readyQuery ? (
+                <View style={styles.empty}>
+                  <Text style={styles.emptyTitle}>{t("family.critical.126")}</Text>
+                  <Text style={styles.emptyBody}>{t("family.critical.127")}</Text>
+                  {canSendInvite ? (
+                    <Pressable style={styles.retry} onPress={() => setCodeOpen(true)} accessibilityRole="button">
+                      <Text style={styles.retryText}>{t("family.critical.139")}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : (
+                <View style={styles.empty}>
+                  <Text style={styles.emptyBody}>{t("family.critical.125")}</Text>
+                  {canSendInvite ? (
+                    <Pressable style={styles.retry} onPress={() => setCodeOpen(true)} accessibilityRole="button">
+                      <Text style={styles.retryText}>{t("family.critical.139")}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              )
+            }
+            renderItem={({ item }) => {
+              const status = resolveInviteRowStatus({
+                hit: item,
+                meId,
+                myDarinId,
+                familyIds,
+                friendIds,
+                outgoingUserIds,
+                outgoingDarinIds,
+                incomingUserIds,
+                canInvite: canSendInvite,
+              });
+              return (
+                <InviteSearchRow
+                  hit={item}
+                  status={status}
+                  sending={submitting && selected?.darinId === item.darinId}
+                  onInvite={() => {
+                    if (status !== "invite" || submitting) return;
+                    setSendError("");
+                    setSelected(item);
+                  }}
+                  onOpenIncoming={() => navigation.navigate("NotificationCenter")}
+                />
+              );
+            }}
+          />
+        </KeyboardAvoidingView>
+      )}
+
+      <InviteComposerSheet
+        visible={Boolean(selected)}
+        hit={selected}
+        submitting={submitting}
+        error={sendError}
+        onClose={() => {
+          if (submitting) return;
+          setSelected(null);
+          setSendError("");
+        }}
+        onSend={(input) => void sendInvite(input)}
+      />
+      <InviteCodeSheet
+        visible={codeOpen}
+        babyId={babyId}
+        babyName={babyName}
+        myFamilyRole={myFamilyRole}
+        onClose={() => setCodeOpen(false)}
+        onAccepted={(acceptedBabyId) => {
+          if (acceptedBabyId) void switchActiveBaby(acceptedBabyId);
+          else void refresh();
+        }}
+      />
+      {toast ? (
+        <View style={styles.toast} accessibilityLiveRegion="polite">
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function Avatar({ name, uri }: { name: string; uri?: string }) {
+function SearchSkeleton() {
   return (
-    <View style={styles.personAvatar}>
-      {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFillObject} contentFit="cover" /> : (
-        <Text style={styles.personAvatarText}>{name.slice(0, 1)}</Text>
-      )}
+    <View style={styles.skeletonWrap}>
+      {[0, 1, 2].map((key) => (
+        <View key={key} style={styles.skeletonRow}>
+          <View style={styles.skeletonAvatar} />
+          <View style={styles.skeletonCopy}>
+            <View style={styles.skeletonLine} />
+            <View style={[styles.skeletonLine, styles.skeletonLineShort]} />
+          </View>
+        </View>
+      ))}
+      <ActivityIndicator color={colors.amberText} />
     </View>
   );
 }
@@ -667,68 +430,54 @@ function Avatar({ name, uri }: { name: string; uri?: string }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  topChrome: { paddingHorizontal: 16, paddingTop: 12, gap: 12 },
-  content: { paddingHorizontal: 16, paddingTop: 12, gap: 16 },
-  card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: 16 },
-  summaryCard: { minHeight: 96, flexDirection: "row", alignItems: "center", gap: 12 },
-  summaryIcon: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: colors.amberSoft },
-  summaryCopy: { flex: 1, minWidth: 0, gap: 3 },
-  summaryTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
-  summaryMeta: { color: colors.muted, fontSize: 12.5, lineHeight: 18 },
-  summaryHint: { color: colors.faint, fontSize: 11.5, lineHeight: 17 },
-  hubCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, padding: 12, gap: 16 },
-  tabs: { flexDirection: "row", gap: 6 },
-  tab: { flex: 1, minWidth: 0, minHeight: TOUCH_MIN, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, backgroundColor: colors.card },
-  tabActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  tabText: { color: colors.muted, fontSize: 11.5, fontWeight: "800", textAlign: "center" },
-  tabTextActive: { color: colors.amberText },
-  tabBody: { gap: 12, paddingHorizontal: 2, paddingBottom: 2 },
-  sectionTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
-  description: { fontSize: 13, color: colors.muted, lineHeight: 19 },
-  permissionHint: { fontSize: 12, color: colors.faint, lineHeight: 18 },
-  person: { fontSize: 14, color: colors.text, fontWeight: "700" },
-  nickname: { fontSize: 11.5, color: colors.muted, lineHeight: 17 },
-  inviteOption: { minHeight: 86, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11 },
-  inviteOptionActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  optionIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.cardHi, alignItems: "center", justifyContent: "center" },
-  optionIconActive: { backgroundColor: "rgba(232,145,138,0.24)" },
-  optionCopy: { flex: 1, minWidth: 0, gap: 3 },
-  optionTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
-  optionDescription: { color: colors.muted, fontSize: 11.5, lineHeight: 17 },
-  roleArea: { gap: 8, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { minHeight: TOUCH_MIN, paddingHorizontal: 14, justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderRadius: radius.full },
-  chipActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
-  chipText: { fontSize: 12, fontWeight: "700", color: colors.muted },
-  chipTextActive: { color: colors.amberText },
-  primary: { minHeight: TOUCH_MIN, borderRadius: radius.full, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
-  primaryText: { color: colors.primaryForeground, fontWeight: "800" },
-  sendSection: { gap: 10, marginTop: 4, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border },
-  secondary: { minHeight: TOUCH_MIN, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  secondaryText: { color: colors.text, fontSize: 13, fontWeight: "800" },
-  input: { width: "100%", minHeight: TOUCH_MIN, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, color: colors.text, backgroundColor: colors.cardHi, fontSize: 15 },
-  previewCard: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: radius.md, backgroundColor: colors.cardHi },
-  requestCard: { gap: 10, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card },
-  requestButton: { minHeight: TOUCH_MIN, minWidth: 96, maxWidth: 118, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  requestButtonText: { color: colors.primaryForeground, fontSize: 12, fontWeight: "800", textAlign: "center" },
-  fieldLabel: { fontSize: 12, fontWeight: "800", color: colors.muted, marginTop: 2 },
-  peopleSection: { gap: 9, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card },
-  peopleTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  personRow: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 },
-  personAvatar: { width: 38, height: 38, borderRadius: 19, overflow: "hidden", backgroundColor: colors.amberSoft, alignItems: "center", justifyContent: "center" },
-  personAvatarText: { color: colors.amberText, fontSize: 14, fontWeight: "900" },
-  friendCopy: { flex: 1, minWidth: 0 },
-  emptyGroup: { gap: 8 },
-  empty: { color: colors.faint, fontSize: 12, lineHeight: 18 },
-  error: { color: colors.dangerText, backgroundColor: colors.dangerSoft, padding: 12, borderRadius: radius.md, fontSize: 12.5 },
-  disabled: { opacity: 0.48 },
-  inviteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
-  secondaryAction: { flex: 1, minHeight: TOUCH_MIN, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  primaryAction: { flex: 1, minHeight: TOUCH_MIN, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  codePill: { minHeight: TOUCH_MIN, borderRadius: radius.md, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
-  codeText: { fontSize: 18, fontWeight: "800", letterSpacing: 2, color: colors.text },
-  declineButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.backgroundSecondary, justifyContent: "center" },
-  declineText: { color: colors.muted, fontWeight: "700", fontSize: 13 },
-  acceptButton: { minHeight: TOUCH_MIN, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.primary, justifyContent: "center" },
-  acceptText: { color: colors.primaryForeground, fontWeight: "800", fontSize: 13 },
+  header: {
+    minHeight: 56,
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  side: { width: 72, minHeight: TOUCH_MIN, alignItems: "center", justifyContent: "center" },
+  sideLabel: { color: colors.amberText, fontSize: 13, fontWeight: "800", textAlign: "center" },
+  headerCopy: { flex: 1, minWidth: 0, alignItems: "center", gap: 2 },
+  title: { color: colors.text, fontSize: 17, fontWeight: "800" },
+  subtitle: { color: colors.muted, fontSize: 12.5, lineHeight: 17, textAlign: "center" },
+  searchWrap: { paddingHorizontal: 16, paddingBottom: 8 },
+  search: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: colors.inputBg,
+  },
+  searchInput: { flex: 1, minHeight: TOUCH_MIN, color: colors.text, fontSize: 16 },
+  clear: { minWidth: TOUCH_MIN, minHeight: TOUCH_MIN, alignItems: "center", justifyContent: "center" },
+  clearText: { color: colors.muted, fontSize: 16, fontWeight: "700" },
+  permission: { paddingHorizontal: 16, paddingBottom: 8, color: colors.muted, fontSize: 13, lineHeight: 18 },
+  list: { paddingBottom: 40, flexGrow: 1 },
+  resultDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 78 },
+  empty: { paddingHorizontal: 24, paddingTop: 36, alignItems: "center", gap: 8 },
+  emptyTitle: { color: colors.text, fontSize: 15, fontWeight: "800", textAlign: "center" },
+  emptyBody: { color: colors.muted, fontSize: 13.5, lineHeight: 20, textAlign: "center" },
+  retry: { minHeight: TOUCH_MIN, justifyContent: "center", paddingHorizontal: 12 },
+  retryText: { color: colors.amberText, fontSize: 13, fontWeight: "800", textAlign: "center" },
+  skeletonWrap: { paddingHorizontal: 16, paddingTop: 8, gap: 12, paddingBottom: 8 },
+  skeletonRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  skeletonAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.cardHi },
+  skeletonCopy: { flex: 1, gap: 8 },
+  skeletonLine: { height: 12, borderRadius: 6, backgroundColor: colors.cardHi },
+  skeletonLineShort: { width: "48%" },
+  toast: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 24,
+    backgroundColor: "rgba(30,32,42,0.96)",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  toastText: { color: "#FFFFFF", fontSize: 13.5, fontWeight: "800", textAlign: "center" },
 });

@@ -40,6 +40,59 @@ function hhmm(totalMinutes: number): string {
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
 
+function minutesFromTime(time: string): number {
+  const [hours, minutes] = time.split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0;
+  return Math.max(0, Math.min(1439, hours * 60 + minutes));
+}
+
+type DemoSleepRange = { start: number; end: number };
+
+function sleepRangesFor(entries: Omit<BabyLogEntry, "id">[]): DemoSleepRange[] {
+  const ranges: DemoSleepRange[] = [];
+  for (const entry of entries) {
+    if (entry.cat !== "sleep") continue;
+    const start = minutesFromTime(entry.time);
+    const duration = Math.max(1, Number.parseInt(entry.duration ?? "5", 10) || 5);
+    const end = start + duration;
+    if (end <= 1440) {
+      ranges.push({ start, end });
+    } else {
+      ranges.push({ start, end: 1440 });
+      ranges.push({ start: 0, end: end - 1440 });
+    }
+  }
+  return ranges;
+}
+
+function overlapsSleep(start: number, duration: number, ranges: DemoSleepRange[]): boolean {
+  const end = Math.min(1440, start + Math.max(1, duration));
+  return ranges.some((range) => start < range.end && end > range.start);
+}
+
+/** Keep the two demo days readable: events never land inside a sleep block or on the same marker. */
+function normalizeDemoDayTimeline(logs: Omit<BabyLogEntry, "id">[], dateKey: string): void {
+  const dayLogs = logs.filter((entry) => entry.dateKey === dateKey);
+  const sleepRanges = sleepRangesFor(dayLogs);
+  const events = dayLogs
+    .filter((entry) => entry.cat !== "sleep")
+    .sort((a, b) => minutesFromTime(a.time) - minutesFromTime(b.time));
+  const occupied = new Set<number>();
+
+  for (const entry of events) {
+    const duration = entry.cat === "tummy" || entry.cat === "play"
+      ? Math.max(1, Number.parseInt(entry.duration ?? "1", 10) || 1)
+      : 1;
+    let candidate = minutesFromTime(entry.time);
+    for (let attempt = 0; attempt < 288; attempt += 1) {
+      if (!overlapsSleep(candidate, duration, sleepRanges) && !occupied.has(candidate)) break;
+      candidate = (candidate + 5) % 1440;
+    }
+    entry.time = hhmm(candidate);
+    occupied.add(candidate);
+  }
+}
+
 /**
  * 결정적 의사난수. 같은 날짜에는 항상 같은 값이 나와 데모가 재현 가능하다.
  *
@@ -211,43 +264,76 @@ function buildLogs(
       });
     }
 
-    if (isToday) continue;
-
-    // ── 활동 ────────────────────────────────────────────────
-    out.push({
-      cat: "tummy",
-      time: hhmm(615 + jitter(ago, 23, 30)),
-      dateKey,
-      duration: String(tummyMin),
-      createdBy: actor,
-      source: "manual",
-    });
-    out.push({
-      cat: "play",
-      time: hhmm(930 + jitter(ago, 24, 50)),
-      dateKey,
-      duration: String(playMin),
-      details: ["모빌 보기", "딸랑이", "노래 듣기", "거울 보기", "발 잡기"][ago % 5],
-      createdBy: actor,
-      source: "manual",
-    });
-    out.push({ cat: "bath", time: hhmm(bathTime), dateKey, createdBy: actor, source: "manual" });
-
-    if (ago % 2 === 1) {
+    if (isToday) {
+      // 오늘도 어제와 같은 비교 축을 볼 수 있도록 한눈에 대표 활동을 남긴다.
+      // 실제 앱의 오늘 데이터가 끝나지 않았다는 의미는 유지하되, 데모에서는
+      // 고정 카드(수유·수면·기저귀)와 선택 카드(터미타임·놀이·목욕)를
+      // 양쪽 날짜에서 각각 확인할 수 있어야 한다.
+      out.push({
+        cat: "tummy",
+        time: "10:15",
+        dateKey,
+        duration: String(Math.max(12, tummyMin - 4)),
+        createdBy: actor,
+        source: "manual",
+      });
+      out.push({
+        cat: "play",
+        time: "14:30",
+        dateKey,
+        duration: String(Math.max(15, playMin - 8)),
+        details: "딸랑이",
+        createdBy: actor,
+        source: "manual",
+      });
+      out.push({ cat: "bath", time: "18:30", dateKey, createdBy: actor, source: "manual" });
       out.push({
         cat: "pump",
-        time: hhmm(1290 + jitter(ago, 25, 35)),
+        time: hasSolids ? "17:10" : "11:20",
         dateKey,
-        amount: String(95 + jitter(ago, 26, 35)),
+        amount: "110",
         createdBy: actor,
         source: "manual",
       });
     }
-    if (ago === 9) {
-      out.push({ cat: "doctor", time: hhmm(615), dateKey, title: "예방접종", createdBy: actor, source: "manual" });
-    }
-    if (ago === 8 || ago === 7) {
-      out.push({ cat: "med", time: hhmm(1155), dateKey, createdBy: actor, source: "manual" });
+
+    // ── 활동 ────────────────────────────────────────────────
+    if (!isToday) {
+      out.push({
+        cat: "tummy",
+        time: hhmm(615 + jitter(ago, 23, 30)),
+        dateKey,
+        duration: String(tummyMin),
+        createdBy: actor,
+        source: "manual",
+      });
+      out.push({
+        cat: "play",
+        time: hhmm(930 + jitter(ago, 24, 50)),
+        dateKey,
+        duration: String(playMin),
+        details: ["모빌 보기", "딸랑이", "노래 듣기", "거울 보기", "발 잡기"][ago % 5],
+        createdBy: actor,
+        source: "manual",
+      });
+      out.push({ cat: "bath", time: hhmm(bathTime), dateKey, createdBy: actor, source: "manual" });
+
+      if (ago % 2 === 1) {
+        out.push({
+          cat: "pump",
+          time: hhmm(1290 + jitter(ago, 25, 35)),
+          dateKey,
+          amount: String(95 + jitter(ago, 26, 35)),
+          createdBy: actor,
+          source: "manual",
+        });
+      }
+      if (ago === 9) {
+        out.push({ cat: "doctor", time: hhmm(615), dateKey, title: "예방접종", createdBy: actor, source: "manual" });
+      }
+      if (ago === 8 || ago === 7) {
+        out.push({ cat: "med", time: hhmm(1155), dateKey, createdBy: actor, source: "manual" });
+      }
     }
 
     // ── 이유식 월령에서만 ───────────────────────────────────
@@ -271,6 +357,12 @@ function buildLogs(
       });
     }
   }
+
+  // The overview intentionally compares two complete, readable sample days.
+  // Normalize only those days so generated records do not appear to happen
+  // during sleep or stack on the same minute marker.
+  normalizeDemoDayTimeline(out, dateKeyDaysAgo(0, now));
+  normalizeDemoDayTimeline(out, dateKeyDaysAgo(1, now));
 
   return out;
 }
@@ -305,8 +397,14 @@ function buildGrowthRecords(
   for (let month = 0; month <= Math.min(ageMonthsNow, 3); month += earlyStep) {
     picked.add(Number(month.toFixed(2)));
   }
+  // Keep one recent comparison point so the overview can show a real
+  // current-month delta instead of a lone latest measurement.
+  if (ageMonthsNow > 0.25) {
+    picked.add(Number(Math.max(0, ageMonthsNow - 0.25).toFixed(2)));
+  }
   const months = [...picked].sort((a, b) => a - b);
-  if (ageMonthsNow - months[months.length - 1] > 0.2) months.push(Number(ageMonthsNow.toFixed(2)));
+  const currentMonth = Number(ageMonthsNow.toFixed(2));
+  if (Math.abs(currentMonth - (months[months.length - 1] ?? 0)) > 0.01) months.push(currentMonth);
 
   const records: GrowthRecord[] = [];
   months.forEach((month, index) => {

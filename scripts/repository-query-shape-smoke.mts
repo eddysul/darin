@@ -49,6 +49,15 @@ assert.match(notifications, /NOTIFICATION_SETTINGS_SELECT/);
 assert.doesNotMatch(contactRequests, /\.select\(/);
 assert.match(profiles, /rpc\("list_memory_author_display"/);
 assert.match(profiles, /rpc\("list_visible_profile_display"/);
+assert.match(profiles, /rpc\("search_invite_profiles"/);
+assert.doesNotMatch(
+  profiles.slice(profiles.indexOf("searchInviteProfiles"), profiles.indexOf("listMemoryAuthorDisplayProfiles")),
+  /email|phone|guardian_birth_date|residence_country|nickname/,
+);
+assert.doesNotMatch(
+  profiles.slice(profiles.indexOf("searchInviteProfiles"), profiles.indexOf("listMemoryAuthorDisplayProfiles")),
+  /\.from\("profiles"\)/,
+);
 assert.doesNotMatch(
   profiles.slice(profiles.indexOf("listMemoryAuthorDisplayProfiles"), profiles.indexOf("getMyProfile")),
   /\.from\("profiles"\)/,

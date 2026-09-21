@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   createWeeklyAiDisplayState,
   createScopedWeeklyAiCacheStore,
@@ -227,6 +228,28 @@ assert.deepEqual(
   { [relationKey]: "Rule-based sentence" },
   "an invalid or failed replacement keeps the localized rule fallback visible",
 );
+
+const oldNarrative = createWeeklyAiDisplayState(identity(scopeA), {
+  headline: "이전 기록의 AI 요약",
+  body: "이전 수치 기반 문장",
+  fromAI: true,
+});
+const newRuleNarrative = { headline: "현재 기록의 규칙 요약", body: "현재 기록 기반 문장" };
+for (const current of [
+  identity(scopeA, { facts: { sleep: 420, feed: [6, 7] } }),
+  identity(scopeA, { locale: "en" }),
+  identity(scopeB),
+  identity(scopeOtherAccount),
+]) {
+  assert.deepEqual(
+    getCurrentWeeklyAiDisplayValue(current, oldNarrative) ?? newRuleNarrative,
+    newRuleNarrative,
+    "old narrative must not survive a changed facts, locale, baby, or account identity",
+  );
+}
+const reportScreen = readFileSync(new URL("../src/screens/tabs/BabyReportScreen.tsx", import.meta.url), "utf8");
+assert.match(reportScreen, /const narrative = getCurrentWeeklyAiDisplayValue\([\s\S]*?narrativeCacheIdentity,[\s\S]*?narrativeDisplay,[\s\S]*?\) \?\? ruleNarrative/);
+assert.match(reportScreen, /setNarrativeDisplay\(createWeeklyAiDisplayState\(narrativeCacheIdentity, result\)\)/);
 
 const storage = new MemoryStorage();
 const baseKey = "qa:weekly-ai-cache";

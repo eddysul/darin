@@ -3,6 +3,8 @@ import type { DiaryEntry } from "../types/babyLog";
 import { createT, type Locale, type MessageKey } from "../i18n";
 import type { BabyAgeFormat } from "../types/appSettings";
 import { formatLocalizedDate } from "./localeFormat";
+import { pregnancyProgressFromDueDate } from "./pregnancyProgress";
+export { pregnancyProgressFromDueDate, type PregnancyProgress } from "./pregnancyProgress";
 
 const POSTPARTUM_KEYS: Record<PostpartumStatus, MessageKey> = {
   pregnant: "onboardingFlow.postpartum.pregnant",
@@ -51,9 +53,6 @@ function calendarDayDifference(later: Date, earlier: Date): number {
   return Math.floor((laterUtc - earlierUtc) / 86_400_000);
 }
 
-/** Full-term pregnancy in days (40w0d). Due date is treated as day 280. */
-const PREGNANCY_TERM_DAYS = 280;
-
 /** Accepts a raw `child_status` string so callers can pass a `BabyRow` directly. */
 export function isPregnancyStage(child: { childStatus: string; birthDate?: string }): boolean {
   return child.childStatus === "unborn" && !child.birthDate;
@@ -68,15 +67,9 @@ export function formatDottedDate(value?: string): string | null {
 }
 
 export function formatGestationalAge(dueDate?: string, onDate: Date | string = new Date(), locale: Locale = "ko"): string | null {
-  const due = parseCalendarDate(dueDate);
-  const on = typeof onDate === "string" ? parseCalendarDate(onDate) : onDate;
-  if (!due || !on) return null;
-  const remainingDays = calendarDayDifference(startOfLocalDay(due), startOfLocalDay(on));
-  const gestationalDays = PREGNANCY_TERM_DAYS - remainingDays;
-  if (gestationalDays < 0) return ageCopy[locale].pregnant(0, 0);
-  const weeks = Math.floor(gestationalDays / 7);
-  const days = gestationalDays % 7;
-  return ageCopy[locale].pregnant(weeks, days);
+  const progress = pregnancyProgressFromDueDate(dueDate, onDate);
+  if (!progress) return null;
+  return ageCopy[locale].pregnant(progress.weeks, progress.days);
 }
 
 const BIRTH_CTA_WINDOW_DAYS = 7;

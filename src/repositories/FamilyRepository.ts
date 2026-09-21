@@ -1,11 +1,12 @@
 import type {
+  BabyAccessPermissionRow,
   BabyMemberRow,
   DarinInviteRequestRow,
   InviteCodeRow,
   InviteType,
   PermissionRole,
 } from "../types/database";
-import type { FamilyMember, FamilyRole } from "../types/family";
+import type { BabyAccessPermissions, FamilyMember, FamilyRole } from "../types/family";
 import { FAMILY_ROLE_LABELS } from "../types/family";
 import type { FamilyMemberDisplay } from "../types/profileSettings";
 import type { RelationshipLabel } from "../types/growthBook";
@@ -21,7 +22,10 @@ import { ProfileRepository } from "./ProfileRepository";
 export type DarinInviteRequestView = {
   id: string;
   babyId: string;
+  senderId: string;
+  receiverId: string;
   requestType: "family" | "friend";
+  permissionRole: PermissionRole;
   roleLabel: string;
   relation: string;
   createdAt: string;
@@ -30,6 +34,17 @@ export type DarinInviteRequestView = {
   body: string;
   direction: "incoming" | "outgoing";
 };
+
+function accessFromRow(row: BabyAccessPermissionRow): BabyAccessPermissions {
+  return {
+    careRead: row.care_read,
+    careWrite: row.care_write,
+    momentsRead: row.moments_read,
+    momentsWrite: row.moments_write,
+    socialComment: row.social_comment,
+    socialReact: row.social_react,
+  };
+}
 
 function mapDarinInviteError(error: { code?: string; message: string }): Error {
   const message = error.message ?? "";
@@ -76,7 +91,10 @@ function viewFromRow(
   return {
     id: row.id,
     babyId: row.baby_id,
+    senderId: row.sender_id,
+    receiverId: row.receiver_id,
     requestType,
+    permissionRole: row.permission_role,
     roleLabel: FAMILY_ROLE_LABELS[permissionToFamilyRole(row.permission_role)],
     relation: row.relationship_label,
     createdAt: row.created_at,
@@ -352,6 +370,80 @@ export const FamilyRepository = {
       }
     }
     return rows.map((row) => viewFromRow(row, user.id, byRequestId.get(row.id)));
+  },
+
+  async listBabyAccessPermissions(babyId: string): Promise<Array<{
+    userId: string;
+    permissions: BabyAccessPermissions;
+  }>> {
+    const { data, error } = await requireSupabase()
+      .from("baby_access_permissions")
+      .select("*")
+      .eq("baby_id", babyId)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map((row) => ({ userId: row.user_id, permissions: accessFromRow(row) }));
+  },
+
+  async setBabyAccessPermissions(input: {
+    babyId: string;
+    userId: string;
+    permissions: BabyAccessPermissions;
+  }): Promise<BabyAccessPermissions> {
+    const { data, error } = await requireSupabase().rpc("set_baby_access_permissions", {
+      p_baby_id: input.babyId,
+      p_user_id: input.userId,
+      p_care_read: input.permissions.careRead,
+      p_care_write: input.permissions.careWrite,
+      p_moments_read: input.permissions.momentsRead,
+      p_moments_write: input.permissions.momentsWrite,
+      p_social_comment: input.permissions.socialComment,
+      p_social_react: input.permissions.socialReact,
+    });
+    if (error) throw error;
+    return accessFromRow(data);
+  },
+
+  async promoteBabyFullAdmin(babyId: string, userId: string): Promise<void> {
+    const { error } = await requireSupabase().rpc("promote_baby_full_admin", {
+      p_baby_id: babyId,
+      p_user_id: userId,
+    });
+    if (error) throw error;
+  },
+
+  subscribeToMyBabyAccess(input: {
+    babyId: string;
+    userId: string;
+    onChange: () => void;
+  }): () => void {
+    const sb = requireSupabase();
+    const matchesUser = (payload: { new?: Record<string, unknown>; old?: Record<string, unknown> }) => {
+      const nextUser = payload.new?.user_id ?? payload.old?.user_id;
+      if (nextUser === input.userId) input.onChange();
+    };
+    const channel = sb
+      .channel(`baby-access:${input.babyId}:${input.userId}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "baby_access_permissions",
+        filter: `baby_id=eq.${input.babyId}`,
+      }, matchesUser)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "baby_members",
+        filter: `baby_id=eq.${input.babyId}`,
+      }, matchesUser)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "memory_friends",
+        filter: `baby_id=eq.${input.babyId}`,
+      }, matchesUser)
+      .subscribe();
+    return () => { void sb.removeChannel(channel); };
   },
 
   async getMyPermission(babyId: string): Promise<PermissionRole | null> {
