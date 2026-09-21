@@ -122,7 +122,7 @@ try {
     service.from("growth_books").insert({
       id: growthBookId, baby_id: sharedBabyId, title: "shared book", status: "draft", created_by: ownerId,
     }),
-    owner.from("push_tokens").insert({
+    service.from("push_tokens").insert({
       user_id: ownerId, device_id: `delete-qa-${stamp}`,
       expo_push_token: `ExponentPushToken[DeleteQA${crypto.randomUUID().replaceAll("-", "")}]`, platform: "ios",
     }),
@@ -197,11 +197,11 @@ try {
     service.from("babies").select("id").eq("id", soloBabyId),
     service.from("babies").select("id").eq("id", sharedBabyId),
     service.from("baby_members").select("user_id").eq("baby_id", sharedBabyId),
-    service.from("care_logs").select("id,created_by").eq("id", careId).single(),
-    service.from("growth_records").select("id,created_by").eq("id", growthId).single(),
-    service.from("diary_entries").select("id,author_id").eq("id", diaryId).single(),
-    service.from("memory_posts").select("id,author_id").eq("id", memoryId).single(),
-    service.from("growth_books").select("id,created_by").eq("id", growthBookId).single(),
+    service.from("care_logs").select("id").eq("id", careId),
+    service.from("growth_records").select("id").eq("id", growthId),
+    service.from("diary_entries").select("id").eq("id", diaryId),
+    service.from("memory_posts").select("id").eq("id", memoryId),
+    service.from("growth_books").select("id").eq("id", growthBookId),
     service.from("push_tokens").select("id").eq("user_id", ownerId),
     service.from("notification_settings").select("id").eq("user_id", ownerId),
     service.from("notification_events").select("id").eq("recipient_id", ownerId),
@@ -210,21 +210,17 @@ try {
 
   if (!ownerLookup.error || ownerLookup.data.user) throw new Error("auth user still exists");
   if (soloLookup.error || soloLookup.data.length !== 0) throw new Error("solo baby was not deleted");
-  if (sharedLookup.error || sharedLookup.data.length !== 1) throw new Error("shared baby was deleted");
-  if (memberships.error || memberships.data.length !== 1 || memberships.data[0].user_id !== memberId) {
-    throw new Error("shared membership cleanup failed");
+  if (sharedLookup.error || sharedLookup.data.length !== 0) throw new Error("last-admin shared baby survived");
+  if (memberships.error || memberships.data.length !== 0) throw new Error("shared memberships survived");
+  for (const result of [careLookup, growthLookup, diaryLookup, memoryLookup, bookLookup]) {
+    if (result.error || result.data.length !== 0) throw new Error("last-admin baby content survived");
   }
-  if (careLookup.error || careLookup.data.created_by !== null) throw new Error("shared care log was not anonymized");
-  if (growthLookup.error || growthLookup.data.created_by !== null) throw new Error("shared growth record was not anonymized");
-  if (diaryLookup.error || diaryLookup.data.author_id !== null) throw new Error("shared diary was not anonymized");
-  if (memoryLookup.error || memoryLookup.data.author_id !== null) throw new Error("shared memory was not anonymized");
-  if (bookLookup.error || bookLookup.data.created_by !== null) throw new Error("shared growth book was not anonymized");
   if (tokenLookup.error || tokenLookup.data.length) throw new Error("push token cleanup failed");
   if (settingLookup.error || settingLookup.data.length) throw new Error("notification settings cleanup failed");
   if (eventLookup.error || eventLookup.data.length) throw new Error("notification event cleanup failed");
   if (contactLookup.error || contactLookup.data.user_id !== null) throw new Error("contact request was not anonymized");
-  pass("auth user and solo baby deleted");
-  pass("shared baby preserved and Diary/Growth Book/Memories authorship anonymized");
+  pass("auth user and both last-admin baby spaces deleted");
+  pass("shared baby's Care/Diary/Growth Book/Memories data removed by cascade");
   pass("push token, notification settings and recipient events cleaned up");
   pass("contact request retained without account identifier");
 
