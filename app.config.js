@@ -35,8 +35,10 @@ module.exports = ({ config }) => {
     && process.env.EXPO_NO_DOTENV === "1"
     && !process.env.EXPO_PUBLIC_SUPABASE_URL?.trim()
     && !process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim()
-    && !process.env.EXPO_PUBLIC_FEATURE_ENV?.trim()
-    && !process.env.EXPO_PUBLIC_FEATURE_PROFILE?.trim()
+    && (!process.env.EXPO_PUBLIC_FEATURE_ENV?.trim()
+      || process.env.EXPO_PUBLIC_FEATURE_ENV === "production")
+    && (!process.env.EXPO_PUBLIC_FEATURE_PROFILE?.trim()
+      || process.env.EXPO_PUBLIC_FEATURE_PROFILE === "production")
     && !process.env.EXPO_PUBLIC_INTERNAL_FEATURES?.trim();
   if (serverKeys.length) {
     throw new Error(`EXPO CONFIG SAFETY BLOCK: server-only variables detected (${serverKeys.join(", ")})`);

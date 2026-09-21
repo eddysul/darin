@@ -86,6 +86,12 @@ withEnv({
 }, () => assert.deepEqual(expoConfig({ config: { name: "Darin" } }), { name: "Darin" }));
 withEnv({
   EAS_BUILD_PROFILE: "production",
+  EXPO_NO_DOTENV: "1",
+  EXPO_PUBLIC_FEATURE_ENV: "production",
+  EXPO_PUBLIC_FEATURE_PROFILE: "production",
+}, () => assert.deepEqual(expoConfig({ config: { name: "Darin" } }), { name: "Darin" }));
+withEnv({
+  EAS_BUILD_PROFILE: "production",
 }, () => assert.throws(() => expoConfig({ config: {} }), /invalid production project/));
 withEnv({
   EAS_BUILD_PROFILE: "production",
