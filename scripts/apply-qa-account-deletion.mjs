@@ -41,7 +41,9 @@ const history = psql(`select version from supabase_migrations.schema_migrations 
 if (!history.includes(baseline)) throw new Error("Account deletion migration baseline missing on QA");
 function verifyApplied() {
   const verified = legacyRetry
-    ? psql(`select (position('v_is_legacy_orphan' in pg_get_functiondef('public.prepare_account_deletion()'::regprocedure))>0)::text || '|' || (select count(*)::text from supabase_migrations.schema_migrations where version='${version}')`, true)
+    ? psql(`select (position('v_is_legacy_orphan' in pg_get_functiondef('public.prepare_account_deletion()'::regprocedure))>0
+        or position('v_creator_orphan' in pg_get_functiondef('public.prepare_account_deletion()'::regprocedure))>0)::text
+        || '|' || (select count(*)::text from supabase_migrations.schema_migrations where version='${version}')`, true)
     : psql(`select (select is_nullable from information_schema.columns where table_schema='public' and table_name='baby_caution_foods' and column_name='created_by') || '|' || (select confdeltype::text from pg_constraint where conname='baby_caution_foods_created_by_fkey') || '|' || (select count(*)::text from supabase_migrations.schema_migrations where version='${version}')`, true);
   if (verified !== (legacyRetry ? "true|1" : "YES|n|1")) throw new Error(`QA post-apply contract mismatch: ${verified}`);
 }

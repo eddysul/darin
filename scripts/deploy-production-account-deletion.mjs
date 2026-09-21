@@ -84,7 +84,8 @@ if (pending.length) {
 const verified = psql(`select (select is_nullable from information_schema.columns where table_schema='public'
   and table_name='baby_caution_foods' and column_name='created_by') || '|' ||
   (select confdeltype::text from pg_constraint where conname='baby_caution_foods_created_by_fkey') || '|' ||
-  (position('v_is_legacy_orphan' in pg_get_functiondef('public.prepare_account_deletion()'::regprocedure))>0)::text || '|' ||
+  (position('v_is_legacy_orphan' in pg_get_functiondef('public.prepare_account_deletion()'::regprocedure))>0
+    or position('v_creator_orphan' in pg_get_functiondef('public.prepare_account_deletion()'::regprocedure))>0)::text || '|' ||
   (select count(*)::text from supabase_migrations.schema_migrations where version in ('202609170005','202609170006'));`);
 if (verified !== "YES|n|true|2") throw new Error(`Production post-apply contract mismatch: ${verified}`);
 console.log(JSON.stringify({ target: "production", applied: pending.map(({ version }) => version), verified }));

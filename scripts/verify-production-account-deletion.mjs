@@ -20,7 +20,11 @@ const sql = `select json_build_object(
     and table_name='baby_caution_foods' and column_name='created_by'),
   'fk',(select confdeltype::text from pg_constraint where conname='baby_caution_foods_created_by_fkey'),
   'legacyRetry',(position('v_is_legacy_orphan' in
-    pg_get_functiondef('public.prepare_account_deletion()'::regprocedure))>0),
+      pg_get_functiondef('public.prepare_account_deletion()'::regprocedure))>0
+    or position('v_creator_orphan' in
+      pg_get_functiondef('public.prepare_account_deletion()'::regprocedure))>0),
+  'capabilityCleanup',(position('delete from public.baby_access_permissions' in
+    lower(pg_get_functiondef('public.prepare_account_deletion()'::regprocedure)))>0),
   'activeAdminless',(select count(*) from public.babies b where not exists (
     select 1 from public.baby_members m where m.baby_id=b.id and m.status='active' and m.permission_role='admin')
     and exists (select 1 from public.baby_members m where m.baby_id=b.id and m.status='active')),
@@ -32,7 +36,8 @@ const db = spawnSync(resolvePsqlBinary(), ["-X", "-At", "-v", "ON_ERROR_STOP=1",
 if (db.status !== 0) throw new Error(`Production read-only DB verification failed: ${(db.stderr || "").slice(0, 1200)}`);
 const state = JSON.parse(db.stdout.trim());
 if (state.migrations !== 2 || state.nullable !== "YES" || state.fk !== "n"
-  || !state.legacyRetry || state.activeAdminless !== 0 || state.publicPrivateBuckets !== 0
+  || !state.legacyRetry || !state.capabilityCleanup
+  || state.activeAdminless !== 0 || state.publicPrivateBuckets !== 0
   || state.cleanupSchedule !== 1) throw new Error(`Production DB contract mismatch: ${JSON.stringify(state)}`);
 
 // CLI 'functions list' is a read-only management request; do not invoke deletion
