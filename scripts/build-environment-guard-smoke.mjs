@@ -80,5 +80,17 @@ withEnv({
   EXPO_PUBLIC_FEATURE_ENV: "production",
   EXPO_PUBLIC_FEATURE_PROFILE: "production",
 }, () => assert.deepEqual(expoConfig({ config: { name: "Darin" } }), { name: "Darin" }));
+withEnv({
+  EAS_BUILD_PROFILE: "production",
+  EXPO_NO_DOTENV: "1",
+}, () => assert.deepEqual(expoConfig({ config: { name: "Darin" } }), { name: "Darin" }));
+withEnv({
+  EAS_BUILD_PROFILE: "production",
+}, () => assert.throws(() => expoConfig({ config: {} }), /invalid production project/));
+withEnv({
+  EAS_BUILD_PROFILE: "production",
+  EXPO_NO_DOTENV: "1",
+  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "partial-config-is-not-bootstrap",
+}, () => assert.throws(() => expoConfig({ config: {} }), /invalid production project/));
 
 console.log("Build environment guard smoke passed");
