@@ -1,4 +1,4 @@
-import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { BabyLogIcon } from "../babylog/BabyLogIcon";
 import { useLanguage } from "../../LanguageContext";
@@ -7,7 +7,6 @@ import type { MyProfileBabyItem } from "../../types/myProfileShowcase";
 import { colors, fontScaleCap, radius } from "../../theme";
 import { RoleBadge } from "./RoleBadge";
 
-const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 const SIDE = 20;
 const GAP = 10;
 
@@ -29,17 +28,6 @@ export function MyBabiesSection({ babies, loading, onPressManage, onPressBaby }:
         <Text style={styles.title} maxFontSizeMultiplier={fontScaleCap.chrome}>
           {t("memory.critical.225")}
         </Text>
-        <Pressable
-          style={styles.link}
-          onPress={onPressManage}
-          accessibilityRole="button"
-          accessibilityLabel={t("memory.critical.226")}
-        >
-          <Text style={styles.linkText} maxFontSizeMultiplier={fontScaleCap.chrome}>
-            {t("memory.critical.226")}
-          </Text>
-          <BabyLogIcon kind="chevron" size={15} color={colors.muted} strokeWidth={2.1} />
-        </Pressable>
       </View>
 
       {loading ? (
@@ -119,7 +107,6 @@ const styles = StyleSheet.create({
   heading: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: 8,
     paddingHorizontal: SIDE,
   },
@@ -133,17 +120,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: "800",
-  },
-  link: {
-    minHeight: TOUCH_MIN,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 1,
-  },
-  linkText: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "600",
   },
   card: {
     minHeight: 88,

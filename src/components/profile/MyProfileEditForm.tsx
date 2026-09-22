@@ -50,8 +50,17 @@ import { formatDateKey } from "../../utils/dateKey";
 import { localizedErrorMessage, storedRelationshipLabel } from "../../utils/familyDisplay";
 import { clampProfileBio, readProfileBio, writeProfileBio } from "../../utils/profileBioStore";
 import type { MessageKey } from "../../i18n";
+import type { RelationshipToChild } from "../../types/careSetup";
 
 const TOUCH_MIN = Platform.select({ ios: 44, android: 48 }) ?? 44;
+
+function relationshipToCareValue(relation: RelationshipLabel): RelationshipToChild {
+  if (relation === "엄마") return "mom";
+  if (relation === "아빠") return "dad";
+  if (relation === "보호자") return "guardian";
+  if (relation === "시터") return "sitter";
+  return "family";
+}
 
 type Props = {
   onClose: () => void;
@@ -74,7 +83,7 @@ export function MyProfileEditForm({ onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { careSetup, setCareSetup } = useApp();
   const { setSettings } = useAppSettings();
-  const { activeBabyId, myFamilyRole, applyOwnerFromSetup, rehydrateFromServer } = useBabyLog();
+  const { activeBabyId, myFamilyRole, applyMyProfileUpdate } = useBabyLog();
   const { t, setLocale } = useLanguage();
   const [panel, setPanel] = useState<Panel>("main");
   const [nickname, setNickname] = useState(careSetup.parent.parentName);
@@ -257,7 +266,8 @@ export function MyProfileEditForm({ onClose }: Props) {
           babyId,
           userId: user.id,
           relation,
-        }).catch(() => undefined);
+          displayNameOverride: null,
+        });
       }
       const resolvedLanguage = resolveAppLocale(preferredLanguage);
       const nextSetup = {
@@ -266,18 +276,27 @@ export function MyProfileEditForm({ onClose }: Props) {
           ...careSetup.parent,
           parentName: next.displayName,
           nickname: confirmedRealName,
+          relationshipToChild: relationshipToCareValue(relation),
           preferredLanguage: resolvedLanguage,
           avatarUri: pendingClear && !pendingAvatar ? undefined : next.avatarUrl,
         },
       };
       setCareSetup(nextSetup);
-      applyOwnerFromSetup(nextSetup);
       setLocale(resolvedLanguage);
       setSettings((current) => ({
         ...current,
         account: { ...current.account, language: preferredLanguage },
       }));
-      await rehydrateFromServer().catch(() => undefined);
+      if (user) {
+        applyMyProfileUpdate({
+          userId: user.id,
+          babyId,
+          displayName: next.displayName,
+          realName: confirmedRealName,
+          avatarUrl: pendingClear && !pendingAvatar ? undefined : next.avatarUrl,
+          relationshipLabel: relation,
+        });
+      }
       onClose();
     } catch (cause) {
       const raw = cause instanceof Error ? cause.message : "";
@@ -385,6 +404,13 @@ export function MyProfileEditForm({ onClose }: Props) {
                     maxLength={12}
                   />
                   <ProfileEditFieldRow
+                    label={t("settings.critical.018")}
+                    value={realName || t("settings.critical.020")}
+                    onChangeText={() => undefined}
+                    helper={t("settings.critical.019")}
+                    editable={false}
+                  />
+                  <ProfileEditFieldRow
                     label="Darin ID"
                     value={darinId}
                     onChangeText={() => undefined}
@@ -490,10 +516,6 @@ export function MyProfileEditForm({ onClose }: Props) {
               <View style={styles.panel}>
                 <Text style={styles.panelHint}>{t("settings.critical.343")}</Text>
                 <View style={styles.group}>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaLabel}>{t("settings.critical.018")}</Text>
-                    <Text style={styles.metaValue}>{realName || t("settings.critical.020")}</Text>
-                  </View>
                   <View style={styles.metaRow}>
                     <Text style={styles.metaLabel}>{t("settings.critical.002")}</Text>
                     <Text style={styles.metaValue}>{email || t("settings.critical.026")}</Text>

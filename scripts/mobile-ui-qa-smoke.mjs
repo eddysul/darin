@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const [tabs, navTypes, menu, navigator, theme, consult, notifications, mediaViewer, growthChart, report, formField, emailAuth, appConfig, expoConfig, appRoot, packageJson, recordGrid, timeline, memoryDetail, memoryComments, stickerVault, memoriesScreen, rhythmCard] = await Promise.all([
+const [tabs, navTypes, menu, navigator, theme, consult, notifications, mediaViewer, growthChart, report, formField, emailAuth, appConfig, expoConfig, appRoot, packageJson, recordGrid, timeline, memoryDetail, memoryComments, stickerVault, memoriesScreen, rhythmCard, myProfileEdit, settingsMessages] = await Promise.all([
   read("src/screens/MainTabs.tsx"),
   read("src/navigation/types.ts"),
   read("src/screens/tabs/MenuScreen.tsx"),
@@ -26,6 +26,8 @@ const [tabs, navTypes, menu, navigator, theme, consult, notifications, mediaView
   read("src/components/babylog/BabyStickerVaultModal.tsx"),
   read("src/screens/tabs/MemoriesScreen.tsx"),
   read("src/components/babylog/OverviewRhythmCard.tsx"),
+  read("src/components/profile/MyProfileEditForm.tsx"),
+  read("src/i18nSettingsCriticalMessages.ts"),
 ]);
 
 assert.ok(tabs.includes('{ kind: "micAction" }'), "Mic remains an independent center action");
@@ -69,5 +71,12 @@ assert.ok(memoriesScreen.includes("visible={feedReady && Boolean(commentsCard)}"
 assert.ok(rhythmCard.includes("fontScale >= 1.4") && rhythmCard.includes("styles.headLargeText") && rhythmCard.includes("largeText ? [0, 12, 24]"), "rhythm title/actions and time guides adapt to accessibility text sizes");
 assert.ok(stickerVault.includes("styles.cardPressed") && stickerVault.includes("styles.optionChipPressed"), "sticker selection and options have press feedback");
 assert.ok(notifications.includes("cardMainPressed"), "notification read actions react immediately on press");
+const nicknameIndex = myProfileEdit.indexOf('label={t("settings.critical.326")}');
+const realNameIndex = myProfileEdit.indexOf('label={t("settings.critical.018")}');
+const darinIdIndex = myProfileEdit.indexOf('label="Darin ID"');
+assert.ok(nicknameIndex >= 0 && nicknameIndex < realNameIndex && realNameIndex < darinIdIndex, "read-only real name appears directly below nickname");
+assert.equal(myProfileEdit.match(/label=\{t\("settings\.critical\.018"\)\}/g)?.length, 1, "real name is not duplicated in personal info");
+assert.match(myProfileEdit.slice(realNameIndex, darinIdIndex), /editable=\{false\}/, "real name cannot be edited");
+assert.ok(settingsMessages.includes("예: 다솜이 맘, 나린이 아빠") && settingsMessages.includes("다솜이와 나린이의 순간을 기록하고 있어요"), "profile examples use the approved names");
 
 console.log("mobile-ui-qa-smoke: approved navigation, accessibility, contrast, motion, and virtualization invariants passed");

@@ -97,6 +97,14 @@ assert.match(repo, /variant: "thumbnail"/);
 assert.match(repo, /requireCompletedEagerPhoto/);
 assert.match(repo, /captureSessionScope/);
 assert.match(repo, /mediaType === "video"/);
+const createPostScoped = repo.match(/async function createMemoryPostScoped[\s\S]*?\n}\n\nasync function addMemoryMediaScoped/)?.[0] ?? "";
+assert.ok(createPostScoped, "createMemoryPostScoped must remain covered");
+assert.match(
+  createPostScoped,
+  /status: input\.status \?\? "published",\n  \}\);\n  if \(error\) throw error;/,
+  "memory post INSERT must complete without same-statement RETURNING under visibility RLS",
+);
+assert.match(createPostScoped, /from\("memory_posts"\)\.select\("\*"\)\.eq\("id", postId\)\.single\(\)/);
 
 const upload = readFileSync("src/utils/eagerMediaUpload.ts", "utf8");
 assert.match(upload, /prepareVideoUpload/);
@@ -114,6 +122,8 @@ assert.doesNotMatch(player, /console\.(log|info|warn)\(.*uri/);
 const picker = readFileSync("src/components/memories/MemoryUploadModal.tsx", "utf8");
 assert.match(picker, /inspectPickedMemoryAsset/);
 assert.match(picker, /\["images", "videos"\]/);
+assert.match(picker, /failedUploads === 0/);
+assert.match(picker, /if \(failedUploads > 0\)/);
 assert.match(readFileSync("src/components/memories/memoryPresentation.ts", "utf8"), /mediaType === "video"/);
 assert.match(readFileSync("src/screens/tabs/MemoriesScreen.tsx", "utf8"), /playbackActive/);
 assert.match(readFileSync("src/screens/tabs/MemoriesScreen.tsx", "utf8"), /onViewableItemsChanged/);

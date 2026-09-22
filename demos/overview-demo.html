@@ -2302,16 +2302,21 @@
       void scene.offsetWidth;
       scene.classList.add("is-playing");
     };
-    const motionScenes = [
+    const autoplayMotionScenes = [
       document.querySelector(".duck-mascot"),
       document.querySelector(".weekly-card"),
+      document.querySelector(".milestone-intro .duck-inline"),
+      document.querySelector(".growth-ai-duck"),
+    ].filter(Boolean);
+    const replayMotionScenes = [
+      document.querySelector(".duck-mascot"),
       document.querySelector(".report-duck-week"),
       document.querySelector(".report-duck-month"),
       document.querySelector(".report-duck-all"),
       document.querySelector(".milestone-intro .duck-inline"),
       document.querySelector(".growth-ai-duck"),
     ].filter(Boolean);
-    motionScenes.forEach((scene) => {
+    replayMotionScenes.forEach((scene) => {
       const replay = () => replayMotionScene(scene);
       scene.addEventListener("click", replay);
       scene.addEventListener("keydown", (event) => {
@@ -2330,9 +2335,9 @@
           observer.unobserve(entry.target);
         });
       }, { threshold: 0.35 });
-      motionScenes.forEach((scene) => motionObserver.observe(scene));
+      autoplayMotionScenes.forEach((scene) => motionObserver.observe(scene));
     } else {
-      motionScenes.forEach((scene) => replayMotionScene(scene));
+      autoplayMotionScenes.forEach((scene) => replayMotionScene(scene));
     }
 
     const hour = Math.floor(nowMinutes / 60);

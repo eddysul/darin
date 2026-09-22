@@ -84,6 +84,14 @@ import {
 import { clearGrowthRecordsMigrationState } from "../utils/growthRecordsMigrationStore";
 import { formatDateKey } from "../utils/dateKey";
 import { actorFromFamily } from "../utils/logProvenance";
+import {
+  applyProfileDisplayToDiaries,
+  applyProfileDisplayToFamily,
+  applyProfileDisplayToGrowthBook,
+  applyProfileDisplayToLogs,
+  profileDisplayUpdateFromFamilyMember,
+  type ProfileDisplayUpdate,
+} from "../utils/profileDisplayUpdate";
 import type { BabyLogSource } from "../types/babyLog";
 import {
   clearDiaryDraft,
@@ -203,6 +211,8 @@ type BabyLogContextValue = {
   myFamilyRole: FamilyRole;
   /** Sync the local "me" member from completed CareSetup (name + relationship). */
   applyOwnerFromSetup: (setup: CareSetup) => void;
+  /** Apply a saved profile identity to every mounted author/family presentation in the current account scope. */
+  applyMyProfileUpdate: (update: ProfileDisplayUpdate) => void;
   updateFamilyMemberRole: (id: string, role: FamilyRole) => void;
   acceptFamilyInvite: (id: string) => void;
   setFamilyMemberStatus: (id: string, status: FamilyMember["status"]) => void;
@@ -366,6 +376,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     const cache = await hydrateBabyLogCaches(scope, force);
     if (hydrationRun !== storageHydrationRunRef.current) return false;
     const { customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, growthRecordsOk } = cache;
+    const scopeBabyId = scope?.babyId;
+    let hydratedFamily: FamilyMember[] = [];
 
     if (customOk) setCustomCategoriesState(getCustomCategories());
     if (quickOk) setQuickRecordsState(getQuickRecords());
@@ -419,8 +431,18 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       const family = await resolveFamilySnapshot(scope);
       if (hydrationRun !== storageHydrationRunRef.current) return false;
       if (family.value !== null) {
+        hydratedFamily = family.value;
         setFamilyMembers(family.value);
         if (family.persist) void saveFamilyMembers(family.value, scope);
+        if (scopeBabyId) {
+          const displayUpdates = family.value.map((member) => profileDisplayUpdateFromFamilyMember(member, scopeBabyId));
+          setLogs((current) => {
+            const next = displayUpdates.reduce(applyProfileDisplayToLogs, current);
+            logsRef.current = next;
+            return next;
+          });
+          setDiaryEntries((current) => displayUpdates.reduce(applyProfileDisplayToDiaries, current));
+        }
       }
       setFamilyHydrated(true);
     }
@@ -430,8 +452,13 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         babyName: careSetup.child.childName,
       });
       if (hydrationRun !== storageHydrationRunRef.current) return false;
-      setGrowthBookEditState(growthBook.edit);
-      void saveGrowthBookEdit(growthBook.edit, scope);
+      const normalizedGrowthBook = scopeBabyId
+        ? hydratedFamily
+          .map((member) => profileDisplayUpdateFromFamilyMember(member, scopeBabyId))
+          .reduce((current, update) => applyProfileDisplayToGrowthBook(current, update), growthBook.edit)
+        : growthBook.edit;
+      setGrowthBookEditState(normalizedGrowthBook);
+      void saveGrowthBookEdit(normalizedGrowthBook, scope);
       growthBookDirtyRef.current = growthBook.mediaFailed > 0;
       setGrowthBookHydrated(!!scope);
     }
@@ -1254,6 +1281,28 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const applyMyProfileUpdate = useCallback((update: ProfileDisplayUpdate) => {
+    const scope = localDataScopeRef.current;
+    if (!scope || scope.userId !== update.userId) return;
+    const resolved = {
+      ...update,
+      applyRelationship: scope.babyId === update.babyId,
+      legacyUserIds: ["local-me"],
+    };
+    setFamilyMembers((current) => applyProfileDisplayToFamily(current, resolved));
+    setLogs((current) => {
+      const next = applyProfileDisplayToLogs(current, resolved);
+      logsRef.current = next;
+      return next;
+    });
+    setDiaryEntries((current) => applyProfileDisplayToDiaries(current, resolved));
+    setGrowthBookEditState((current) => {
+      const next = applyProfileDisplayToGrowthBook(current, resolved);
+      if (next !== current) growthBookDirtyRef.current = true;
+      return next;
+    });
+  }, []);
+
   const updateFamilyMemberRole = useCallback((id: string, role: FamilyRole) => {
     setFamilyMembers((prev) => prev.map((m) => (m.id === id && !m.isMe ? { ...m, role } : m)));
   }, []);
@@ -1709,6 +1758,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       deleteGrowthRecord,
       myFamilyRole,
       applyOwnerFromSetup,
+      applyMyProfileUpdate,
       updateFamilyMemberRole,
       acceptFamilyInvite,
       setFamilyMemberStatus,
@@ -1779,6 +1829,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       deleteGrowthRecord,
       myFamilyRole,
       applyOwnerFromSetup,
+      applyMyProfileUpdate,
       updateFamilyMemberRole,
       acceptFamilyInvite,
       setFamilyMemberStatus,

@@ -76,8 +76,35 @@ assert.match(reportSource, /canShowReport && tab === "month"/);
 assert.match(reportSource, /canShowReport && tab === "all"/);
 const overviewSource = readFileSync(new URL("../src/screens/tabs/BabyReportScreen.tsx", import.meta.url), "utf8");
 assert.match(overviewSource, /reportDataState === "ready" \? \([\s\S]*?<OverviewTodaySummary[\s\S]*?<OverviewRhythmCard/);
-assert.match(overviewSource, /reportDataState === "ready" && narrative\.headline/);
+assert.match(overviewSource, /const weeklyHeadline = narrative\.headline \|\| t\("report\.critical\.013"\)/);
+assert.match(overviewSource, /const weeklyBody = narrative\.body \|\| t\("report\.critical\.014"\)/);
+assert.match(overviewSource, /reportDataState === "ready" \? \([\s\S]*?<OverviewWeeklyCard/);
 assert.match(overviewSource, /storageReady && !growthRecordsHydrated \? \([\s\S]*?<ErrorState/);
 assert.match(overviewSource, /growthRecordsHydrated \? \([\s\S]*?<OverviewGrowthSection/);
+
+const spriteSource = readFileSync(new URL("../src/components/babylog/OverviewSprite.tsx", import.meta.url), "utf8");
+assert.doesNotMatch(spriteSource, /frames\.length \* 2/, "overview motion frames must play exactly once");
+assert.match(spriteSource, /if \(frame >= frames\.length\)/, "overview motion frames stop after one pass");
+assert.match(spriteSource, /if \(index >= total\)/, "overview sprite sheets stop after one pass");
+
+const weeklyCardSource = readFileSync(new URL("../src/components/babylog/OverviewWeeklyCard.tsx", import.meta.url), "utf8");
+const todaySummarySource = readFileSync(new URL("../src/components/babylog/OverviewTodaySummary.tsx", import.meta.url), "utf8");
+const growthSource = readFileSync(new URL("../src/components/babylog/OverviewGrowthSection.tsx", import.meta.url), "utf8");
+assert.match(weeklyCardSource, /useState\(1\)/, "weekly duck must autoplay on first exposure");
+assert.match(todaySummarySource, /useState\(1\)/, "today summary duck must autoplay on first exposure");
+assert.match(growthSource, /const \[aiPlay, setAiPlay\] = useState\(1\)/, "growth AI duck must autoplay on first exposure");
+assert.match(growthSource, /const \[milestonePlay, setMilestonePlay\] = useState\(1\)/, "milestone duck must autoplay on first exposure");
+assert.doesNotMatch(growthSource, /monthlyDuck[^\n]+playing=\{false\}/, "monthly duck must not start paused");
+assert.match(reportSource, /if \(!visible\) return;[\s\S]*?week: current\.week \+ 1/, "weekly report duck must autoplay when the report opens");
+assert.match(reportSource, /setPlay\(\(current\) => \(\{ \.\.\.current, \[value\]: current\[value\] \+ 1 \}\)\)/, "month and all report ducks must autoplay when their tabs are exposed");
+
+const demoSource = readFileSync(new URL("../demos/overview-demo.html", import.meta.url), "utf8");
+assert.match(demoSource, /const autoplayMotionScenes = \[/);
+assert.match(demoSource, /const replayMotionScenes = \[/);
+assert.doesNotMatch(
+  demoSource.match(/const autoplayMotionScenes = \[[\s\S]*?\]\.filter\(Boolean\);/)?.[0] ?? "",
+  /report-duck-/,
+  "hidden report ducks must not autoplay before their report tab is visible",
+);
 
 console.log("report QA: PASS");

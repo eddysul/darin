@@ -86,7 +86,14 @@ export function OverviewReportScreen({
     if (!visible) return;
     setTab("week");
     setOpenEvidence(null);
+    setPlay((current) => ({ ...current, week: current.week + 1 }));
   }, [visible]);
+
+  const showTab = (value: Tab) => {
+    if (value === tab) return;
+    setTab(value);
+    setPlay((current) => ({ ...current, [value]: current[value] + 1 }));
+  };
   const monthReport = useMemo(() => buildMonthReport(logs), [logs]);
   const allReport = useMemo(
     () => buildAllReport(logs, diaryEntries, birthDate, t),
@@ -143,7 +150,7 @@ export function OverviewReportScreen({
               <Pressable
                 key={value}
                 style={[styles.tab, selected && styles.tabOn]}
-                onPress={() => setTab(value)}
+                onPress={() => showTab(value)}
                 accessibilityRole="tab"
                 accessibilityState={{ selected }}
               >

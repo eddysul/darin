@@ -93,10 +93,9 @@ export function MemoryUploadModal({
   const [error, setError] = useState("");
 
   const dirty = Boolean(photos.length || caption.trim() || taggedIds.length || selectedIds.length || privacy !== "family_circle");
-  // "failed" photos can still be posted and retried from the feed, but a photo
-  // that is still compressing or uploading has no storage path to attach yet.
   const pendingUploads = photos.filter((photo) => photo.status !== "uploaded" && photo.status !== "failed").length;
-  const canSubmit = photos.length > 0 && pendingUploads === 0;
+  const failedUploads = photos.filter((photo) => photo.status === "failed").length;
+  const canSubmit = photos.length > 0 && pendingUploads === 0 && failedUploads === 0;
 
   useEffect(() => {
     if (!visible) return;
@@ -202,6 +201,11 @@ export function MemoryUploadModal({
     if (photos.length === 0 || postedRef.current) return;
     if (pendingUploads > 0) {
       setError(t("memory.critical.100"));
+      return;
+    }
+    if (failedUploads > 0) {
+      const failed = photos.find((photo) => photo.status === "failed");
+      setError(t(memoryUploadErrorMessageKey(new Error(failed?.error))));
       return;
     }
     if (privacy === "tagged_family" && taggedIds.length === 0) {

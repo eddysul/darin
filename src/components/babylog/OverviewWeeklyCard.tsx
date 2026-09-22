@@ -42,7 +42,7 @@ export function OverviewWeeklyCard({
   onPress,
 }: Props) {
   const { t } = useLanguage();
-  const [playToken, setPlayToken] = useState(0);
+  const [playToken, setPlayToken] = useState(1);
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}

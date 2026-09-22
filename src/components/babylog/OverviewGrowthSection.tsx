@@ -245,8 +245,8 @@ export function OverviewGrowthSection({
   const { settings } = useAppSettings();
   const [monthOpen, setMonthOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
-  const [aiPlay, setAiPlay] = useState(0);
-  const [milestonePlay, setMilestonePlay] = useState(0);
+  const [aiPlay, setAiPlay] = useState(1);
+  const [milestonePlay, setMilestonePlay] = useState(1);
   const [milestoneAllOpen, setMilestoneAllOpen] = useState(false);
   const latest = records[records.length - 1];
   const thisMonth = monthKey(new Date().toISOString());
@@ -334,7 +334,7 @@ export function OverviewGrowthSection({
           <Text style={styles.sectionMeta}>{monthLabel}</Text>
         </View>
         <View style={styles.monthlyTop}>
-          <OverviewSpriteSheet source={overviewAssets.monthlyDuck} width={54} height={66} columns={4} rows={2} playing={false} />
+          <OverviewSpriteSheet source={overviewAssets.monthlyDuck} width={54} height={66} columns={4} rows={2} playing />
           <View style={styles.monthNums}>
             <View style={styles.monthNum}><Text style={styles.monthNumLabel}>{t("report.critical.021")}</Text><Text style={styles.monthNumValue}>{heightSpan ? formatDelta("height", heightSpan.delta, units, locale) : "—"}</Text></View>
             <View style={styles.monthNum}><Text style={styles.monthNumLabel}>{t("report.critical.016")}</Text><Text style={styles.monthNumValue}>{weightSpan ? formatDelta("weight", weightSpan.delta, units, locale) : "—"}</Text></View>

@@ -89,7 +89,7 @@ export function MyProfileScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const editing = Boolean(route.params?.edit);
   const { careSetup, setCareSetup } = useApp();
-  const { babies, activeBabyId, myFamilyRole, switchActiveBaby, applyOwnerFromSetup } = useBabyLog();
+  const { babies, activeBabyId, myFamilyRole, switchActiveBaby, applyMyProfileUpdate } = useBabyLog();
   const { t } = useLanguage();
   const [name, setName] = useState(careSetup.parent.parentName);
   const [handle, setHandle] = useState<string | undefined>();
@@ -216,7 +216,14 @@ export function MyProfileScreen({ navigation, route }: Props) {
               parent: { ...careSetup.parent, avatarUri: next.avatarUrl, parentName: next.displayName },
             };
             setCareSetup(nextSetup);
-            applyOwnerFromSetup(nextSetup);
+            applyMyProfileUpdate({
+              userId: next.userId,
+              babyId: activeBabyId,
+              displayName: next.displayName,
+              realName: next.nickname,
+              avatarUrl: next.avatarUrl,
+              relationshipLabel: relation,
+            });
           })
           .catch((cause) => setError(cause instanceof Error ? localizedErrorMessage(t, cause.message) : t("settings.critical.007")))
           .finally(() => setSaving(false));
@@ -234,6 +241,14 @@ export function MyProfileScreen({ navigation, route }: Props) {
             setCareSetup({
               ...careSetup,
               parent: { ...careSetup.parent, avatarUri: undefined, parentName: next.displayName },
+            });
+            applyMyProfileUpdate({
+              userId: next.userId,
+              babyId: activeBabyId,
+              displayName: next.displayName,
+              realName: next.nickname,
+              avatarUrl: undefined,
+              relationshipLabel: relation,
             });
           })
           .catch((cause) => setError(cause instanceof Error ? localizedErrorMessage(t, cause.message) : t("settings.critical.006")))

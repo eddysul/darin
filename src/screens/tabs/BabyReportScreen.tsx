@@ -213,6 +213,8 @@ export function BabyReportScreen({
     narrativeCacheIdentity,
     narrativeDisplay,
   ) ?? ruleNarrative;
+  const weeklyHeadline = narrative.headline || t("report.critical.013");
+  const weeklyBody = narrative.body || t("report.critical.014");
 
   // 같은 계정·아기·기간·사실에는 한 번만 AI 를 부른다. 실패하면 규칙 문장이 남는다.
   useEffect(() => {
@@ -382,15 +384,15 @@ export function BabyReportScreen({
                   />
                 </>
               ) : null}
-              {reportDataState === "ready" && narrative.headline ? (
+              {reportDataState === "ready" ? (
                 <OverviewWeeklyCard
                   kicker={t("report.critical.091")}
                   badge={formatWeekOfMonth(weekTable.meta.dateKeys[weekTable.meta.dateKeys.length - 1], t)}
-                  headline={narrative.headline}
-                  body={narrative.body}
+                  headline={weeklyHeadline}
+                  body={weeklyBody}
                   finding={insights.length ? t("report.critical.123", { count: insights.length }) : undefined}
                   moreLabel={t("report.critical.093")}
-                  accessibilityLabel={t("report.critical.110", { headline: narrative.headline })}
+                  accessibilityLabel={t("report.critical.110", { headline: weeklyHeadline })}
                   onPress={() => setReportOpen(true)}
                 />
               ) : null}

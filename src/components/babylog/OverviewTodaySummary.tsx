@@ -20,7 +20,7 @@ type Props = {
 
 export function OverviewTodaySummary({ todayLogs, yesterdayLogs }: Props) {
   const { t } = useLanguage();
-  const [playToken, setPlayToken] = useState(0);
+  const [playToken, setPlayToken] = useState(1);
   const pills = overviewStatPills(todayLogs);
   const yesterdayPills = overviewStatPills(yesterdayLogs);
   const kind = buildOverviewHeadlineKind(todayLogs, yesterdayLogs);

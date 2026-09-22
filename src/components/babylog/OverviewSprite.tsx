@@ -97,12 +97,12 @@ export function OverviewMotionFrames({ frames, playing, style, onPress, accessib
     let frame = 0;
     const timer = setInterval(() => {
       frame += 1;
-      if (frame >= frames.length * 2) {
+      if (frame >= frames.length) {
         setIndex(frames.length - 1);
         clearInterval(timer);
         return;
       }
-      setIndex(frame % frames.length);
+      setIndex(frame);
     }, 90);
     return () => clearInterval(timer);
   }, [frames.length, playing, reduceMotion]);

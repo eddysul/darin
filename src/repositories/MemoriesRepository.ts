@@ -308,7 +308,7 @@ async function createMemoryPostScoped(
 ): Promise<MemoryPost> {
   await scope.assertCurrent();
   const postId = input.id ?? createId();
-  const { data, error } = await scope.client.from("memory_posts").insert({
+  const { error } = await scope.client.from("memory_posts").insert({
     id: postId,
     baby_id: input.babyId,
     author_id: scope.accountId,
@@ -316,20 +316,37 @@ async function createMemoryPostScoped(
     privacy_type: input.privacyType,
     is_family_moment: input.isFamilyMoment ?? false,
     status: input.status ?? "published",
-  }).select("*").single();
+  });
   if (error) throw error;
-  const selectedUserIds = [...new Set(input.selectedUserIds ?? [])];
-  if (selectedUserIds.length > 0) {
+
+  try {
+    // Keep INSERT and SELECT as separate requests. The visibility policy calls
+    // can_view_memory_post(), whose stable lookup cannot see the row created by
+    // the same INSERT ... RETURNING statement on PostgreSQL.
     await scope.assertCurrent();
-    const selected = await scope.client.from("memory_selected_people").insert(
-      selectedUserIds.map((userId) => ({ memory_post_id: postId, user_id: userId })),
-    );
-    if (selected.error) {
-      await scope.client.from("memory_posts").delete().eq("id", postId);
-      throw selected.error;
+    const readback = await scope.client.from("memory_posts").select("*").eq("id", postId).single();
+    if (readback.error) throw readback.error;
+
+    const selectedUserIds = [...new Set(input.selectedUserIds ?? [])];
+    if (selectedUserIds.length > 0) {
+      await scope.assertCurrent();
+      const selected = await scope.client.from("memory_selected_people").insert(
+        selectedUserIds.map((userId) => ({ memory_post_id: postId, user_id: userId })),
+      );
+      if (selected.error) throw selected.error;
     }
+
+    return memoryPostRowToModel(readback.data);
+  } catch (cause) {
+    // The pinned client owns the row even if the mutable app session changed.
+    // Best-effort cleanup prevents an invisible media-less post.
+    try {
+      await scope.client.from("memory_posts").delete().eq("id", postId);
+    } catch {
+      // Report the original create/readback error.
+    }
+    throw cause;
   }
-  return memoryPostRowToModel(data);
 }
 
 async function addMemoryMediaScoped(
