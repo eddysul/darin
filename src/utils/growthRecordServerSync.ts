@@ -12,6 +12,7 @@ import {
   detectLocalGrowthRecordMigrationCandidates,
   mergePendingGrowthRecords,
 } from "./growthRecordsMigration";
+import { isValidLocalDataScope, type LocalDataScope } from "./scopedLocalStorage";
 
 export type GrowthRecordsBootstrapResult = {
   usedServer: boolean;
@@ -27,16 +28,23 @@ function errMsg(error: unknown): string {
   return String(error);
 }
 
-export async function bootstrapGrowthRecordsFromServer(localRecords: GrowthRecord[]): Promise<GrowthRecordsBootstrapResult> {
+export async function bootstrapGrowthRecordsFromServer(
+  localRecords: GrowthRecord[],
+  verifiedScope?: LocalDataScope | null,
+): Promise<GrowthRecordsBootstrapResult> {
   if (!isSupabaseConfigured()) {
     return { usedServer: false, records: null, migrated: 0, migrationFailed: 0 };
   }
-  if (!(await AuthRepository.getSession())) {
+  const session = await AuthRepository.getSession();
+  if (!session) {
     return { usedServer: false, records: null, migrated: 0, migrationFailed: 0 };
   }
   try {
-    const babyId = await ensureCareLogBabyId();
-    const user = await AuthRepository.getUser();
+    const scoped = isValidLocalDataScope(verifiedScope) && verifiedScope.userId === session.user.id
+      ? verifiedScope
+      : null;
+    const babyId = scoped?.babyId ?? await ensureCareLogBabyId();
+    const user = session.user;
     if (!babyId || !user) throw new Error("No authenticated baby binding for growth records.");
 
     let remote = await GrowthRecordRepository.hydrate(babyId);

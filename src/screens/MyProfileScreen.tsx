@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActionSheetIOS,
   Alert,
@@ -41,6 +41,7 @@ import { presentAvatarPicker } from "../utils/profileAvatarPicker";
 import { readProfileBio } from "../utils/profileBioStore";
 import { permissionToFamilyRole } from "../utils/supabaseMappers";
 import type { MessageKey } from "../i18n";
+import { useScreenLoadTrace } from "../hooks/useScreenLoadTrace";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MyProfile">;
 
@@ -101,9 +102,18 @@ export function MyProfileScreen({ navigation, route }: Props) {
   const [babyItems, setBabyItems] = useState<MyProfileBabyItem[]>([]);
   const [moments, setMoments] = useState<MemoryMomentPreview[]>([]);
   const [customBio, setCustomBio] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [babiesLoading, setBabiesLoading] = useState(true);
+  const [momentsLoading, setMomentsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const loadRunRef = useRef(0);
+
+  useScreenLoadTrace("MyProfile", activeBabyId, {
+    firstContent: !babiesLoading,
+    coreReady: !babiesLoading && !statsLoading,
+    fullReady: !babiesLoading && !statsLoading && !momentsLoading,
+  });
 
   const bio = useMemo(() => {
     if (customBio.trim()) return customBio.trim();
@@ -113,84 +123,160 @@ export function MyProfileScreen({ navigation, route }: Props) {
   }, [babyItems, customBio, t]);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const loadRun = ++loadRunRef.current;
     setError("");
     setFamilyCount(null);
     setFriendCount(null);
-    let partialFailure = false;
-    const safe = async <T,>(operation: Promise<T>, fallback: T): Promise<T> => {
-      try {
-        return await operation;
-      } catch {
-        partialFailure = true;
-        return fallback;
-      }
-    };
+    setStatsLoading(true);
+    setBabiesLoading(true);
+    setMomentsLoading(true);
+
+    const userPromise = AuthRepository.getUser();
+    const profilePromise = ProfileRepository.getMyProfile();
+    const momentsPromise = MemoriesRepository.listRecentAuthoredPreviews(3, babies.map((baby) => baby.id));
+
+    // The list itself is already account-scoped by BabyLogContext. Render it
+    // immediately; relationship/profile enrichment can arrive independently.
+    setBabyItems(babies.map((baby) => ({
+      id: baby.id,
+      name: baby.name,
+      ageLabel: babyCardAge(baby, t),
+      role: roleForBaby(baby, undefined, undefined, activeBabyId, myFamilyRole),
+      avatarUrl: baby.photo_url ?? undefined,
+    } satisfies MyProfileBabyItem)));
+    setBabiesLoading(false);
+
+    let user: Awaited<ReturnType<typeof AuthRepository.getUser>> = null;
     try {
-      const [user, profile, recentMoments] = await Promise.all([
-        safe(AuthRepository.getUser(), null),
-        safe(ProfileRepository.getMyProfile(), null),
-        safe(MemoriesRepository.listRecentAuthoredPreviews(3, babies.map((baby) => baby.id)), []),
-      ]);
-      const meId = user?.id;
-      setCustomBio(meId ? await readProfileBio(meId) : "");
-      if (profile) {
+      user = await userPromise;
+    } catch (cause) {
+      if (loadRun === loadRunRef.current) {
+        setError(cause instanceof Error ? localizedErrorMessage(t, cause.message) : t("settings.critical.003"));
+      }
+    }
+    if (loadRun !== loadRunRef.current) return;
+    const meId = user?.id;
+
+    const baseBabies = babies.map((baby) => ({
+      id: baby.id,
+      name: baby.name,
+      ageLabel: babyCardAge(baby, t),
+      role: roleForBaby(baby, meId, undefined, activeBabyId, myFamilyRole),
+      avatarUrl: baby.photo_url ?? undefined,
+    } satisfies MyProfileBabyItem));
+    setBabyItems(baseBabies);
+
+    const bioTask = (async () => {
+      if (!meId) return;
+      try {
+        const nextBio = await readProfileBio(meId);
+        if (loadRun === loadRunRef.current) setCustomBio(nextBio);
+      } catch {
+        // Keep the previous scoped bio instead of replacing it with an empty value.
+      }
+    })();
+
+    const profileTask = (async () => {
+      try {
+        const profile = await profilePromise;
+        if (loadRun !== loadRunRef.current) return;
+        if (!profile) {
+          setName(careSetup.parent.parentName);
+          setHandle(undefined);
+          setAvatarUrl(careSetup.parent.avatarUri);
+          return;
+        }
         setName(profile.display_name || careSetup.parent.parentName);
         setHandle(formatHandle(profile.darin_id));
         setRealName(profile.nickname ?? careSetup.parent.nickname ?? "");
         if (profile.default_relation) setRelation(profile.default_relation as RelationshipLabel);
-        const signedAvatarUrl = profile.avatar_storage_path
-          ? await safe(
-            ProfileRepository.createProfileAvatarSignedUrl(profile.avatar_storage_path),
-            profile.avatar_url ?? careSetup.parent.avatarUri,
-          )
-          : profile.avatar_url ?? careSetup.parent.avatarUri;
-        setAvatarUrl(signedAvatarUrl);
-      } else {
-        setName(careSetup.parent.parentName);
-        setHandle(undefined);
-        setAvatarUrl(careSetup.parent.avatarUri);
+        const fallbackAvatar = profile.avatar_url ?? careSetup.parent.avatarUri;
+        setAvatarUrl(fallbackAvatar);
+        if (profile.avatar_storage_path) {
+          void ProfileRepository.createProfileAvatarSignedUrl(profile.avatar_storage_path)
+            .then((signed) => {
+              if (loadRun === loadRunRef.current) setAvatarUrl(signed);
+            })
+            .catch(() => undefined);
+        }
+      } catch (cause) {
+        if (loadRun === loadRunRef.current) {
+          setError(cause instanceof Error ? localizedErrorMessage(t, cause.message) : t("settings.critical.003"));
+        }
       }
-      setMoments(recentMoments);
+    })();
 
-      const familyIds = new Set<string>();
-      const friendIds = new Set<string>();
-      const nextBabies = await Promise.all(babies.map(async (baby) => {
-        const [members, friends, babyProfile] = await Promise.all([
-          safe(FamilyRepository.listMembers(baby.id), []),
-          safe(FriendRepository.listFriendsByBabyId(baby.id), []),
-          safe(BabyProfileRepository.getBabyProfile(baby.id), null),
-        ]);
-        for (const member of members) {
-          if (member.status === "active" && member.user_id !== meId) familyIds.add(member.user_id);
-        }
-        for (const friend of friends) {
-          if (friend.status === "active") friendIds.add(friend.userId);
-        }
-        const mine = members.find((member) => member.user_id === meId);
-        return {
-          id: baby.id,
-          name: baby.name,
-          ageLabel: babyCardAge(baby, t),
-          role: roleForBaby(
-            baby,
-            meId,
-            mine ? permissionToFamilyRole(mine.permission_role) : undefined,
-            activeBabyId,
-            myFamilyRole,
-          ),
-          avatarUrl: babyProfile?.avatarUrl ?? babyProfile?.photoUrl ?? baby.photo_url ?? undefined,
-        } satisfies MyProfileBabyItem;
-      }));
-      setBabyItems(nextBabies);
-      setFamilyCount(partialFailure ? null : familyIds.size);
-      setFriendCount(partialFailure ? null : friendIds.size);
-      if (partialFailure) setError(t("settings.critical.003"));
-    } catch (cause) {
-      setError(cause instanceof Error ? localizedErrorMessage(t, cause.message) : t("settings.critical.003"));
-    } finally {
-      setLoading(false);
-    }
+    const momentsTask = (async () => {
+      try {
+        const recentMoments = await momentsPromise;
+        if (loadRun === loadRunRef.current) setMoments(recentMoments);
+      } catch {
+        if (loadRun === loadRunRef.current) setError(t("settings.critical.003"));
+      } finally {
+        if (loadRun === loadRunRef.current) setMomentsLoading(false);
+      }
+    })();
+
+    const familyIds = new Set<string>();
+    const friendIds = new Set<string>();
+    let statsComplete = Boolean(meId);
+    const memberGroupsPromise = FamilyRepository.listMembersForBabyIds(babies.map((baby) => baby.id));
+    const friendRequests = new Map(babies.map((baby) => [
+      baby.id,
+      FriendRepository.listFriendsByBabyId(baby.id).then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (reason: unknown) => ({ status: "rejected" as const, reason }),
+      ),
+    ]));
+    const memberGroupsResult = await Promise.allSettled([memberGroupsPromise]);
+    const memberGroups = memberGroupsResult[0]?.status === "fulfilled"
+      ? memberGroupsResult[0].value
+      : null;
+    if (!memberGroups) statsComplete = false;
+    const babyTasks = babies.map(async (baby) => {
+      const friendsResult = await friendRequests.get(baby.id)!;
+      if (loadRun !== loadRunRef.current) return;
+      if (friendsResult.status === "rejected") {
+        statsComplete = false;
+      }
+      const members = memberGroups?.get(baby.id) ?? [];
+      const friends = friendsResult.status === "fulfilled" ? friendsResult.value : [];
+      members.forEach((member) => {
+        if (member.status === "active" && member.user_id !== meId) familyIds.add(member.user_id);
+      });
+      friends.forEach((friend) => {
+        if (friend.status === "active") friendIds.add(friend.userId);
+      });
+      const mine = members.find((member) => member.user_id === meId);
+      setBabyItems((current) => current.map((item) => item.id === baby.id ? {
+        ...item,
+        role: roleForBaby(
+          baby,
+          meId,
+          mine ? permissionToFamilyRole(mine.permission_role) : undefined,
+          activeBabyId,
+          myFamilyRole,
+        ),
+        avatarUrl: baby.photo_url ?? undefined,
+      } : item));
+      if (baby.avatar_storage_path) {
+        void BabyProfileRepository.createBabyAvatarSignedUrl(baby.avatar_storage_path)
+          .then((signed) => {
+            if (loadRun !== loadRunRef.current) return;
+            setBabyItems((current) => current.map((item) => item.id === baby.id
+              ? { ...item, avatarUrl: signed }
+              : item));
+          })
+          .catch(() => undefined);
+      }
+    });
+
+    await Promise.all([bioTask, profileTask, momentsTask, ...babyTasks]);
+    if (loadRun !== loadRunRef.current) return;
+    setFamilyCount(statsComplete ? familyIds.size : null);
+    setFriendCount(statsComplete ? friendIds.size : null);
+    setStatsLoading(false);
+    if (!statsComplete) setError(t("settings.critical.003"));
   }, [activeBabyId, babies, careSetup.parent.avatarUri, careSetup.parent.nickname, careSetup.parent.parentName, myFamilyRole, t]);
 
   useFocusEffect(useCallback(() => {
@@ -347,18 +433,18 @@ export function MyProfileScreen({ navigation, route }: Props) {
           babyCount={babies.length}
           familyCount={familyCount}
           friendCount={friendCount}
-          loading={loading}
+          loading={statsLoading}
           onPressStat={onPressStat}
         />
         <MyBabiesSection
           babies={babyItems}
-          loading={loading}
+          loading={babiesLoading}
           onPressManage={openBabyManage}
           onPressBaby={(babyId) => { void openBaby(babyId); }}
         />
         <MyMomentsSection
           moments={moments}
-          loading={loading}
+          loading={momentsLoading}
           onPressSeeAll={openMemories}
           onPressMoment={(memoryPostId) => navigation.navigate("MemoryDetail", { memoryPostId })}
         />

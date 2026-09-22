@@ -44,6 +44,7 @@ import { NotificationBellButton } from "../../components/NotificationBellButton"
 import { useLanguage } from "../../LanguageContext";
 import { useAppSideMenu } from "../../context/AppSideMenuContext";
 import { caughtErrorMessage } from "../../utils/familyDisplay";
+import { useScreenLoadTrace } from "../../hooks/useScreenLoadTrace";
 
 import type { MemoryCriticalKey } from "../../i18nMemoriesCriticalMessages";
 
@@ -95,7 +96,7 @@ export function MemoriesScreen({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
-  const { babyName, familyMembers, familyHydrated, myFamilyRole, logAuthor, localDataScope, storageReady, babies, activeBabyId } = useBabyLog();
+  const { babyName, familyMembers, familyHydrated, myFamilyRole, logAuthor, localDataScope, babies, activeBabyId } = useBabyLog();
   const [cards, setCards] = useState<MemoryCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -130,13 +131,15 @@ export function MemoriesScreen({
   const pageOffsetsRef = useRef<Map<string, number>>(new Map());
   const exhaustedBabyIdsRef = useRef<Set<string>>(new Set());
   const loadingMoreRef = useRef(false);
+  const lastLoadedAtRef = useRef(0);
+  const mediaResolveKeysRef = useRef<Set<string>>(new Set());
   const babyId = activeBabyId;
   const accountId = localDataScope?.userId ?? null;
   const feedBabyIds = useMemo(
     () => babies.length > 0 ? babies.map((baby) => baby.id) : (babyId ? [babyId] : []),
     [babies, babyId],
   );
-  const feedScopeKey = storageReady && accountId && babyId && localDataScope?.babyId === babyId
+  const feedScopeKey = accountId && babyId && localDataScope?.babyId === babyId
     ? JSON.stringify([accountId, babyId, [...feedBabyIds].sort()])
     : null;
   const feedScopeVersionRef = useRef({ key: feedScopeKey, version: 0 });
@@ -156,12 +159,23 @@ export function MemoriesScreen({
   const loadedFeedScopeKeyRef = useRef<string | null>(null);
   const feedReady = Boolean(feedScopeToken && loadedFeedScopeKey === feedScopeToken);
   const visibleCards = feedReady ? cards : EMPTY_MEMORY_CARDS;
+  useScreenLoadTrace("Memories", feedScopeToken, {
+    firstContent: feedReady,
+    coreReady: feedReady && !loading,
+    fullReady: feedReady && !loading && !refreshing,
+  });
   useEffect(() => {
     setUploadOpen(false);
     setCommentsPostId(null);
     setEditBundle(null);
     setLightbox(null);
+    lastLoadedAtRef.current = 0;
+    mediaResolveKeysRef.current.clear();
   }, [feedScopeToken]);
+
+  useEffect(() => {
+    void MemoriesRepository.cleanupOrphanTempMedia();
+  }, []);
   const canCreate = Boolean(feedScopeToken && familyHydrated && myFamilyRole !== "viewer");
   const { isOpen: menuOpen, open: openAppMenu, close: closeAppMenu } = useAppSideMenu();
   const overlayBlocking = Boolean(commentsPostId || uploadOpen || editBundle || lightbox || viewSheetOpen);
@@ -225,27 +239,36 @@ export function MemoriesScreen({
   );
 
   const load = useCallback(async (refresh = false) => {
-    const requestRun = ++feedLoadRunRef.current;
     if (!feedScopeToken || !babyId) {
+      feedLoadRunRef.current += 1;
       setCards([]);
       setLoadedFeedScopeKey(null);
       setPostCount(0);
       setLoading(false);
       setRefreshing(false);
-      if (storageReady) setError(t("memory.critical.051"));
+      if (localDataScope) setError(t("memory.critical.051"));
       return;
     }
+    if (
+      !refresh
+      && loadedFeedScopeKeyRef.current === feedScopeToken
+      && Date.now() - lastLoadedAtRef.current < 30_000
+    ) {
+      setLoading(false);
+      return;
+    }
+    const requestRun = ++feedLoadRunRef.current;
     const requestedScopeKey = feedScopeToken;
     if (refresh) setRefreshing(true);
-    else setLoading(true);
+    else if (loadedFeedScopeKeyRef.current !== requestedScopeKey) setLoading(true);
     setError("");
     setActionError("");
     try {
-      void MemoriesRepository.cleanupOrphanTempMedia();
       const [lists, nextPostCount] = await Promise.all([
         Promise.all(feedBabyIds.map((id) => MemoriesRepository.listCardsByBabyId(id, {
           offset: 0,
           limit: MEMORY_FEED_PAGE_SIZE,
+          resolveMedia: false,
         }))),
         MemoriesRepository.countByBabyId(babyId).catch(() => 0),
       ]);
@@ -254,11 +277,6 @@ export function MemoriesScreen({
       pageOffsetsRef.current = new Map(feedBabyIds.map((id, index) => [id, lists[index]?.length ?? 0]));
       exhaustedBabyIdsRef.current = new Set(feedBabyIds.filter((id, index) => (lists[index]?.length ?? 0) < MEMORY_FEED_PAGE_SIZE));
       const unique = new Map(lists.flat().map((card) => [card.post.id, card]));
-      const nextAuthorProfiles = await ProfileRepository.listMemoryAuthorDisplayProfiles(
-        memoryAuthorIdsFromCards([...unique.values()]),
-      ).catch(() => [] as DisplayProfile[]);
-      if (feedScopeKeyRef.current !== requestedScopeKey || feedLoadRunRef.current !== requestRun) return;
-      setAuthorProfiles(nextAuthorProfiles);
       setCards((current) => {
         if (feedScopeKeyRef.current !== requestedScopeKey || feedLoadRunRef.current !== requestRun) return current;
         const optimistic = loadedFeedScopeKeyRef.current === requestedScopeKey
@@ -276,6 +294,15 @@ export function MemoriesScreen({
       });
       loadedFeedScopeKeyRef.current = requestedScopeKey;
       setLoadedFeedScopeKey(requestedScopeKey);
+      lastLoadedAtRef.current = Date.now();
+      mediaResolveKeysRef.current.clear();
+      void ProfileRepository.listMemoryAuthorDisplayProfiles(
+        memoryAuthorIdsFromCards([...unique.values()]),
+      ).then((nextAuthorProfiles) => {
+        if (feedScopeKeyRef.current === requestedScopeKey && feedLoadRunRef.current === requestRun) {
+          setAuthorProfiles(nextAuthorProfiles);
+        }
+      }).catch(() => undefined);
     } catch (cause) {
       if (feedScopeKeyRef.current === requestedScopeKey && feedLoadRunRef.current === requestRun) {
         setError(caughtErrorMessage(t, cause, "memory.critical.016"));
@@ -286,7 +313,7 @@ export function MemoriesScreen({
         setRefreshing(false);
       }
     }
-  }, [babyId, feedBabyIds, feedScopeToken, storageReady, t]);
+  }, [babyId, feedBabyIds, feedScopeToken, localDataScope, t]);
 
   const loadMore = useCallback(async () => {
     if (!feedScopeToken || loadedFeedScopeKey !== feedScopeToken || loadingMoreRef.current || loading || refreshing || error) return;
@@ -300,6 +327,7 @@ export function MemoriesScreen({
       const lists = await Promise.all(targets.map((id) => MemoriesRepository.listCardsByBabyId(id, {
         offset: pageOffsetsRef.current.get(id) ?? 0,
         limit: MEMORY_FEED_PAGE_SIZE,
+        resolveMedia: false,
       })));
       if (feedScopeKeyRef.current !== requestedScopeKey || feedLoadRunRef.current !== requestRun) return;
       targets.forEach((id, index) => {
@@ -308,15 +336,6 @@ export function MemoriesScreen({
         if (count < MEMORY_FEED_PAGE_SIZE) exhaustedBabyIdsRef.current.add(id);
       });
       const incoming = lists.flat();
-      const incomingProfiles = await ProfileRepository.listMemoryAuthorDisplayProfiles(
-        memoryAuthorIdsFromCards(incoming),
-      ).catch(() => [] as DisplayProfile[]);
-      if (feedScopeKeyRef.current !== requestedScopeKey || feedLoadRunRef.current !== requestRun) return;
-      setAuthorProfiles((current) => (
-        feedScopeKeyRef.current === requestedScopeKey && feedLoadRunRef.current === requestRun
-          ? mergeDisplayProfiles(current, incomingProfiles)
-          : current
-      ));
       setCards((current) => {
         if (feedScopeKeyRef.current !== requestedScopeKey || feedLoadRunRef.current !== requestRun) return current;
         const unique = new Map(current.map((card) => [card.post.id, card]));
@@ -330,6 +349,12 @@ export function MemoriesScreen({
         }
         return [...unique.values()].sort((a, b) => b.post.createdAt.localeCompare(a.post.createdAt));
       });
+      void ProfileRepository.listMemoryAuthorDisplayProfiles(
+        memoryAuthorIdsFromCards(incoming),
+      ).then((incomingProfiles) => {
+        if (feedScopeKeyRef.current !== requestedScopeKey || feedLoadRunRef.current !== requestRun) return;
+        setAuthorProfiles((current) => mergeDisplayProfiles(current, incomingProfiles));
+      }).catch(() => undefined);
     } catch (cause) {
       if (feedScopeKeyRef.current === requestedScopeKey && feedLoadRunRef.current === requestRun) {
         setActionError(caughtErrorMessage(t, cause, "memory.critical.016"));
@@ -340,7 +365,7 @@ export function MemoriesScreen({
     }
   }, [error, feedBabyIds, feedScopeToken, loadedFeedScopeKey, loading, refreshing, t]);
 
-  // Refetch on every focus so privacy/selection changes and short-lived signed URLs refresh.
+  // Keep a warm feed on quick tab switches; refresh stale authorization-backed data.
   useFocusEffect(useCallback(() => {
     void load();
   }, [load]));
@@ -637,9 +662,42 @@ export function MemoriesScreen({
   }, []);
 
   const commentsCard = commentsPostId ? visibleCards.find((card) => card.post.id === commentsPostId) : undefined;
+  const requestCardMedia = useCallback((card: MemoryCard) => {
+    const requestedScopeKey = feedScopeKeyRef.current;
+    if (!requestedScopeKey || !card.media?.some((item) => item.uploadStatus === "ready")) return;
+    const requestKey = `${requestedScopeKey}:${card.post.id}`;
+    if (mediaResolveKeysRef.current.has(requestKey)) return;
+    mediaResolveKeysRef.current.add(requestKey);
+    const requestRun = feedLoadRunRef.current;
+    const mediaIds = card.media.map((item) => item.id).join(":");
+    void MemoriesRepository.resolveCardMedia(card).then((resolved) => {
+      if (feedScopeKeyRef.current !== requestedScopeKey || feedLoadRunRef.current !== requestRun) return;
+      setCards((current) => current.map((item) => item.post.id === resolved.post.id
+        && item.media?.map((media) => media.id).join(":") === mediaIds
+        ? {
+          ...item,
+          coverUrl: resolved.coverUrl ?? item.coverUrl,
+          mediaUrls: resolved.mediaUrls,
+          mediaPosterUrls: resolved.mediaPosterUrls,
+        }
+        : item));
+    }).catch(() => {
+      // Keep the metadata card visible. A later focus/refresh can retry URLs.
+      if (feedScopeKeyRef.current === requestedScopeKey && feedLoadRunRef.current === requestRun) {
+        mediaResolveKeysRef.current.delete(requestKey);
+      }
+    });
+  }, []);
+  const requestCardMediaRef = useRef(requestCardMedia);
+  requestCardMediaRef.current = requestCardMedia;
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ isViewable: boolean; item: (typeof feedRows)[number] }> }) => {
     const next = viewableItems.find((entry) => entry.isViewable);
     setActivePostId(next ? memoryFeedPostIdFromViewable(next.item) : null);
+    viewableItems.forEach((entry) => {
+      if (entry.isViewable && entry.item.kind === "memory") {
+        requestCardMediaRef.current(entry.item.card);
+      }
+    });
   }).current;
 
   const listHeader = (

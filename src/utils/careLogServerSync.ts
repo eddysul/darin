@@ -20,6 +20,7 @@ import {
   hydrateSupabaseSync,
   saveSupabaseSync,
 } from "./supabaseSyncStore";
+import { isValidLocalDataScope, type LocalDataScope } from "./scopedLocalStorage";
 
 export type CareLogBootstrapResult = {
   usedServer: boolean;
@@ -79,6 +80,7 @@ export async function ensureCareLogBabyId(): Promise<string | null> {
  * Local AsyncStorage remains cache; migration is detection-only.
  */
 export async function bootstrapCareLogsFromServer(opts: {
+  verifiedScope?: LocalDataScope | null;
   careSetup: CareSetup;
   hasSavedCareSetup: boolean;
   localLogs: BabyLogEntry[] | null;
@@ -100,7 +102,8 @@ export async function bootstrapCareLogsFromServer(opts: {
 
   // Never create an auth session or baby while login or first-run UI is visible.
   // A server baby is bound only after onboarding has produced a real CareSetup.
-  if (!opts.hasSavedCareSetup || !(await AuthRepository.getSession())) {
+  const session = await AuthRepository.getSession();
+  if (!opts.hasSavedCareSetup || !session) {
     return {
       usedServer: false,
       babyId: getSupabaseSync().babyId,
@@ -111,7 +114,11 @@ export async function bootstrapCareLogsFromServer(opts: {
   }
 
   try {
-    const { babyId } = await bindBaby(opts.careSetup);
+    const verifiedScope = isValidLocalDataScope(opts.verifiedScope)
+      && opts.verifiedScope.userId === session.user.id
+      ? opts.verifiedScope
+      : null;
+    const babyId = verifiedScope?.babyId ?? (await bindBaby(opts.careSetup)).babyId;
     const recentCoverage = recentCareLogRange(formatDateKey());
     const remote = opts.historyMode === "recent"
       ? await CareLogRepository.getCareLogsByBabyAndDateRange(

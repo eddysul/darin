@@ -13,6 +13,7 @@ import { OverviewReportScreen } from "../../components/babylog/OverviewReportScr
 import { PregnancyOverview } from "../../components/babylog/PregnancyOverview";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { useConsultFabBehavior } from "../../hooks/useConsultFabBehavior";
+import { useScreenLoadTrace } from "../../hooks/useScreenLoadTrace";
 import { formatDateKey, offsetDateKey, yesterdayDateKey } from "../../utils/dateKey";
 import { careLogCoverageContains } from "../../utils/careLogHistory";
 import { buildTodaySummary, getLogsForDay } from "../../utils/reportAggregates";
@@ -92,7 +93,7 @@ export function BabyReportScreen({
     customCategories,
     addGrowthRecord,
     updateGrowthRecord,
-    storageReady,
+    logsHydrated,
     careLogCoverage,
     ensureCareLogsForRange,
     localDataScope,
@@ -118,9 +119,22 @@ export function BabyReportScreen({
   const [reportDataState, setReportDataState] = useState<"loading" | "ready" | "partial" | "error">("loading");
   const [reportHistoryState, setReportHistoryState] = useState<"loading" | "ready" | "partial" | "error">("loading");
 
+  useScreenLoadTrace(
+    "OverviewReport",
+    localDataScope ? `${localDataScope.userId}:${localDataScope.babyId}` : null,
+    {
+      firstContent: logsHydrated,
+      coreReady: logsHydrated && reportDataState !== "loading",
+      fullReady: logsHydrated
+        && reportDataState !== "loading"
+        && growthRecordsHydrated
+        && (!reportOpen || reportHistoryState !== "loading"),
+    },
+  );
+
   useEffect(() => {
     let active = true;
-    if (!storageReady) {
+    if (!logsHydrated) {
       setReportHistoryComplete(false);
       setReportDataState("loading");
       return () => {
@@ -147,10 +161,10 @@ export function BabyReportScreen({
     return () => {
       active = false;
     };
-  }, [ensureCareLogsForRange, reportFromDateKey, reportRangeCovered, storageReady, todayKey]);
+  }, [ensureCareLogsForRange, logsHydrated, reportFromDateKey, reportRangeCovered, todayKey]);
 
   useEffect(() => {
-    if (!reportOpen || !storageReady) return;
+    if (!reportOpen || !logsHydrated) return;
     let active = true;
     setReportHistoryState("loading");
     void ensureCareLogsForRange(historyFromDateKey, todayKey).then((result) => {
@@ -164,7 +178,7 @@ export function BabyReportScreen({
     return () => {
       active = false;
     };
-  }, [ensureCareLogsForRange, historyFromDateKey, reportOpen, storageReady, todayKey]);
+  }, [ensureCareLogsForRange, historyFromDateKey, logsHydrated, reportOpen, todayKey]);
 
   const reportLogs = reportLogsForDisplay(logs, reportRangeCovered, reportHistoryComplete);
   const yesterdayKey = yesterdayDateKey();
@@ -177,7 +191,10 @@ export function BabyReportScreen({
   );
   const insights = useMemo(() => findInsights(reportLogs, todayKey), [reportLogs, todayKey]);
 
-  const weekTable = useMemo(() => buildWeeklyFeatureTable(reportLogs, careSetup), [reportLogs, careSetup]);
+  const weekTable = useMemo(
+    () => buildWeeklyFeatureTable(reportLogs, careSetup, undefined, insights),
+    [careSetup, insights, reportLogs],
+  );
   const ruleNarrative = useMemo(() => buildRuleNarrative(weekTable, t, locale), [locale, t, weekTable]);
   const narrativePromptInput = useMemo(() => describeTable(weekTable), [weekTable]);
   const narrativeFromDateKey = weekTable.meta.dateKeys[0]
@@ -396,10 +413,6 @@ export function BabyReportScreen({
                   onPress={() => setReportOpen(true)}
                 />
               ) : null}
-              {!storageReady ? <LoadingState label={t("report.critical.227")} /> : null}
-              {storageReady && !growthRecordsHydrated ? (
-                <ErrorState title={t("report.critical.016")} body={t("home.storage.offlineError")} />
-              ) : null}
               {growthRecordsHydrated ? (
                 <OverviewGrowthSection
                   records={sortedGrowthRecords}
@@ -412,7 +425,9 @@ export function BabyReportScreen({
                   onOpenGrowthBook={() => onOpenDiary?.({ openGrowthBookVault: true })}
                   onAskAi={onOpenConsult}
                 />
-              ) : null}
+              ) : (
+                <LoadingState label={t("report.critical.227")} />
+              )}
             </>
           )}
         </View>

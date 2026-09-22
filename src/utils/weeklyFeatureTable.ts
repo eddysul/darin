@@ -111,6 +111,7 @@ export function buildWeeklyFeatureTable(
   logs: BabyLogEntry[],
   careSetup: CareSetup,
   now = new Date(),
+  precomputedInsights?: ReturnType<typeof findInsights>,
 ): WeeklyFeatureTable {
   const todayKey = formatDateKey(now);
   // 오늘 포함 13일에서 오늘을 떼면 최근 6일 + 그 앞 6일이 된다.
@@ -158,7 +159,7 @@ export function buildWeeklyFeatureTable(
       hasPreviousWeek: metrics.some((metric) => metric.lastWeek !== null),
     },
     metrics,
-    correlations: findInsights(logs, todayKey).map((insight) => ({
+    correlations: (precomputedInsights ?? findInsights(logs, todayKey)).map((insight) => ({
       a: insight.lead.replace(/ 날, $/, ""),
       b: `${insight.gapText} ${insight.tail}`,
       rho: Math.round(insight.rho * 100) / 100,

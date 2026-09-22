@@ -127,12 +127,33 @@ export const FamilyRepository = {
     return data ?? [];
   },
 
+  async listMembersForBabyIds(babyIds: readonly string[]): Promise<Map<string, BabyMemberRow[]>> {
+    const uniqueIds = [...new Set(babyIds.filter(Boolean))];
+    const grouped = new Map(uniqueIds.map((babyId) => [babyId, [] as BabyMemberRow[]]));
+    if (!uniqueIds.length) return grouped;
+    const { data, error } = await requireSupabase()
+      .from("baby_members")
+      .select("*")
+      .in("baby_id", uniqueIds)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const rows = grouped.get(row.baby_id);
+      if (rows) rows.push(row);
+    }
+    return grouped;
+  },
+
   async listMembersAsFamily(babyId: string): Promise<FamilyMember[]> {
     const rows = await this.listMembers(babyId);
     const user = await AuthRepository.getUser();
     let profiles = new Map<string, { displayName: string; realName?: string; avatarUrl?: string }>();
     try {
-      const list = await ProfileRepository.listDisplayProfilesForBaby(babyId);
+      // The membership rows above already passed baby-scoped RLS. Reuse their
+      // user ids instead of querying baby_members a second time.
+      const list = await ProfileRepository.listVisibleDisplayProfiles(
+        rows.filter((row) => row.status === "active").map((row) => row.user_id),
+      );
       profiles = new Map(list.map((item) => [item.userId, { displayName: item.displayName, realName: item.nickname, avatarUrl: item.avatarUrl }]));
     } catch {
       // Fall back to membership-only labels when profile join is unavailable.
@@ -152,7 +173,9 @@ export const FamilyRepository = {
   async listMemberDisplays(babyId: string): Promise<FamilyMemberDisplay[]> {
     const rows = await this.listMembers(babyId);
     const user = await AuthRepository.getUser();
-    const profiles = await ProfileRepository.listDisplayProfilesForBaby(babyId).catch(() => []);
+    const profiles = await ProfileRepository.listVisibleDisplayProfiles(
+      rows.filter((row) => row.status === "active").map((row) => row.user_id),
+    ).catch(() => []);
     const byId = new Map(profiles.map((item) => [item.userId, item]));
     return rows.map((row) => {
       const profile = byId.get(row.user_id);

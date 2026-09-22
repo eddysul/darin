@@ -72,6 +72,7 @@ import { useCompactLayout } from "../../hooks/useCompactLayout";
 import { loadFoodIngredients, normalizeIngredientName, saveFoodIngredients } from "../../utils/foodIngredientsStore";
 import type { MainTabParamList } from "../../navigation/types";
 import { useLanguage } from "../../LanguageContext";
+import { useScreenLoadTrace } from "../../hooks/useScreenLoadTrace";
 import { RECORD_VALUE } from "../../constants/recordInternalValues";
 import { quickRecordLabel, recordCategoryLabel } from "../../utils/recordDisplay";
 import { formatDayNavLabel } from "../../utils/insightDisplay";
@@ -128,7 +129,8 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     setQuickRecords,
     myFamilyRole,
     familyMembers,
-    storageReady,
+    familyHydrated,
+    logsHydrated,
     addGrowthRecord,
     updateGrowthRecord,
     localDataScope,
@@ -193,10 +195,16 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     : false;
   const historyComplete = selectedDateCovered
     || (historyResult?.dateKey === selectedDateKey && historyResult.complete);
-  const historyLoading = storageReady
+  const recordCoreReady = logsHydrated && familyHydrated;
+  const historyLoading = recordCoreReady
     && !selectedDateCovered
     && (historyLoadingDateKey === selectedDateKey || historyResult?.dateKey !== selectedDateKey);
-  const allowRecord = allowAdd && storageReady && historyComplete && !historyLoading;
+  useScreenLoadTrace("Record", localDataScope ? `${localDataScope.userId}:${localDataScope.babyId}` : null, {
+    firstContent: logsHydrated,
+    coreReady: recordCoreReady,
+    fullReady: recordCoreReady && historyComplete && !historyLoading,
+  });
+  const allowRecord = allowAdd && recordCoreReady && historyComplete && !historyLoading;
   const dayLogs = useMemo(
     () => getLogsForDay(logs, selectedDateKey, todayKey),
     [logs, selectedDateKey, todayKey],
@@ -212,7 +220,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   const isViewingToday = selectedDateKey === todayKey;
 
   useEffect(() => {
-    if (!storageReady) return;
+    if (!recordCoreReady) return;
     if (selectedDateCovered) {
       setHistoryLoadingDateKey(null);
       setHistoryResult({ dateKey: selectedDateKey, complete: true });
@@ -226,11 +234,11 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       setHistoryLoadingDateKey(null);
     });
     return () => { active = false; };
-  }, [ensureCareLogsForRange, selectedDateCovered, selectedDateKey, storageReady]);
+  }, [ensureCareLogsForRange, recordCoreReady, selectedDateCovered, selectedDateKey]);
 
   useEffect(() => {
     let active = true;
-    if (!storageReady) {
+    if (!recordCoreReady) {
       setInventoryHistoryComplete(false);
       return () => {
         active = false;
@@ -243,11 +251,11 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     return () => {
       active = false;
     };
-  }, [ensureCareLogsForCategories, localDataScope, storageReady]);
+  }, [ensureCareLogsForCategories, localDataScope, recordCoreReady]);
 
   useEffect(() => {
     let active = true;
-    if (!contractionSheetOpen || !storageReady) {
+    if (!contractionSheetOpen || !recordCoreReady) {
       setContractionHistoryComplete(false);
       return () => {
         active = false;
@@ -259,7 +267,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
     return () => {
       active = false;
     };
-  }, [contractionSheetOpen, ensureCareLogsForCategories, localDataScope, storageReady]);
+  }, [contractionSheetOpen, ensureCareLogsForCategories, localDataScope, recordCoreReady]);
   const canGoNext = selectedDateKey < todayKey;
   const canGoPrev = selectedDateKey > offsetDateKey(todayKey, -365);
   const timelineTitle = isViewingToday
@@ -312,15 +320,15 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   }, [ensureCareLogById, localDataScope, settingsReady, settings.timers.restoreAfterRestart]);
 
   useEffect(() => {
-    if (!storageReady) return;
+    if (!recordCoreReady) return;
     const scopeKey = localDataScope ? `${localDataScope.userId}:${localDataScope.babyId}` : null;
     if (activeTimersScopeRef.current !== scopeKey) return;
     void saveActiveTimers(activeTimers, localDataScope);
-  }, [activeTimers, localDataScope, storageReady]);
+  }, [activeTimers, localDataScope, recordCoreReady]);
 
   // Keep sleep timer in sync with open sleep log (short-tap start / restore).
   useEffect(() => {
-    if (!storageReady || !timerRestoreInitialized.current) return;
+    if (!recordCoreReady || !timerRestoreInitialized.current) return;
     setActiveTimers((prev) => {
       const sleepTimer = prev.find((t) => t.kind === "sleep");
       if (activeSleep) {
@@ -343,7 +351,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       }
       return prev;
     });
-  }, [activeSleep, logs, storageReady]);
+  }, [activeSleep, logs, recordCoreReady]);
 
   useEffect(() => {
     if (!activeTimers.some((t) => t.status === "running")) return;
@@ -442,7 +450,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
 
   useEffect(() => {
     const logId = route.params?.logId;
-    if (!logId || !storageReady) return;
+    if (!logId || !recordCoreReady) return;
     let active = true;
     void ensureCareLogById(logId).then((entry) => {
       if (!active) return;
@@ -453,11 +461,11 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       openEdit(entry);
     });
     return () => { active = false; };
-  }, [ensureCareLogById, navigation, openEdit, route.params?.logId, storageReady]);
+  }, [ensureCareLogById, navigation, openEdit, recordCoreReady, route.params?.logId]);
 
   useEffect(() => {
     const category = route.params?.category;
-    if (!category || !storageReady || route.params?.logId) return;
+    if (!category || !recordCoreReady || route.params?.logId) return;
     navigation.setParams({ category: undefined });
     openSheet(category, {
       cat: category,
@@ -465,7 +473,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
       time: nowTime(),
       source: "manual",
     });
-  }, [navigation, route.params?.category, route.params?.logId, selectedDateKey, storageReady]);
+  }, [navigation, recordCoreReady, route.params?.category, route.params?.logId, selectedDateKey]);
 
   const announceCreated = (entry: BabyLogEntry, title: string) => {
     setHighlightId(entry.id);
@@ -898,7 +906,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
   return (
     <View style={styles.root}>
       <TodayTimeline
-        logs={storageReady && !historyLoading ? dayLogs : []}
+        logs={recordCoreReady && !historyLoading ? dayLogs : []}
         title={timelineTitle}
         customCategories={customCategories}
         highlightId={highlightId}
@@ -916,7 +924,7 @@ export function RecordScreen({ onOpenProfile, onOpenSettings, onOpenNotification
           scrollEventThrottle: 16,
         }}
         listEmpty={
-          !storageReady || historyLoading ? (
+          !recordCoreReady || historyLoading ? (
             <LoadingState label={t("record.screen.loading")} />
           ) : !historyComplete ? (
             <EmptyState

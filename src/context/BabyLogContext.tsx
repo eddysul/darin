@@ -131,6 +131,7 @@ import { sameLocalDataScope } from "./babyLogContextHelpers";
 import { useBabyLogCachePersistence } from "./useBabyLogCachePersistence";
 import {
   hydrateBabyLogCaches,
+  normalizeCachedCareLogs,
   resolveBabyLogDataScope,
   resolveHydratedCareLogs,
 } from "./babyLogHydrationService";
@@ -181,11 +182,14 @@ type BabyLogContextValue = {
   quickRecords: QuickRecord[];
   setQuickRecords: (records: QuickRecord[] | ((prev: QuickRecord[]) => QuickRecord[])) => void;
   logs: BabyLogEntry[];
+  /** Scoped cache is available; a server refresh may still be running. */
+  logsHydrated: boolean;
   careLogCoverage: CareLogHistoryCoverage | null;
   ensureCareLogsForRange: (fromDateKey: string, toDateKey: string) => Promise<CareLogRangeResult>;
   ensureCareLogById: (id: string) => Promise<BabyLogEntry | null>;
   ensureCareLogsForCategories: (categories: readonly LogCategoryKey[]) => Promise<CareLogCategoryResult>;
   diaryEntries: DiaryEntry[];
+  diaryHydrated: boolean;
   localDataScope: LocalDataScope | null;
   babies: BabyRow[];
   activeBabyId: string | null;
@@ -282,6 +286,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const [cautionFoods, setCautionFoods] = useState<CautionFood[]>([]);
   const localDataScopeRef = useRef<LocalDataScope | null>(null);
   const storageHydrationRunRef = useRef(0);
+  const careLogRangeRequestsRef = useRef(new Map<string, Promise<CareLogRangeResult>>());
+  const careLogCategoryRequestsRef = useRef(new Map<string, Promise<CareLogCategoryResult>>());
   const growthBookDirtyRef = useRef(false);
   const growthBookSyncRunRef = useRef(0);
   const accessRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -314,17 +320,27 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
   const resolveLocalDataScope = useCallback(async (
     override?: LocalDataScope,
     suppressBootstrap = false,
+    verifiedBabies?: BabyRow[],
   ): Promise<LocalDataScope | null> => {
-    const resolution = await resolveBabyLogDataScope({ override, hasSavedCareSetup: hasSavedCareSetup && !suppressBootstrap });
+    const resolution = await resolveBabyLogDataScope({
+      override,
+      hasSavedCareSetup: hasSavedCareSetup && !suppressBootstrap,
+      verifiedBabies,
+    });
     setBabies(resolution.babies);
     return resolution.scope;
   }, [hasSavedCareSetup]);
 
-  const hydrateStorageState = useCallback(async (force = false, scopeOverride?: LocalDataScope, suppressBootstrap = false) => {
+  const hydrateStorageState = useCallback(async (
+    force = false,
+    scopeOverride?: LocalDataScope,
+    suppressBootstrap = false,
+    verifiedBabies?: BabyRow[],
+  ) => {
     const hydrationRun = ++storageHydrationRunRef.current;
     let scope: LocalDataScope | null = null;
     try {
-      scope = await resolveLocalDataScope(scopeOverride, suppressBootstrap);
+      scope = await resolveLocalDataScope(scopeOverride, suppressBootstrap, verifiedBabies);
     } catch {
       // Without a verified auth+baby scope, account data must remain hidden.
       scope = null;
@@ -335,6 +351,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     const previousScopeId = previousScope ? localDataScopeId(previousScope) : null;
     const nextScopeId = scope ? localDataScopeId(scope) : null;
     if (previousScopeId !== nextScopeId) {
+      careLogRangeRequestsRef.current.clear();
+      careLogCategoryRequestsRef.current.clear();
       growthBookDirtyRef.current = false;
       growthBookSyncRunRef.current += 1;
       setDiaryHydrated(false);
@@ -377,17 +395,42 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     if (hydrationRun !== storageHydrationRunRef.current) return false;
     const { customOk, quickOk, logsOk, diaryOk, chatOk, familyOk, growthOk, stickersOk, growthRecordsOk } = cache;
     const scopeBabyId = scope?.babyId;
-    let hydratedFamily: FamilyMember[] = [];
 
     if (customOk) setCustomCategoriesState(getCustomCategories());
     if (quickOk) setQuickRecordsState(getQuickRecords());
+    if (chatOk) {
+      const storedChat = getChatHistory();
+      setChatHistory(storedChat && storedChat.length > 0 ? storedChat : [DEFAULT_CHAT_GREETING]);
+    } else {
+      setChatHistory([DEFAULT_CHAT_GREETING]);
+    }
+    setChatHydrated(true);
+
+    // A verified account+baby cache can be shown immediately while the server
+    // refresh continues. Never do this before scope verification.
     if (logsOk) {
+      const cachedLogs = normalizeCachedCareLogs(getBabyLogs());
+      if (cachedLogs !== null) {
+        setLogs(cachedLogs);
+        logsRef.current = cachedLogs;
+      }
+      const storedMetadata = getCareLogCacheMetadata();
+      if (storedMetadata.coverage) applyCareLogCoverage(storedMetadata.coverage);
+      careLogCategoryCoverageRef.current = new Set(storedMetadata.categoryCoverage);
+      setLogsHydrated(true);
+    }
+
+    // Start independent server domains together. Each task publishes its own
+    // slice as soon as it finishes; slower media-heavy domains do not hold the
+    // core record/report surfaces behind a single waterfall.
+    const careTask = logsOk ? (async () => {
       const careLogs = await resolveHydratedCareLogs({
+        scope,
         careSetup,
         hasSavedCareSetup: hasSavedCareSetup && !suppressBootstrap,
         storedLogs: getBabyLogs(),
       });
-      if (hydrationRun !== storageHydrationRunRef.current) return false;
+      if (hydrationRun !== storageHydrationRunRef.current) return;
       if (careLogs.logs !== null) {
         setLogs(careLogs.logs);
         logsRef.current = careLogs.logs;
@@ -410,28 +453,23 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         });
       }
       setLogsHydrated(true);
-    }
-    if (diaryOk) {
+    })() : Promise.resolve();
+
+    const diaryTask = diaryOk ? (async () => {
       const diary = await resolveDiarySnapshot(scope);
-      if (hydrationRun !== storageHydrationRunRef.current) return false;
+      if (hydrationRun !== storageHydrationRunRef.current) return;
       if (diary.value !== null) {
         setDiaryEntries(diary.value);
         if (diary.persist) void saveDiaryEntries(diary.value, scope);
       }
       setDiaryHydrated(!!scope);
-    }
-    if (chatOk) {
-      const storedChat = getChatHistory();
-      setChatHistory(storedChat && storedChat.length > 0 ? storedChat : [DEFAULT_CHAT_GREETING]);
-    } else {
-      setChatHistory([DEFAULT_CHAT_GREETING]);
-    }
-    setChatHydrated(true);
-    if (familyOk) {
+    })() : Promise.resolve();
+
+    const familyTask: Promise<FamilyMember[]> = familyOk ? (async () => {
       const family = await resolveFamilySnapshot(scope);
-      if (hydrationRun !== storageHydrationRunRef.current) return false;
+      if (hydrationRun !== storageHydrationRunRef.current) return [];
+      const hydratedFamily = family.value ?? [];
       if (family.value !== null) {
-        hydratedFamily = family.value;
         setFamilyMembers(family.value);
         if (family.persist) void saveFamilyMembers(family.value, scope);
         if (scopeBabyId) {
@@ -445,13 +483,15 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
         }
       }
       setFamilyHydrated(true);
-    }
-    if (growthOk) {
-      const growthBook = await resolveGrowthBookSnapshot({
-        scope,
-        babyName: careSetup.child.childName,
-      });
-      if (hydrationRun !== storageHydrationRunRef.current) return false;
+      return hydratedFamily;
+    })() : Promise.resolve([]);
+
+    const growthBookPromise = growthOk
+      ? resolveGrowthBookSnapshot({ scope, babyName: careSetup.child.childName })
+      : Promise.resolve(null);
+    const growthTask = growthOk ? (async () => {
+      const [growthBook, hydratedFamily] = await Promise.all([growthBookPromise, familyTask]);
+      if (!growthBook || hydrationRun !== storageHydrationRunRef.current) return;
       const normalizedGrowthBook = scopeBabyId
         ? hydratedFamily
           .map((member) => profileDisplayUpdateFromFamilyMember(member, scopeBabyId))
@@ -461,32 +501,49 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       void saveGrowthBookEdit(normalizedGrowthBook, scope);
       growthBookDirtyRef.current = growthBook.mediaFailed > 0;
       setGrowthBookHydrated(!!scope);
-    }
-    if (stickersOk) {
+    })() : Promise.resolve();
+
+    const stickerTask = stickersOk ? (async () => {
       const nextStickers = await resolveStickerSnapshot(scope);
-      if (hydrationRun !== storageHydrationRunRef.current) return false;
+      if (hydrationRun !== storageHydrationRunRef.current) return;
       setBabyStickers((prev) => {
         const merged = mergeBabyStickerLists(nextStickers, prev);
         void saveBabyStickers(merged, scope);
         return merged;
       });
       setStickersHydrated(!!scope);
-    }
-    if (growthRecordsOk) {
-      const growthRecordsSnapshot = await resolveGrowthRecordsSnapshot(hasSavedCareSetup && !suppressBootstrap);
-      if (hydrationRun !== storageHydrationRunRef.current) return false;
-      if (growthRecordsSnapshot.value !== null) {
-        setGrowthRecords(growthRecordsSnapshot.value);
-        if (growthRecordsSnapshot.persist) void saveGrowthRecords(growthRecordsSnapshot.value, scope);
+    })() : Promise.resolve();
+
+    const growthRecordsTask = growthRecordsOk ? (async () => {
+      const snapshot = await resolveGrowthRecordsSnapshot(
+        hasSavedCareSetup && !suppressBootstrap,
+        scope,
+      );
+      if (hydrationRun !== storageHydrationRunRef.current) return;
+      if (snapshot.value !== null) {
+        setGrowthRecords(snapshot.value);
+        if (snapshot.persist) void saveGrowthRecords(snapshot.value, scope);
       }
       setGrowthRecordsHydrated(true);
-    }
-    if (scope) {
+    })() : Promise.resolve();
+
+    const cautionTask = scope ? (async () => {
       const nextCautionFoods = await resolveCautionFoodsSnapshot(scope);
-      if (hydrationRun !== storageHydrationRunRef.current) return false;
+      if (hydrationRun !== storageHydrationRunRef.current) return;
       setCautionFoods(nextCautionFoods);
       void saveCautionFoods(scope, nextCautionFoods);
-    }
+    })() : Promise.resolve();
+
+    await Promise.allSettled([
+      careTask,
+      diaryTask,
+      familyTask,
+      growthTask,
+      stickerTask,
+      growthRecordsTask,
+      cautionTask,
+    ]);
+    if (hydrationRun !== storageHydrationRunRef.current) return false;
     const allLoaded = cache.allLoaded;
     if (!allLoaded) {
       const issue = getStorageIssue();
@@ -510,27 +567,38 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     const scope = localDataScopeRef.current;
     if (!scope) return { logs: cached(), complete: false, coverage: currentCoverage };
     const requestedScopeId = localDataScopeId(scope);
-    const remote = await fetchCareLogsByDateRange(scope.babyId, from, to);
-    if (!remote || !careLogRequestMatchesScope(requestedScopeId, localDataScopeRef.current)) {
-      return { logs: cached(), complete: false, coverage: careLogCoverageRef.current };
-    }
-    const merged = reconcileCareLogRange(logsRef.current, remote, from, to);
-    logsRef.current = merged;
-    setLogs(merged);
-    const requestedCoverage = { kind: "range" as const, fromDateKey: from, toDateKey: to };
-    const nextCoverage = extendCareLogCoverage(careLogCoverageRef.current, requestedCoverage);
-    applyCareLogCoverage(nextCoverage);
-    void saveCareLogCacheMetadata(localDataScopeRef.current, {
-      coverage: nextCoverage,
-      categoryCoverage: [...careLogCategoryCoverageRef.current],
-      migrationCandidateCount: getCareLogCacheMetadata().migrationCandidateCount,
-      verifiedAt: new Date().toISOString(),
+    const requestKey = `${requestedScopeId}:range:${from}:${to}`;
+    const existing = careLogRangeRequestsRef.current.get(requestKey);
+    if (existing) return existing;
+    const request = (async (): Promise<CareLogRangeResult> => {
+      const remote = await fetchCareLogsByDateRange(scope.babyId, from, to);
+      if (!remote || !careLogRequestMatchesScope(requestedScopeId, localDataScopeRef.current)) {
+        return { logs: cached(), complete: false, coverage: careLogCoverageRef.current };
+      }
+      const merged = reconcileCareLogRange(logsRef.current, remote, from, to);
+      logsRef.current = merged;
+      setLogs(merged);
+      const requestedCoverage = { kind: "range" as const, fromDateKey: from, toDateKey: to };
+      const nextCoverage = extendCareLogCoverage(careLogCoverageRef.current, requestedCoverage);
+      applyCareLogCoverage(nextCoverage);
+      void saveCareLogCacheMetadata(localDataScopeRef.current, {
+        coverage: nextCoverage,
+        categoryCoverage: [...careLogCategoryCoverageRef.current],
+        migrationCandidateCount: getCareLogCacheMetadata().migrationCandidateCount,
+        verifiedAt: new Date().toISOString(),
+      });
+      return {
+        logs: filterCareLogsByDateRange(merged, from, to),
+        complete: true,
+        coverage: requestedCoverage,
+      };
+    })().finally(() => {
+      if (careLogRangeRequestsRef.current.get(requestKey) === request) {
+        careLogRangeRequestsRef.current.delete(requestKey);
+      }
     });
-    return {
-      logs: filterCareLogsByDateRange(merged, from, to),
-      complete: true,
-      coverage: requestedCoverage,
-    };
+    careLogRangeRequestsRef.current.set(requestKey, request);
+    return request;
   }, [applyCareLogCoverage]);
 
   const ensureCareLogById = useCallback(async (id: string): Promise<BabyLogEntry | null> => {
@@ -581,25 +649,36 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     const scope = localDataScopeRef.current;
     if (!scope) return { logs: cached(), complete: false, categories: requested };
     const requestedScopeId = localDataScopeId(scope);
-    const remote = await fetchCareLogsByCategories(scope.babyId, requested);
-    if (!remote || !careLogRequestMatchesScope(requestedScopeId, localDataScopeRef.current)) {
-      return { logs: cached(), complete: false, categories: requested };
-    }
-    const merged = reconcileCareLogCategories(logsRef.current, remote, requested);
-    logsRef.current = merged;
-    setLogs(merged);
-    requested.forEach((category) => careLogCategoryCoverageRef.current.add(category));
-    void saveCareLogCacheMetadata(localDataScopeRef.current, {
-      coverage: careLogCoverageRef.current,
-      categoryCoverage: [...careLogCategoryCoverageRef.current],
-      migrationCandidateCount: getCareLogCacheMetadata().migrationCandidateCount,
-      verifiedAt: new Date().toISOString(),
+    const requestKey = `${requestedScopeId}:categories:${requested.join(",")}`;
+    const existing = careLogCategoryRequestsRef.current.get(requestKey);
+    if (existing) return existing;
+    const request = (async (): Promise<CareLogCategoryResult> => {
+      const remote = await fetchCareLogsByCategories(scope.babyId, requested);
+      if (!remote || !careLogRequestMatchesScope(requestedScopeId, localDataScopeRef.current)) {
+        return { logs: cached(), complete: false, categories: requested };
+      }
+      const merged = reconcileCareLogCategories(logsRef.current, remote, requested);
+      logsRef.current = merged;
+      setLogs(merged);
+      requested.forEach((category) => careLogCategoryCoverageRef.current.add(category));
+      void saveCareLogCacheMetadata(localDataScopeRef.current, {
+        coverage: careLogCoverageRef.current,
+        categoryCoverage: [...careLogCategoryCoverageRef.current],
+        migrationCandidateCount: getCareLogCacheMetadata().migrationCandidateCount,
+        verifiedAt: new Date().toISOString(),
+      });
+      return {
+        logs: merged.filter((entry) => requested.includes(entry.cat)),
+        complete: true,
+        categories: requested,
+      };
+    })().finally(() => {
+      if (careLogCategoryRequestsRef.current.get(requestKey) === request) {
+        careLogCategoryRequestsRef.current.delete(requestKey);
+      }
     });
-    return {
-      logs: merged.filter((entry) => requested.includes(entry.cat)),
-      complete: true,
-      categories: requested,
-    };
+    careLogCategoryRequestsRef.current.set(requestKey, request);
+    return request;
   }, []);
 
   useEffect(() => {
@@ -1398,6 +1477,8 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     // every previous-baby view immediately so a render in that gap cannot pair
     // the new baby identity with old records or let an old request write back.
     storageHydrationRunRef.current += 1;
+    careLogRangeRequestsRef.current.clear();
+    careLogCategoryRequestsRef.current.clear();
     growthBookDirtyRef.current = false;
     growthBookSyncRunRef.current += 1;
     localDataScopeRef.current = null;
@@ -1480,7 +1561,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       });
       hidePreviousBabyDuringSwitch();
       applyBabyRowToLocalProfile(fallback);
-      await hydrateStorageState(true, { userId: session.user.id, babyId: fallback.id });
+      await hydrateStorageState(true, { userId: session.user.id, babyId: fallback.id }, false, available);
       return false;
     }
     await saveSupabaseSync({
@@ -1491,7 +1572,7 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
     });
     hidePreviousBabyDuringSwitch();
     applyBabyRowToLocalProfile(selected);
-    await hydrateStorageState(true, { userId: session.user.id, babyId: selected.id });
+    await hydrateStorageState(true, { userId: session.user.id, babyId: selected.id }, false, available);
     return true;
   }, [applyBabyRowToLocalProfile, hidePreviousBabyDuringSwitch, hydrateStorageState]);
 
@@ -1729,11 +1810,13 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       quickRecords,
       setQuickRecords,
       logs,
+      logsHydrated,
       careLogCoverage,
       ensureCareLogsForRange,
       ensureCareLogById,
       ensureCareLogsForCategories,
       diaryEntries,
+      diaryHydrated,
       localDataScope,
       babies,
       activeBabyId: localDataScope?.babyId ?? null,
@@ -1801,11 +1884,13 @@ export function BabyLogProvider({ children }: { children: ReactNode }) {
       quickRecords,
       setQuickRecords,
       logs,
+      logsHydrated,
       careLogCoverage,
       ensureCareLogsForRange,
       ensureCareLogById,
       ensureCareLogsForCategories,
       diaryEntries,
+      diaryHydrated,
       localDataScope,
       babies,
       switchActiveBaby,

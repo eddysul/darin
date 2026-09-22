@@ -79,8 +79,8 @@ assert.match(overviewSource, /reportDataState === "ready" \? \([\s\S]*?<Overview
 assert.match(overviewSource, /const weeklyHeadline = narrative\.headline \|\| t\("report\.critical\.013"\)/);
 assert.match(overviewSource, /const weeklyBody = narrative\.body \|\| t\("report\.critical\.014"\)/);
 assert.match(overviewSource, /reportDataState === "ready" \? \([\s\S]*?<OverviewWeeklyCard/);
-assert.match(overviewSource, /storageReady && !growthRecordsHydrated \? \([\s\S]*?<ErrorState/);
-assert.match(overviewSource, /growthRecordsHydrated \? \([\s\S]*?<OverviewGrowthSection/);
+assert.doesNotMatch(overviewSource, /storageReady/, "overview must not wait for unrelated storage domains");
+assert.match(overviewSource, /growthRecordsHydrated \? \([\s\S]*?<OverviewGrowthSection[\s\S]*?: \([\s\S]*?<LoadingState/, "growth distinguishes loading from empty/error");
 
 const spriteSource = readFileSync(new URL("../src/components/babylog/OverviewSprite.tsx", import.meta.url), "utf8");
 assert.doesNotMatch(spriteSource, /frames\.length \* 2/, "overview motion frames must play exactly once");

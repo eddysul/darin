@@ -17,6 +17,7 @@ import { ConsultPromptSheet } from "../../components/babylog/ConsultPromptSheet"
 import type { DiaryComposeDraft } from "../../constants/diaryCompose";
 import { useBabyLog } from "../../context/BabyLogContext";
 import { useConsultFabBehavior } from "../../hooks/useConsultFabBehavior";
+import { useScreenLoadTrace } from "../../hooks/useScreenLoadTrace";
 import type { DiaryEntry } from "../../types/babyLog";
 import type { DiaryDraft, DiaryReminderSettings } from "../../types/diaryReminder";
 import { DEFAULT_DIARY_REMINDER } from "../../types/diaryReminder";
@@ -58,7 +59,7 @@ import {
   isMeaningfulDiaryDraft,
   resolveDiaryComposeTarget,
 } from "../../utils/diaryToday";
-import { EmptyState } from "../../components/states/FeedbackStates";
+import { EmptyState, LoadingState } from "../../components/states/FeedbackStates";
 import { colors, fontScaleCap, radius, type } from "../../theme";
 import { canAddLog, canDeleteLog, canEditLog } from "../../types/family";
 import type { MainTabParamList } from "../../navigation/types";
@@ -101,7 +102,8 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
     addBabySticker,
     deleteBabySticker,
     careSetup,
-    storageReady,
+    logsHydrated,
+    diaryHydrated,
     ensureCareLogsForRange,
   } = useBabyLog();
   const me = familyMembers.find((member) => member.isMe);
@@ -140,6 +142,12 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   const draftRef = useRef(draftMemory);
   draftRef.current = draftMemory;
 
+  useScreenLoadTrace("Diary", localDataScopeKey, {
+    firstContent: diaryHydrated,
+    coreReady: diaryHydrated && logsHydrated,
+    fullReady: diaryHydrated && logsHydrated,
+  });
+
   useEffect(() => {
     screenMountedRef.current = true;
     return () => {
@@ -150,9 +158,9 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
   const todayKey = formatDateKey();
 
   useEffect(() => {
-    if (!storageReady) return;
+    if (!logsHydrated) return;
     void ensureCareLogsForRange(offsetDateKey(todayKey, -6), todayKey);
-  }, [ensureCareLogsForRange, storageReady, todayKey]);
+  }, [ensureCareLogsForRange, logsHydrated, todayKey]);
 
   const summary = useMemo(() => buildTodaySummary(logs), [logs]);
   const notifCopy = useMemo(
@@ -702,7 +710,9 @@ export function DiaryScreen({ onOpenProfile, onOpenSettings, onOpenNotifications
           </>
         }
         ListEmptyComponent={
-          <EmptyState
+          !diaryHydrated ? (
+            <LoadingState label={t("record.screen.loading")} />
+          ) : <EmptyState
             title={
               diaryEntries.length === 0
                 ? t("diary.screen.emptyAllTitle")

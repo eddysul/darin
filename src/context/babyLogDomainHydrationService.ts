@@ -96,11 +96,12 @@ export async function resolveStickerSnapshot(
 
 export async function resolveGrowthRecordsSnapshot(
   hasSavedCareSetup: boolean,
+  scope?: LocalDataScope | null,
 ): Promise<HydratedDomainSnapshot<GrowthRecord[]>> {
   const stored = getGrowthRecords();
   const local = stored ?? [];
   if (!hasSavedCareSetup) return { value: stored, persist: false };
-  const boot = await bootstrapGrowthRecordsFromServer(local);
+  const boot = await bootstrapGrowthRecordsFromServer(local, scope);
   if (boot.usedServer && boot.records !== null) {
     return { value: boot.records, persist: true };
   }

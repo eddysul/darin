@@ -50,6 +50,8 @@ export type BabyLogCacheHydration = {
 export async function resolveBabyLogDataScope(input: {
   override?: LocalDataScope;
   hasSavedCareSetup: boolean;
+  /** Membership rows already fetched and verified by the current operation. */
+  verifiedBabies?: BabyRow[];
 }): Promise<BabyLogScopeResolution> {
   if (!isSupabaseConfigured()) return { scope: null, babies: [] };
   const session = await AuthRepository.getSession();
@@ -57,7 +59,7 @@ export async function resolveBabyLogDataScope(input: {
 
   await hydrateSupabaseSync();
   const sync = getSupabaseSync();
-  const babies = await BabyRepository.listMyBabies();
+  const babies = input.verifiedBabies ?? await BabyRepository.listMyBabies();
   const requested = isValidLocalDataScope(input.override) && input.override.userId === session.user.id
     ? babies.find((baby) => baby.id === input.override?.babyId)
     : null;
@@ -132,6 +134,7 @@ export function normalizeCachedCareLogs(storedLogs: BabyLogEntry[] | null): Baby
 }
 
 export async function resolveHydratedCareLogs(input: {
+  scope: LocalDataScope | null;
   careSetup: CareSetup;
   hasSavedCareSetup: boolean;
   storedLogs: BabyLogEntry[] | null;
@@ -157,6 +160,7 @@ export async function resolveHydratedCareLogs(input: {
     sync.migrationCandidateCount,
   );
   const boot = await bootstrapCareLogsFromServer({
+    verifiedScope: input.scope,
     careSetup: input.careSetup,
     hasSavedCareSetup: input.hasSavedCareSetup,
     localLogs,
