@@ -8,6 +8,7 @@
       "distribution": "store",
       "environment": "production",
       "env": {
+        "EXPO_NO_DOTENV": "1",
         "EXPO_PUBLIC_FEATURE_ENV": "production",
         "EXPO_PUBLIC_FEATURE_PROFILE": "production",
         "EXPO_PUBLIC_SHOW_GOOGLE_LOGIN": "true",
