@@ -53,7 +53,7 @@ export function memoryPrivacyMessageKey(value: MemoryPrivacyType): MemoryCritica
 export function memoryFeedAspectRatio(media?: Pick<MemoryMedia, "width" | "height">): number {
   const width = media?.width;
   const height = media?.height;
-  if (!width || !height) return 1;
+  if (!width || !height || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return 1;
   return Math.min(1.91, Math.max(4 / 5, width / height));
 }
 

@@ -42,12 +42,12 @@ import {
   captureMemoryVideoThumbnail,
   extensionForMemoryAsset,
   mimeTypeForMemoryAsset,
-  videoDurationExceedsLimit,
 } from "../utils/memoryVideo";
 import { AuthRepository } from "./AuthRepository";
 import { BabyStickerRepository } from "./BabyStickerRepository";
 import { NotificationRepository } from "./NotificationRepository";
 import { MISSING_MEMORY_AUTHOR_ID } from "../utils/memoryAuthorDisplay";
+import { normalizeMediaDimension, normalizeMemoryVideoDurationMs } from "../utils/memoryMediaMetadata";
 
 const MEMORIES_BUCKET = "memories";
 const MAX_IMAGE_BYTES = MEMORY_IMAGE_MAX_BYTES;
@@ -58,6 +58,50 @@ export const MEMORY_FEED_IMAGE_WIDTH = 800;
 export const MEMORY_DETAIL_IMAGE_WIDTH = 1400;
 /** Short TTL so revoked viewers lose access soon. Known limitation: old URLs work until expiry. */
 export const MEMORY_SIGNED_URL_TTL_SECONDS = 180;
+
+async function signedUrlForKnownMemoryMedia(
+  media: MemoryMedia,
+  options: { width?: number; variant?: "source" | "thumbnail" } = {},
+): Promise<string> {
+  const mint = (width?: number) => createPrivateMediaSignedUrl("memory_media", media.id, {
+    ...(width ? { width } : {}),
+    ...(options.variant && options.variant !== "source" ? { variant: options.variant } : {}),
+  });
+  try {
+    return await mint(options.width);
+  } catch (error) {
+    if (!options.width) throw error;
+    return mint();
+  }
+}
+
+async function resolveFeedMediaUrls(media: MemoryMedia[]): Promise<{
+  mediaUrls: string[];
+  mediaPosterUrls: string[];
+}> {
+  const mediaUrls = await Promise.all(media.map(async (item) => {
+    const local = getLocalUriForMedia(item.id);
+    if (item.mediaType === "video" || item.uploadStatus !== "ready") return local ?? "";
+    try {
+      return await signedUrlForKnownMemoryMedia(item, { width: MEMORY_FEED_IMAGE_WIDTH });
+    } catch {
+      return local ?? "";
+    }
+  }));
+  const mediaPosterUrls = await Promise.all(media.map(async (item) => {
+    const localPoster = getLocalPosterUriForMedia(item.id);
+    if (item.mediaType !== "video" || item.uploadStatus !== "ready") return localPoster ?? "";
+    try {
+      return await signedUrlForKnownMemoryMedia(item, {
+        width: MEMORY_FEED_IMAGE_WIDTH,
+        variant: "thumbnail",
+      });
+    } catch {
+      return localPoster ?? "";
+    }
+  }));
+  return { mediaUrls, mediaPosterUrls };
+}
 
 
 export function memoryPostRowToModel(row: MemoryPostRow): MemoryPost {
@@ -242,9 +286,7 @@ async function uploadMemoryVideo(input: {
   scope: CapturedSessionScope;
 }): Promise<MemoryMedia> {
   const { scope } = input;
-  const durationMs = input.image.durationMs;
-  if (durationMs == null) throw new MemoryMediaUploadError("VIDEO_DURATION_UNKNOWN");
-  if (videoDurationExceedsLimit(durationMs)) throw new MemoryMediaUploadError("VIDEO_TOO_LONG");
+  const durationMs = normalizeMemoryVideoDurationMs(input.image.durationMs);
   if (input.image.fileSize !== undefined && input.image.fileSize > MEMORY_VIDEO_MAX_BYTES) {
     throw new MemoryMediaUploadError("VIDEO_TOO_LARGE");
   }
@@ -289,8 +331,8 @@ async function uploadMemoryVideo(input: {
     storage_path: storagePath,
     media_type: "video",
     upload_status: "ready",
-    width: input.image.width ?? null,
-    height: input.image.height ?? null,
+    width: normalizeMediaDimension(input.image.width) ?? null,
+    height: normalizeMediaDimension(input.image.height) ?? null,
     duration_ms: durationMs,
     thumbnail_storage_path: thumbnailStoragePath ?? null,
   }).select("*").single();
@@ -362,8 +404,8 @@ async function addMemoryMediaScoped(
     id: input.id ?? createId(), memory_post_id: input.memoryPostId,
     baby_id: input.babyId, storage_path: input.storagePath,
     media_type: input.mediaType ?? "image", upload_status: "ready",
-    width: input.width ?? null, height: input.height ?? null,
-    duration_ms: input.durationMs ?? null,
+    width: normalizeMediaDimension(input.width) ?? null, height: normalizeMediaDimension(input.height) ?? null,
+    duration_ms: input.mediaType === "video" ? normalizeMemoryVideoDurationMs(input.durationMs) : null,
     thumbnail_storage_path: input.thumbnailStoragePath ?? null,
   }).select("*").single();
   if (error) throw error;
@@ -788,7 +830,7 @@ export const MemoriesRepository = {
 
   async listCardsByBabyId(
     babyId: string,
-    options: { offset?: number; limit?: number } = {},
+    options: { offset?: number; limit?: number; resolveMedia?: boolean } = {},
   ): Promise<MemoryCard[]> {
     const [posts, userId] = await Promise.all([
       this.listByBabyId(babyId, options),
@@ -822,29 +864,12 @@ export const MemoriesRepository = {
       const comments = commentsByPost.get(post.id) ?? [];
       const reactions = reactionsByPost.get(post.id) ?? [];
       const coverMedia = media[0];
-      const mediaUrls = await Promise.all(media.map(async (item) => {
-        const local = getLocalUriForMedia(item.id);
-        if (item.mediaType === "video") return local ?? "";
-        if (item.uploadStatus !== "ready") return local ?? "";
-        try {
-          return await this.createSignedUrl(item.storagePath, MEMORY_SIGNED_URL_TTL_SECONDS, { width: MEMORY_FEED_IMAGE_WIDTH });
-        } catch {
-          return local ?? "";
+      const { mediaUrls, mediaPosterUrls } = options.resolveMedia === false
+        ? {
+          mediaUrls: media.map((item) => getLocalUriForMedia(item.id) ?? ""),
+          mediaPosterUrls: media.map((item) => getLocalPosterUriForMedia(item.id) ?? ""),
         }
-      }));
-      const mediaPosterUrls = await Promise.all(media.map(async (item) => {
-        const localPoster = getLocalPosterUriForMedia(item.id);
-        if (item.mediaType !== "video") return "";
-        if (item.uploadStatus !== "ready") return localPoster ?? "";
-        try {
-          return await this.createSignedUrl(item.storagePath, MEMORY_SIGNED_URL_TTL_SECONDS, {
-            width: MEMORY_FEED_IMAGE_WIDTH,
-            variant: "thumbnail",
-          });
-        } catch {
-          return localPoster ?? "";
-        }
-      }));
+        : await resolveFeedMediaUrls(media);
       const coverUrl = (coverMedia?.mediaType === "video" ? mediaPosterUrls[0] : mediaUrls[0]) || undefined;
       return {
         post,
@@ -863,6 +888,22 @@ export const MemoriesRepository = {
         hasFailedMedia: media.some((item) => item.uploadStatus === "failed"),
       };
     }));
+  },
+
+  /** Resolve only the media for a card that is about to enter the viewport. */
+  async resolveCardMedia(card: MemoryCard): Promise<MemoryCard> {
+    const media = card.media ?? [];
+    if (!media.length) return card;
+    const { mediaUrls, mediaPosterUrls } = await resolveFeedMediaUrls(media);
+    const coverUrl = card.coverMedia?.mediaType === "video"
+      ? mediaPosterUrls[0]
+      : mediaUrls[0];
+    return {
+      ...card,
+      coverUrl: coverUrl || card.coverUrl,
+      mediaUrls,
+      mediaPosterUrls,
+    };
   },
 
   async listRecentAuthoredPreviews(limit = 3, babyIds: string[] = []): Promise<MemoryMomentPreview[]> {

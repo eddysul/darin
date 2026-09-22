@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { normalizeMemoryVideoDurationMs, normalizeMediaDimension, MemoryMediaUploadError } from "../src/utils/memoryMediaMetadata.ts";
+import { uploadMediaWithRecovery } from "../src/utils/mediaUploadRecovery.ts";
+import { memoryFeedAspectRatio } from "../src/components/memories/memoryPresentation.ts";
 import {
   buildTempMediaPath,
   buildTempPosterPath,
@@ -19,7 +22,52 @@ const baby = "10000000-0000-4000-8000-000000000001";
 const session = "20000000-0000-4000-8000-000000000001";
 const media = "30000000-0000-4000-8000-000000000001";
 const limits = readFileSync("src/utils/memoryVideo.ts", "utf8");
-assert.match(limits, /MEMORY_VIDEO_MAX_DURATION_MS = 90_000/);
+assert.equal(normalizeMemoryVideoDurationMs(90_000), 90_000);
+assert.equal(normalizeMemoryVideoDurationMs(3566.666666666667), 3567, "iOS fractional duration becomes an int4-compatible value");
+assert.equal(normalizeMemoryVideoDurationMs(6095.238095), 6095);
+assert.equal(normalizeMemoryVideoDurationMs(120), 120, "short clips remain milliseconds, not seconds");
+for (const invalid of [undefined, null, NaN, Infinity, -1, 0]) {
+  assert.throws(() => normalizeMemoryVideoDurationMs(invalid), (e: unknown) => e instanceof MemoryMediaUploadError && e.code === "VIDEO_DURATION_UNKNOWN");
+}
+assert.throws(() => normalizeMemoryVideoDurationMs(90000.01), /VIDEO_TOO_LONG/, "check the upper bound before rounding");
+for (const invalid of [NaN, Infinity, -1, 0, 2_147_483_648]) assert.equal(normalizeMediaDimension(invalid), undefined);
+assert.equal(normalizeMediaDimension(1079.999999), 1080);
+for (const value of [NaN, Infinity, -1, 0]) {
+  assert.equal(memoryFeedAspectRatio({ width: value, height: 1920 }), 1);
+  assert.equal(memoryFeedAspectRatio({ width: 1080, height: value }), 1);
+}
+assert.equal(memoryFeedAspectRatio({ width: 1080, height: 1920 }), 0.8);
+
+let attempts = 0;
+let verifies = 0;
+const network = { originalError: new TypeError("Network request failed") };
+await uploadMediaWithRecovery({
+  upload: async () => ({ error: ++attempts === 1 ? network : null }),
+  assertCurrent: async () => {}, verifyOwned: async () => false, wait: async () => {},
+});
+assert.equal(attempts, 2, "one transient failure recovers");
+attempts = 0;
+await uploadMediaWithRecovery({
+  upload: async () => ({ error: ++attempts === 1 ? network : { statusCode: "409" } }),
+  assertCurrent: async () => {}, verifyOwned: async () => { verifies++; return true; }, wait: async () => {},
+});
+assert.equal(verifies, 1, "lost upload acknowledgement verifies ownership before accepting conflict");
+for (const error of [{ statusCode: 403 }, { statusCode: 413 }, { statusCode: 409 }]) {
+  attempts = 0;
+  await assert.rejects(uploadMediaWithRecovery({ upload: async () => { attempts++; return { error }; },
+    assertCurrent: async () => {}, verifyOwned: async () => false, wait: async () => {} }));
+  assert.equal(attempts, 1, "permanent or foreign-object errors are not retried");
+}
+attempts = 0;
+await assert.rejects(uploadMediaWithRecovery({ upload: async () => { attempts++; return { error: network }; },
+  assertCurrent: async () => {}, verifyOwned: async () => false, wait: async () => {} }));
+assert.equal(attempts, 2, "persistent network failure stops after one retry");
+attempts = 0;
+let switched = false;
+await assert.rejects(uploadMediaWithRecovery({ upload: async () => { attempts++; return { error: network }; },
+  assertCurrent: async () => { if (switched) throw new Error("scope changed"); },
+  verifyOwned: async () => false, wait: async () => { switched = true; } }), /scope changed/);
+assert.equal(attempts, 1, "account switch/cancel prevents retry dispatch");
 assert.match(limits, /MEMORY_VIDEO_MAX_BYTES = 100 \* 1024 \* 1024/);
 assert.match(limits, /durationMs > MEMORY_VIDEO_MAX_DURATION_MS/);
 assert.match(limits, /video\/quicktime/);

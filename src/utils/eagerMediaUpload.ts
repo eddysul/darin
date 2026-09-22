@@ -14,6 +14,8 @@ import {
   videoDurationExceedsLimit,
 } from "./memoryVideo";
 import type { MemoryMediaType } from "../types/memory";
+import { normalizeMediaDimension, normalizeMemoryVideoDurationMs } from "./memoryMediaMetadata";
+import { mediaUploadFailureCategory, uploadMediaWithRecovery } from "./mediaUploadRecovery";
 
 export type MediaBucket = "memories" | "diary-media";
 export type PhotoUploadStatus = "local" | "compressing" | "uploading" | "uploaded" | "failed";
@@ -186,9 +188,9 @@ export function enqueuePickedPhotos(input: {
       localUri: asset.uri,
       storagePath: buildTempMediaPath(input.babyId, input.sessionId, id, extension),
       mediaType,
-      width: asset.width,
-      height: asset.height,
-      durationMs: mediaType === "video" ? asset.durationMs : undefined,
+      width: normalizeMediaDimension(asset.width),
+      height: normalizeMediaDimension(asset.height),
+      durationMs: mediaType === "video" ? normalizeMemoryVideoDurationMs(asset.durationMs) : undefined,
       thumbnailLocalUri: mediaType === "video" ? asset.thumbnailLocalUri : undefined,
       thumbnailStoragePath: mediaType === "video" ? buildTempPosterPath(input.babyId, input.sessionId, id) : undefined,
       mimeType: mimeTypeForMemoryAsset(mediaType, asset.mimeType, asset.uri),
@@ -306,6 +308,7 @@ async function runJob(id: string): Promise<void> {
   const job = jobs.get(id);
   if (!job) return;
   const generation = job.generation;
+  let stage = "prepare";
   try {
     const sb = requireSupabase();
     const { data: initial } = await sb.auth.getSession();
@@ -317,11 +320,11 @@ async function runJob(id: string): Promise<void> {
       : await compressImageForUpload(job.localUri, job.width, job.height);
     if (!jobs.has(id) || jobs.get(id)?.generation !== generation) return;
     job.compressedUri = prepared.uri;
-    job.width = prepared.width;
-    job.height = prepared.height;
+    job.width = normalizeMediaDimension(prepared.width);
+    job.height = normalizeMediaDimension(prepared.height);
     job.mimeType = job.mediaType === "video" ? job.mimeType : prepared.mimeType;
     if (job.mediaType === "video" && "durationMs" in prepared && prepared.durationMs != null) {
-      job.durationMs = prepared.durationMs;
+      job.durationMs = normalizeMemoryVideoDurationMs(prepared.durationMs);
     }
     if (job.mediaType === "video" && "thumbnailUri" in prepared) {
       job.thumbnailLocalUri = prepared.thumbnailUri;
@@ -329,6 +332,7 @@ async function runJob(id: string): Promise<void> {
     job.status = "uploading";
     notify(job.sessionId);
 
+    stage = "read_file";
     const response = await fetch(prepared.uri);
     const bytes = await response.arrayBuffer();
     if (!jobs.has(id) || jobs.get(id)?.generation !== generation) return;
@@ -345,11 +349,17 @@ async function runJob(id: string): Promise<void> {
     const { data: current } = await sb.auth.getSession();
     if (!current.session || current.session.user.id !== job.accountId) throw new Error("Upload account changed.");
     const scoped = sessionScopedSupabase(current.session);
-    await uploadOwnedObject(scoped, job.bucket, job.storagePath, bytes, job.mimeType);
+    const assertUploadCurrent = async () => {
+      const latest = await sb.auth.getSession();
+      if (latest.error || latest.data.session?.user.id !== job.accountId
+        || !jobs.has(id) || jobs.get(id)?.generation !== generation) throw new Error("Upload scope changed.");
+    };
+    stage = "storage_upload";
+    await uploadOwnedObject(scoped, job.bucket, job.storagePath, bytes, job.mimeType, assertUploadCurrent);
     if (job.thumbnailStoragePath && job.thumbnailLocalUri) {
       const poster = await fetch(job.thumbnailLocalUri).then((item) => item.arrayBuffer()).catch(() => null);
       if (poster && poster.byteLength > 0 && poster.byteLength <= MEMORY_IMAGE_MAX_BYTES) {
-        await uploadOwnedObject(scoped, job.bucket, job.thumbnailStoragePath, poster, "image/jpeg").catch(() => {
+        await uploadOwnedObject(scoped, job.bucket, job.thumbnailStoragePath, poster, "image/jpeg", assertUploadCurrent).catch(() => {
           job.thumbnailStoragePath = undefined;
         });
       } else {
@@ -369,6 +379,7 @@ async function runJob(id: string): Promise<void> {
     if (job.diaryEntryId) await persistDiaryStatus(job, "ready");
   } catch (cause) {
     if (!jobs.has(id) || jobs.get(id)?.generation !== generation) return;
+    if (__DEV__) console.warn("[memory-upload]", { stage, mediaType: job.mediaType, category: mediaUploadFailureCategory(cause) });
     job.status = "failed";
     job.error = cause instanceof MemoryMediaUploadError
       ? cause.code
@@ -389,7 +400,7 @@ async function persistMemoryStatus(job: Job, uploadStatus: "ready" | "failed"): 
       upload_status: uploadStatus,
       width: job.width ?? null,
       height: job.height ?? null,
-      duration_ms: job.durationMs ?? null,
+      duration_ms: job.mediaType === "video" ? normalizeMemoryVideoDurationMs(job.durationMs) : null,
     }).eq("id", job.id);
     const { data } = await sb.from("memory_media").select("upload_status").eq("memory_post_id", job.memoryPostId);
     const rows = data ?? [];
@@ -425,16 +436,14 @@ async function prepareVideoUpload(job: Job): Promise<{
   durationMs?: number;
   thumbnailUri?: string;
 }> {
-  if (job.durationMs == null || videoDurationExceedsLimit(job.durationMs)) {
-    throw new MemoryMediaUploadError("VIDEO_TOO_LONG");
-  }
+  const durationMs = normalizeMemoryVideoDurationMs(job.durationMs);
   if (job.thumbnailLocalUri) {
     return {
       uri: job.localUri,
       width: job.width,
       height: job.height,
       mimeType: job.mimeType,
-      durationMs: job.durationMs,
+      durationMs,
       thumbnailUri: job.thumbnailLocalUri,
     };
   }
@@ -444,7 +453,7 @@ async function prepareVideoUpload(job: Job): Promise<{
     width: job.width ?? poster?.width,
     height: job.height ?? poster?.height,
     mimeType: job.mimeType,
-    durationMs: job.durationMs,
+    durationMs,
     thumbnailUri: poster?.uri,
   };
 }
@@ -455,16 +464,14 @@ async function uploadOwnedObject(
   path: string,
   bytes: ArrayBuffer,
   contentType: string,
+  assertCurrent: () => Promise<void>,
 ): Promise<void> {
-  const { error } = await client.storage.from(bucket).upload(path, bytes, {
-    contentType,
-    upsert: false,
+  await uploadMediaWithRecovery({
+    assertCurrent,
+    upload: () => client.storage.from(bucket).upload(path, bytes, { contentType, upsert: false }),
+    verifyOwned: async () => {
+      const verified = await client.rpc("verify_owned_storage_upload", { p_bucket: bucket, p_path: path });
+      return !verified.error && verified.data === true;
+    },
   });
-  if (!error) return;
-  if ((error as { statusCode?: string }).statusCode !== "409") throw error;
-  const verified = await client.rpc("verify_owned_storage_upload", {
-    p_bucket: bucket,
-    p_path: path,
-  });
-  if (verified.error || verified.data !== true) throw verified.error ?? error;
 }

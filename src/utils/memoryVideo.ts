@@ -2,28 +2,13 @@ import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import type { ImagePickerAsset } from "expo-image-picker";
 import type { MemoryMediaType } from "../types/memory";
+import { MEMORY_VIDEO_MAX_DURATION_MS, MemoryMediaUploadError, normalizeMediaDimension, normalizeMemoryVideoDurationMs, type MemoryUploadErrorCode } from "./memoryMediaMetadata";
+export { MEMORY_VIDEO_MAX_DURATION_MS, MemoryMediaUploadError, normalizeMemoryVideoDurationMs, type MemoryUploadErrorCode } from "./memoryMediaMetadata";
 
 /** Inclusive ceiling: 90.000s is allowed, anything above is rejected. */
-export const MEMORY_VIDEO_MAX_DURATION_MS = 90_000;
 export const MEMORY_VIDEO_MAX_BYTES = 100 * 1024 * 1024;
 export const MEMORY_IMAGE_MAX_BYTES = 25 * 1024 * 1024;
 export const MEMORY_MEDIA_MAX_ITEMS = 5;
-
-export type MemoryUploadErrorCode =
-  | "VIDEO_TOO_LONG"
-  | "VIDEO_TOO_LARGE"
-  | "VIDEO_DURATION_UNKNOWN"
-  | "IMAGE_TOO_LARGE"
-  | "READ_FAILED";
-
-export class MemoryMediaUploadError extends Error {
-  readonly code: MemoryUploadErrorCode;
-  constructor(code: MemoryUploadErrorCode) {
-    super(code);
-    this.name = "MemoryMediaUploadError";
-    this.code = code;
-  }
-}
 
 export type MemoryPickedAsset = {
   uri: string;
@@ -66,7 +51,7 @@ export function mimeTypeForMemoryAsset(mediaType: MemoryMediaType, mimeType?: st
 }
 
 export function formatMemoryVideoDuration(durationMs: number): string {
-  const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
+  const totalSeconds = Number.isFinite(durationMs) ? Math.max(0, Math.round(durationMs / 1000)) : 0;
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
@@ -86,7 +71,7 @@ async function probeVideoDurationMs(uri: string): Promise<number | undefined> {
   const created = await Audio.Sound.createAsync({ uri }, { shouldPlay: false }, undefined, false);
   try {
     const status = created.status.isLoaded ? created.status : await created.sound.getStatusAsync();
-    if (status.isLoaded && typeof status.durationMillis === "number" && status.durationMillis >= 0) {
+    if (status.isLoaded && typeof status.durationMillis === "number" && Number.isFinite(status.durationMillis) && status.durationMillis > 0) {
       return status.durationMillis;
     }
   } finally {
@@ -111,23 +96,20 @@ export async function inspectPickedMemoryAsset(asset: ImagePickerAsset): Promise
     return {
       uri: asset.uri,
       mediaType,
-      width: asset.width,
-      height: asset.height,
+      width: normalizeMediaDimension(asset.width),
+      height: normalizeMediaDimension(asset.height),
       fileSize: asset.fileSize,
       mimeType: mimeTypeForMemoryAsset("image", asset.mimeType, asset.uri),
     };
   }
 
-  const pickerDuration = typeof asset.duration === "number" && asset.duration >= 0 ? asset.duration : undefined;
+  const pickerDuration = typeof asset.duration === "number" && Number.isFinite(asset.duration) && asset.duration > 0 ? asset.duration : undefined;
   let durationMs = pickerDuration;
-  if (durationMs != null && durationMs > 0 && durationMs <= 180) {
-    const probed = await probeVideoDurationMs(asset.uri);
-    durationMs = probed ?? durationMs * 1000;
-  } else if (durationMs == null) {
-    durationMs = await probeVideoDurationMs(asset.uri);
+  // ImagePicker reports milliseconds on both platforms, including clips <180ms.
+  if (durationMs == null) {
+    durationMs = await probeVideoDurationMs(asset.uri).catch(() => undefined);
   }
-  if (durationMs == null) throw new MemoryMediaUploadError("VIDEO_DURATION_UNKNOWN");
-  if (videoDurationExceedsLimit(durationMs)) throw new MemoryMediaUploadError("VIDEO_TOO_LONG");
+  durationMs = normalizeMemoryVideoDurationMs(durationMs);
 
   const fileSize = await fileSizeBytes(asset.uri, asset.fileSize);
   if (fileSize !== undefined && fileSize > MEMORY_VIDEO_MAX_BYTES) {
@@ -137,8 +119,8 @@ export async function inspectPickedMemoryAsset(asset: ImagePickerAsset): Promise
   return {
     uri: asset.uri,
     mediaType: "video",
-    width: asset.width,
-    height: asset.height,
+    width: normalizeMediaDimension(asset.width),
+    height: normalizeMediaDimension(asset.height),
     fileSize,
     mimeType: mimeTypeForMemoryAsset("video", asset.mimeType, asset.uri),
     durationMs,
@@ -176,7 +158,7 @@ export async function captureMemoryVideoThumbnail(
       time: options?.time ?? 0,
       quality: options?.quality ?? 0.7,
     });
-    return { uri: poster.uri, width: poster.width, height: poster.height };
+    return { uri: poster.uri, width: normalizeMediaDimension(poster.width), height: normalizeMediaDimension(poster.height) };
   } catch (error) {
     if (isMissingVideoThumbnailsModule(error)) videoThumbnailsMissing = true;
     return null;
