@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAppSettings } from "../../context/AppSettingsContext";
 import type {
   GrowthLengthUnit,
@@ -12,6 +12,7 @@ import { colors } from "../../theme";
 import { lengthFromCm, lengthToCm, weightFromKg, weightToKg } from "../../utils/measurementFormat";
 import { BabyLogIcon } from "./BabyLogIcon";
 import { DatePickerField, DatePickerSheet } from "../inputs/TimePickerFields";
+import { FocusedInputScrollView } from "../inputs/FocusedInputScrollView";
 import { useLanguage } from "../../LanguageContext";
 
 type Props = {
@@ -166,7 +167,7 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={requestClose} onDismiss={onDismiss}>
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "android" ? "height" : undefined}>
       <Pressable style={styles.backdrop} onPress={requestClose} accessible={false}>
         <Pressable style={styles.sheet} onPress={() => {}} accessible={false}>
           <View style={styles.handle} />
@@ -178,7 +179,7 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
             </View>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <FocusedInputScrollView showsVerticalScrollIndicator={false}>
             <DatePickerField label={t("growth.critical.097")} valueDateKey={measuredAt} onPress={() => setDatePickerOpen(true)} />
 
             <MeasurementField label={t("growth.critical.098")} value={height} onChangeText={setHeight} unit={<UnitToggle value={heightUnit} options={["cm", "in"] as const} onChange={(next) => changeLengthUnit("height", next)} />} placeholder={heightUnit === "cm" ? t("growth.critical.099") : t("growth.critical.100")} />
@@ -201,7 +202,7 @@ export function GrowthRecordModal({ visible, record, initialSource = "hospital",
               <Pressable style={[styles.actionBtn, styles.cancelBtn]} onPress={requestClose}><Text style={styles.cancelText}>{t("growth.critical.066")}</Text></Pressable>
               <Pressable style={[styles.actionBtn, styles.saveBtn]} onPress={save}><Text style={styles.saveText}>{t("growth.critical.112")}</Text></Pressable>
             </View>
-          </ScrollView>
+          </FocusedInputScrollView>
           <DatePickerSheet
             visible={datePickerOpen}
             valueDateKey={measuredAt}

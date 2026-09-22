@@ -5,7 +5,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -28,6 +27,7 @@ import {
   todayContractionSummary,
 } from "../../utils/contractionLog";
 import { formatDisplayTime } from "../../utils/logSummary";
+import { FocusedInputScrollView } from "../inputs/FocusedInputScrollView";
 
 type Props = {
   visible: boolean;
@@ -95,11 +95,11 @@ export function ContractionTimerSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "android" ? "height" : undefined}>
         <Pressable style={styles.backdrop} onPress={onClose}>
           <Pressable style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 20) }]} onPress={(event) => event.stopPropagation()}>
             <View style={styles.handle} />
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
+            <FocusedInputScrollView contentContainerStyle={styles.sheetContent}>
               <View style={styles.titleRow}>
                 {running ? <View style={styles.liveDot} /> : null}
                 <Text style={styles.title}>{t("record.contraction.title")}</Text>
@@ -231,7 +231,7 @@ export function ContractionTimerSheet({
                   </View>
                 ))
               )}
-            </ScrollView>
+            </FocusedInputScrollView>
           </Pressable>
         </Pressable>
       </KeyboardAvoidingView>

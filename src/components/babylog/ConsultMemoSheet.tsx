@@ -4,7 +4,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -22,6 +21,7 @@ import {
   TimePickerSheet,
 } from "../inputs/TimePickerFields";
 import { useLanguage } from "../../LanguageContext";
+import { FocusedInputScrollView } from "../inputs/FocusedInputScrollView";
 
 const HIT = Platform.OS === "android" ? 48 : 44;
 
@@ -92,14 +92,13 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "android" ? "height" : undefined}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t("consult.critical.013")} />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
           <View style={styles.handle} />
           <Text style={styles.title}>{t("consult.critical.026")}</Text>
           <Text style={styles.subtitle}>{t("consult.critical.042")}</Text>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
+          <FocusedInputScrollView
             contentContainerStyle={styles.body}
             showsVerticalScrollIndicator={false}
           >
@@ -157,7 +156,7 @@ export function ConsultMemoSheet({ visible, initialText = "", saving = false, on
                 <TimeOfDayPickerField label={t("consult.critical.050")} valueHHmm={remindTime} onPress={() => setTimeOpen(true)} />
               </>
             ) : null}
-          </ScrollView>
+          </FocusedInputScrollView>
 
           <Pressable
             style={[styles.primaryBtn, saving && styles.disabled]}

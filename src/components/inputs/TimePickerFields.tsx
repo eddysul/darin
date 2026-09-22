@@ -1,17 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "../../LanguageContext";
 import { colors, radius } from "../../theme";
 import { formatDurationMinutes, formatHHmm, formatTimeOfDay, parseHHmm } from "../../utils/timePicker";
 import { formatDateKey, parseDateKey } from "../../utils/dateKey";
 import { formatLocalizedDate } from "../../utils/localeFormat";
+import { pickerWheelIndex, pickerWheelOffset } from "../../utils/pickerWheel";
 
 export { formatDurationMinutes, formatHHmm, formatTimeOfDay, parseHHmm } from "../../utils/timePicker";
 
 const ITEM_HEIGHT = 44;
 const HOURS_12 = Array.from({ length: 12 }, (_, index) => String(index + 1));
 const MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
+
+function openPicker(onPress: () => void) {
+  Keyboard.dismiss();
+  requestAnimationFrame(onPress);
+}
 
 function durationLabel(
   valueMinutes: number | null | undefined,
@@ -33,7 +39,7 @@ export function TimeOfDayPickerField({ label, valueHHmm, placeholder, onPress, d
   return (
     <View style={styles.fieldBlock}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${hasValue ? display : resolvedPlaceholder}`}>
+      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={() => openPicker(onPress)} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${hasValue ? display : resolvedPlaceholder}`}>
         <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{display}</Text>
         <Text style={styles.fieldArrow}>›</Text>
       </Pressable>
@@ -50,7 +56,7 @@ export function DurationPickerField({ label, valueMinutes, placeholder, onPress,
   return (
     <View style={styles.fieldBlock}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${display}`}>
+      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={() => openPicker(onPress)} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${display}`}>
         <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{display}</Text>
         <Text style={styles.fieldArrow}>›</Text>
       </Pressable>
@@ -67,7 +73,7 @@ export function DatePickerField({ label, valueDateKey, placeholder, onPress, dis
   return (
     <View style={styles.fieldBlock}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button">
+      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={() => openPicker(onPress)} disabled={disabled} accessibilityRole="button">
         <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{display}</Text>
         <Text style={styles.fieldArrow}>›</Text>
       </Pressable>
@@ -84,7 +90,7 @@ export function VolumePickerField({ label, value, unit = "ml", placeholder, onPr
   return (
     <View style={styles.fieldBlock}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${display}`}>
+      <Pressable style={[styles.field, disabled && styles.disabled]} onPress={() => openPicker(onPress)} disabled={disabled} accessibilityRole="button" accessibilityLabel={`${label} ${display}`}>
         <Text style={[styles.fieldValue, !hasValue && styles.placeholder]}>{display}</Text>
         <Text style={styles.fieldArrow}>›</Text>
       </Pressable>
@@ -246,23 +252,70 @@ function PickerOverlay({ title, onCancel, onConfirm, onClear, bottomInset, help,
 
 function WheelColumn({ options, selectedIndex, onSelect, label }: { options: string[]; selectedIndex: number; onSelect: (index: number) => void; label: string }) {
   const scrollRef = useRef<ScrollView>(null);
+  const interacting = useRef(false);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastUserIndex = useRef<number | null>(null);
+  const selectedIndexRef = useRef(selectedIndex);
+  selectedIndexRef.current = selectedIndex;
   useEffect(() => {
-    scrollRef.current?.scrollTo({ y: selectedIndex * ITEM_HEIGHT, animated: false });
-  }, [selectedIndex]);
-  const selectOffset = (offsetY: number) => onSelect(Math.max(0, Math.min(options.length - 1, Math.round(offsetY / ITEM_HEIGHT))));
+    if (interacting.current) return;
+    if (lastUserIndex.current === selectedIndex) {
+      lastUserIndex.current = null;
+      return;
+    }
+    const frame = requestAnimationFrame(() => scrollRef.current?.scrollTo({
+      y: pickerWheelOffset(selectedIndex, ITEM_HEIGHT),
+      animated: false,
+    }));
+    return () => cancelAnimationFrame(frame);
+  }, [options.length, selectedIndex]);
+  useEffect(() => () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+  }, []);
+  const selectOffset = (offsetY: number) => {
+    const index = pickerWheelIndex(offsetY, ITEM_HEIGHT, options.length);
+    if (index === selectedIndexRef.current) return;
+    selectedIndexRef.current = index;
+    lastUserIndex.current = index;
+    onSelect(index);
+  };
+  const finishInteraction = (offsetY: number) => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = null;
+    selectOffset(offsetY);
+    interacting.current = false;
+  };
   return (
     <ScrollView
       ref={scrollRef}
       style={styles.wheelColumn}
       contentContainerStyle={styles.wheelContent}
-      contentOffset={{ x: 0, y: selectedIndex * ITEM_HEIGHT }}
       showsVerticalScrollIndicator={false}
       snapToInterval={ITEM_HEIGHT}
+      snapToAlignment="start"
       decelerationRate="fast"
+      bounces={false}
+      overScrollMode="never"
       nestedScrollEnabled
       accessibilityLabel={label}
-      onMomentumScrollEnd={(event) => selectOffset(event.nativeEvent.contentOffset.y)}
-      onScrollEndDrag={(event) => selectOffset(event.nativeEvent.contentOffset.y)}
+      scrollEventThrottle={16}
+      onScrollBeginDrag={() => {
+        interacting.current = true;
+        if (settleTimer.current) clearTimeout(settleTimer.current);
+      }}
+      onMomentumScrollBegin={() => {
+        interacting.current = true;
+        if (settleTimer.current) clearTimeout(settleTimer.current);
+      }}
+      onScroll={(event) => {
+        if (interacting.current) selectOffset(event.nativeEvent.contentOffset.y);
+      }}
+      onScrollEndDrag={(event) => {
+        const offsetY = event.nativeEvent.contentOffset.y;
+        if (settleTimer.current) clearTimeout(settleTimer.current);
+        settleTimer.current = setTimeout(() => finishInteraction(offsetY), 90);
+      }}
+      onMomentumScrollEnd={(event) => finishInteraction(event.nativeEvent.contentOffset.y)}
     >
       {options.map((option, index) => <View key={option} style={styles.wheelItem}><Text style={[styles.wheelText, index === selectedIndex && styles.wheelTextSelected]}>{option}</Text></View>)}
     </ScrollView>

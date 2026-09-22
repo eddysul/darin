@@ -4,7 +4,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -21,6 +20,7 @@ import { PREGNANCY_QUICK_RECORD_ACTIONS, QUICK_RECORD_ACTIONS } from "../../cons
 import type { CustomCategory, CustomCategoryInputMode } from "../../types/logCategory";
 import { CUSTOM_CATEGORY_INPUT_MODES } from "../../types/logCategory";
 import { colors, radius } from "../../theme";
+import { FocusedInputScrollView } from "../inputs/FocusedInputScrollView";
 import { CustomTemplateIcon } from "./CustomTemplateIcon";
 import { useLanguage } from "../../LanguageContext";
 import {
@@ -122,7 +122,7 @@ export function AddCustomCategorySheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "android" ? "height" : undefined}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.handle} />
@@ -133,7 +133,7 @@ export function AddCustomCategorySheet({
               : t("record.custom.body")}
           </Text>
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <FocusedInputScrollView showsVerticalScrollIndicator={false}>
             {pregnancy ? (
               <>
                 <Text style={styles.fieldLabel}>{t("record.custom.recommended")}</Text>
@@ -241,7 +241,7 @@ export function AddCustomCategorySheet({
             </View>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
-          </ScrollView>
+          </FocusedInputScrollView>
 
           <View style={styles.actions}>
             <Pressable style={[styles.btn, styles.btnGhost]} onPress={onClose}>

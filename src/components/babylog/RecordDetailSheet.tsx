@@ -5,7 +5,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -14,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FocusedInputScrollView } from "../inputs/FocusedInputScrollView";
 import { isPregnancyLogCategoryId, type BabyLogCategoryId } from "../../constants/babyLogCategories";
 import { LogCategoryIcon } from "./LogCategoryIcon";
 import type { BabyLogEntry } from "../../types/babyLog";
@@ -763,7 +763,7 @@ export function RecordDetailSheet({
   };
 
   const sheet = (
-    <KeyboardAvoidingView style={styles.keyboardRoot} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <KeyboardAvoidingView style={styles.keyboardRoot} behavior={Platform.OS === "android" ? "height" : undefined}>
     <View style={[styles.backdrop, embedded && styles.embeddedBackdrop]}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel={t("record.detail.cancel")} />
       <View style={[styles.sheet, { maxHeight: sheetMaxHeight, paddingBottom: Math.max(insets.bottom, 16) }]}>
@@ -778,11 +778,10 @@ export function RecordDetailSheet({
         </View>
         <Text style={styles.activeBabyLabel}>{t("record.detail.target", { babyName })}</Text>
 
-        <ScrollView
+        <FocusedInputScrollView
           style={{ maxHeight: sheetScrollMaxHeight }}
           contentContainerStyle={styles.sheetScrollContent}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
           nestedScrollEnabled
         >
           {(builtinId === "breast" || builtinId === "formula" || builtinId === "storedMilk") && (
@@ -1367,7 +1366,7 @@ export function RecordDetailSheet({
               <Text style={styles.btnPrimaryText}>{t("record.detail.save")}</Text>
             </Pressable>
           </View>
-        </ScrollView>
+        </FocusedInputScrollView>
       </View>
     </View>
       <TimePickerSheet

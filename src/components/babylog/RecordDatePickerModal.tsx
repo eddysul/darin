@@ -6,13 +6,12 @@ import {
   StyleSheet,
   Text,
   View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from "react-native";
 import { colors, radius } from "../../theme";
 import { formatDateKey, offsetDateKey, parseDateKey } from "../../utils/dateKey";
 import { getMonthMatrix } from "../../utils/trialCalendar";
 import { useLanguage } from "../../LanguageContext";
+import { pickerWheelIndex, pickerWheelOffset } from "../../utils/pickerWheel";
 
 const WEEKDAY_KEYS = ["record.date.weekday.sun", "record.date.weekday.mon", "record.date.weekday.tue", "record.date.weekday.wed", "record.date.weekday.thu", "record.date.weekday.fri", "record.date.weekday.sat"] as const;
 const WHEEL_ITEM_HEIGHT = 44;
@@ -192,14 +191,45 @@ export function RecordDatePickerModal({
 function WheelColumn({ values, value, formatValue, onChange, accessibilityLabel }: { values: number[]; value: number; formatValue: (value: number) => string; onChange: (value: number) => void; accessibilityLabel: string }) {
   const ref = useRef<ScrollView>(null);
   const index = Math.max(0, values.indexOf(value));
+  const interacting = useRef(false);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastUserIndex = useRef<number | null>(null);
+  const selectedIndexRef = useRef(index);
+  selectedIndexRef.current = index;
 
   useEffect(() => {
-    const timer = setTimeout(() => ref.current?.scrollTo({ y: index * WHEEL_ITEM_HEIGHT, animated: false }), 0);
-    return () => clearTimeout(timer);
-  }, [index]);
+    if (interacting.current) return;
+    if (lastUserIndex.current === index) {
+      lastUserIndex.current = null;
+      return;
+    }
+    const frame = requestAnimationFrame(() => ref.current?.scrollTo({
+      y: pickerWheelOffset(index, WHEEL_ITEM_HEIGHT),
+      animated: false,
+    }));
+    return () => cancelAnimationFrame(frame);
+  }, [index, values.length]);
+  useEffect(() => () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+  }, []);
 
-  const settle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nextIndex = Math.max(0, Math.min(values.length - 1, Math.round(event.nativeEvent.contentOffset.y / WHEEL_ITEM_HEIGHT)));
+  const settleOffset = (offsetY: number) => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = null;
+    const nextIndex = pickerWheelIndex(offsetY, WHEEL_ITEM_HEIGHT, values.length);
+    if (nextIndex !== selectedIndexRef.current) {
+      selectedIndexRef.current = nextIndex;
+      lastUserIndex.current = nextIndex;
+      onChange(values[nextIndex]);
+    }
+    interacting.current = false;
+  };
+
+  const selectWhileScrolling = (offsetY: number) => {
+    const nextIndex = pickerWheelIndex(offsetY, WHEEL_ITEM_HEIGHT, values.length);
+    if (nextIndex === selectedIndexRef.current) return;
+    selectedIndexRef.current = nextIndex;
+    lastUserIndex.current = nextIndex;
     onChange(values[nextIndex]);
   };
 
@@ -210,9 +240,29 @@ function WheelColumn({ values, value, formatValue, onChange, accessibilityLabel 
       contentContainerStyle={styles.wheelContent}
       showsVerticalScrollIndicator={false}
       snapToInterval={WHEEL_ITEM_HEIGHT}
+      snapToAlignment="start"
       decelerationRate="fast"
-      onMomentumScrollEnd={settle}
-      onScrollEndDrag={settle}
+      bounces={false}
+      overScrollMode="never"
+      scrollEventThrottle={16}
+      onScrollBeginDrag={() => {
+        interacting.current = true;
+        if (settleTimer.current) clearTimeout(settleTimer.current);
+      }}
+      onMomentumScrollBegin={() => {
+        interacting.current = true;
+        if (settleTimer.current) clearTimeout(settleTimer.current);
+      }}
+      onScroll={(event) => {
+        if (interacting.current) selectWhileScrolling(event.nativeEvent.contentOffset.y);
+      }}
+      onMomentumScrollEnd={(event) => settleOffset(event.nativeEvent.contentOffset.y)}
+      onScrollEndDrag={(event) => {
+        const nativeEvent = event.nativeEvent;
+        selectWhileScrolling(nativeEvent.contentOffset.y);
+        if (settleTimer.current) clearTimeout(settleTimer.current);
+        settleTimer.current = setTimeout(() => settleOffset(nativeEvent.contentOffset.y), 90);
+      }}
       accessibilityLabel={accessibilityLabel}
     >
       {values.map((item) => (

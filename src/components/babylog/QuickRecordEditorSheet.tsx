@@ -24,6 +24,7 @@ import { DurationPickerField, DurationPickerSheet } from "../inputs/TimePickerFi
 import { useLanguage } from "../../LanguageContext";
 import { RECORD_VALUE } from "../../constants/recordInternalValues";
 import { quickRecordLabel, recordCategoryLabel, storedRecordValueLabel } from "../../utils/recordDisplay";
+import { FocusedInputScrollView } from "../inputs/FocusedInputScrollView";
 
 const BORN_LINK_CATS: BabyLogCategoryId[] = [
   "formula",
@@ -209,7 +210,7 @@ export function QuickRecordEditorSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.keyboardRoot} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView style={styles.keyboardRoot} behavior={Platform.OS === "android" ? "height" : undefined}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.handle} />
@@ -301,7 +302,7 @@ export function QuickRecordEditorSheet({
               </Pressable>
             </ScrollView>
           ) : (
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <FocusedInputScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.label}>{t("record.quick.name")}</Text>
               <TextInput
                 style={styles.input}
@@ -441,7 +442,7 @@ export function QuickRecordEditorSheet({
               <Pressable style={[styles.primary, !canSave && styles.disabled]} disabled={!canSave} onPress={saveForm}>
                 <Text style={styles.primaryText}>{t("record.quick.save")}</Text>
               </Pressable>
-            </ScrollView>
+            </FocusedInputScrollView>
           )}
         </Pressable>
       </Pressable>
